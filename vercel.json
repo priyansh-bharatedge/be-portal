@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/api/send-otp",
+      "destination": "/api/send-otp"
+    },
+    {
+      "source": "/api/zoho/:action*",
+      "destination": "/api/zoho/:action*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -17,6 +17,21 @@ export interface ZohoApiResponse {
   errorDetails?: any;
 }
 
+async function safeParseResponse(response: Response): Promise<any> {
+  try {
+    const text = await response.text();
+    if (!text || !text.trim()) {
+      return { success: response.ok, message: response.statusText || 'Empty response' };
+    }
+    return JSON.parse(text);
+  } catch {
+    return {
+      success: false,
+      message: `Invalid server response (${response.status}): ${response.statusText || 'Unable to parse JSON'}`,
+    };
+  }
+}
+
 /**
  * Inserts a new record into the Zoho CRM Quotations module using REST API v8.
  */
@@ -30,7 +45,7 @@ export async function insertZohoQuotation(quotation: any): Promise<ZohoApiRespon
       body: JSON.stringify(quotation),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -68,7 +83,7 @@ export async function updateZohoQuotation(quotation: any): Promise<ZohoApiRespon
       body: JSON.stringify(quotation),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -130,7 +145,7 @@ export async function uploadZohoAttachment(
       body: formData,
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -213,7 +228,7 @@ export async function insertZohoQuotationWithAttachment(
 export async function testZohoConnection(): Promise<{ success: boolean; message: string }> {
   try {
     const response = await fetch('/api/zoho/test-connection');
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return { success: true, message: data.message || 'Successfully connected to Zoho CRM' };
     } else {
@@ -238,7 +253,7 @@ export async function insertZohoEmployee(employee: any): Promise<ZohoApiResponse
       body: JSON.stringify(employee),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -276,7 +291,7 @@ export async function updateZohoEmployee(employee: any): Promise<ZohoApiResponse
       body: JSON.stringify(employee),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -325,7 +340,7 @@ export async function deleteZohoEmployee(zohoId: string): Promise<ZohoApiRespons
       body: JSON.stringify({ id: zohoId }),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -363,7 +378,7 @@ export async function deleteZohoRecord(module: string, zohoId: string): Promise<
       body: JSON.stringify({ id: zohoId, module }),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -402,7 +417,7 @@ export async function insertZohoLeave(leave: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(leave),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -440,7 +455,7 @@ export async function updateZohoLeave(leave: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(leave),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -489,7 +504,7 @@ export async function deleteZohoLeave(zohoId: string): Promise<ZohoApiResponse> 
       body: JSON.stringify({ id: zohoId }),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -520,7 +535,7 @@ export async function deleteZohoLeave(zohoId: string): Promise<ZohoApiResponse> 
 export async function fetchZohoEmployees(): Promise<{ success: boolean; data: any[]; message?: string }> {
   try {
     const response = await fetch('/api/zoho/get-employees');
-    const result = await response.json();
+    const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
@@ -549,7 +564,7 @@ export async function fetchZohoEmployees(): Promise<{ success: boolean; data: an
 export async function fetchZohoLeaves(): Promise<{ success: boolean; data: any[]; message?: string }> {
   try {
     const response = await fetch('/api/zoho/get-leaves');
-    const result = await response.json();
+    const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
@@ -586,7 +601,7 @@ export async function insertZohoCompany(company: any): Promise<ZohoApiResponse> 
       body: JSON.stringify(company),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -624,7 +639,7 @@ export async function updateZohoCompany(company: any): Promise<ZohoApiResponse> 
       body: JSON.stringify(company),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -673,7 +688,7 @@ export async function deleteZohoCompany(zohoId: string): Promise<ZohoApiResponse
       body: JSON.stringify({ id: zohoId }),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -704,7 +719,7 @@ export async function deleteZohoCompany(zohoId: string): Promise<ZohoApiResponse
 export async function fetchZohoCompanies(): Promise<{ success: boolean; data: any[]; message?: string }> {
   try {
     const response = await fetch('/api/zoho/get-companies');
-    const result = await response.json();
+    const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
@@ -741,7 +756,7 @@ export async function insertZohoClient(client: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(client),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -779,7 +794,7 @@ export async function updateZohoClient(client: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(client),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -828,7 +843,7 @@ export async function deleteZohoClient(zohoId: string): Promise<ZohoApiResponse>
       body: JSON.stringify({ id: zohoId }),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -859,7 +874,7 @@ export async function deleteZohoClient(zohoId: string): Promise<ZohoApiResponse>
 export async function fetchZohoClients(): Promise<{ success: boolean; data: any[]; message?: string }> {
   try {
     const response = await fetch('/api/zoho/get-clients');
-    const result = await response.json();
+    const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
@@ -896,7 +911,7 @@ export async function insertZohoDeal(deal: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(deal),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -934,7 +949,7 @@ export async function updateZohoDeal(deal: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(deal),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -991,7 +1006,7 @@ export async function deleteZohoQuotation(zohoId: string): Promise<ZohoApiRespon
 export async function fetchZohoDeals(): Promise<{ success: boolean; data: any[]; message?: string }> {
   try {
     const response = await fetch('/api/zoho/get-deals');
-    const result = await response.json();
+    const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
@@ -1028,7 +1043,7 @@ export async function insertZohoPolicy(policy: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(policy),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -1066,7 +1081,7 @@ export async function updateZohoPolicy(policy: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(policy),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -1115,7 +1130,7 @@ export async function deleteZohoPolicy(zohoId: string): Promise<ZohoApiResponse>
       body: JSON.stringify({ id: zohoId }),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -1146,7 +1161,7 @@ export async function deleteZohoPolicy(zohoId: string): Promise<ZohoApiResponse>
 export async function fetchZohoPolicies(): Promise<{ success: boolean; data: any[]; message?: string }> {
   try {
     const response = await fetch('/api/zoho/get-policies');
-    const result = await response.json();
+    const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
@@ -1234,7 +1249,7 @@ export async function insertZohoCalendarEvent(event: any): Promise<ZohoApiRespon
       body: JSON.stringify(event),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -1272,7 +1287,7 @@ export async function updateZohoCalendarEvent(event: any): Promise<ZohoApiRespon
       body: JSON.stringify(event),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -1321,7 +1336,7 @@ export async function deleteZohoCalendarEvent(zohoId: string): Promise<ZohoApiRe
       body: JSON.stringify({ id: zohoId }),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -1352,7 +1367,7 @@ export async function deleteZohoCalendarEvent(zohoId: string): Promise<ZohoApiRe
 export async function fetchZohoCalendarEvents(): Promise<{ success: boolean; data: any[]; message?: string }> {
   try {
     const response = await fetch('/api/zoho/get-calendar');
-    const result = await response.json();
+    const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
@@ -1389,7 +1404,7 @@ export async function insertZohoDsr(dsr: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(dsr),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -1427,7 +1442,7 @@ export async function updateZohoDsr(dsr: any): Promise<ZohoApiResponse> {
       body: JSON.stringify(dsr),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -1476,7 +1491,7 @@ export async function deleteZohoDsr(zohoId: string): Promise<ZohoApiResponse> {
       body: JSON.stringify({ id: zohoId }),
     });
 
-    const data = await response.json();
+    const data = await safeParseResponse(response);
     if (response.ok && data.success) {
       return {
         success: true,
@@ -1507,7 +1522,7 @@ export async function deleteZohoDsr(zohoId: string): Promise<ZohoApiResponse> {
 export async function fetchZohoDsr(): Promise<{ success: boolean; data: any[]; message?: string }> {
   try {
     const response = await fetch('/api/zoho/get-dsr');
-    const result = await response.json();
+    const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
