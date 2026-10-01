@@ -166,10 +166,10 @@ export const Employees = () => {
 
     return {
       id: empId,
-      name: fullName,
+      name: fullName || 'Employee',
       email: z.Email || z.Personal_Email_Address || '',
       mobile: z.Contact_Number || '',
-      dept: z.Department || 'IT',
+      dept: z.Department || 'General',
       role: z.Designation_Job_Title || z.System_Role || 'Team Member',
       systemRole,
       salaryEntity: z.Salary_Entity || z.Company_Entity || 'BSPL',
@@ -847,18 +847,20 @@ export const Employees = () => {
     : matchedEmployees;
 
   const filteredEmployees = visibleEmployees.filter(e => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.dept.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (e.systemRole && e.systemRole.toLowerCase().includes(searchQuery.toLowerCase()));
+      (e.name ?? '').toLowerCase().includes(q) ||
+      (e.id ?? '').toLowerCase().includes(q) ||
+      (e.dept ?? '').toLowerCase().includes(q) ||
+      (e.role ?? '').toLowerCase().includes(q) ||
+      (e.systemRole ? e.systemRole.toLowerCase().includes(q) : false);
 
     const matchesRole = selectedRoleFilter === 'All' || e.systemRole === selectedRoleFilter;
     const matchesDept = selectedDeptFilter === 'All' || e.dept === selectedDeptFilter;
 
     return matchesSearch && matchesRole && matchesDept;
   });
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
