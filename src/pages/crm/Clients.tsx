@@ -50,11 +50,37 @@ export const Clients = () => {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           setClients(parsed);
-          return;
         }
       } catch (e) {}
     }
-    setClients([]);
+
+    // Auto-fetch live clients from Zoho CRM
+    fetchZohoClients().then(res => {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const fetchedClients: Client[] = res.data.map((r: any) => ({
+          id: `CL-${r.id ? String(r.id).slice(-4) : Math.floor(1000 + Math.random() * 9000)}`,
+          name: r.Name || 'Unnamed Client',
+          company: r.Company_Name || 'Individual',
+          email: r.Email || '',
+          phone: r.Mobile_Number || '',
+          secondaryEmail: r.Secondary_Email || '',
+          status: (r.Status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
+          source: 'Zoho CRM',
+          addedOn: r.Created_Time ? new Date(r.Created_Time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB'),
+          zohoId: String(r.id),
+          zohoStatus: 'synced',
+          zohoSyncedAt: new Date().toISOString(),
+        }));
+
+        setClients(prev => {
+          const existingZohoIds = new Set(prev.map(c => c.zohoId).filter(Boolean));
+          const newOnly = fetchedClients.filter(c => c.zohoId && !existingZohoIds.has(c.zohoId));
+          const updated = [...newOnly, ...prev];
+          localStorage.setItem('be_clients', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    }).catch(err => console.warn('[Zoho CRM] Auto-fetch clients error:', err));
   }, []);
 
   // Toast Auto-Dismiss

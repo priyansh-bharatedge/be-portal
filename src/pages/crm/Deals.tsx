@@ -376,6 +376,11 @@ export const Deals = () => {
     return [];
   });
 
+  // Auto-fetch live deals from Zoho CRM on mount
+  useEffect(() => {
+    handleFetchFromZoho(false);
+  }, []);
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Won': return 'bg-emerald-100 text-emerald-700';
@@ -807,7 +812,7 @@ export const Deals = () => {
     }
   };
 
-  const handleFetchFromZoho = async () => {
+  const handleFetchFromZoho = async (showNotification = true) => {
     setIsFetchingZoho(true);
     try {
       const result = await fetchZohoDeals();
@@ -924,12 +929,14 @@ export const Deals = () => {
         setDeals(currentDeals);
         localStorage.setItem('be_deals', JSON.stringify(currentDeals));
 
-        setToast({
-          type: 'success',
-          message: 'Zoho Deals Synchronized',
-          submessage: `Fetched ${result.data.length} records from Zoho CRM (${countAdded} new, ${countUpdated} updated)`
-        });
-      } else {
+        if (showNotification) {
+          setToast({
+            type: 'success',
+            message: 'Zoho Deals Synchronized',
+            submessage: `Fetched ${result.data.length} records from Zoho CRM (${countAdded} new, ${countUpdated} updated)`
+          });
+        }
+      } else if (showNotification) {
         setToast({
           type: 'error',
           message: 'Failed to Fetch from Zoho CRM',
@@ -937,11 +944,13 @@ export const Deals = () => {
         });
       }
     } catch (err: any) {
-      setToast({
-        type: 'error',
-        message: 'Fetch Error',
-        submessage: err?.message || 'Could not communicate with Zoho CRM endpoint'
-      });
+      if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Fetch Error',
+          submessage: err?.message || 'Could not communicate with Zoho CRM endpoint'
+        });
+      }
     } finally {
       setIsFetchingZoho(false);
     }
@@ -996,7 +1005,7 @@ export const Deals = () => {
             />
           </div>
           <button
-            onClick={handleFetchFromZoho}
+            onClick={() => handleFetchFromZoho(true)}
             disabled={isFetchingZoho}
             className="flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50"
             title="Fetch and sync live deals from Zoho CRM"

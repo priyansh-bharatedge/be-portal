@@ -942,6 +942,66 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
           return;
         }
 
+        // Fetch / Get Quotations endpoint (Module API Name: Quotations)
+        if (pathname === '/api/zoho/get-quotations' && req.method === 'GET') {
+          try {
+            let accessToken = await getAccessToken(env);
+            const moduleName = env.VITE_ZOHO_MODULE_NAME || 'Quotations';
+            const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+            const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Created_Time,Modified_Time';
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${quotationFields}&per_page=200`;
+
+            console.log(`[Vite Zoho Plugin] Fetching live Quotations from Zoho CRM (${moduleName})`);
+
+            let crmRes = await fetch(crmEndpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${accessToken}`,
+              },
+            });
+
+            let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+
+            if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              crmRes = await fetch(crmEndpoint, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                },
+              });
+              crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            if (crmData?.data) {
+              return res.end(JSON.stringify({
+                success: true,
+                data: crmData.data,
+                info: crmData.info,
+              }));
+            } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
+              return res.end(JSON.stringify({
+                success: true,
+                data: [],
+              }));
+            } else {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({
+                success: false,
+                message: crmData?.message || 'Failed to fetch quotations from Zoho CRM',
+                errorDetails: crmData,
+              }));
+            }
+          } catch (err: any) {
+            console.error('[Vite Zoho Plugin] Fetch quotations error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
         // Insert or Update Deal endpoint (Module API Name: Deals)
         if ((pathname === '/api/zoho/insert-deal' || pathname === '/api/zoho/update-deal') && (req.method === 'POST' || req.method === 'PUT')) {
           let body = '';
@@ -1180,7 +1240,7 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const employeeFields = 'id,Name,Email,Phone,Department,Designation,Status,Created_Time';
+            const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Contact_Number,Personal_Email_Address,Email,Gender,Marital_Status,Nationality,Blood_Group,Date_of_Birth,Date_of_Joining,Department,Designation_Job_Title,System_Role,Employment_Type,Permanent_Address,Current_Address,Education_Qualification,Professional_Certifications,Key_Skills,Languages_Known,Previous_Employer,Total_Experience,Emergency_Contact_First_Name,Emergency_Contact_Last_Name,Emergency_Contact_Number,Relationship_with_Contact,Who_is_the_Team_Leader_TL,Reporting_Manager,Pan_Number,Aadhaar_Number,Passport_Number,Driving_License_Number,Bank_Account_Number,Bank_Name,IFSC_Code,PF_Applicable,PF_Number,ESIC_Number,UAN_Number,Medical_Insurance_Number,Salary_Entity,Company_Entity,Password,Created_Time,Modified_Time';
             const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&per_page=200`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Employees from Zoho CRM (${moduleName})`);
@@ -1322,7 +1382,7 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_LEAVE_MODULE_NAME || 'Leave_Management';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const leaveFields = 'id,Name,Leave_Type,From_Date,To_Date,Total_Days,Reason,Status,Created_Time';
+            const leaveFields = 'id,Name,Leave_Type,Start_Date,End_Date,Approved_by_TL,Approved_by_HR,Approved_by_MD,Email,Secondary_Email,Employee,Created_Time,Modified_Time';
             const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${leaveFields}&per_page=200`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Leaves from Zoho CRM (${moduleName})`);
@@ -1464,7 +1524,7 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_COMPANIES_MODULE_NAME || 'Companies';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const companyFields = 'id,Name,Company_Name,Email,Phone,Mobile_Number,GST_Number,Pan_number,Billing_address,Created_Time';
+            const companyFields = 'id,Name,Business_Type,Date_of_Incorporation,GST_Number,Email,Secondary_Email,Status,Tag,Created_Time,Modified_Time';
             const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${companyFields}&per_page=200`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Companies from Zoho CRM (${moduleName})`);
@@ -1606,7 +1666,7 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_CLIENTS_MODULE_NAME || 'Clients';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const clientFields = 'id,Name,Company_Name,Email,Mobile_Number,Secondary_Email,Status,Created_Time';
+            const clientFields = 'id,Name,Company_Name,Email,Mobile_Number,Secondary_Email,Status,Tag,Created_Time,Modified_Time';
             const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${clientFields}&per_page=200`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Clients from Zoho CRM (${moduleName})`);

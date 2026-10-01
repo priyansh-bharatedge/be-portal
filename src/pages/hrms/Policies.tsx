@@ -11,7 +11,8 @@ import {
   saveOrUpdateZohoPolicy, 
   deleteZohoPolicy, 
   insertZohoPolicyWithAttachment, 
-  uploadZohoAttachmentToPolicy 
+  uploadZohoAttachmentToPolicy,
+  fetchZohoPolicies 
 } from '../../services/zohoService';
 
 export interface Policy {
@@ -62,6 +63,7 @@ export const Policies = () => {
   // Async states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   
   // Toast notifications
   const [toast, setToast] = useState<{ 
@@ -87,56 +89,90 @@ export const Policies = () => {
 
   const canManage = can('manage_policies') || isHR || isSuperAdmin;
 
-  // Load Initial Policies from localStorage
+  const syncPoliciesFromZoho = async (showNotification = false) => {
+    setIsFetchingZoho(true);
+    try {
+      const res = await fetchZohoPolicies();
+      if (res.success && Array.isArray(res.data)) {
+        const zohoPolicies: Policy[] = res.data.map((z: any) => ({
+          id: `POL-${String(z.id).slice(-4)}`,
+          title: z.Name || 'Company Policy',
+          content: z.Policy_Content || '',
+          department: z.Department || 'All',
+          email: z.Email || '',
+          secondaryEmail: z.Secondary_Email || '',
+          tag: z.Tag || 'Policy',
+          emailOptOut: Boolean(z.Email_Opt_Out),
+          createdBy: z.Created_By?.name || '',
+          modifiedBy: z.Modified_By?.name || '',
+          lastUpdated: z.Modified_Time ? new Date(z.Modified_Time).toLocaleDateString('en-GB') : (z.Created_Time ? new Date(z.Created_Time).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')),
+          zohoId: String(z.id),
+          zohoStatus: 'synced',
+          zohoSyncedAt: z.Modified_Time || z.Created_Time || new Date().toISOString()
+        }));
+
+        const saved = localStorage.getItem('be_policies');
+        const localList: Policy[] = saved ? JSON.parse(saved) : [];
+
+        const seenZohoIds = new Set<string>();
+        const mergedList: Policy[] = [];
+
+        for (const zP of zohoPolicies) {
+          if (zP.zohoId) seenZohoIds.add(zP.zohoId);
+          mergedList.push(zP);
+        }
+
+        for (const lP of localList) {
+          if (lP.zohoId && seenZohoIds.has(lP.zohoId)) continue;
+          mergedList.push(lP);
+        }
+
+        setPolicies(mergedList);
+        localStorage.setItem('be_policies', JSON.stringify(mergedList));
+
+        if (showNotification) {
+          setToast({
+            type: 'success',
+            message: `Synced ${zohoPolicies.length} Policy/Policies from Zoho CRM`,
+            submessage: 'Policy database is updated with live Zoho CRM records'
+          });
+        }
+      } else if (showNotification) {
+        setToast({
+          type: 'info',
+          message: 'No policies returned from Zoho CRM',
+          submessage: res.message || 'Check connection or Zoho CRM records'
+        });
+      }
+    } catch (err: any) {
+      console.warn('[Zoho CRM] Policy fetch error:', err);
+      if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Failed to fetch policies from Zoho CRM',
+          submessage: err?.message || 'Network error communicating with server'
+        });
+      }
+    } finally {
+      setIsFetchingZoho(false);
+    }
+  };
+
+  // Load Initial Policies from localStorage & sync live Zoho CRM
   useEffect(() => {
     const saved = localStorage.getItem('be_policies');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           setPolicies(parsed);
-          return;
         }
       } catch (e) {
         console.error('Failed to parse saved policies:', e);
       }
     }
     
-    // Default seed policies if empty
-    const seedPolicies: Policy[] = [
-      {
-        id: 'POL-1001',
-        title: 'Code of Conduct & Workplace Ethics',
-        content: 'This policy outlines the standard of conduct expected of all employees at Bharat Enterprises. All employees must act with integrity, respect, and professionalism in all work interactions and maintain strict client confidentiality.',
-        department: 'All',
-        tag: 'Code of Conduct',
-        email: 'hr@bharatenterprises.in',
-        lastUpdated: '15/01/2026',
-        zohoStatus: 'pending'
-      },
-      {
-        id: 'POL-1002',
-        title: 'Leave & Attendance Policy 2026',
-        content: 'Employees are entitled to Paid Leaves (PL), Casual Leaves (CL), and Sick Leaves (SL) as per their employment tier. All leave requests must be applied through the HRMS Portal at least 24 hours in advance and require TL/HR approval.',
-        department: 'HR',
-        tag: 'Leave Rules',
-        email: 'hr@bharatenterprises.in',
-        lastUpdated: '01/02/2026',
-        zohoStatus: 'pending'
-      },
-      {
-        id: 'POL-1003',
-        title: 'Data Privacy & Information Security',
-        content: 'All confidential corporate files, client project briefs, subsidy documents, and proprietary tools must only be accessed through authorized VPNs and portal credentials. Sharing customer PII or credentials externally is strictly prohibited.',
-        department: 'IT',
-        tag: 'Security & Compliance',
-        email: 'it@bharatenterprises.in',
-        lastUpdated: '10/02/2026',
-        zohoStatus: 'pending'
-      }
-    ];
-    setPolicies(seedPolicies);
-    localStorage.setItem('be_policies', JSON.stringify(seedPolicies));
+    syncPoliciesFromZoho(false);
   }, []);
 
   // Toast Auto-Dismiss
@@ -447,6 +483,20 @@ export const Policies = () => {
         </div>
         
         <div className="flex items-center gap-2.5 w-full lg:w-auto justify-start lg:justify-end">
+          <button
+            onClick={() => syncPoliciesFromZoho(true)}
+            disabled={isFetchingZoho}
+            title="Sync live company policies from Zoho CRM"
+            className="bg-white hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-300 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-sm hover:shadow active:scale-95 disabled:opacity-50 transition-all"
+          >
+            {isFetchingZoho ? (
+              <Loader2 size={16} className="mr-2 animate-spin text-be-orange" />
+            ) : (
+              <Globe size={16} className="mr-2 text-be-orange" />
+            )}
+            {isFetchingZoho ? 'Syncing...' : 'Sync Zoho CRM'}
+          </button>
+
           {canManage ? (
             <button
               onClick={() => openModal()}

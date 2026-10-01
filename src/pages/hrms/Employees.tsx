@@ -8,7 +8,7 @@ import { ROLE_DEFINITIONS } from '../../types/roles';
 import type { SystemRole } from '../../types/roles';
 import { INITIAL_EMPLOYEES } from '../../utils/initialData';
 import type { EmployeeData } from '../../utils/initialData';
-import { saveOrUpdateZohoEmployee, uploadZohoAttachment, deleteZohoEmployee } from '../../services/zohoService';
+import { saveOrUpdateZohoEmployee, uploadZohoAttachment, deleteZohoEmployee, fetchZohoEmployees } from '../../services/zohoService';
 
 export const OPTIONAL_DOCUMENT_FIELDS = [
   {
@@ -80,6 +80,7 @@ export const Employees = () => {
   const [editingEmployee, setEditingEmployee] = useState<EmployeeData | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
 
   const initialFormData = {
@@ -106,35 +107,178 @@ export const Employees = () => {
   const [salaryDocumentFile, setSalaryDocumentFile] = useState<File | null>(null);
   const [additionalDocs, setAdditionalDocs] = useState<Record<string, { file: File, name: string }>>({});
 
+  const mapZohoRecordToEmployee = (z: any): EmployeeData => {
+    const firstName = z.Name || '';
+    const middleName = z.Middle_Name || '';
+    const lastName = z.Last_Name || '';
+    const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ') || z.Name || 'Employee';
+    const empId = z.Employment_ID || (z.id ? `EMP-${String(z.id).slice(-4)}` : `EMP-${Math.floor(1000 + Math.random() * 9000)}`);
+    const systemRole: SystemRole = (z.System_Role as SystemRole) || 'TM';
+
+    const fd = {
+      empId,
+      salaryEntity: z.Salary_Entity || z.Company_Entity || 'BSPL',
+      firstName,
+      middleName,
+      lastName,
+      dob: z.Date_of_Birth || '',
+      gender: z.Gender || 'Male',
+      nationality: z.Nationality || 'Indian',
+      maritalStatus: z.Marital_Status || 'Single',
+      mobile: z.Contact_Number || '',
+      email: z.Personal_Email_Address || z.Email || '',
+      permanentAddress: z.Permanent_Address || '',
+      currentAddress: z.Current_Address || '',
+      bloodGroup: z.Blood_Group || 'O+',
+      education: z.Education_Qualification || '',
+      certifications: z.Professional_Certifications || '',
+      skills: z.Key_Skills || '',
+      languages: Array.isArray(z.Languages_Known) ? z.Languages_Known : (typeof z.Languages_Known === 'string' ? z.Languages_Known.split(',').map((s: string) => s.trim()).filter(Boolean) : ['English']),
+      emergencyFirstName: z.Emergency_Contact_First_Name || '',
+      emergencyLastName: z.Emergency_Contact_Last_Name || '',
+      emergencyMobile: z.Emergency_Contact_Number || '',
+      emergencyRelation: z.Relationship_with_Contact || '',
+      doj: z.Date_of_Joining || new Date().toISOString().split('T')[0],
+      dept: z.Department || 'Sales',
+      role: z.Designation_Job_Title || '',
+      systemRole,
+      workEmail: z.Email || z.Personal_Email_Address || '',
+      previousEmployer: z.Previous_Employer || '',
+      experience: z.Total_Experience || '',
+      employmentType: z.Employment_Type || 'Full Time',
+      hasPf: Boolean(z.PF_Applicable),
+      teamLeaderId: '',
+      teamLeaderName: z.Who_is_the_Team_Leader_TL || '',
+      reportingManagerId: '',
+      reportingManagerName: z.Reporting_Manager || '',
+      bankAccount: z.Bank_Account_Number || '',
+      bankName: z.Bank_Name || '',
+      ifsc: z.IFSC_Code || '',
+      panNumber: z.Pan_Number || '',
+      aadhaarNumber: z.Aadhaar_Number || '',
+      passportNumber: z.Passport_Number || '',
+      drivingLicense: z.Driving_License_Number || '',
+      pfNumber: z.PF_Number || '',
+      esicNumber: z.ESIC_Number || '',
+      uanNumber: z.UAN_Number || '',
+      medicalInsurance: z.Medical_Insurance_Number || '',
+    };
+
+    return {
+      id: empId,
+      name: fullName,
+      email: z.Email || z.Personal_Email_Address || '',
+      mobile: z.Contact_Number || '',
+      dept: z.Department || 'IT',
+      role: z.Designation_Job_Title || z.System_Role || 'Team Member',
+      systemRole,
+      salaryEntity: z.Salary_Entity || z.Company_Entity || 'BSPL',
+      teamLeaderName: z.Who_is_the_Team_Leader_TL || '',
+      reportingManagerName: z.Reporting_Manager || '',
+      joined: z.Date_of_Joining || z.Created_Time?.split('T')[0] || new Date().toISOString().split('T')[0],
+      status: 'Active',
+      formData: fd,
+      zohoId: String(z.id),
+      zohoStatus: 'synced',
+      zohoSyncedAt: z.Modified_Time || z.Created_Time || new Date().toISOString(),
+    };
+  };
+
+  const syncEmployeesFromZoho = async (showNotification = false) => {
+    setIsFetchingZoho(true);
+    try {
+      const res = await fetchZohoEmployees();
+      if (res.success && Array.isArray(res.data)) {
+        const zohoEmployees = res.data.map(mapZohoRecordToEmployee);
+        
+        // Ensure default Super Admin (EMP-001) always exists if not in Zoho
+        const superAdminExists = zohoEmployees.some(e => e.systemRole === 'Super Admin' || e.id === 'EMP-001');
+        const defaultAdmin = INITIAL_EMPLOYEES.find(e => e.id === 'EMP-001') || INITIAL_EMPLOYEES[0];
+
+        // Merge with existing local employees to keep any local documents / un-synced items
+        const saved = localStorage.getItem('be_employees');
+        const localList: EmployeeData[] = saved ? JSON.parse(saved) : [];
+
+        const seenZohoIds = new Set<string>();
+        const seenIds = new Set<string>();
+        const mergedList: EmployeeData[] = [];
+
+        // Add default admin first if needed
+        if (!superAdminExists && defaultAdmin) {
+          mergedList.push(defaultAdmin);
+          seenIds.add(defaultAdmin.id.toLowerCase());
+        }
+
+        // Add Zoho employees
+        for (const zEmp of zohoEmployees) {
+          if (zEmp.zohoId) seenZohoIds.add(zEmp.zohoId);
+          if (zEmp.id) seenIds.add(zEmp.id.toLowerCase());
+          mergedList.push(zEmp);
+        }
+
+        // Preserve any local non-synced employees
+        for (const lEmp of localList) {
+          const lId = lEmp.id ? lEmp.id.toLowerCase() : '';
+          const lZoho = lEmp.zohoId ? String(lEmp.zohoId) : '';
+          if (lZoho && seenZohoIds.has(lZoho)) continue;
+          if (lId && seenIds.has(lId)) continue;
+          if (lId) seenIds.add(lId);
+          if (lZoho) seenZohoIds.add(lZoho);
+          mergedList.push(lEmp);
+        }
+
+        setEmployees(mergedList);
+        localStorage.setItem('be_employees', JSON.stringify(mergedList));
+        window.dispatchEvent(new Event('be_employees_updated'));
+
+        if (showNotification) {
+          setToast({
+            type: 'success',
+            message: `Synced ${zohoEmployees.length} Employee(s) from Zoho CRM`,
+            submessage: 'Employee directory is up to date with live Zoho database'
+          });
+        }
+      } else if (showNotification) {
+        setToast({
+          type: 'info',
+          message: 'No employees returned from Zoho CRM',
+          submessage: res.message || 'Check connection or Zoho CRM module records'
+        });
+      }
+    } catch (err: any) {
+      console.warn('[Zoho CRM] Employee fetch error:', err);
+      if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Failed to fetch employees from Zoho CRM',
+          submessage: err?.message || 'Network error communicating with server'
+        });
+      }
+    } finally {
+      setIsFetchingZoho(false);
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('be_employees');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // De-duplicate any existing duplicate entries in storage
-          const seenIds = new Set<string>();
-          const seenZohoIds = new Set<string>();
-          const unique: EmployeeData[] = [];
-          for (const emp of parsed) {
-            const idKey = emp.id ? String(emp.id).trim().toLowerCase() : '';
-            const zohoKey = emp.zohoId ? String(emp.zohoId).trim() : '';
-            if (idKey && seenIds.has(idKey)) continue;
-            if (zohoKey && seenZohoIds.has(zohoKey)) continue;
-            if (idKey) seenIds.add(idKey);
-            if (zohoKey) seenZohoIds.add(zohoKey);
-            unique.push(emp);
-          }
-          setEmployees(unique);
-          localStorage.setItem('be_employees', JSON.stringify(unique));
-          return;
+          setEmployees(parsed);
+        } else {
+          setEmployees(INITIAL_EMPLOYEES);
         }
       } catch (e) {
-        console.error('Failed to parse employees', e);
+        setEmployees(INITIAL_EMPLOYEES);
       }
+    } else {
+      setEmployees(INITIAL_EMPLOYEES);
+      localStorage.setItem('be_employees', JSON.stringify(INITIAL_EMPLOYEES));
     }
-    setEmployees(INITIAL_EMPLOYEES);
-    localStorage.setItem('be_employees', JSON.stringify(INITIAL_EMPLOYEES));
+
+    // Automatically sync live records from Zoho CRM on mount
+    syncEmployeesFromZoho(false);
   }, []);
 
   // Toast Auto-Dismiss
@@ -798,6 +942,20 @@ export const Employees = () => {
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => syncEmployeesFromZoho(true)}
+            disabled={isFetchingZoho}
+            title="Sync live records from Zoho CRM"
+            className="bg-white hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-300 px-4 py-2.5 rounded-xl font-bold flex items-center transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+          >
+            {isFetchingZoho ? (
+              <Loader2 size={16} className="mr-2 animate-spin text-be-orange" />
+            ) : (
+              <Cloud size={16} className="mr-2 text-be-orange" />
+            )}
+            {isFetchingZoho ? 'Syncing...' : 'Sync Zoho CRM'}
+          </button>
+
           {can('create_employee') ? (
             <button
               onClick={() => {

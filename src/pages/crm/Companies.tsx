@@ -52,11 +52,38 @@ export const Companies = () => {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           setCompanies(parsed);
-          return;
         }
       } catch (e) {}
     }
-    setCompanies([]);
+
+    // Auto-fetch live companies from Zoho CRM
+    fetchZohoCompanies().then(res => {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const fetchedCompanies: Company[] = res.data.map((r: any) => ({
+          id: `CMP-${r.id ? String(r.id).slice(-4) : Math.floor(1000 + Math.random() * 9000)}`,
+          name: r.Name || 'Unnamed Company',
+          type: r.Business_Type || 'Private Limited',
+          gstNumber: r.GST_Number || '',
+          doi: r.Date_of_Incorporation || '',
+          email: r.Email || '',
+          secondaryEmail: r.Secondary_Email || '',
+          status: (r.Status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
+          source: 'Zoho CRM',
+          addedOn: r.Created_Time ? new Date(r.Created_Time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB'),
+          zohoId: String(r.id),
+          zohoStatus: 'synced',
+          zohoSyncedAt: new Date().toISOString(),
+        }));
+
+        setCompanies(prev => {
+          const existingZohoIds = new Set(prev.map(c => c.zohoId).filter(Boolean));
+          const newOnly = fetchedCompanies.filter(c => c.zohoId && !existingZohoIds.has(c.zohoId));
+          const updated = [...newOnly, ...prev];
+          localStorage.setItem('be_companies', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    }).catch(err => console.warn('[Zoho CRM] Auto-fetch companies error:', err));
   }, []);
 
   // Toast Auto-Dismiss

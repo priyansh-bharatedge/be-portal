@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, Filter, Check, X, Calendar as CalendarIcon, Briefcase, Info, Users, User, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, ChevronRight, Trash2, RefreshCw, Cloud, CloudCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { saveOrUpdateZohoLeave, deleteZohoLeave, updateZohoLeave, insertZohoLeave } from '../../services/zohoService';
+import { saveOrUpdateZohoLeave, deleteZohoLeave, updateZohoLeave, insertZohoLeave, fetchZohoLeaves } from '../../services/zohoService';
 
 interface LeaveRequest {
   id: string;
@@ -33,6 +33,7 @@ export const Leaves = () => {
   const [viewingLeave, setViewingLeave] = useState<LeaveRequest | null>(null);
   const [syncToast, setSyncToast] = useState<{ message: string; type: 'success' | 'warning' | 'info' | 'error' } | null>(null);
   const [syncingLeaveId, setSyncingLeaveId] = useState<string | null>(null);
+  const [isFetchingZoho, setIsFetchingZoho] = useState(false);
 
   const isTeamLeader = isTL || (currentUser.role as string) === 'TL';
   const isFullAdmin = isSuperAdmin || isHR;
@@ -62,6 +63,75 @@ export const Leaves = () => {
     }, 4500);
   };
 
+  const syncLeavesFromZoho = async (showNotification = false) => {
+    setIsFetchingZoho(true);
+    try {
+      const res = await fetchZohoLeaves();
+      if (res.success && Array.isArray(res.data)) {
+        const emps = getEmployees();
+        const zohoLeaves: LeaveRequest[] = res.data.map((z: any) => {
+          let status: LeaveRequest['status'] = 'Pending TL';
+          if (z.Approved_by_HR === 'Approved') status = 'Approved';
+          else if (z.Approved_by_HR === 'Rejected') status = 'Rejected by HR';
+          else if (z.Approved_by_TL === 'Rejected') status = 'Rejected by TL';
+          else if (z.Approved_by_TL === 'Approved') status = 'Pending HR';
+
+          const targetEmp = emps.find((e: any) => (e.zohoId && z.Employee?.id && String(e.zohoId) === String(z.Employee.id)) || (e.email && z.Email && e.email.toLowerCase() === z.Email.toLowerCase()));
+
+          return {
+            id: `LV-ZOHO-${String(z.id).slice(-4)}`,
+            empId: targetEmp?.id || (z.Employee?.id ? String(z.Employee.id) : 'EMP'),
+            empName: targetEmp?.name || z.Employee?.name || 'Employee',
+            dept: targetEmp?.dept || 'Operations',
+            teamLeaderName: targetEmp?.teamLeaderName || '',
+            type: z.Leave_Type || 'Casual Leave',
+            startDate: z.Start_Date || '',
+            endDate: z.End_Date || '',
+            reason: z.Name || 'Leave Application',
+            status,
+            appliedOn: z.Created_Time ? z.Created_Time.split('T')[0] : new Date().toISOString().split('T')[0],
+            zohoId: String(z.id),
+            employeeZohoId: z.Employee?.id ? String(z.Employee.id) : undefined,
+            email: z.Email || targetEmp?.email || '',
+            secondaryEmail: z.Secondary_Email || ''
+          };
+        });
+
+        const saved = localStorage.getItem('be_leaves');
+        const localList: LeaveRequest[] = saved ? JSON.parse(saved) : [];
+
+        const seenZohoIds = new Set<string>();
+        const mergedList: LeaveRequest[] = [];
+
+        for (const zL of zohoLeaves) {
+          if (zL.zohoId) seenZohoIds.add(zL.zohoId);
+          mergedList.push(zL);
+        }
+
+        for (const lL of localList) {
+          if (lL.zohoId && seenZohoIds.has(lL.zohoId)) continue;
+          mergedList.push(lL);
+        }
+
+        setLeaves(mergedList);
+        localStorage.setItem('be_leaves', JSON.stringify(mergedList));
+
+        if (showNotification) {
+          showToast(`Synced ${zohoLeaves.length} leave record(s) from Zoho CRM`, 'success');
+        }
+      } else if (showNotification) {
+        showToast(res.message || 'No leave records in Zoho CRM', 'info');
+      }
+    } catch (err: any) {
+      console.warn('[Zoho CRM] Leave sync error:', err);
+      if (showNotification) {
+        showToast('Failed to fetch leaves from Zoho CRM', 'error');
+      }
+    } finally {
+      setIsFetchingZoho(false);
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('be_leaves');
     if (saved) {
@@ -71,6 +141,8 @@ export const Leaves = () => {
         console.error('Failed to parse leaves:', e);
       }
     }
+
+    syncLeavesFromZoho(false);
   }, []);
 
   const saveToStorage = (newLeaves: LeaveRequest[]) => {
@@ -431,6 +503,16 @@ export const Leaves = () => {
         </div>
 
         <div className="flex items-center gap-3 relative z-10 shrink-0">
+          <button
+            onClick={() => syncLeavesFromZoho(true)}
+            disabled={isFetchingZoho}
+            title="Sync live leave requests from Zoho CRM"
+            className="bg-white hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-300 px-4 py-3 rounded-2xl font-bold flex items-center transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50 text-sm"
+          >
+            <Cloud size={16} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-pulse' : ''}`} />
+            {isFetchingZoho ? 'Syncing...' : 'Sync Zoho CRM'}
+          </button>
+
           <button
             onClick={() => openAddModal(true)}
             className="bg-be-orange hover:bg-orange-600 text-white px-5 py-3 rounded-2xl font-bold flex items-center transition-all shadow-md shadow-orange-500/20 hover:shadow-lg hover:-translate-y-0.5 text-sm"

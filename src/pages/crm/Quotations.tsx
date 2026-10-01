@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, Download, Send, Cloud, CloudOff, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Loader2, Printer } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { saveDocument } from '../../lib/db';
-import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal } from '../../services/zohoService';
+import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal, fetchZohoQuotations } from '../../services/zohoService';
 import { downloadQuotationPDF, downloadQuotationHTML, printQuotation, generateQuotationPDFBlob } from '../../utils/quotationTemplate';
 
 interface DealService {
@@ -362,6 +362,60 @@ export const Quotations = () => {
     } catch (e) { }
     return [];
   });
+
+  // Auto-fetch live quotations from Zoho CRM on mount
+  useEffect(() => {
+    fetchZohoQuotations().then(res => {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const fetchedQuotations = res.data.map((z: any) => ({
+          id: z.Name?.match(/QT-\d+/)?.[0] || `QT-${String(z.id).slice(-4)}`,
+          client: z.Name ? z.Name.split(' - ')[1] || z.Name : 'Client',
+          company: z.Company_Name || z.Name?.split(' - ')[0] || 'N/A',
+          amount: z.Grand_Total || (z.Subtotal ? `₹${Number(z.Subtotal).toLocaleString()}` : '₹0'),
+          status: 'Sent',
+          date: z.Created_Time ? new Date(z.Created_Time).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
+          zohoId: String(z.id),
+          zohoStatus: 'synced',
+          formData: {
+            clientName: z.Name ? z.Name.split(' - ')[1] || z.Name : '',
+            companyName: z.Company_Name || '',
+            email: z.Email || '',
+            mobile: z.Mobile_Number || '',
+            gender: z.Gender || 'Male',
+            city: z.City || '',
+            state: z.State || '',
+            panCard: z.PAN_Card || '',
+            aadhaarCard: z.Aadhaar_Card || '',
+            businessType: z.Company_Type || '',
+            doi: z.Date_of_Incorporation || '',
+            gstNumber: z.GST_Number || '',
+            companyPan: z.Company_PAN_Number || '',
+            sector: z.Sector || '',
+            industry: z.Industry || '',
+          },
+          servicesData: Array.isArray(z.Services_And_Pricing) ? z.Services_And_Pricing.map((s: any, idx: number) => ({
+            id: String(idx + 1),
+            name: s.Service || 'Service',
+            totalAmount: s.Total ? String(s.Total).replace(/[^0-9.]/g, '') : '',
+            baseAmount: s.Base ? String(s.Base).replace(/[^0-9.]/g, '') : '',
+          })) : [],
+          totals: {
+            subtotal: z.Subtotal ? Number(String(z.Subtotal).replace(/[^0-9.]/g, '')) : 0,
+            totalGst: z.Total_GST ? Number(String(z.Total_GST).replace(/[^0-9.]/g, '')) : 0,
+            grandTotal: z.Grand_Total ? Number(String(z.Grand_Total).replace(/[^0-9.]/g, '')) : 0,
+          }
+        }));
+
+        setQuotations(prev => {
+          const existingZohoIds = new Set(prev.map((q: any) => q.zohoId).filter(Boolean));
+          const newOnly = fetchedQuotations.filter((q: any) => q.zohoId && !existingZohoIds.has(q.zohoId));
+          const updated = [...newOnly, ...prev];
+          localStorage.setItem('be_quotations', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    }).catch(err => console.warn('[Zoho CRM] Auto-fetch quotations error:', err));
+  }, []);
 
   const filteredQuotations = quotations.filter((q: any) =>
     (q.client && String(q.client).toLowerCase().includes(searchQuery.toLowerCase())) ||

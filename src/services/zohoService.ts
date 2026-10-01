@@ -536,6 +536,35 @@ export async function deleteZohoLeave(zohoId: string): Promise<ZohoApiResponse> 
 }
 
 /**
+ * Fetches all live quotation records from Zoho CRM Quotations module.
+ */
+export async function fetchZohoQuotations(): Promise<{ success: boolean; data: any[]; message?: string }> {
+  try {
+    const response = await fetch('/api/zoho/get-quotations');
+    const result = await safeParseResponse(response);
+    if (response.ok && result.success && Array.isArray(result.data)) {
+      return {
+        success: true,
+        data: result.data,
+        message: 'Quotations fetched successfully from Zoho CRM'
+      };
+    }
+    return {
+      success: false,
+      data: [],
+      message: result.message || 'Failed to fetch quotations from Zoho CRM'
+    };
+  } catch (error: any) {
+    console.error('[Zoho CRM] Client exception while fetching quotations:', error);
+    return {
+      success: false,
+      data: [],
+      message: error?.message || 'Network error communicating with Zoho CRM get-quotations endpoint'
+    };
+  }
+}
+
+/**
  * Fetches all live employee records from Zoho CRM Employee module.
  */
 export async function fetchZohoEmployees(): Promise<{ success: boolean; data: any[]; message?: string }> {
