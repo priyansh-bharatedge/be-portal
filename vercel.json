@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/zoho/:match*",
+      "destination": "/api/zoho?action=:match*"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
