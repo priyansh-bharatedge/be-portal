@@ -13,12 +13,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Missing required parameters: toEmail, otpCode' });
   }
 
-  // Load SMTP config from environment variables
-  const host = process.env.SMTP_HOST || process.env.VITE_SMTP_HOST || 'smtp.zoho.in';
+  // Load SMTP config from environment variables (with testerbemain@gmail.com defaults)
+  const host = process.env.SMTP_HOST || process.env.VITE_SMTP_HOST || 'smtp.gmail.com';
   const port = parseInt(process.env.SMTP_PORT || process.env.VITE_SMTP_PORT || '465', 10);
   const secure = port === 465 || process.env.SMTP_SECURE === 'true' || process.env.VITE_SMTP_SECURE === 'true';
-  const user = process.env.SMTP_USER || process.env.VITE_SMTP_USER || 'support@bharat-edge.com';
-  const pass = process.env.SMTP_PASS || process.env.VITE_SMTP_PASS || '';
+  const user = process.env.SMTP_USER || process.env.VITE_SMTP_USER || 'testerbemain@gmail.com';
+  const pass = process.env.SMTP_PASS || process.env.VITE_SMTP_PASS || 'qyquibvuwwefczsy';
   const from = process.env.SMTP_FROM || process.env.VITE_SMTP_FROM || `"BharatEdge Support" <${user}>`;
 
   if (!pass) {

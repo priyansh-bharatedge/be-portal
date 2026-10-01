@@ -821,7 +821,7 @@ function zohoApiPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const pathname = req.url ? req.url.split('?')[0] : '';
-        if (!pathname.startsWith('/api/zoho/')) {
+        if (!pathname.startsWith('/api/zoho/') && pathname !== '/api/send-otp') {
           return next();
         }
 
@@ -2262,7 +2262,7 @@ function zohoApiPlugin(): Plugin {
         }
 
         // --- DEV ENDPOINT: /api/send-otp ---
-        if (req.url === '/api/send-otp' && req.method === 'POST') {
+        if ((pathname === '/api/send-otp' || req.url?.startsWith('/api/send-otp')) && req.method === 'POST') {
           let body = '';
           req.on('data', chunk => { body += chunk; });
           req.on('end', async () => {
