@@ -26,6 +26,7 @@ export const Quotations = () => {
   // Zoho & Submission States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
   const [isTestingZoho, setIsTestingZoho] = useState(false);
 
@@ -363,10 +364,22 @@ export const Quotations = () => {
     return [];
   });
 
-  // Auto-fetch live quotations from Zoho CRM on mount
-  useEffect(() => {
-    fetchZohoQuotations().then(res => {
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+  const handleFetchFromZoho = async (showNotification = true) => {
+    setIsFetchingZoho(true);
+    try {
+      const res = await fetchZohoQuotations();
+      if (res.success && Array.isArray(res.data)) {
+        if (res.data.length === 0) {
+          if (showNotification) {
+            setToast({
+              type: 'info',
+              message: 'No Quotations Found in Zoho CRM',
+              submessage: 'Quotations module returned 0 records'
+            });
+          }
+          return;
+        }
+
         const fetchedQuotations = res.data.map((z: any) => ({
           id: z.Name?.match(/QT-\d+/)?.[0] || `QT-${String(z.id).slice(-4)}`,
           client: z.Name ? z.Name.split(' - ')[1] || z.Name : 'Client',
@@ -407,14 +420,49 @@ export const Quotations = () => {
         }));
 
         setQuotations(prev => {
-          const existingZohoIds = new Set(prev.map((q: any) => q.zohoId).filter(Boolean));
-          const newOnly = fetchedQuotations.filter((q: any) => q.zohoId && !existingZohoIds.has(q.zohoId));
-          const updated = [...newOnly, ...prev];
-          localStorage.setItem('be_quotations', JSON.stringify(updated));
-          return updated;
+          const seenZohoIds = new Set<string>();
+          const merged = [...fetchedQuotations];
+          for (const f of fetchedQuotations) {
+            if (f.zohoId) seenZohoIds.add(f.zohoId);
+          }
+          for (const p of prev) {
+            if (p.zohoId && seenZohoIds.has(p.zohoId)) continue;
+            merged.push(p);
+          }
+          localStorage.setItem('be_quotations', JSON.stringify(merged));
+          return merged;
+        });
+
+        if (showNotification) {
+          setToast({
+            type: 'success',
+            message: `Fetched ${res.data.length} Quotation(s) from Zoho CRM!`,
+            submessage: 'Quotations synchronized successfully'
+          });
+        }
+      } else if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Failed to fetch quotations from Zoho CRM',
+          submessage: res.message || 'Check connection or Zoho API rate limits'
         });
       }
-    }).catch(err => console.warn('[Zoho CRM] Auto-fetch quotations error:', err));
+    } catch (err: any) {
+      if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Error connecting to Zoho CRM',
+          submessage: err.message || 'Network communication error'
+        });
+      }
+    } finally {
+      setIsFetchingZoho(false);
+    }
+  };
+
+  // Auto-fetch live quotations from Zoho CRM on mount
+  useEffect(() => {
+    handleFetchFromZoho(false);
   }, []);
 
   const filteredQuotations = quotations.filter((q: any) =>
@@ -1004,9 +1052,14 @@ export const Quotations = () => {
               className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none shadow-sm transition-shadow w-64"
             />
           </div>
-          <button className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm hover:shadow">
-            <Filter size={16} className="mr-2" />
-            Filters
+          <button
+            onClick={() => handleFetchFromZoho(true)}
+            disabled={isFetchingZoho}
+            className="flex items-center px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm hover:shadow disabled:opacity-60"
+            title="Fetch live records from Zoho CRM Quotations module"
+          >
+            <RefreshCw size={15} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
+            {isFetchingZoho ? 'Fetching...' : 'Fetch Zoho CRM'}
           </button>
           <button
             onClick={() => handleOpenModal()}
@@ -1149,6 +1202,23 @@ export const Quotations = () => {
                   </td>
                 </tr>
               ))}
+              {filteredQuotations.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
+                    {isFetchingZoho ? (
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
+                        <p className="text-sm font-semibold text-gray-800">Fetching live quotation records from Zoho CRM...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-lg font-medium text-gray-900">No quotations found</p>
+                        <p className="text-xs text-gray-400 mt-1">Create a new quotation or sync live records from Zoho CRM.</p>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

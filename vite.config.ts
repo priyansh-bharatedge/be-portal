@@ -2167,8 +2167,182 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
           }
         }
 
-        // Delete leave, employee, company, client, deal, quotation, policy, calendar, dsr or generic record endpoint (Module API Name: Leave_Management, Employee, Companies, Clients, Deals, Quotations, Company_Policies, Company_Calendar, DSR, etc.)
-        if ((pathname === '/api/zoho/delete-leave' || pathname === '/api/zoho/delete-employee' || pathname === '/api/zoho/delete-company' || pathname === '/api/zoho/delete-client' || pathname === '/api/zoho/delete-deal' || pathname === '/api/zoho/delete-quotation' || pathname === '/api/zoho/delete-policy' || pathname === '/api/zoho/delete-calendar' || pathname === '/api/zoho/delete-dsr' || pathname === '/api/zoho/delete-record') && req.method === 'DELETE') {
+        // Fetch / Get Daily Attendance records endpoint (Module API Name: Daily_Attendance)
+        if (pathname === '/api/zoho/get-attendance' && req.method === 'GET') {
+          try {
+            let accessToken = await getAccessToken(env);
+            const moduleName = env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
+            const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+            const attFields = 'id,Name,Attendance_Date,Employee_Code,First_In,Last_Out,Punch_Status,Punches,Total_Minutes,Late_Minutes,Created_Time,Modified_Time';
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&per_page=200`;
+
+            console.log(`[Vite Zoho Plugin] Fetching live Attendance from Zoho CRM (${moduleName})`);
+
+            let crmRes = await fetch(crmEndpoint, {
+              method: 'GET',
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            });
+            let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+
+            if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              crmRes = await fetch(crmEndpoint, {
+                method: 'GET',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+              });
+              crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            if (crmData?.data) {
+              return res.end(JSON.stringify({
+                success: true,
+                data: crmData.data,
+                info: crmData.info,
+              }));
+            } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
+              return res.end(JSON.stringify({ success: true, data: [] }));
+            } else {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({
+                success: false,
+                message: crmData?.message || 'Failed to fetch attendance from Zoho CRM',
+                errorDetails: crmData,
+              }));
+            }
+          } catch (err: any) {
+            console.error('[Vite Zoho Plugin] Fetch Attendance error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
+        // Fetch / Get Raised Queries / Cases endpoint (Module API Name: Cases)
+        if (pathname === '/api/zoho/get-queries' && req.method === 'GET') {
+          try {
+            let accessToken = await getAccessToken(env);
+            const moduleName = 'Cases';
+            const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+            const caseFields = 'id,Case_Number,Subject,Description,Status,Priority,Created_Time,Modified_Time';
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${caseFields}&per_page=200`;
+
+            console.log(`[Vite Zoho Plugin] Fetching live Queries from Zoho CRM (${moduleName})`);
+
+            let crmRes = await fetch(crmEndpoint, {
+              method: 'GET',
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            });
+            let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+
+            if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              crmRes = await fetch(crmEndpoint, {
+                method: 'GET',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+              });
+              crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            if (crmData?.data) {
+              return res.end(JSON.stringify({
+                success: true,
+                data: crmData.data,
+                info: crmData.info,
+              }));
+            } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
+              return res.end(JSON.stringify({ success: true, data: [] }));
+            } else {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({
+                success: false,
+                message: crmData?.message || 'Failed to fetch queries from Zoho CRM',
+                errorDetails: crmData,
+              }));
+            }
+          } catch (err: any) {
+            console.error('[Vite Zoho Plugin] Fetch Queries error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
+        // Insert or Update Query endpoint (Module API Name: Cases)
+        if ((pathname === '/api/zoho/insert-query' || pathname === '/api/zoho/update-query') && (req.method === 'POST' || req.method === 'PUT')) {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const q = JSON.parse(body);
+              const isUpdate = Boolean(q.zohoId || pathname === '/api/zoho/update-query');
+              const httpMethod = isUpdate ? 'PUT' : 'POST';
+
+              const payload: any = {
+                Subject: q.query || q.subject || 'Quality Query',
+                Description: q.description || '',
+                Status: q.status || 'Open',
+                Priority: q.priority || 'Medium',
+              };
+              if (q.zohoId) payload.id = String(q.zohoId);
+
+              let accessToken = await getAccessToken(env);
+              const moduleName = 'Cases';
+              const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+              const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
+
+              let crmRes = await fetch(crmEndpoint, {
+                method: httpMethod,
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ data: [payload] }),
+              });
+              let crmData: any = await crmRes.json();
+
+              if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+                cachedToken = null;
+                accessToken = await getAccessToken(env);
+                crmRes = await fetch(crmEndpoint, {
+                  method: httpMethod,
+                  headers: {
+                    'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ data: [payload] }),
+                });
+                crmData = await crmRes.json();
+              }
+
+              res.setHeader('Content-Type', 'application/json');
+              if (crmData.data?.[0]?.code === 'SUCCESS') {
+                const zohoId = crmData.data[0].details?.id || q.zohoId;
+                return res.end(JSON.stringify({
+                  success: true,
+                  zohoId,
+                  message: isUpdate ? 'Query updated in Zoho CRM' : 'Query inserted into Zoho CRM',
+                  data: crmData.data[0],
+                }));
+              } else {
+                res.statusCode = 400;
+                const errMsg = crmData.data?.[0]?.message || crmData.message || 'Failed to save query in Zoho CRM';
+                return res.end(JSON.stringify({ success: false, message: errMsg, errorDetails: crmData }));
+              }
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+          });
+          return;
+        }
+
+        // Delete leave, employee, company, client, deal, quotation, policy, calendar, dsr, query or generic record endpoint (Module API Name: Leave_Management, Employee, Companies, Clients, Deals, Quotations, Company_Policies, Company_Calendar, DSR, Cases, etc.)
+        if ((pathname === '/api/zoho/delete-leave' || pathname === '/api/zoho/delete-employee' || pathname === '/api/zoho/delete-company' || pathname === '/api/zoho/delete-client' || pathname === '/api/zoho/delete-deal' || pathname === '/api/zoho/delete-quotation' || pathname === '/api/zoho/delete-policy' || pathname === '/api/zoho/delete-calendar' || pathname === '/api/zoho/delete-dsr' || pathname === '/api/zoho/delete-query' || pathname === '/api/zoho/delete-record') && req.method === 'DELETE') {
           let body = '';
           req.on('data', chunk => { body += chunk; });
           req.on('end', async () => {

@@ -1580,3 +1580,144 @@ export async function fetchZohoDsr(): Promise<{ success: boolean; data: any[]; m
   }
 }
 
+/**
+ * Fetches all live attendance records from Zoho CRM Daily_Attendance module.
+ */
+export async function fetchZohoAttendance(): Promise<{ success: boolean; data: any[]; message?: string }> {
+  try {
+    const response = await fetch('/api/zoho/get-attendance');
+    const result = await safeParseResponse(response);
+    if (response.ok && result.success && Array.isArray(result.data)) {
+      return {
+        success: true,
+        data: result.data,
+        message: 'Attendance records fetched successfully from Zoho CRM'
+      };
+    }
+    return {
+      success: false,
+      data: [],
+      message: result.message || 'Failed to fetch attendance records from Zoho CRM'
+    };
+  } catch (error: any) {
+    console.error('[Zoho CRM] Client exception while fetching attendance records:', error);
+    return {
+      success: false,
+      data: [],
+      message: error?.message || 'Network error communicating with Zoho CRM get-attendance endpoint'
+    };
+  }
+}
+
+/**
+ * Fetches all live query records from Zoho CRM Cases module.
+ */
+export async function fetchZohoQueries(): Promise<{ success: boolean; data: any[]; message?: string }> {
+  try {
+    const response = await fetch('/api/zoho/get-queries');
+    const result = await safeParseResponse(response);
+    if (response.ok && result.success && Array.isArray(result.data)) {
+      return {
+        success: true,
+        data: result.data,
+        message: 'Queries fetched successfully from Zoho CRM'
+      };
+    }
+    return {
+      success: false,
+      data: [],
+      message: result.message || 'Failed to fetch queries from Zoho CRM'
+    };
+  } catch (error: any) {
+    console.error('[Zoho CRM] Client exception while fetching queries:', error);
+    return {
+      success: false,
+      data: [],
+      message: error?.message || 'Network error communicating with Zoho CRM get-queries endpoint'
+    };
+  }
+}
+
+/**
+ * Inserts a new query into Zoho CRM Cases module.
+ */
+export async function insertZohoQuery(query: any): Promise<ZohoApiResponse> {
+  try {
+    const response = await fetch('/api/zoho/insert-query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(query),
+    });
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        zohoId: data.zohoId,
+        message: data.message || 'Query inserted successfully into Zoho CRM',
+        data: data.data,
+      };
+    }
+    return {
+      success: false,
+      message: data.message || 'Failed to insert query into Zoho CRM',
+      errorDetails: data.errorDetails || data,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with Zoho CRM server',
+      errorDetails: error,
+    };
+  }
+}
+
+/**
+ * Updates an existing query in Zoho CRM Cases module.
+ */
+export async function updateZohoQuery(query: any): Promise<ZohoApiResponse> {
+  try {
+    const response = await fetch('/api/zoho/update-query', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(query),
+    });
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        zohoId: data.zohoId || query.zohoId,
+        message: data.message || 'Query updated successfully in Zoho CRM',
+        data: data.data,
+      };
+    }
+    return {
+      success: false,
+      message: data.message || 'Failed to update query in Zoho CRM',
+      errorDetails: data.errorDetails || data,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with Zoho CRM server',
+      errorDetails: error,
+    };
+  }
+}
+
+/**
+ * Automatically inserts or updates a query in Zoho CRM.
+ */
+export async function saveOrUpdateZohoQuery(query: any): Promise<ZohoApiResponse> {
+  if (query.zohoId) {
+    return updateZohoQuery(query);
+  }
+  return insertZohoQuery(query);
+}
+
+/**
+ * Deletes a query record from Zoho CRM.
+ */
+export async function deleteZohoQuery(zohoId: string): Promise<ZohoApiResponse> {
+  return deleteZohoRecord('Cases', zohoId);
+}
+

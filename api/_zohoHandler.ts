@@ -1667,7 +1667,127 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    // 19. Delete Record (Generic or module-specific)
+    // 19. Get Daily Attendance
+    if (action === 'get-attendance' && method === 'GET') {
+      let accessToken = await getAccessToken();
+      const moduleName = process.env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
+      const attFields = 'id,Name,Attendance_Date,Employee_Code,First_In,Last_Out,Punch_Status,Punches,Total_Minutes,Late_Minutes,Created_Time,Modified_Time';
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&per_page=200`;
+
+      let crmRes = await fetch(crmEndpoint, {
+        method: 'GET',
+        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+      });
+      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+
+      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
+        cachedToken = null;
+        accessToken = await getAccessToken();
+        crmRes = await fetch(crmEndpoint, {
+          method: 'GET',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+        });
+        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+      }
+
+      if (crmData?.data) {
+        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
+      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
+        return sendJson(res, 200, { success: true, data: [] });
+      } else {
+        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch attendance from Zoho CRM', errorDetails: crmData });
+      }
+    }
+
+    // 20. Get Raised Queries / Cases
+    if (action === 'get-queries' && method === 'GET') {
+      let accessToken = await getAccessToken();
+      const moduleName = 'Cases';
+      const caseFields = 'id,Case_Number,Subject,Description,Status,Priority,Created_Time,Modified_Time';
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${caseFields}&per_page=200`;
+
+      let crmRes = await fetch(crmEndpoint, {
+        method: 'GET',
+        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+      });
+      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+
+      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
+        cachedToken = null;
+        accessToken = await getAccessToken();
+        crmRes = await fetch(crmEndpoint, {
+          method: 'GET',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+        });
+        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+      }
+
+      if (crmData?.data) {
+        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
+      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
+        return sendJson(res, 200, { success: true, data: [] });
+      } else {
+        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch queries from Zoho CRM', errorDetails: crmData });
+      }
+    }
+
+    // 21. Insert / Update Query
+    if ((action === 'insert-query' || action === 'update-query') && (method === 'POST' || method === 'PUT')) {
+      const q = await getRequestBody(req);
+      const isUpdate = Boolean(q.zohoId || action === 'update-query');
+      const httpMethod = isUpdate ? 'PUT' : 'POST';
+
+      const payload: any = {
+        Subject: q.query || q.subject || 'Quality Query',
+        Description: q.description || '',
+        Status: q.status || 'Open',
+        Priority: q.priority || 'Medium',
+      };
+      if (q.zohoId) payload.id = String(q.zohoId);
+
+      let accessToken = await getAccessToken();
+      const moduleName = 'Cases';
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
+
+      let crmRes = await fetch(crmEndpoint, {
+        method: httpMethod,
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ data: [payload] }),
+      });
+
+      let crmData: any = await crmRes.json();
+      if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+        cachedToken = null;
+        accessToken = await getAccessToken();
+        crmRes = await fetch(crmEndpoint, {
+          method: httpMethod,
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ data: [payload] }),
+        });
+        crmData = await crmRes.json();
+      }
+
+      if (crmData.data?.[0]?.code === 'SUCCESS') {
+        const zohoId = crmData.data[0].details?.id || q.zohoId;
+        return sendJson(res, 200, {
+          success: true,
+          zohoId,
+          message: isUpdate ? 'Query updated in Zoho CRM' : 'Query inserted into Zoho CRM',
+          data: crmData.data[0],
+        });
+      } else {
+        const errMsg = crmData.data?.[0]?.message || crmData.message || 'Failed to save query in Zoho CRM';
+        return sendJson(res, 400, { success: false, message: errMsg, errorDetails: crmData });
+      }
+    }
+
+    // 22. Delete Record (Generic or module-specific)
     if ((action.startsWith('delete-') || method === 'DELETE')) {
       const parsedBody = await getRequestBody(req);
       let recordId = parsedBody.id || parsedBody.zohoId || urlObj.searchParams.get('id') || urlObj.searchParams.get('zohoId') || '';

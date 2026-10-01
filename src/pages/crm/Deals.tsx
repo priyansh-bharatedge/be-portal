@@ -28,6 +28,7 @@ export const Deals = () => {
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState('All Deals');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Zoho CRM states
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1001,17 +1002,19 @@ export const Deals = () => {
             <input
               type="text"
               placeholder="Search deals..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none"
             />
           </div>
           <button
             onClick={() => handleFetchFromZoho(true)}
             disabled={isFetchingZoho}
-            className="flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50"
+            className="flex items-center px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm hover:shadow disabled:opacity-60"
             title="Fetch and sync live deals from Zoho CRM"
           >
-            <RefreshCw size={15} className={`mr-2 text-gray-600 ${isFetchingZoho ? 'animate-spin' : ''}`} />
-            {isFetchingZoho ? 'Fetching...' : 'Fetch from Zoho'}
+            <RefreshCw size={15} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
+            {isFetchingZoho ? 'Fetching...' : 'Fetch Zoho CRM'}
           </button>
           <button
             onClick={() => handleOpenModal()}
@@ -1059,8 +1062,16 @@ export const Deals = () => {
             </thead>
             <tbody className="text-gray-700">
               {deals.filter((deal: any) => {
-                if (activeTab === 'Manual Deals') return deal.source !== 'Quotation';
-                if (activeTab === 'From Quotations') return deal.source === 'Quotation';
+                if (activeTab === 'Manual Deals' && deal.source === 'Quotation') return false;
+                if (activeTab === 'From Quotations' && deal.source !== 'Quotation') return false;
+                if (searchQuery) {
+                  const q = searchQuery.toLowerCase();
+                  const matchClient = deal.client && deal.client.toLowerCase().includes(q);
+                  const matchCompany = deal.company && deal.company.toLowerCase().includes(q);
+                  const matchService = deal.service && deal.service.toLowerCase().includes(q);
+                  const matchId = deal.id && deal.id.toLowerCase().includes(q);
+                  if (!matchClient && !matchCompany && !matchService && !matchId) return false;
+                }
                 return true;
               }).map((deal: any) => (
                 <tr key={deal.id} className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm">
@@ -1144,6 +1155,35 @@ export const Deals = () => {
                   </td>
                 </tr>
               ))}
+              {deals.filter((deal: any) => {
+                if (activeTab === 'Manual Deals' && deal.source === 'Quotation') return false;
+                if (activeTab === 'From Quotations' && deal.source !== 'Quotation') return false;
+                if (searchQuery) {
+                  const q = searchQuery.toLowerCase();
+                  const matchClient = deal.client && deal.client.toLowerCase().includes(q);
+                  const matchCompany = deal.company && deal.company.toLowerCase().includes(q);
+                  const matchService = deal.service && deal.service.toLowerCase().includes(q);
+                  const matchId = deal.id && deal.id.toLowerCase().includes(q);
+                  if (!matchClient && !matchCompany && !matchService && !matchId) return false;
+                }
+                return true;
+              }).length === 0 && (
+                <tr>
+                  <td colSpan={11} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
+                    {isFetchingZoho ? (
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
+                        <p className="text-sm font-semibold text-gray-800">Fetching live deals from Zoho CRM...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-lg font-medium text-gray-900">No deals found</p>
+                        <p className="text-xs text-gray-400 mt-1">Create a new deal or fetch live records from Zoho CRM.</p>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

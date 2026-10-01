@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Calendar as CalendarIcon, CheckCircle2, XCircle, Clock, AlertCircle, Info } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Search, Filter, Calendar as CalendarIcon, CheckCircle2, XCircle, Clock, AlertCircle, Info, RefreshCw, Loader2, Cloud, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { fetchZohoAttendance } from '../../services/zohoService';
 
 interface AttendanceRecord {
   id: string;
@@ -11,6 +12,7 @@ interface AttendanceRecord {
   status: 'Present' | 'Absent' | 'Half Day' | 'Late';
   checkIn?: string;
   checkOut?: string;
+  zohoId?: string;
 }
 
 export const Attendance = () => {
@@ -18,15 +20,107 @@ export const Attendance = () => {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isFetchingZoho, setIsFetchingZoho] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
 
   const canMarkAttendance = isSuperAdmin || isHR;
+
+  const handleFetchAttendance = async (showNotification = true) => {
+    setIsFetchingZoho(true);
+    try {
+      const res = await fetchZohoAttendance();
+      if (res.success && Array.isArray(res.data)) {
+        const mappedRecords: AttendanceRecord[] = res.data.map((item: any) => {
+          const empCode = item.Employee_Code || (item.Name ? item.Name.split(' - ')[0] : 'EMP');
+          const attDate = item.Attendance_Date || (item.Name && item.Name.includes(' - ') ? item.Name.split(' - ')[1] : new Date().toISOString().split('T')[0]);
+          
+          let checkInStr = '--';
+          if (item.First_In) {
+            try {
+              checkInStr = new Date(item.First_In).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            } catch (e) {
+              checkInStr = item.First_In;
+            }
+          }
+          let checkOutStr = '--';
+          if (item.Last_Out) {
+            try {
+              checkOutStr = new Date(item.Last_Out).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            } catch (e) {
+              checkOutStr = item.Last_Out;
+            }
+          }
+
+          let status: AttendanceRecord['status'] = 'Present';
+          if (item.Punch_Status === 'Absent') status = 'Absent';
+          else if (item.Punch_Status === 'Half Day') status = 'Half Day';
+          else if (item.Late_Minutes && item.Late_Minutes > 15) status = 'Late';
+
+          return {
+            id: `ATT-${item.id || Date.now()}`,
+            empId: empCode,
+            empName: item.Employee?.name || `Employee ${empCode}`,
+            date: attDate,
+            status,
+            checkIn: checkInStr,
+            checkOut: checkOutStr,
+            zohoId: String(item.id),
+          };
+        });
+
+        setRecords(prev => {
+          const existingZoho = new Set(prev.map(r => r.zohoId).filter(Boolean));
+          const newOnly = mappedRecords.filter(r => r.zohoId && !existingZoho.has(r.zohoId));
+          const merged = [...newOnly, ...prev];
+          localStorage.setItem('be_attendance', JSON.stringify(merged));
+          return merged;
+        });
+
+        if (showNotification) {
+          setToast({
+            type: 'success',
+            message: `Fetched ${res.data.length} Attendance Records from Zoho CRM`,
+            submessage: 'Daily Attendance synchronized with live database'
+          });
+        }
+      } else if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Failed to fetch attendance records',
+          submessage: res.message || 'Check connection or Zoho CRM rate limits'
+        });
+      }
+    } catch (e: any) {
+      if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Error connecting to Zoho CRM',
+          submessage: e.message || 'Network communication error'
+        });
+      }
+    } finally {
+      setIsFetchingZoho(false);
+    }
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('be_attendance');
     if (saved) {
-      setRecords(JSON.parse(saved));
+      try {
+        setRecords(JSON.parse(saved));
+      } catch (e) {}
     }
+
+    // Auto-fetch live attendance from Zoho CRM on mount
+    handleFetchAttendance(false);
   }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const saveToStorage = (newRecords: AttendanceRecord[]) => {
     setRecords(newRecords);
@@ -120,6 +214,44 @@ export const Attendance = () => {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={`fixed top-6 right-6 z-[999] max-w-md p-4 rounded-xl shadow-2xl border flex items-start space-x-3 backdrop-blur-md ${
+              toast.type === 'success'
+                ? 'bg-emerald-950/90 text-white border-emerald-500/30'
+                : toast.type === 'error'
+                  ? 'bg-rose-950/90 text-white border-rose-500/30'
+                  : 'bg-slate-900/90 text-white border-slate-700'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
+            ) : toast.type === 'error' ? (
+              <AlertCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
+            ) : (
+              <Cloud className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+            )}
+            <div className="flex-1 text-sm">
+              <p className="font-semibold text-white">{toast.message}</p>
+              {toast.submessage && (
+                <p className="text-xs text-gray-300 mt-1 font-mono break-all">{toast.submessage}</p>
+              )}
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              className="text-gray-400 hover:text-white p-1 rounded transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
@@ -134,6 +266,15 @@ export const Attendance = () => {
           </p>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => handleFetchAttendance(true)}
+            disabled={isFetchingZoho}
+            className="px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold flex items-center shadow-sm transition-all disabled:opacity-60"
+            title="Fetch live attendance records from Zoho CRM"
+          >
+            <RefreshCw size={14} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
+            {isFetchingZoho ? 'Syncing...' : 'Fetch Zoho CRM'}
+          </button>
           {!canMarkAttendance && (
             <div className="text-xs text-gray-500 bg-gray-50 px-3.5 py-2 rounded-xl font-medium border border-gray-200 flex items-center">
               <Info size={14} className="mr-1.5 text-gray-400" /> View-only Mode
@@ -210,8 +351,17 @@ export const Attendance = () => {
               {currentRecords.length === 0 && (
                 <tr>
                   <td colSpan={canMarkAttendance ? 5 : 4} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
-                    <p className="text-lg font-medium text-gray-900">No employees found</p>
-                    <p className="text-xs text-gray-400 mt-1">No attendance records found for this date.</p>
+                    {isFetchingZoho ? (
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
+                        <p className="text-sm font-semibold text-gray-800">Fetching live attendance records from Zoho CRM...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-lg font-medium text-gray-900">No employees found</p>
+                        <p className="text-xs text-gray-400 mt-1">No attendance records found for this date.</p>
+                      </>
+                    )}
                   </td>
                 </tr>
               )}

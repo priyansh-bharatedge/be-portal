@@ -50,40 +50,14 @@ export const Companies = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           setCompanies(parsed);
         }
       } catch (e) {}
     }
 
-    // Auto-fetch live companies from Zoho CRM
-    fetchZohoCompanies().then(res => {
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        const fetchedCompanies: Company[] = res.data.map((r: any) => ({
-          id: `CMP-${r.id ? String(r.id).slice(-4) : Math.floor(1000 + Math.random() * 9000)}`,
-          name: r.Name || 'Unnamed Company',
-          type: r.Business_Type || 'Private Limited',
-          gstNumber: r.GST_Number || '',
-          doi: r.Date_of_Incorporation || '',
-          email: r.Email || '',
-          secondaryEmail: r.Secondary_Email || '',
-          status: (r.Status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
-          source: 'Zoho CRM',
-          addedOn: r.Created_Time ? new Date(r.Created_Time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB'),
-          zohoId: String(r.id),
-          zohoStatus: 'synced',
-          zohoSyncedAt: new Date().toISOString(),
-        }));
-
-        setCompanies(prev => {
-          const existingZohoIds = new Set(prev.map(c => c.zohoId).filter(Boolean));
-          const newOnly = fetchedCompanies.filter(c => c.zohoId && !existingZohoIds.has(c.zohoId));
-          const updated = [...newOnly, ...prev];
-          localStorage.setItem('be_companies', JSON.stringify(updated));
-          return updated;
-        });
-      }
-    }).catch(err => console.warn('[Zoho CRM] Auto-fetch companies error:', err));
+    // Auto-fetch live companies from Zoho CRM on mount
+    handleFetchZohoCompanies(false);
   }, []);
 
   // Toast Auto-Dismiss
@@ -237,17 +211,19 @@ export const Companies = () => {
     }
   };
 
-  const handleFetchZohoCompanies = async () => {
+  const handleFetchZohoCompanies = async (showNotification = true) => {
     setIsFetchingZoho(true);
     try {
       const res = await fetchZohoCompanies();
       if (res.success && Array.isArray(res.data)) {
         if (res.data.length === 0) {
-          setToast({
-            type: 'info',
-            message: 'No Live Companies Found in Zoho CRM',
-            submessage: 'Companies module returned 0 records'
-          });
+          if (showNotification) {
+            setToast({
+              type: 'info',
+              message: 'No Live Companies Found in Zoho CRM',
+              submessage: 'Companies module returned 0 records'
+            });
+          }
           return;
         }
 
@@ -268,31 +244,51 @@ export const Companies = () => {
           zohoSyncedAt: new Date().toISOString(),
         }));
 
-        // Merge with existing companies avoiding duplicates
-        const existingZohoIds = new Set(companies.map(c => c.zohoId).filter(Boolean));
-        const newOnly = fetchedCompanies.filter(c => c.zohoId && !existingZohoIds.has(c.zohoId));
+        setCompanies(prev => {
+          const seenZohoIds = new Set<string>();
+          const seenIds = new Set<string>();
+          const merged: Company[] = [];
 
-        const updated = [...newOnly, ...companies];
-        saveToStorage(updated);
+          for (const fc of fetchedCompanies) {
+            if (fc.zohoId) seenZohoIds.add(fc.zohoId);
+            if (fc.id) seenIds.add(fc.id.toLowerCase());
+            merged.push(fc);
+          }
 
-        setToast({
-          type: 'success',
-          message: `Fetched ${res.data.length} Companies from Zoho CRM!`,
-          submessage: `${newOnly.length} new records imported successfully`
+          for (const pc of prev) {
+            if (pc.zohoId && seenZohoIds.has(pc.zohoId)) continue;
+            if (pc.id && seenIds.has(pc.id.toLowerCase())) continue;
+            if (pc.id) seenIds.add(pc.id.toLowerCase());
+            if (pc.zohoId) seenZohoIds.add(pc.zohoId);
+            merged.push(pc);
+          }
+
+          localStorage.setItem('be_companies', JSON.stringify(merged));
+          return merged;
         });
-      } else {
+
+        if (showNotification) {
+          setToast({
+            type: 'success',
+            message: `Fetched ${res.data.length} Companies from Zoho CRM!`,
+            submessage: 'Live CRM data synchronized successfully'
+          });
+        }
+      } else if (showNotification) {
         setToast({
           type: 'error',
           message: 'Failed to fetch companies from Zoho CRM',
-          submessage: res.message
+          submessage: res.message || 'Check connection or Zoho API rate limits'
         });
       }
     } catch (e: any) {
-      setToast({
-        type: 'error',
-        message: 'Error connecting to Zoho CRM',
-        submessage: e.message
-      });
+      if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Error connecting to Zoho CRM',
+          submessage: e.message || 'Network communication error'
+        });
+      }
     } finally {
       setIsFetchingZoho(false);
     }
@@ -421,7 +417,7 @@ export const Companies = () => {
         </div>
         <div className="flex items-center space-x-3">
           <button
-            onClick={handleFetchZohoCompanies}
+            onClick={() => handleFetchZohoCompanies(true)}
             disabled={isFetchingZoho}
             className="px-3.5 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-semibold flex items-center shadow-sm transition-all disabled:opacity-60"
             title="Fetch live records from Zoho CRM Companies module"
@@ -589,9 +585,19 @@ export const Companies = () => {
               {filteredCompanies.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                    <Building2 size={48} className="mx-auto text-gray-300 mb-3" />
-                    <p className="text-lg font-medium text-gray-900">No companies found</p>
-                    <p className="text-sm">Try adjusting your search query, fetch from Zoho CRM, or add a new company.</p>
+                    {isFetchingZoho ? (
+                      <div className="flex flex-col items-center justify-center py-6">
+                        <Loader2 className="w-8 h-8 animate-spin text-be-orange mb-3" />
+                        <p className="text-sm font-semibold text-gray-800">Fetching live company records from Zoho CRM...</p>
+                        <p className="text-xs text-gray-400 mt-1">Connecting to Zoho CRM API</p>
+                      </div>
+                    ) : (
+                      <>
+                        <Building2 size={48} className="mx-auto text-gray-300 mb-3" />
+                        <p className="text-lg font-medium text-gray-900">No companies found</p>
+                        <p className="text-sm">Try adjusting your search query, fetch from Zoho CRM, or add a new company.</p>
+                      </>
+                    )}
                   </td>
                 </tr>
               )}

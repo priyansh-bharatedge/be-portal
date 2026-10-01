@@ -12,9 +12,15 @@ import {
   Trash2,
   Download,
   Eye,
+  RefreshCw,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  Cloud
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { saveDocument, getDocument, deleteDocument } from "../../lib/db";
+import { fetchZohoQueries, saveOrUpdateZohoQuery, deleteZohoQuery } from "../../services/zohoService";
 
 interface Query {
   id: string;
@@ -29,6 +35,7 @@ interface Query {
   date: string;
   fileId?: string;
   fileName?: string;
+  zohoId?: string;
 }
 
 export const RaisedQueries = () => {
@@ -36,6 +43,8 @@ export const RaisedQueries = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [queries, setQueries] = useState<Query[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
+  const [isFetchingZoho, setIsFetchingZoho] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
 
   const [formData, setFormData] = useState({
     salesEmployee: "",
@@ -114,22 +123,69 @@ export const RaisedQueries = () => {
     "Event Based Compliance for LLP",
   ].sort();
 
+  const handleFetchZohoQueries = async (showNotification = true) => {
+    setIsFetchingZoho(true);
+    try {
+      const res = await fetchZohoQueries();
+      if (res.success && Array.isArray(res.data)) {
+        const fetchedList: Query[] = res.data.map((c: any) => ({
+          id: c.Case_Number ? `Q-${c.Case_Number}` : `Q-${String(c.id).slice(-4)}`,
+          client: c.Client_Name || c.Contact_Name?.name || 'Client',
+          company: c.Account_Name?.name || c.Company_Name || 'BharatEdge Client',
+          service: c.Service_Type || 'Consulting & Legal',
+          query: c.Subject || 'Client Query',
+          description: c.Description || '',
+          priority: c.Priority || 'Medium',
+          assignee: c.Case_Owner?.name || 'Quality Team',
+          status: c.Status || 'Open',
+          date: c.Created_Time ? new Date(c.Created_Time).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
+          zohoId: String(c.id),
+        }));
+
+        setQueries(prev => {
+          const seenZoho = new Set(prev.map(q => q.zohoId).filter(Boolean));
+          const newOnly = fetchedList.filter(q => q.zohoId && !seenZoho.has(q.zohoId));
+          const merged = [...newOnly, ...prev];
+          localStorage.setItem("be_queries", JSON.stringify(merged));
+          return merged;
+        });
+
+        if (showNotification) {
+          setToast({
+            type: 'success',
+            message: `Fetched ${res.data.length} Queries from Zoho CRM`,
+            submessage: 'Quality queries synchronized with live database'
+          });
+        }
+      } else if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Failed to fetch queries from Zoho CRM',
+          submessage: res.message || 'Check connection or Zoho API status'
+        });
+      }
+    } catch (e: any) {
+      if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Error connecting to Zoho CRM',
+          submessage: e.message || 'Network communication error'
+        });
+      }
+    } finally {
+      setIsFetchingZoho(false);
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem("be_queries");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           setQueries(parsed);
-        } else {
-          setQueries([]);
         }
-      } catch (e) {
-        setQueries([]);
-      }
-    } else {
-      setQueries([]);
-      localStorage.setItem("be_queries", JSON.stringify([]));
+      } catch (e) {}
     }
 
     const savedDeals = localStorage.getItem("be_deals");
@@ -138,7 +194,17 @@ export const RaisedQueries = () => {
         setDeals(JSON.parse(savedDeals));
       } catch (e) {}
     }
+
+    // Auto-fetch live queries from Zoho CRM on mount
+    handleFetchZohoQueries(false);
   }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const saveToStorage = (data: Query[]) => {
     setQueries(data);
@@ -178,6 +244,7 @@ export const RaisedQueries = () => {
   const handleRaiseQuery = async (e: React.FormEvent) => {
     e.preventDefault();
     const queryId = editingId || `Q-${Math.floor(Math.random() * 9000) + 1000}`;
+    const existing = editingId ? queries.find((q) => q.id === editingId) : null;
 
     let fileId = undefined;
     let fileName = undefined;
@@ -186,25 +253,35 @@ export const RaisedQueries = () => {
       fileId = `query_file_${queryId}_${Date.now()}`;
       fileName = selectedFile.name;
       await saveDocument(fileId, selectedFile);
-    } else if (editingId) {
-      const existing = queries.find((q) => q.id === editingId);
-      fileId = existing?.fileId;
-      fileName = existing?.fileName;
+    } else if (existing) {
+      fileId = existing.fileId;
+      fileName = existing.fileName;
     }
 
     const newQuery: Query = {
       id: queryId,
       ...formData,
-      status: editingId
-        ? queries.find((q) => q.id === editingId)?.status || "Open"
-        : "Open",
-      date: editingId
-        ? queries.find((q) => q.id === editingId)?.date ||
-          new Date().toLocaleDateString("en-GB")
-        : new Date().toLocaleDateString("en-GB"),
+      status: existing?.status || "Open",
+      date: existing?.date || new Date().toLocaleDateString("en-GB"),
       fileId,
       fileName,
+      zohoId: existing?.zohoId,
     };
+
+    // Sync with Zoho CRM Cases
+    try {
+      const zRes = await saveOrUpdateZohoQuery(newQuery);
+      if (zRes.success && zRes.zohoId) {
+        newQuery.zohoId = zRes.zohoId;
+        setToast({
+          type: 'success',
+          message: editingId ? 'Query Updated & Synced to Zoho CRM' : 'Query Raised & Synced to Zoho CRM',
+          submessage: `Case Record #${zRes.zohoId}`
+        });
+      }
+    } catch (zErr) {
+      console.warn('[Zoho CRM] Query sync warning:', zErr);
+    }
 
     if (editingId) {
       saveToStorage(queries.map((q) => (q.id === editingId ? newQuery : q)));
@@ -235,6 +312,17 @@ export const RaisedQueries = () => {
     if (confirm("Are you sure you want to delete this query?")) {
       if (query.fileId) await deleteDocument(query.fileId);
       saveToStorage(queries.filter((q) => q.id !== query.id));
+
+      if (query.zohoId) {
+        try {
+          await deleteZohoQuery(query.zohoId);
+          setToast({
+            type: 'success',
+            message: 'Query Deleted from Zoho CRM',
+            submessage: `Case #${query.zohoId} removed`
+          });
+        } catch (e) {}
+      }
     }
   };
 
@@ -261,25 +349,60 @@ export const RaisedQueries = () => {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={`fixed top-6 right-6 z-[999] max-w-md p-4 rounded-xl shadow-2xl border flex items-start space-x-3 backdrop-blur-md ${
+              toast.type === 'success'
+                ? 'bg-emerald-950/90 text-white border-emerald-500/30'
+                : toast.type === 'error'
+                  ? 'bg-rose-950/90 text-white border-rose-500/30'
+                  : 'bg-slate-900/90 text-white border-slate-700'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
+            ) : toast.type === 'error' ? (
+              <AlertCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
+            ) : (
+              <Cloud className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+            )}
+            <div className="flex-1 text-sm">
+              <p className="font-semibold text-white">{toast.message}</p>
+              {toast.submessage && (
+                <p className="text-xs text-gray-300 mt-1 font-mono break-all">{toast.submessage}</p>
+              )}
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              className="text-gray-400 hover:text-white p-1 rounded transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Raised Queries</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage and track client issues and requests.
+            Manage and track client issues, quality queries, and Zoho CRM cases.
           </p>
         </div>
         <div className="flex items-center space-x-3">
-          <div className="relative hidden sm:block">
-            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search queries..."
-              className="pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none shadow-sm"
-            />
-          </div>
-          <button className="flex items-center px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
-            <Filter size={16} className="mr-2 text-gray-400" />
-            Filters
+          <button
+            onClick={() => handleFetchZohoQueries(true)}
+            disabled={isFetchingZoho}
+            className="flex items-center px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-60"
+            title="Fetch live query cases from Zoho CRM"
+          >
+            <RefreshCw size={15} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
+            {isFetchingZoho ? 'Fetching...' : 'Fetch Zoho CRM'}
           </button>
           <button
             onClick={() => {
@@ -297,7 +420,7 @@ export const RaisedQueries = () => {
               setSelectedFile(null);
               setIsRaiseModalOpen(true);
             }}
-            className="flex items-center px-4 py-2 bg-be-orange text-white rounded-lg text-sm font-medium hover:bg-be-orangeHover transition-colors shadow-sm"
+            className="flex items-center px-4 py-2.5 bg-be-orange text-white rounded-lg text-sm font-medium hover:bg-be-orangeHover transition-colors shadow-sm"
           >
             <MessageSquarePlus size={16} className="mr-2" />
             Raise Query
@@ -412,6 +535,23 @@ export const RaisedQueries = () => {
                   </td>
                 </tr>
               ))}
+              {queries.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
+                    {isFetchingZoho ? (
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
+                        <p className="text-sm font-semibold text-gray-800">Fetching live queries from Zoho CRM...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-lg font-medium text-gray-900">No raised queries</p>
+                        <p className="text-xs text-gray-400 mt-1">Raise a new query or sync live records from Zoho CRM.</p>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

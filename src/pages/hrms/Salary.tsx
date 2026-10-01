@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, Download, Edit, Trash2, Shield, Info, DollarSign } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { fetchZohoEmployees } from '../../services/zohoService';
 
 interface SalaryRecord {
   id: string;
@@ -32,6 +33,7 @@ const INITIAL_SALARIES: SalaryRecord[] = [];
 export const Salary = () => {
   const { currentUser, isTM, isSuperAdmin, isHR, can } = useAuth();
   const [salaries, setSalaries] = useState<SalaryRecord[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -40,6 +42,20 @@ export const Salary = () => {
     empId: '', month: new Date().toISOString().substring(0, 7), basic: 45000, hra: 15000, allowances: 5000, target: 0, deductions: 1000, pf: 1800, tds: 2000, status: 'Pending' as 'Paid' | 'Pending'
   });
 
+  const loadLocalEmployees = () => {
+    try {
+      const raw = localStorage.getItem('be_employees');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setEmployees(parsed);
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return [];
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('be_salaries');
     if (saved) {
@@ -47,21 +63,39 @@ export const Salary = () => {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           setSalaries(parsed);
-          return;
         }
       } catch (e) {
         console.error(e);
       }
     }
-    setSalaries([]);
+
+    const currentEmps = loadLocalEmployees();
+    if (currentEmps.length === 0) {
+      fetchZohoEmployees().then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          const mapped = res.data.map((z: any) => ({
+            id: z.Employment_ID || `EMP-${String(z.id).slice(-4)}`,
+            name: [z.Name, z.Middle_Name, z.Last_Name].filter(Boolean).join(' ') || z.Name || 'Employee',
+            email: z.Email || '',
+            dept: z.Department || 'Sales',
+            role: z.Designation_Job_Title || 'Team Member',
+            zohoId: String(z.id)
+          }));
+          setEmployees(mapped);
+          localStorage.setItem('be_employees', JSON.stringify(mapped));
+        }
+      }).catch(err => console.warn('[Zoho CRM] Salary employee fetch error:', err));
+    }
+
+    const onEmpUpdate = () => loadLocalEmployees();
+    window.addEventListener('be_employees_updated', onEmpUpdate);
+    return () => window.removeEventListener('be_employees_updated', onEmpUpdate);
   }, []);
 
   const saveToStorage = (data: SalaryRecord[]) => {
     setSalaries(data);
     localStorage.setItem('be_salaries', JSON.stringify(data));
   };
-
-  const employees = JSON.parse(localStorage.getItem('be_employees') || '[]');
 
   const calculateNet = () => formData.basic + formData.hra + formData.allowances + formData.target - formData.deductions - formData.pf - formData.tds;
 
