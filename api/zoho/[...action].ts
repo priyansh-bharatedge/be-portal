@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleZohoRequest } from '../_zohoHandler';
+import { handleZohoRequest } from './_handler';
 
 export const config = {
   api: {

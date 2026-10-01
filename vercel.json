@@ -1,4 +1,17 @@
 {
+  "functions": {
+    "api/zoho/[...action].ts": {
+      "runtime": "nodejs20.x",
+      "includeFiles": "api/zoho/_handler.ts"
+    },
+    "api/zoho/index.ts": {
+      "runtime": "nodejs20.x",
+      "includeFiles": "api/zoho/_handler.ts"
+    },
+    "api/send-otp.ts": {
+      "runtime": "nodejs20.x"
+    }
+  },
   "rewrites": [
     {
       "source": "/((?!api/).*)",

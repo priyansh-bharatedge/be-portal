@@ -26,6 +26,7 @@
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "@vercel/node": "^17.0.0",
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.6.1",
     "oxlint": "^1.81.0",
