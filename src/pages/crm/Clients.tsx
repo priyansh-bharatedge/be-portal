@@ -48,39 +48,14 @@ export const Clients = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           setClients(parsed);
         }
       } catch (e) {}
     }
 
-    // Auto-fetch live clients from Zoho CRM
-    fetchZohoClients().then(res => {
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        const fetchedClients: Client[] = res.data.map((r: any) => ({
-          id: `CL-${r.id ? String(r.id).slice(-4) : Math.floor(1000 + Math.random() * 9000)}`,
-          name: r.Name || 'Unnamed Client',
-          company: r.Company_Name || 'Individual',
-          email: r.Email || '',
-          phone: r.Mobile_Number || '',
-          secondaryEmail: r.Secondary_Email || '',
-          status: (r.Status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
-          source: 'Zoho CRM',
-          addedOn: r.Created_Time ? new Date(r.Created_Time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB'),
-          zohoId: String(r.id),
-          zohoStatus: 'synced',
-          zohoSyncedAt: new Date().toISOString(),
-        }));
-
-        setClients(prev => {
-          const existingZohoIds = new Set(prev.map(c => c.zohoId).filter(Boolean));
-          const newOnly = fetchedClients.filter(c => c.zohoId && !existingZohoIds.has(c.zohoId));
-          const updated = [...newOnly, ...prev];
-          localStorage.setItem('be_clients', JSON.stringify(updated));
-          return updated;
-        });
-      }
-    }).catch(err => console.warn('[Zoho CRM] Auto-fetch clients error:', err));
+    // Auto-fetch live clients from Zoho CRM on mount
+    handleFetchZohoClients(false);
   }, []);
 
   // Toast Auto-Dismiss
@@ -234,17 +209,19 @@ export const Clients = () => {
     }
   };
 
-  const handleFetchZohoClients = async () => {
+  const handleFetchZohoClients = async (showNotification = true) => {
     setIsFetchingZoho(true);
     try {
       const res = await fetchZohoClients();
       if (res.success && Array.isArray(res.data)) {
         if (res.data.length === 0) {
-          setToast({
-            type: 'info',
-            message: 'No Live Clients Found in Zoho CRM',
-            submessage: 'Clients module returned 0 records'
-          });
+          if (showNotification) {
+            setToast({
+              type: 'info',
+              message: 'No Live Clients Found in Zoho CRM',
+              submessage: 'Clients module returned 0 records'
+            });
+          }
           return;
         }
 
@@ -264,31 +241,53 @@ export const Clients = () => {
           zohoSyncedAt: new Date().toISOString(),
         }));
 
-        // Merge with existing clients avoiding duplicates
-        const existingZohoIds = new Set(clients.map(c => c.zohoId).filter(Boolean));
-        const newOnly = fetchedClients.filter(c => c.zohoId && !existingZohoIds.has(c.zohoId));
+        setClients(prev => {
+          const seenZohoIds = new Set<string>();
+          const seenIds = new Set<string>();
+          const merged: Client[] = [];
 
-        const updated = [...newOnly, ...clients];
-        saveToStorage(updated);
+          // Live Zoho records take precedence
+          for (const fc of fetchedClients) {
+            if (fc.zohoId) seenZohoIds.add(fc.zohoId);
+            if (fc.id) seenIds.add(fc.id.toLowerCase());
+            merged.push(fc);
+          }
 
-        setToast({
-          type: 'success',
-          message: `Fetched ${res.data.length} Clients from Zoho CRM!`,
-          submessage: `${newOnly.length} new records imported successfully`
+          // Preserve any local non-synced items
+          for (const pc of prev) {
+            if (pc.zohoId && seenZohoIds.has(pc.zohoId)) continue;
+            if (pc.id && seenIds.has(pc.id.toLowerCase())) continue;
+            if (pc.id) seenIds.add(pc.id.toLowerCase());
+            if (pc.zohoId) seenZohoIds.add(pc.zohoId);
+            merged.push(pc);
+          }
+
+          localStorage.setItem('be_clients', JSON.stringify(merged));
+          return merged;
         });
-      } else {
+
+        if (showNotification) {
+          setToast({
+            type: 'success',
+            message: `Fetched ${res.data.length} Clients from Zoho CRM!`,
+            submessage: `Live CRM data synchronized successfully`
+          });
+        }
+      } else if (showNotification) {
         setToast({
           type: 'error',
           message: 'Failed to fetch clients from Zoho CRM',
-          submessage: res.message
+          submessage: res.message || 'Check connection or Zoho API rate limits'
         });
       }
     } catch (e: any) {
-      setToast({
-        type: 'error',
-        message: 'Error connecting to Zoho CRM',
-        submessage: e.message
-      });
+      if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Error connecting to Zoho CRM',
+          submessage: e.message || 'Network communication error'
+        });
+      }
     } finally {
       setIsFetchingZoho(false);
     }
@@ -416,7 +415,7 @@ export const Clients = () => {
         </div>
         <div className="flex items-center space-x-3">
           <button
-            onClick={handleFetchZohoClients}
+            onClick={() => handleFetchZohoClients(true)}
             disabled={isFetchingZoho}
             className="px-3.5 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-semibold flex items-center shadow-sm transition-all disabled:opacity-60"
             title="Fetch live records from Zoho CRM Clients module"
@@ -572,9 +571,19 @@ export const Clients = () => {
               {filteredClients.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                    <UserCircle size={48} className="mx-auto text-gray-300 mb-3" />
-                    <p className="text-lg font-medium text-gray-900">No clients found</p>
-                    <p className="text-sm">Try adjusting your search query, fetch from Zoho CRM, or add a new client.</p>
+                    {isFetchingZoho ? (
+                      <div className="flex flex-col items-center justify-center py-6">
+                        <Loader2 className="w-8 h-8 animate-spin text-be-orange mb-3" />
+                        <p className="text-sm font-semibold text-gray-800">Fetching live client records from Zoho CRM...</p>
+                        <p className="text-xs text-gray-400 mt-1">Connecting to Zoho CRM API v8</p>
+                      </div>
+                    ) : (
+                      <>
+                        <UserCircle size={48} className="mx-auto text-gray-300 mb-3" />
+                        <p className="text-lg font-medium text-gray-900">No clients found</p>
+                        <p className="text-sm">Try adjusting your search query, fetch from Zoho CRM, or add a new client.</p>
+                      </>
+                    )}
                   </td>
                 </tr>
               )}
