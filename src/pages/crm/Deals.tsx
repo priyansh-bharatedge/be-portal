@@ -828,122 +828,218 @@ export const Deals = () => {
     }
   };
 
-    const handleFetchFromZoho = async (showNotification = true, tokenToFetch?: string) => {
+  const cancelSyncRef = useRef(false);
+
+  const safeSaveDealsToStorage = (dealsList: any[]) => {
+    try {
+      localStorage.setItem('be_deals', JSON.stringify(dealsList));
+    } catch (err) {
+      try {
+        const trimmed = dealsList.slice(0, 2500);
+        localStorage.setItem('be_deals', JSON.stringify(trimmed));
+        console.warn('LocalStorage quota limit reached, stored top 2,500 deals in cache. Full list preserved in memory.');
+      } catch (e) {
+        console.warn('LocalStorage unavailable for caching:', e);
+      }
+    }
+  };
+
+  const processZohoDealsBatch = (rawDeals: any[], currentDeals: any[]) => {
+    const updatedDeals = [...currentDeals];
+    let newCount = 0;
+    let updatedCount = 0;
+
+    rawDeals.forEach((zDeal: any) => {
+      const existingIdx = updatedDeals.findIndex((d: any) => 
+        d.zohoId === zDeal.id || (zDeal.Deal_Name && d.id && zDeal.Deal_Name.includes(d.id))
+      );
+
+      const servicesFromSubform = Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0
+        ? zDeal.Subform_1.map((sf: any, i: number) => {
+            const agreementAmount = sf.Agreement_amount || 0;
+            const withoutGst = sf.Without_GST || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0);
+            const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
+            return {
+              id: String(sf.id || i + 1),
+              name: sf.Schemas || 'Website Development',
+              totalAmount: String(totalAmt || ''),
+              baseAmount: String(withoutGst || 0),
+            };
+          })
+        : (existingIdx >= 0 ? updatedDeals[existingIdx]?.servicesData || [] : []);
+
+      const serviceTitle = servicesFromSubform.length === 1 
+        ? servicesFromSubform[0].name 
+        : servicesFromSubform.length > 1 
+          ? `${servicesFromSubform.length} Services` 
+          : (existingIdx >= 0 ? (updatedDeals[existingIdx]?.service || 'Services') : 'Services');
+
+      const dealObj: any = {
+        id: existingIdx >= 0 ? updatedDeals[existingIdx]?.id : `DL-${Math.floor(1000 + Math.random() * 9000)}`,
+        client: zDeal.Contact_Name || zDeal.Name || (existingIdx >= 0 ? updatedDeals[existingIdx]?.client : 'Client') || 'Client',
+        company: zDeal.Account_Name?.name || zDeal.Company_Name || (existingIdx >= 0 ? updatedDeals[existingIdx]?.company : 'N/A') || 'N/A',
+        service: serviceTitle,
+        amount: zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : (existingIdx >= 0 ? updatedDeals[existingIdx]?.amount : '₹0') || '₹0',
+        received: (existingIdx >= 0 && updatedDeals[existingIdx]?.received) || (zDeal.Deal_Received_Amount ? `₹${Number(zDeal.Deal_Received_Amount).toLocaleString()}` : '₹0'),
+        pending: (existingIdx >= 0 && updatedDeals[existingIdx]?.pending) || (zDeal.Deal_Pending_Amount ? `₹${Number(zDeal.Deal_Pending_Amount).toLocaleString()}` : zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : '₹0'),
+        status: zDeal.Stage === 'Closed Won' ? 'Won' : zDeal.Stage === 'Closed Lost' ? 'Lost' : zDeal.Stage || 'New',
+        owner: zDeal.Owner?.name || (existingIdx >= 0 ? updatedDeals[existingIdx]?.owner : 'Admin') || 'Admin',
+        date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingIdx >= 0 ? updatedDeals[existingIdx]?.date : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })),
+        source: (existingIdx >= 0 ? updatedDeals[existingIdx]?.source : 'Zoho CRM') || 'Zoho CRM',
+        zohoId: zDeal.id,
+        zohoStatus: 'synced',
+        zohoSyncedAt: new Date().toISOString(),
+        formData: (existingIdx >= 0 && updatedDeals[existingIdx]?.formData) || {
+          clientName: zDeal.Contact_Name || zDeal.Name || '',
+          companyName: zDeal.Account_Name?.name || zDeal.Company_Name || '',
+          email: zDeal.Email || '',
+          mobile: zDeal.Mobile || '',
+        },
+        servicesData: servicesFromSubform,
+        totals: (existingIdx >= 0 && updatedDeals[existingIdx]?.totals) || {
+          grandTotal: zDeal.Amount || 0,
+        }
+      };
+
+      if (existingIdx >= 0) {
+        updatedDeals[existingIdx] = { ...updatedDeals[existingIdx], ...dealObj };
+        updatedCount++;
+      } else {
+        updatedDeals.push(dealObj);
+        newCount++;
+      }
+
+      // Auto-populate companies and clients if missing
+      try {
+        if (dealObj.company && dealObj.company !== 'N/A') {
+          const rawCompanies = localStorage.getItem('be_companies');
+          const localCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
+          if (!localCompanies.some((c: any) => (c.name ?? '').toLowerCase() === (dealObj.company ?? '').toLowerCase())) {
+            localCompanies.unshift({
+              id: `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
+              name: dealObj.company,
+              type: 'Private Limited',
+              gstNumber: zDeal.Gst_number || '',
+              doi: '',
+              email: zDeal.Client_Email_address || zDeal.Email || '',
+              status: 'Active',
+              source: 'From Deals (Zoho)',
+              addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+              zohoStatus: 'synced'
+            });
+            localStorage.setItem('be_companies', JSON.stringify(localCompanies.slice(0, 2000)));
+          }
+        }
+
+        if (dealObj.client && dealObj.client !== 'Client') {
+          const rawClients = localStorage.getItem('be_clients');
+          const localClients = rawClients ? JSON.parse(rawClients) : [];
+          if (!localClients.some((cl: any) => (cl.name ?? '').toLowerCase() === (dealObj.client ?? '').toLowerCase())) {
+            localClients.unshift({
+              id: `CL-${Math.floor(1000 + Math.random() * 9000)}`,
+              name: dealObj.client,
+              company: dealObj.company || 'Individual',
+              email: zDeal.Client_Email_address || zDeal.Email || '',
+              phone: zDeal.Client_contact_detail || zDeal.Mobile || '',
+              status: 'Active',
+              source: 'From Deals (Zoho)',
+              addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+              zohoStatus: 'synced'
+            });
+            localStorage.setItem('be_clients', JSON.stringify(localClients.slice(0, 2000)));
+          }
+        }
+      } catch (e) {}
+    });
+
+    return { updatedDeals, newCount, updatedCount };
+  };
+
+  const handleStopSync = () => {
+    cancelSyncRef.current = true;
+    setIsFetchingBatch(false);
+    setIsFetchingZoho(false);
+    setToast({
+      type: 'info',
+      message: 'Sync Paused',
+      submessage: `Stopped sync with ${deals.length.toLocaleString()} deals loaded in portal.`
+    });
+  };
+
+  const handleFetchAllBatchesFromZoho = async (showToast = true) => {
+    setIsFetchingBatch(true);
+    cancelSyncRef.current = false;
+    setBatchProgress({ loaded: deals.length, batch: 0 });
+
+    let currentDeals = [...deals];
+    let pageToken: string | undefined = undefined;
+    let pageNumber = 1;
+    let hasMore = true;
+    let batchCount = 0;
+
+    try {
+      while (hasMore && !cancelSyncRef.current && currentDeals.length < 50000) {
+        batchCount++;
+        const res = await fetchZohoDeals({
+          per_page: 200,
+          page_token: pageToken,
+          page: pageToken ? undefined : pageNumber
+        });
+
+        if (!res.success || !Array.isArray(res.data) || res.data.length === 0) {
+          break;
+        }
+
+        const { updatedDeals } = processZohoDealsBatch(res.data, currentDeals);
+        currentDeals = updatedDeals;
+
+        // Real-time UI stream update
+        setDeals([...currentDeals]);
+        setBatchProgress({ loaded: currentDeals.length, batch: batchCount });
+        safeSaveDealsToStorage(currentDeals);
+
+        hasMore = Boolean(res.info?.more_records && res.info?.next_page_token);
+        pageToken = res.info?.next_page_token || undefined;
+        pageNumber++;
+
+        if (!hasMore || cancelSyncRef.current) break;
+      }
+
+      setHasMoreZohoRecords(false);
+      if (showToast && !cancelSyncRef.current) {
+        setToast({
+          type: 'success',
+          message: `All Zoho Deals Synced (${currentDeals.length.toLocaleString()} records)`,
+          submessage: `Total ${currentDeals.length.toLocaleString()} deals now available in your portal with instant search and pagination.`
+        });
+      }
+    } catch (e: any) {
+      if (showToast) {
+        setToast({
+          type: 'error',
+          message: 'Sync Interrupted',
+          submessage: e?.message || 'Failed to sync all records from Zoho CRM'
+        });
+      }
+    } finally {
+      setIsFetchingBatch(false);
+      setBatchProgress(null);
+    }
+  };
+
+  const handleFetchFromZoho = async (showNotification = true, tokenToFetch?: string) => {
+    // If no specific page token is requested, trigger full batch sync
+    if (!tokenToFetch) {
+      return handleFetchAllBatchesFromZoho(showNotification);
+    }
+
     setIsFetchingZoho(true);
     try {
       const result = await fetchZohoDeals({ per_page: 200, page_token: tokenToFetch });
       if (result.success && Array.isArray(result.data)) {
-        let countAdded = 0;
-        let countUpdated = 0;
-        const currentDeals = [...deals];
-
-        result.data.forEach((zDeal: any) => {
-          const existingIdx = currentDeals.findIndex((d: any) => 
-            d.zohoId === zDeal.id || (zDeal.Deal_Name && d.id && zDeal.Deal_Name.includes(d.id))
-          );
-
-          const servicesFromSubform = Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0
-            ? zDeal.Subform_1.map((sf: any, i: number) => {
-                const agreementAmount = sf.Agreement_amount || 0;
-                const withoutGst = sf.Without_GST || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0);
-                const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
-                return {
-                  id: String(sf.id || i + 1),
-                  name: sf.Schemas || 'Website Development',
-                  totalAmount: String(totalAmt || ''),
-                  baseAmount: String(withoutGst || 0),
-                };
-              })
-            : (currentDeals[existingIdx]?.servicesData || []);
-
-          const serviceTitle = servicesFromSubform.length === 1 
-            ? servicesFromSubform[0].name 
-            : servicesFromSubform.length > 1 
-              ? `${servicesFromSubform.length} Services` 
-              : (currentDeals[existingIdx]?.service || 'Services');
-
-          const dealObj: any = {
-            id: currentDeals[existingIdx]?.id || `DL-${Math.floor(1000 + Math.random() * 9000)}`,
-            client: zDeal.Contact_Name || zDeal.Name || currentDeals[existingIdx]?.client || 'Client',
-            company: zDeal.Account_Name?.name || zDeal.Company_Name || currentDeals[existingIdx]?.company || 'N/A',
-            service: serviceTitle,
-            amount: zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : (currentDeals[existingIdx]?.amount || '₹0'),
-            received: currentDeals[existingIdx]?.received || (zDeal.Deal_Received_Amount ? `₹${Number(zDeal.Deal_Received_Amount).toLocaleString()}` : '₹0'),
-            pending: currentDeals[existingIdx]?.pending || (zDeal.Deal_Pending_Amount ? `₹${Number(zDeal.Deal_Pending_Amount).toLocaleString()}` : zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : '₹0'),
-            status: zDeal.Stage === 'Closed Won' ? 'Won' : zDeal.Stage === 'Closed Lost' ? 'Lost' : zDeal.Stage || 'New',
-            owner: zDeal.Owner?.name || currentDeals[existingIdx]?.owner || 'Admin',
-            date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (currentDeals[existingIdx]?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })),
-            source: currentDeals[existingIdx]?.source || 'Zoho CRM',
-            zohoId: zDeal.id,
-            zohoStatus: 'synced',
-            zohoSyncedAt: new Date().toISOString(),
-            formData: currentDeals[existingIdx]?.formData || {
-              clientName: zDeal.Contact_Name || zDeal.Name || '',
-              companyName: zDeal.Account_Name?.name || zDeal.Company_Name || '',
-              email: zDeal.Email || '',
-              mobile: zDeal.Mobile || '',
-            },
-            servicesData: servicesFromSubform,
-            totals: currentDeals[existingIdx]?.totals || {
-              grandTotal: zDeal.Amount || 0,
-            }
-          };
-
-          if (existingIdx >= 0) {
-            currentDeals[existingIdx] = { ...currentDeals[existingIdx], ...dealObj };
-            countUpdated++;
-          } else {
-            currentDeals.unshift(dealObj);
-            countAdded++;
-          }
-
-          // Also populate local companies and clients if missing
-          try {
-            if (dealObj.company && dealObj.company !== 'N/A') {
-              const rawCompanies = localStorage.getItem('be_companies');
-              const localCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
-              if (!localCompanies.some((c: any) => (c.name ?? '').toLowerCase() === (dealObj.company ?? '').toLowerCase())) {
-                localCompanies.unshift({
-                  id: `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
-                  name: dealObj.company,
-                  type: 'Private Limited',
-                  gstNumber: zDeal.Gst_number || '',
-                  doi: '',
-                  email: zDeal.Client_Email_address || zDeal.Email || '',
-                  status: 'Active',
-                  source: 'From Deals (Zoho)',
-                  addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-                  zohoStatus: 'synced'
-                });
-                localStorage.setItem('be_companies', JSON.stringify(localCompanies));
-              }
-            }
-
-            if (dealObj.client && dealObj.client !== 'Client') {
-              const rawClients = localStorage.getItem('be_clients');
-              const localClients = rawClients ? JSON.parse(rawClients) : [];
-              if (!localClients.some((cl: any) => (cl.name ?? '').toLowerCase() === (dealObj.client ?? '').toLowerCase())) {
-                localClients.unshift({
-                  id: `CL-${Math.floor(1000 + Math.random() * 9000)}`,
-                  name: dealObj.client,
-                  company: dealObj.company || 'Individual',
-                  email: zDeal.Client_Email_address || zDeal.Email || '',
-                  phone: zDeal.Client_contact_detail || zDeal.Mobile || '',
-                  status: 'Active',
-                  source: 'From Deals (Zoho)',
-                  addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-                  zohoStatus: 'synced'
-                });
-                localStorage.setItem('be_clients', JSON.stringify(localClients));
-              }
-            }
-          } catch (populateErr) {
-            console.warn('Auto-populating companies/clients from fetched deals failed:', populateErr);
-          }
-        });
-
-        setDeals(currentDeals);
-        localStorage.setItem('be_deals', JSON.stringify(currentDeals));
+        const { updatedDeals } = processZohoDealsBatch(result.data, deals);
+        setDeals(updatedDeals);
+        safeSaveDealsToStorage(updatedDeals);
 
         const hasMore = Boolean(result.info?.more_records && result.info?.next_page_token);
         setHasMoreZohoRecords(hasMore);
@@ -953,15 +1049,9 @@ export const Deals = () => {
           setToast({
             type: 'success',
             message: 'Zoho Deals Synchronized',
-            submessage: `Fetched ${result.data.length} records from Zoho CRM (Total in portal: ${currentDeals.length})${hasMore ? ' • More records available on Zoho' : ''}`
+            submessage: `Fetched ${result.data.length} records from Zoho CRM (Total in portal: ${updatedDeals.length.toLocaleString()})`
           });
         }
-      } else if (showNotification) {
-        setToast({
-          type: 'error',
-          message: 'Failed to Fetch from Zoho CRM',
-          submessage: result.message || 'No records returned or connection error'
-        });
       }
     } catch (err: any) {
       if (showNotification) {
@@ -973,107 +1063,6 @@ export const Deals = () => {
       }
     } finally {
       setIsFetchingZoho(false);
-    }
-  };
-
-  const handleFetchAllBatchesFromZoho = async () => {
-    setIsFetchingBatch(true);
-    setBatchProgress({ loaded: 0, batch: 0 });
-
-    try {
-      const result = await fetchAllZohoRecordsInBatches(
-        fetchZohoDeals,
-        15000,
-        (loadedCount, moreRecords, batchCount) => {
-          setBatchProgress({ loaded: loadedCount, batch: batchCount });
-        }
-      );
-
-      if (result.success && result.data.length > 0) {
-        const currentDeals = [...deals];
-        let countAdded = 0;
-        let countUpdated = 0;
-
-        result.data.forEach((zDeal: any) => {
-          const existingIdx = currentDeals.findIndex((d: any) => 
-            d.zohoId === zDeal.id || (zDeal.Deal_Name && d.id && zDeal.Deal_Name.includes(d.id))
-          );
-
-          const servicesFromSubform = Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0
-            ? zDeal.Subform_1.map((sf: any, i: number) => {
-                const agreementAmount = sf.Agreement_amount || 0;
-                const withoutGst = sf.Without_GST || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0);
-                const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
-                return {
-                  id: String(sf.id || i + 1),
-                  name: sf.Schemas || 'Website Development',
-                  totalAmount: String(totalAmt || ''),
-                  baseAmount: String(withoutGst || 0),
-                };
-              })
-            : (currentDeals[existingIdx]?.servicesData || []);
-
-          const serviceTitle = servicesFromSubform.length === 1 
-            ? servicesFromSubform[0].name 
-            : servicesFromSubform.length > 1 
-              ? `${servicesFromSubform.length} Services` 
-              : (currentDeals[existingIdx]?.service || 'Services');
-
-          const dealObj: any = {
-            id: currentDeals[existingIdx]?.id || `DL-${Math.floor(1000 + Math.random() * 9000)}`,
-            client: zDeal.Contact_Name || zDeal.Name || currentDeals[existingIdx]?.client || 'Client',
-            company: zDeal.Account_Name?.name || zDeal.Company_Name || currentDeals[existingIdx]?.company || 'N/A',
-            service: serviceTitle,
-            amount: zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : (currentDeals[existingIdx]?.amount || '₹0'),
-            received: currentDeals[existingIdx]?.received || (zDeal.Deal_Received_Amount ? `₹${Number(zDeal.Deal_Received_Amount).toLocaleString()}` : '₹0'),
-            pending: currentDeals[existingIdx]?.pending || (zDeal.Deal_Pending_Amount ? `₹${Number(zDeal.Deal_Pending_Amount).toLocaleString()}` : zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : '₹0'),
-            status: zDeal.Stage === 'Closed Won' ? 'Won' : zDeal.Stage === 'Closed Lost' ? 'Lost' : zDeal.Stage || 'New',
-            owner: zDeal.Owner?.name || currentDeals[existingIdx]?.owner || 'Admin',
-            date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (currentDeals[existingIdx]?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })),
-            source: currentDeals[existingIdx]?.source || 'Zoho CRM',
-            zohoId: zDeal.id,
-            zohoStatus: 'synced',
-            zohoSyncedAt: new Date().toISOString(),
-            formData: currentDeals[existingIdx]?.formData || {
-              clientName: zDeal.Contact_Name || zDeal.Name || '',
-              companyName: zDeal.Account_Name?.name || zDeal.Company_Name || '',
-              email: zDeal.Email || '',
-              mobile: zDeal.Mobile || '',
-            },
-            servicesData: servicesFromSubform,
-            totals: currentDeals[existingIdx]?.totals || {
-              grandTotal: zDeal.Amount || 0,
-            }
-          };
-
-          if (existingIdx >= 0) {
-            currentDeals[existingIdx] = { ...currentDeals[existingIdx], ...dealObj };
-            countUpdated++;
-          } else {
-            currentDeals.unshift(dealObj);
-            countAdded++;
-          }
-        });
-
-        setDeals(currentDeals);
-        localStorage.setItem('be_deals', JSON.stringify(currentDeals));
-        setHasMoreZohoRecords(false);
-
-        setToast({
-          type: 'success',
-          message: `All Zoho Deals Synced (${result.data.length} records)`,
-          submessage: `Total ${currentDeals.length} deals now available in your portal with instant search and pagination.`
-        });
-      }
-    } catch (e: any) {
-      setToast({
-        type: 'error',
-        message: 'Batch Sync Error',
-        submessage: e?.message || 'Failed to sync all records in batch'
-      });
-    } finally {
-      setIsFetchingBatch(false);
-      setBatchProgress(null);
     }
   };
 
@@ -1149,7 +1138,7 @@ export const Deals = () => {
           </button>
 
           <button
-            onClick={handleFetchAllBatchesFromZoho}
+            onClick={() => handleFetchAllBatchesFromZoho(true)}
             disabled={isFetchingBatch || isFetchingZoho}
             className="flex items-center px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg text-sm font-semibold hover:from-orange-600 hover:to-amber-600 transition-all shadow-sm hover:shadow disabled:opacity-60"
             title="Sequentially fetch all 10,000+ historical deals from Zoho CRM in batches"
@@ -1176,6 +1165,44 @@ export const Deals = () => {
           </button>
         </div>
       </div>
+
+      {/* Live Sync Progress Banner */}
+      {isFetchingBatch && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-100/70 border border-orange-200/80 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+        >
+          <div className="flex items-center space-x-3.5">
+            <div className="w-10 h-10 rounded-xl bg-be-orange/10 border border-be-orange/20 flex items-center justify-center text-be-orange shrink-0">
+              <Loader2 className="w-5 h-5 animate-spin" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h4 className="text-sm font-bold text-gray-900">
+                  Syncing All Deals from Zoho CRM
+                </h4>
+                <span className="px-2.5 py-0.5 bg-be-orange text-white text-xs font-bold rounded-full shadow-xs">
+                  {deals.length.toLocaleString()} Deals Loaded
+                </span>
+                <span className="text-xs text-gray-500 font-medium">
+                  Batch #{batchProgress?.batch || 1}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 mt-0.5">
+                Records are streaming in real-time. You can filter, search, and navigate existing deals without interruption.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleStopSync}
+            className="px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl shadow-xs hover:shadow transition-all shrink-0"
+          >
+            Pause Sync
+          </button>
+        </motion.div>
+      )}
 
       <div className="flex border-b border-gray-200 mb-6">
         {['All Deals', 'Manual Deals', 'From Quotations'].map(tab => (
