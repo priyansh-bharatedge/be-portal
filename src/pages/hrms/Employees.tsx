@@ -1086,7 +1086,7 @@ export const Employees = () => {
                     <td className="px-6 py-4 rounded-l-2xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">
                       <div className="flex items-center">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-100 to-orange-50 text-be-orange flex items-center justify-center mr-3 font-bold text-sm shrink-0 border border-orange-200 shadow-sm">
-                          {emp.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                          {(emp.name || 'EMP').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                         </div>
                         <div>
                           <div className="font-bold text-gray-900 group-hover:text-be-orange transition-colors">
