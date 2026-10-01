@@ -3,6 +3,7 @@ import { ROLE_DEFINITIONS } from '../types/roles';
 import type { AuthUser, SystemRole } from '../types/roles';
 import { DEMO_USERS, INITIAL_EMPLOYEES, INITIAL_DSR_REPORTS } from '../utils/initialData';
 import { sendOtpEmail } from '../services/emailService';
+import { saveOrUpdateZohoEmployee } from '../services/zohoService';
 
 interface AuthContextType {
   currentUser: AuthUser;
@@ -313,6 +314,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       teamLeaderId: updatedEmp.teamLeaderId,
       teamLeaderName: updatedEmp.teamLeaderName
     };
+
+    // Sync updated employee record (including Password) to Zoho CRM
+    saveOrUpdateZohoEmployee(updatedEmp).then((res) => {
+      if (res.success && res.zohoId && !updatedEmp.zohoId) {
+        const saved = localStorage.getItem('be_employees');
+        if (saved) {
+          const arr = JSON.parse(saved);
+          const idx = arr.findIndex((x: any) => x.id === updatedEmp.id);
+          if (idx !== -1) {
+            arr[idx].zohoId = res.zohoId;
+            arr[idx].zohoStatus = 'synced';
+            localStorage.setItem('be_employees', JSON.stringify(arr));
+            window.dispatchEvent(new Event('be_employees_updated'));
+          }
+        }
+      }
+    }).catch((err) => console.warn('[Zoho CRM] Background sync of updated employee password failed:', err));
 
     switchUser(authUser);
     return { success: true, user: authUser };

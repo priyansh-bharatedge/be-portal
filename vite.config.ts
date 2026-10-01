@@ -492,6 +492,12 @@ function zohoApiPlugin(): Plugin {
       payload.Company_Entity = String(salEntity);
     }
 
+    // Password (API Name: Password, Single Line)
+    const empPassword = employee.password || fd.password || employee.newPassword;
+    if (empPassword) {
+      payload.Password = String(empPassword);
+    }
+
     return payload;
   }
 
