@@ -5,18 +5,18 @@ import nodemailer from 'nodemailer'
 
 function zohoApiPlugin(): Plugin {
 
-function logZohoApiCall(actionName: string, method: string, endpoint: string, payload: any, statusCode: number, responseData: any) {
-  console.log('\n==================== [ZOHO CRM API CALL] ====================');
-  console.log('📌 Action:      ' + actionName);
-  console.log('🌐 HTTP Method: ' + method);
-  console.log('🔗 Endpoint:    ' + endpoint);
-  if (payload !== undefined && payload !== null) {
-    console.log('📦 Request Payload Sent to Zoho CRM:\n' + JSON.stringify(payload, null, 2));
+  function logZohoApiCall(actionName: string, method: string, endpoint: string, payload: any, statusCode: number, responseData: any) {
+    console.log('\n==================== [ZOHO CRM API CALL] ====================');
+    console.log('📌 Action:      ' + actionName);
+    console.log('🌐 HTTP Method: ' + method);
+    console.log('🔗 Endpoint:    ' + endpoint);
+    if (payload !== undefined && payload !== null) {
+      console.log('📦 Request Payload Sent to Zoho CRM:\n' + JSON.stringify(payload, null, 2));
+    }
+    console.log('📊 Zoho Response Status: ' + statusCode);
+    console.log('📥 Zoho API Response Data:\n' + JSON.stringify(responseData, null, 2));
+    console.log('=============================================================\n');
   }
-  console.log('📊 Zoho Response Status: ' + statusCode);
-  console.log('📥 Zoho API Response Data:\n' + JSON.stringify(responseData, null, 2));
-  console.log('=============================================================\n');
-}
 
   let cachedToken: string | null = null;
   let tokenExpiry = 0;
@@ -113,7 +113,7 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
     if (fd.aadhaarCard) payload.Aadhaar_Card = String(fd.aadhaarCard).replace(/[^0-9]/g, '');
     if (fd.companyName) payload.Company_Name = fd.companyName;
     if (fd.businessType) payload.Company_Type = fd.businessType;
-    
+
     const formattedDoi = formatDateForZoho(fd.doi);
     if (formattedDoi) payload.Date_of_Incorporation = formattedDoi;
 
@@ -268,11 +268,11 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
       payload.Service_Name = servicesData.length === 1 ? servicesData[0].name : `${servicesData.length} Services`;
       payload.Subform_1 = servicesData.map((svc: any, idx: number) => {
         const itemTotalFromSvc = Number(svc.totalAmount) || 0;
-        const itemGst = itemTotalFromSvc > 0 
-          ? to2Dec(itemTotalFromSvc * 0.18) 
+        const itemGst = itemTotalFromSvc > 0
+          ? to2Dec(itemTotalFromSvc * 0.18)
           : to2Dec((Number(svc.baseAmount) || 0) * 0.18);
-        const itemBase = itemTotalFromSvc > 0 
-          ? to2Dec(itemTotalFromSvc - itemGst) 
+        const itemBase = itemTotalFromSvc > 0
+          ? to2Dec(itemTotalFromSvc - itemGst)
           : to2Dec(Number(svc.baseAmount) || 0);
         const itemTotal = itemTotalFromSvc > 0 ? to2Dec(itemTotalFromSvc) : to2Dec(itemBase + itemGst);
 
@@ -518,7 +518,7 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
   function buildLeaveZohoPayload(leave: any): Record<string, any> {
     // Reason maps to the primary 'Name' field in Zoho CRM custom module Leave_Management
     const reasonText = leave.reason || leave.Name || `${leave.type || 'Leave'} - ${leave.empName || 'Employee'}`;
-    
+
     const payload: Record<string, any> = {
       Name: reasonText,
     };
@@ -775,7 +775,7 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
     const empName = dsr.empName || fd.empName || dsr.name || fd.name || 'Employee';
     const dateVal = dsr.reportDate || fd.reportDate || dsr.date || fd.date || dsr.Date;
     const formattedDate = formatDateForZoho(dateVal) || new Date().toISOString().split('T')[0];
-    
+
     const dsrTitle = dsr.Name || dsr.name || dsr.title || fd.title || `${empName} - DSR (${formattedDate})`;
 
     const payload: Record<string, any> = {
@@ -2364,7 +2364,7 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
                   const parsed = JSON.parse(body);
                   recordId = parsed.id || parsed.zohoId || '';
                   if (parsed.module) moduleName = parsed.module;
-                } catch (e) {}
+                } catch (e) { }
               }
               if (!recordId && req.url) {
                 const urlObj = new URL(req.url, 'http://localhost');

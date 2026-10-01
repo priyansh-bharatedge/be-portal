@@ -728,8 +728,11 @@ export function buildDsrZohoPayload(dsr: any): Record<string, any> {
 
 // Helper to send JSON response
 function sendJson(res: ApiResponse, statusCode: number, data: any) {
-  if (typeof res.status === 'function' && typeof res.json === 'function') {
-    return res.status(statusCode).json(data);
+  if (typeof res.status === 'function') {
+    res.status(statusCode);
+    if (typeof res.json === 'function') {
+      return res.json(data);
+    }
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
