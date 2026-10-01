@@ -21,14 +21,20 @@ async function safeParseResponse(response: Response): Promise<any> {
   try {
     const text = await response.text();
     if (!text || !text.trim()) {
-      return { success: response.ok, message: response.statusText || 'Empty response' };
+      const resData = { success: response.ok, message: response.statusText || 'Empty response' };
+      console.log(`[Zoho CRM API] Response from ${response.url} (Status ${response.status}):`, resData);
+      return resData;
     }
-    return JSON.parse(text);
-  } catch {
-    return {
+    const parsed = JSON.parse(text);
+    console.log(`[Zoho CRM API] Response from ${response.url} (Status ${response.status}):`, parsed);
+    return parsed;
+  } catch (e: any) {
+    const errData = {
       success: false,
       message: `Invalid server response (${response.status}): ${response.statusText || 'Unable to parse JSON'}`,
     };
+    console.error(`[Zoho CRM API] Error parsing response from ${response.url}:`, errData);
+    return errData;
   }
 }
 

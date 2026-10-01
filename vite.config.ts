@@ -4,6 +4,20 @@ import type { Plugin } from 'vite'
 import nodemailer from 'nodemailer'
 
 function zohoApiPlugin(): Plugin {
+
+function logZohoApiCall(actionName: string, method: string, endpoint: string, payload: any, statusCode: number, responseData: any) {
+  console.log('\n==================== [ZOHO CRM API CALL] ====================');
+  console.log('📌 Action:      ' + actionName);
+  console.log('🌐 HTTP Method: ' + method);
+  console.log('🔗 Endpoint:    ' + endpoint);
+  if (payload !== undefined && payload !== null) {
+    console.log('📦 Request Payload Sent to Zoho CRM:\n' + JSON.stringify(payload, null, 2));
+  }
+  console.log('📊 Zoho Response Status: ' + statusCode);
+  console.log('📥 Zoho API Response Data:\n' + JSON.stringify(responseData, null, 2));
+  console.log('=============================================================\n');
+}
+
   let cachedToken: string | null = null;
   let tokenExpiry = 0;
 
@@ -896,6 +910,8 @@ function zohoApiPlugin(): Plugin {
                 crmData = await crmRes.json();
               }
 
+              logZohoApiCall(isUpdate ? 'update-quotation' : 'insert-quotation', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
               res.setHeader('Content-Type', 'application/json');
               if (crmData.data?.[0]?.code === 'SUCCESS') {
                 const zohoId = crmData.data[0].details?.id || quotation.zohoId;
@@ -975,6 +991,8 @@ function zohoApiPlugin(): Plugin {
                 });
                 crmData = await crmRes.json();
               }
+
+              logZohoApiCall(isUpdate ? 'update-deal' : 'insert-deal', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
 
               res.setHeader('Content-Type', 'application/json');
               if (crmData.data?.[0]?.code === 'SUCCESS') {
@@ -1124,6 +1142,8 @@ function zohoApiPlugin(): Plugin {
                 crmData = await crmRes.json();
               }
 
+              logZohoApiCall(isUpdate ? 'update-employee' : 'insert-employee', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
               res.setHeader('Content-Type', 'application/json');
               if (crmData.data?.[0]?.code === 'SUCCESS') {
                 const zohoId = crmData.data[0].details?.id || employee.zohoId;
@@ -1263,6 +1283,8 @@ function zohoApiPlugin(): Plugin {
                 });
                 crmData = await crmRes.json();
               }
+
+              logZohoApiCall(isUpdate ? 'update-leave' : 'insert-leave', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
 
               res.setHeader('Content-Type', 'application/json');
               if (crmData.data?.[0]?.code === 'SUCCESS') {
@@ -1404,6 +1426,8 @@ function zohoApiPlugin(): Plugin {
                 crmData = await crmRes.json();
               }
 
+              logZohoApiCall(isUpdate ? 'update-company' : 'insert-company', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
               res.setHeader('Content-Type', 'application/json');
               if (crmData.data?.[0]?.code === 'SUCCESS') {
                 const zohoId = crmData.data[0].details?.id || company.zohoId;
@@ -1544,6 +1568,8 @@ function zohoApiPlugin(): Plugin {
                 crmData = await crmRes.json();
               }
 
+              logZohoApiCall(isUpdate ? 'update-client' : 'insert-client', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
               res.setHeader('Content-Type', 'application/json');
               if (crmData.data?.[0]?.code === 'SUCCESS') {
                 const zohoId = crmData.data[0].details?.id || client.zohoId;
@@ -1683,6 +1709,8 @@ function zohoApiPlugin(): Plugin {
                 });
                 crmData = await crmRes.json();
               }
+
+              logZohoApiCall(isUpdate ? 'update-policy' : 'insert-policy', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
 
               res.setHeader('Content-Type', 'application/json');
               if (crmData.data?.[0]?.code === 'SUCCESS') {
@@ -1831,6 +1859,8 @@ function zohoApiPlugin(): Plugin {
                 crmData = await crmRes.json();
               }
 
+              logZohoApiCall(isUpdate ? 'update-calendar' : 'insert-calendar', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
               res.setHeader('Content-Type', 'application/json');
               if (crmData.data?.[0]?.code === 'SUCCESS') {
                 const zohoId = crmData.data[0].details?.id || event.zohoId;
@@ -1977,6 +2007,8 @@ function zohoApiPlugin(): Plugin {
                 });
                 crmData = await crmRes.json();
               }
+
+              logZohoApiCall(isUpdate ? 'update-dsr' : 'insert-dsr', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
 
               res.setHeader('Content-Type', 'application/json');
               if (crmData.data?.[0]?.code === 'SUCCESS') {

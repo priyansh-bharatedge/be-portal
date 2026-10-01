@@ -767,6 +767,20 @@ async function getRequestBody(req: ApiRequest): Promise<any> {
   });
 }
 
+
+function logZohoApiCall(actionName: string, method: string, endpoint: string, payload: any, statusCode: number, responseData: any) {
+  console.log('\n==================== [ZOHO CRM API CALL] ====================');
+  console.log('📌 Action:      ' + actionName);
+  console.log('🌐 HTTP Method: ' + method);
+  console.log('🔗 Endpoint:    ' + endpoint);
+  if (payload !== undefined && payload !== null) {
+    console.log('📦 Request Payload Sent to Zoho CRM:\n' + JSON.stringify(payload, null, 2));
+  }
+  console.log('📊 Zoho Response Status: ' + statusCode);
+  console.log('📥 Zoho API Response Data:\n' + JSON.stringify(responseData, null, 2));
+  console.log('=============================================================\n');
+}
+
 // Main Zoho API Handler
 export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
   const urlObj = new URL(req.url || '/', 'http://localhost');
@@ -841,6 +855,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         crmData = await crmRes.json();
       }
 
+      logZohoApiCall(isUpdate ? 'update-quotation' : 'insert-quotation', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
       if (crmData.data?.[0]?.code === 'SUCCESS') {
         const zohoId = crmData.data[0].details?.id || quotation.zohoId;
         return sendJson(res, 200, {
@@ -899,6 +915,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         });
         crmData = await crmRes.json();
       }
+
+      logZohoApiCall(isUpdate ? 'update-deal' : 'insert-deal', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
 
       if (crmData.data?.[0]?.code === 'SUCCESS') {
         const zohoId = crmData.data[0].details?.id || deal.zohoId;
@@ -999,6 +1017,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         crmData = await crmRes.json();
       }
 
+      logZohoApiCall(isUpdate ? 'update-employee' : 'insert-employee', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
       if (crmData.data?.[0]?.code === 'SUCCESS') {
         const zohoId = crmData.data[0].details?.id || employee.zohoId;
         return sendJson(res, 200, {
@@ -1090,6 +1110,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         crmData = await crmRes.json();
       }
 
+      logZohoApiCall(isUpdate ? 'update-leave' : 'insert-leave', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
       if (crmData.data?.[0]?.code === 'SUCCESS') {
         const zohoId = crmData.data[0].details?.id || leave.zohoId;
         return sendJson(res, 200, {
@@ -1176,6 +1198,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         });
         crmData = await crmRes.json();
       }
+
+      logZohoApiCall(isUpdate ? 'update-company' : 'insert-company', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
 
       if (crmData.data?.[0]?.code === 'SUCCESS') {
         const zohoId = crmData.data[0].details?.id || company.zohoId;
@@ -1264,6 +1288,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         crmData = await crmRes.json();
       }
 
+      logZohoApiCall(isUpdate ? 'update-client' : 'insert-client', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
       if (crmData.data?.[0]?.code === 'SUCCESS') {
         const zohoId = crmData.data[0].details?.id || client.zohoId;
         return sendJson(res, 200, {
@@ -1350,6 +1376,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         });
         crmData = await crmRes.json();
       }
+
+      logZohoApiCall(isUpdate ? 'update-policy' : 'insert-policy', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
 
       if (crmData.data?.[0]?.code === 'SUCCESS') {
         const zohoId = crmData.data[0].details?.id || policy.zohoId;
@@ -1444,6 +1472,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         crmData = await crmRes.json();
       }
 
+      logZohoApiCall(isUpdate ? 'update-calendar' : 'insert-calendar', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
+
       if (crmData.data?.[0]?.code === 'SUCCESS') {
         const zohoId = crmData.data[0].details?.id || event.zohoId;
         return sendJson(res, 200, {
@@ -1536,6 +1566,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         });
         crmData = await crmRes.json();
       }
+
+      logZohoApiCall(isUpdate ? 'update-dsr' : 'insert-dsr', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
 
       if (crmData.data?.[0]?.code === 'SUCCESS') {
         const zohoId = crmData.data[0].details?.id || dsr.zohoId;
