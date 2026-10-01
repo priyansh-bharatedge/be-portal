@@ -5,6 +5,7 @@ import {
   ArrowUpRight, MoreHorizontal, Download, Filter, FolderKanban
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { fetchZohoDeals, fetchZohoClients, fetchZohoQueries } from '../../services/zohoService';
 
 export const CrmDashboard = () => {
   const navigate = useNavigate();
@@ -13,18 +14,41 @@ export const CrmDashboard = () => {
   const [queries, setQueries] = useState<any[]>([]);
 
   useEffect(() => {
+    // Seed from localStorage immediately for instant render
     try {
       const savedDeals = localStorage.getItem('be_deals');
       if (savedDeals) setDeals(JSON.parse(savedDeals));
-
       const savedClients = localStorage.getItem('be_clients');
       if (savedClients) setClients(JSON.parse(savedClients));
-
       const savedQueries = localStorage.getItem('be_queries');
       if (savedQueries) setQueries(JSON.parse(savedQueries));
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
+
+    // Then fetch live data from Zoho CRM
+    const fetchAll = async () => {
+      try {
+        const [dealsRes, clientsRes, queriesRes] = await Promise.allSettled([
+          fetchZohoDeals(),
+          fetchZohoClients(),
+          fetchZohoQueries(),
+        ]);
+        if (dealsRes.status === 'fulfilled' && dealsRes.value.success && dealsRes.value.data.length > 0) {
+          setDeals(dealsRes.value.data);
+          localStorage.setItem('be_deals', JSON.stringify(dealsRes.value.data));
+        }
+        if (clientsRes.status === 'fulfilled' && clientsRes.value.success && clientsRes.value.data.length > 0) {
+          setClients(clientsRes.value.data);
+          localStorage.setItem('be_clients', JSON.stringify(clientsRes.value.data));
+        }
+        if (queriesRes.status === 'fulfilled' && queriesRes.value.success && queriesRes.value.data.length > 0) {
+          setQueries(queriesRes.value.data);
+          localStorage.setItem('be_queries', JSON.stringify(queriesRes.value.data));
+        }
+      } catch (e) {
+        console.error('Dashboard Zoho fetch error:', e);
+      }
+    };
+    fetchAll();
   }, []);
 
   const parseMoney = (val: any) => {

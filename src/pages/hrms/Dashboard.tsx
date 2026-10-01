@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
+import { fetchZohoEmployees, fetchZohoAttendance, fetchZohoLeaves } from '../../services/zohoService';
 
 export const HrmsDashboard = () => {
   const { currentUser, isSuperAdmin, isHR, isTL, isTM } = useAuth();
@@ -13,20 +14,41 @@ export const HrmsDashboard = () => {
   const [leaves, setLeaves] = useState<any[]>([]);
 
   useEffect(() => {
-    const savedEmps = localStorage.getItem('be_employees');
-    if (savedEmps) {
-      try { setEmployees(JSON.parse(savedEmps)); } catch (e) {}
-    }
+    // Seed from localStorage immediately for instant render
+    try {
+      const savedEmps = localStorage.getItem('be_employees');
+      if (savedEmps) setEmployees(JSON.parse(savedEmps));
+      const savedAtt = localStorage.getItem('be_attendance');
+      if (savedAtt) setAttendance(JSON.parse(savedAtt));
+      const savedLeaves = localStorage.getItem('be_leaves');
+      if (savedLeaves) setLeaves(JSON.parse(savedLeaves));
+    } catch (e) {}
 
-    const savedAtt = localStorage.getItem('be_attendance');
-    if (savedAtt) {
-      try { setAttendance(JSON.parse(savedAtt)); } catch (e) {}
-    }
-
-    const savedLeaves = localStorage.getItem('be_leaves');
-    if (savedLeaves) {
-      try { setLeaves(JSON.parse(savedLeaves)); } catch (e) {}
-    }
+    // Then fetch live data from Zoho CRM
+    const fetchAll = async () => {
+      try {
+        const [empsRes, attRes, leavesRes] = await Promise.allSettled([
+          fetchZohoEmployees(),
+          fetchZohoAttendance(),
+          fetchZohoLeaves(),
+        ]);
+        if (empsRes.status === 'fulfilled' && empsRes.value.success && empsRes.value.data.length > 0) {
+          setEmployees(empsRes.value.data);
+          localStorage.setItem('be_employees', JSON.stringify(empsRes.value.data));
+        }
+        if (attRes.status === 'fulfilled' && attRes.value.success && attRes.value.data.length > 0) {
+          setAttendance(attRes.value.data);
+          localStorage.setItem('be_attendance', JSON.stringify(attRes.value.data));
+        }
+        if (leavesRes.status === 'fulfilled' && leavesRes.value.success && leavesRes.value.data.length > 0) {
+          setLeaves(leavesRes.value.data);
+          localStorage.setItem('be_leaves', JSON.stringify(leavesRes.value.data));
+        }
+      } catch (e) {
+        console.error('HRMS Dashboard Zoho fetch error:', e);
+      }
+    };
+    fetchAll();
   }, []);
 
   const isFullAdmin = isSuperAdmin || isHR;
