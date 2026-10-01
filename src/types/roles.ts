@@ -76,11 +76,15 @@ export interface AuthUser {
   email: string;
   personalEmail?: string;
   workEmail?: string;
+  mobile?: string;
   role: SystemRole;
   department: string;
   designation: string;
   empId: string;
   avatar?: string;
+  password?: string;
+  isActivated?: boolean;
+  passwordSet?: boolean;
   reportingManagerId?: string;
   reportingManagerName?: string;
   teamLeaderId?: string;

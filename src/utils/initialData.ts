@@ -16,6 +16,10 @@ export interface EmployeeData {
   joined: string;
   status: 'Active' | 'On Leave' | 'Inactive';
   formData: any;
+  password?: string;
+  isActivated?: boolean;
+  passwordSet?: boolean;
+  activatedAt?: string;
   salaryDocumentName?: string;
   zohoId?: string;
   zohoStatus?: 'synced' | 'pending' | 'failed';

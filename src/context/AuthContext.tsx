@@ -16,7 +16,10 @@ interface AuthContextType {
   isTL: boolean;
   isTM: boolean;
   can: (permission: string) => boolean;
-  login: (email: string, password?: string, role?: SystemRole) => { success: boolean; error?: string };
+  login: (email: string, password?: string, role?: SystemRole) => { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser };
+  requestOtp: (emailOrId: string) => Promise<{ success: boolean; error?: string; maskedEmail?: string; otp?: string; empName?: string; targetEmail?: string }>;
+  verifyOtp: (emailOrId: string, otp: string) => { success: boolean; error?: string };
+  setPasswordAndActivate: (emailOrId: string, otp: string, newPassword: string) => { success: boolean; error?: string; user?: AuthUser };
   logout: () => void;
 }
 
@@ -81,10 +84,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email: e.email || e.formData?.workEmail || e.formData?.email || '',
             personalEmail: e.formData?.email || e.email || '',
             workEmail: e.formData?.workEmail || e.email || '',
+            mobile: e.mobile || e.formData?.mobile || '',
             role: sRole,
             department: e.dept || e.formData?.dept || 'General',
             designation: e.role || e.formData?.role || 'Employee',
             empId: e.id,
+            password: e.password || e.formData?.password,
+            isActivated: e.isActivated || e.formData?.isActivated || false,
+            passwordSet: e.passwordSet || e.formData?.passwordSet || false,
             reportingManagerId: e.reportingManagerId || e.formData?.reportingManagerId,
             reportingManagerName: e.reportingManagerName || e.formData?.reportingManagerName,
             teamLeaderId: e.teamLeaderId || e.formData?.teamLeaderId,
@@ -135,7 +142,169 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     switchUser(userForRole);
   };
 
-  const login = (email: string, password?: string, role?: SystemRole): { success: boolean; error?: string } => {
+  const requestOtp = async (emailOrId: string): Promise<{ success: boolean; error?: string; maskedEmail?: string; otp?: string; empName?: string; targetEmail?: string }> => {
+    const clean = (emailOrId || '').trim().toLowerCase();
+    if (!clean) {
+      return { success: false, error: 'Please enter your registered Email address or Employee ID.' };
+    }
+
+    const savedEmps = localStorage.getItem('be_employees');
+    const emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
+    
+    // Find matching employee across email, workEmail, personalEmail, and ID
+    const foundEmp = emps.find((e: any) => {
+      const emailMatches = e.email?.trim().toLowerCase() === clean;
+      const personalEmailMatches = e.formData?.email?.trim().toLowerCase() === clean;
+      const workEmailMatches = e.formData?.workEmail?.trim().toLowerCase() === clean;
+      const idMatches = e.id?.toString().trim().toLowerCase() === clean || e.empId?.toString().trim().toLowerCase() === clean;
+      return emailMatches || personalEmailMatches || workEmailMatches || idMatches;
+    });
+
+    if (!foundEmp) {
+      return { 
+        success: false, 
+        error: `No registered employee record found for "${emailOrId}". Please verify your email/ID or contact HR.` 
+      };
+    }
+
+    const targetEmail = foundEmp.formData?.workEmail || foundEmp.formData?.email || foundEmp.email || 'support@bharat-edge.com';
+    
+    // Create masked email (e.g. r****l@bharat-edge.com)
+    let maskedEmail = targetEmail;
+    if (targetEmail.includes('@')) {
+      const [local, domain] = targetEmail.split('@');
+      const maskedLocal = local.length <= 2 
+        ? local + '***' 
+        : `${local[0]}${'*'.repeat(Math.max(local.length - 2, 3))}${local[local.length - 1]}`;
+      maskedEmail = `${maskedLocal}@${domain}`;
+    }
+
+    // Generate 6-digit OTP
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins validity
+
+    const otpSession = {
+      identifier: clean,
+      empId: foundEmp.id,
+      targetEmail,
+      otp: generatedOtp,
+      expiresAt,
+      sender: 'support@bharat-edge.com',
+      createdAt: new Date().toISOString()
+    };
+    sessionStorage.setItem('be_active_otp_session', JSON.stringify(otpSession));
+
+    return {
+      success: true,
+      otp: generatedOtp,
+      maskedEmail,
+      empName: foundEmp.name,
+      targetEmail
+    };
+  };
+
+  const verifyOtp = (emailOrId: string, inputOtp: string): { success: boolean; error?: string } => {
+    const cleanOtp = (inputOtp || '').trim();
+    if (!cleanOtp || cleanOtp.length !== 6) {
+      return { success: false, error: 'Please enter the complete 6-digit OTP verification code.' };
+    }
+
+    const savedSession = sessionStorage.getItem('be_active_otp_session');
+    if (!savedSession) {
+      return { success: false, error: 'No active OTP session found. Please request an OTP first.' };
+    }
+
+    try {
+      const session = JSON.parse(savedSession);
+      if (Date.now() > session.expiresAt) {
+        return { success: false, error: 'Verification code has expired. Please click "Resend OTP".' };
+      }
+      if (session.otp !== cleanOtp) {
+        return { success: false, error: 'Invalid verification code. Please check the code sent from support@bharat-edge.com.' };
+      }
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: 'Failed to verify OTP. Please try again.' };
+    }
+  };
+
+  const setPasswordAndActivate = (emailOrId: string, inputOtp: string, newPassword: string): { success: boolean; error?: string; user?: AuthUser } => {
+    const otpResult = verifyOtp(emailOrId, inputOtp);
+    if (!otpResult.success) {
+      return { success: false, error: otpResult.error };
+    }
+
+    const cleanPassword = (newPassword || '').trim();
+    if (cleanPassword.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters long.' };
+    }
+
+    const savedSession = sessionStorage.getItem('be_active_otp_session');
+    const session = savedSession ? JSON.parse(savedSession) : null;
+    const empId = session?.empId;
+
+    const savedEmps = localStorage.getItem('be_employees');
+    let emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
+
+    const empIndex = emps.findIndex((e: any) => 
+      e.id === empId || 
+      e.id?.toLowerCase() === emailOrId.toLowerCase() ||
+      e.email?.toLowerCase() === emailOrId.toLowerCase()
+    );
+
+    if (empIndex === -1) {
+      return { success: false, error: 'Employee account record not found.' };
+    }
+
+    // Save updated password and mark account as activated
+    emps[empIndex] = {
+      ...emps[empIndex],
+      password: cleanPassword,
+      isActivated: true,
+      passwordSet: true,
+      activatedAt: new Date().toISOString(),
+      formData: {
+        ...(emps[empIndex].formData || {}),
+        password: cleanPassword,
+        isActivated: true,
+        passwordSet: true
+      }
+    };
+
+    localStorage.setItem('be_employees', JSON.stringify(emps));
+    window.dispatchEvent(new Event('be_employees_updated'));
+
+    // Clear active OTP session
+    sessionStorage.removeItem('be_active_otp_session');
+
+    const updatedEmp = emps[empIndex];
+    const sRole = updatedEmp.systemRole || (updatedEmp.role?.includes('HR') ? 'HR' : updatedEmp.role?.includes('HOD') ? 'HOD' : updatedEmp.role?.includes('TL') ? 'TL' : updatedEmp.role?.includes('Super Admin') ? 'Super Admin' : 'TM');
+    
+    const authUser: AuthUser = {
+      id: updatedEmp.id,
+      name: updatedEmp.name,
+      email: updatedEmp.email || updatedEmp.formData?.workEmail || updatedEmp.formData?.email || '',
+      personalEmail: updatedEmp.formData?.email || updatedEmp.email || '',
+      workEmail: updatedEmp.formData?.workEmail || updatedEmp.email || '',
+      mobile: updatedEmp.mobile || updatedEmp.formData?.mobile || '',
+      role: sRole,
+      department: updatedEmp.dept || updatedEmp.formData?.dept || 'General',
+      designation: updatedEmp.role || updatedEmp.formData?.role || 'Employee',
+      empId: updatedEmp.id,
+      password: cleanPassword,
+      isActivated: true,
+      passwordSet: true,
+      reportingManagerId: updatedEmp.reportingManagerId,
+      reportingManagerName: updatedEmp.reportingManagerName,
+      teamLeaderId: updatedEmp.teamLeaderId,
+      teamLeaderName: updatedEmp.teamLeaderName
+    };
+
+    switchUser(authUser);
+    return { success: true, user: authUser };
+  };
+
+  const login = (email: string, password?: string, role?: SystemRole): { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser } => {
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanPassword = (password || '').trim();
     const usersList = getAllUsersFromStorage();
@@ -150,7 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       if (foundByRole) {
         switchUser(foundByRole);
-        return { success: true };
+        return { success: true, user: foundByRole };
       }
       switchRole(role);
       return { success: true };
@@ -181,19 +350,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    // 4. Validate password (accept default admin123 or whatever is configured)
-    const validPasswords = ['admin123', 'admin', 'password', '123456', (found as any).password].filter(Boolean);
-    const isValid = validPasswords.includes(cleanPassword) || cleanPassword === 'admin123';
+    // 4. Validate password (accept employee's custom password or default admin123)
+    const userCustomPassword = (found as any).password;
+    let isValid = false;
+    if (userCustomPassword) {
+      isValid = cleanPassword === userCustomPassword || cleanPassword === 'admin123';
+    } else {
+      const validPasswords = ['admin123', 'admin', 'password', '123456'];
+      isValid = validPasswords.includes(cleanPassword);
+    }
 
     if (!isValid) {
+      const hasPasswordSet = Boolean(userCustomPassword);
       return { 
         success: false, 
-        error: 'Incorrect password. (Default password is admin123)' 
+        error: hasPasswordSet 
+          ? 'Incorrect password. Please try again or use "Forgot / Set Password" with OTP.'
+          : 'Incorrect password. (First time login? Click "First-Time Login" to verify via OTP and set password)' 
       };
     }
 
     switchUser(found);
-    return { success: true };
+    return { success: true, user: found };
   };
 
   const logout = () => {
@@ -257,6 +435,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isTM,
         can,
         login,
+        requestOtp,
+        verifyOtp,
+        setPasswordAndActivate,
         logout
       }}
     >
