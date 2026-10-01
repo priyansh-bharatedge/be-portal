@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ROLE_DEFINITIONS } from '../types/roles';
 import type { AuthUser, SystemRole } from '../types/roles';
 import { DEMO_USERS, INITIAL_EMPLOYEES, INITIAL_DSR_REPORTS } from '../utils/initialData';
+import { sendOtpEmail } from '../services/emailService';
 
 interface AuthContextType {
   currentUser: AuthUser;
@@ -193,6 +194,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString()
     };
     sessionStorage.setItem('be_active_otp_session', JSON.stringify(otpSession));
+
+    // Dispatch email via Nodemailer API
+    sendOtpEmail({
+      toEmail: targetEmail,
+      empName: foundEmp.name,
+      otpCode: generatedOtp
+    }).catch(err => console.warn('Background email delivery attempt:', err));
 
     return {
       success: true,
