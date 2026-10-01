@@ -262,11 +262,11 @@ export const Policies = () => {
 
     const policyData: Policy = {
       id: polId,
-      title: formData.title.trim(),
+      title: (formData.title ?? '').trim(),
       content: formData.content.trim(),
       department: formData.department,
       tag: formData.tag.trim() || 'Company Policy',
-      email: formData.email.trim(),
+      email: (formData.email ?? '').trim(),
       secondaryEmail: formData.secondaryEmail.trim(),
       emailOptOut: formData.emailOptOut,
       createdBy: editingPolicy?.createdBy || currentUser?.name || 'HR Admin',
@@ -402,11 +402,11 @@ export const Policies = () => {
       const matchesDept = selectedDept === 'All' || pol.department === selectedDept || pol.department === 'All';
       const q = searchQuery.toLowerCase().trim();
       const matchesQuery = !q || 
-        pol.title.toLowerCase().includes(q) ||
+        (pol.title ?? '').toLowerCase().includes(q) ||
         pol.content.toLowerCase().includes(q) ||
         (pol.tag && pol.tag.toLowerCase().includes(q)) ||
-        (pol.department && pol.department.toLowerCase().includes(q)) ||
-        (pol.email && pol.email.toLowerCase().includes(q));
+        (pol.department && (pol.department ?? '').toLowerCase().includes(q)) ||
+        (pol.email && (pol.email ?? '').toLowerCase().includes(q));
 
       return matchesDept && matchesQuery;
     });

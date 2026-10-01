@@ -108,7 +108,7 @@ export const Calendar = () => {
           const merged = [...prev];
           res.data.forEach((item: any) => {
             const zohoIdStr = String(item.id);
-            const exists = merged.some(e => e.zohoId === zohoIdStr || (e.title && e.title.toLowerCase() === (item.Name || '').toLowerCase() && e.date === item.Date));
+            const exists = merged.some(e => e.zohoId === zohoIdStr || (e.title && (e.title ?? '').toLowerCase() === (item.Name || '').toLowerCase() && e.date === item.Date));
             if (!exists && item.Name) {
               merged.push({
                 id: `EV-${zohoIdStr.slice(-4)}`,

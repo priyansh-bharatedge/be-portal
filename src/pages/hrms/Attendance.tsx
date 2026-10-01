@@ -181,10 +181,10 @@ export const Attendance = () => {
         e.id === currentUser.empId || 
         (currentUser.id && e.id && String(e.id).trim().toLowerCase() === String(currentUser.id).trim().toLowerCase()) ||
         (currentUser.empId && e.id && String(e.id).trim().toLowerCase() === String(currentUser.empId).trim().toLowerCase()) ||
-        (e.email && currentUser.email && e.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
-        (e.formData?.email && currentUser.email && e.formData.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
-        (e.formData?.workEmail && currentUser.email && e.formData.workEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
-        (e.name && currentUser.name && e.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase())
+        (e.email && currentUser.email && (e.email ?? '').trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
+        (e.formData?.email && currentUser.email && e.formData.email.trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
+        (e.formData?.workEmail && currentUser.email && e.formData.workEmail.trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
+        (e.name && currentUser.name && (e.name ?? '').trim().toLowerCase() === (currentUser.name ?? '').trim().toLowerCase())
       );
 
   const visibleEmployees = (!isFullAdmin && matchedEmployees.length === 0)
@@ -200,7 +200,7 @@ export const Attendance = () => {
       checkIn: record?.checkIn || '--',
       checkOut: record?.checkOut || '--'
     };
-  }).filter((r: any) => r.empName.toLowerCase().includes(searchQuery.toLowerCase()));
+  }).filter((r: any) => (r.empName ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
 
   const getStatusColor = (status: string) => {
     switch (status) {

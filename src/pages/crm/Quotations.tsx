@@ -281,7 +281,7 @@ export const Quotations = () => {
     let errorMsg = '';
 
     for (const file of newFiles) {
-      const extension = file.name.split('.').pop()?.toLowerCase();
+      const extension = (file.name ?? '').split('.').pop()?.toLowerCase();
       const isAllowedExt = extension && ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'].includes(extension);
 
       if (!ALLOWED_TYPES.includes(file.type) && !isAllowedExt) {

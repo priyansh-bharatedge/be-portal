@@ -108,7 +108,7 @@ export const Documents = () => {
   };
 
   const displayedDocs = documents.filter(d => {
-    const matchesSearch = d.title.toLowerCase().includes(searchQuery.toLowerCase()) || d.empName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (d.title ?? '').toLowerCase().includes(searchQuery.toLowerCase()) || (d.empName ?? '').toLowerCase().includes(searchQuery.toLowerCase());
     if (isEmployeeSelfOnly) {
       return matchesSearch && (
         d.empId === currentUser.empId || 

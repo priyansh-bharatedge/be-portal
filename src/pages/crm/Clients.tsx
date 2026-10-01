@@ -357,9 +357,9 @@ export const Clients = () => {
     if (activeTab === 'From Deals' && source !== 'From Deals') return false;
     if (activeTab === 'Zoho CRM' && source !== 'Zoho CRM') return false;
     
-    return c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    return (c.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) || 
            c.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           (c.email ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
            (c.phone && c.phone.includes(searchQuery));
   });
 

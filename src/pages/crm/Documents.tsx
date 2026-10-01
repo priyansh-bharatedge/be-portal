@@ -74,7 +74,7 @@ export const Documents = () => {
   };
 
   const filteredDocs = documents.filter(d => 
-    d.name.toLowerCase().includes(searchQuery.toLowerCase())
+    (d.name ?? '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -128,7 +128,7 @@ export const Documents = () => {
                 <tbody className="text-gray-700">
                 {filteredDocs.map((doc) => {
                   const isDealDoc = doc.id.startsWith('DL-');
-                  const contextText = isDealDoc ? `Deal: ${doc.id.split('_')[0]}` : 'Global Upload';
+                  const contextText = isDealDoc ? `Deal: ${(doc.id ?? '').split('_')[0]}` : 'Global Upload';
                   return (
                     <tr key={doc.id} className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm">
                       <td className="px-6 py-5 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">

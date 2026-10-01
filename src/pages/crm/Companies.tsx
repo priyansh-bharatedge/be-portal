@@ -359,10 +359,10 @@ export const Companies = () => {
     if (activeTab === 'From Deals' && source !== 'From Deals') return false;
     if (activeTab === 'Zoho CRM' && source !== 'Zoho CRM') return false;
     
-    return c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    return (c.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) || 
            (c.gstNumber && c.gstNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
-           (c.type && c.type.toLowerCase().includes(searchQuery.toLowerCase())) ||
-           (c.email && c.email.toLowerCase().includes(searchQuery.toLowerCase()));
+           (c.type && (c.type ?? '').toLowerCase().includes(searchQuery.toLowerCase())) ||
+           (c.email && (c.email ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
   });
 
   return (

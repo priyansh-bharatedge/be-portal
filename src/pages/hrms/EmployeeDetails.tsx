@@ -173,7 +173,7 @@ export const EmployeeDetails = () => {
           </button>
           
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center font-bold text-xl shadow-lg shadow-orange-500/20 shrink-0">
-            {employee.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+            {(employee.name ?? '').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
           </div>
 
           <div>
@@ -399,7 +399,7 @@ export const EmployeeDetails = () => {
                       className="p-3 bg-white rounded-xl border border-gray-200 hover:border-be-orange cursor-pointer transition-all shadow-sm flex items-center space-x-3 group"
                     >
                       <div className="w-8 h-8 rounded-full bg-orange-100 text-be-orange flex items-center justify-center font-bold text-xs">
-                        {sub.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
+                        {(sub.name ?? '').split(' ').map((n: string) => n[0]).join('').substring(0, 2)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-bold text-gray-900 truncate group-hover:text-be-orange">

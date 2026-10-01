@@ -218,7 +218,7 @@ export const Employees = () => {
 
         // Preserve any local non-synced employees
         for (const lEmp of localList) {
-          const lId = lEmp.id ? lEmp.id.toLowerCase() : '';
+          const lId = lEmp.id ? (lEmp.id ?? '').toLowerCase() : '';
           const lZoho = lEmp.zohoId ? String(lEmp.zohoId) : '';
           if (lZoho && seenZohoIds.has(lZoho)) continue;
           if (lId && seenIds.has(lId)) continue;
@@ -821,10 +821,10 @@ export const Employees = () => {
       e.id === currentUser.empId ||
       (currentUser.id && e.id && String(e.id).trim().toLowerCase() === String(currentUser.id).trim().toLowerCase()) ||
       (currentUser.empId && e.id && String(e.id).trim().toLowerCase() === String(currentUser.empId).trim().toLowerCase()) ||
-      (e.email && currentUser.email && e.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
-      (e.formData?.email && currentUser.email && e.formData.email.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
-      (e.formData?.workEmail && currentUser.email && e.formData.workEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
-      (e.name && currentUser.name && e.name.trim().toLowerCase() === currentUser.name.trim().toLowerCase())
+      (e.email && currentUser.email && (e.email ?? '').trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
+      (e.formData?.email && currentUser.email && e.formData.email.trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
+      (e.formData?.workEmail && currentUser.email && e.formData.workEmail.trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
+      (e.name && currentUser.name && (e.name ?? '').trim().toLowerCase() === (currentUser.name ?? '').trim().toLowerCase())
     );
 
   const visibleEmployees: EmployeeData[] = (!isFullAdmin && matchedEmployees.length === 0)

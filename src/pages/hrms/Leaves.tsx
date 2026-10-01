@@ -76,7 +76,7 @@ export const Leaves = () => {
           else if (z.Approved_by_TL === 'Rejected') status = 'Rejected by TL';
           else if (z.Approved_by_TL === 'Approved') status = 'Pending HR';
 
-          const targetEmp = emps.find((e: any) => (e.zohoId && z.Employee?.id && String(e.zohoId) === String(z.Employee.id)) || (e.email && z.Email && e.email.toLowerCase() === z.Email.toLowerCase()));
+          const targetEmp = emps.find((e: any) => (e.zohoId && z.Employee?.id && String(e.zohoId) === String(z.Employee.id)) || (e.email && z.Email && (e.email ?? '').toLowerCase() === z.Email.toLowerCase()));
 
           return {
             id: `LV-ZOHO-${String(z.id).slice(-4)}`,
@@ -162,8 +162,8 @@ export const Leaves = () => {
     const myId = currentUser.id ? String(currentUser.id).trim().toLowerCase() : '';
     const myEmpId = currentUser.empId ? String(currentUser.empId).trim().toLowerCase() : '';
     const lEmpId = l.empId ? String(l.empId).trim().toLowerCase() : '';
-    const myName = currentUser.name ? currentUser.name.trim().toLowerCase() : '';
-    const lName = l.empName ? l.empName.trim().toLowerCase() : '';
+    const myName = currentUser.name ? (currentUser.name ?? '').trim().toLowerCase() : '';
+    const lName = l.empName ? (l.empName ?? '').trim().toLowerCase() : '';
 
     return (myId && lEmpId === myId) ||
       (myEmpId && lEmpId === myEmpId) ||
@@ -177,7 +177,7 @@ export const Leaves = () => {
 
     const myId = currentUser.id ? String(currentUser.id).trim().toLowerCase() : '';
     const myEmpId = currentUser.empId ? String(currentUser.empId).trim().toLowerCase() : '';
-    const myName = currentUser.name ? currentUser.name.trim().toLowerCase() : '';
+    const myName = currentUser.name ? (currentUser.name ?? '').trim().toLowerCase() : '';
 
     const tlId = l.teamLeaderId ? String(l.teamLeaderId).trim().toLowerCase() : '';
     const tlName = l.teamLeaderName ? l.teamLeaderName.trim().toLowerCase() : '';
@@ -189,7 +189,7 @@ export const Leaves = () => {
     // Check employee record
     const emp = employees.find((e: any) =>
       (e.id && l.empId && String(e.id).trim().toLowerCase() === String(l.empId).trim().toLowerCase()) ||
-      (e.name && l.empName && e.name.trim().toLowerCase() === l.empName.trim().toLowerCase())
+      (e.name && l.empName && (e.name ?? '').trim().toLowerCase() === (l.empName ?? '').trim().toLowerCase())
     );
 
     const empReportsToTL = emp && (
@@ -201,7 +201,7 @@ export const Leaves = () => {
       ))
     );
 
-    const isSameDept = l.dept && currentUser.department && l.dept.toLowerCase() === currentUser.department.toLowerCase();
+    const isSameDept = l.dept && currentUser.department && (l.dept ?? '').toLowerCase() === (currentUser.department ?? '').toLowerCase();
 
     return isDirectTL || empReportsToTL || isSameDept || !l.teamLeaderId;
   };
@@ -390,9 +390,9 @@ export const Leaves = () => {
     return currentTabLeaves.filter(l => {
       const q = searchQuery.toLowerCase();
       const matchesSearch =
-        l.empName.toLowerCase().includes(q) ||
-        l.id.toLowerCase().includes(q) ||
-        l.type.toLowerCase().includes(q) ||
+        (l.empName ?? '').toLowerCase().includes(q) ||
+        (l.id ?? '').toLowerCase().includes(q) ||
+        (l.type ?? '').toLowerCase().includes(q) ||
         l.reason.toLowerCase().includes(q);
 
       const matchesType = typeFilter === 'All' || l.type === typeFilter;

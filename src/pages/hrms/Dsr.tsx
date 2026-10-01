@@ -98,7 +98,7 @@ export const DSR = () => {
                 status: (item.Tag as DsrStatus) || merged[existsIndex].status,
               };
             } else if (item.Name || item.Date) {
-              const matchedEmp = (savedEmps ? JSON.parse(savedEmps) : []).find((e: any) => e.email && item.Email && e.email.toLowerCase() === item.Email.toLowerCase());
+              const matchedEmp = (savedEmps ? JSON.parse(savedEmps) : []).find((e: any) => e.email && item.Email && (e.email ?? '').toLowerCase() === item.Email.toLowerCase());
               merged.push({
                 id: `DSR-ZOHO-${zohoIdStr.slice(-4)}`,
                 empId: matchedEmp?.id || 'EMP-ZOHO',
@@ -160,12 +160,12 @@ export const DSR = () => {
       e.teamLeaderId === currentUser.empId ||
       (e.teamLeaderName && currentUser.name && (
         e.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase()) ||
-        currentUser.name.toLowerCase().includes(e.teamLeaderName.toLowerCase())
+        (currentUser.name ?? '').toLowerCase().includes(e.teamLeaderName.toLowerCase())
       )) ||
       (e.formData?.teamLeaderId && (e.formData.teamLeaderId === currentUser.id || e.formData.teamLeaderId === currentUser.empId)) ||
       (e.formData?.teamLeaderName && currentUser.name && (
         e.formData.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase()) ||
-        currentUser.name.toLowerCase().includes(e.formData.teamLeaderName.toLowerCase())
+        (currentUser.name ?? '').toLowerCase().includes(e.formData.teamLeaderName.toLowerCase())
       ));
     return isSubordinate && e.id !== currentUser.id && e.id !== currentUser.empId;
   });
@@ -175,7 +175,7 @@ export const DSR = () => {
     r.empId === currentUser.id || 
     r.empId === currentUser.empId || 
     r.empEmail?.toLowerCase() === currentUser.email?.toLowerCase() ||
-    (currentUser.name && r.empName?.toLowerCase() === currentUser.name.toLowerCase())
+    (currentUser.name && r.empName?.toLowerCase() === (currentUser.name ?? '').toLowerCase())
   );
 
   // Filter: Team Reports (Submitted to current user as TL, or all if Super Admin/HR)
@@ -186,9 +186,9 @@ export const DSR = () => {
       r.tlId === currentUser.empId || 
       (r.tlName && currentUser.name && (
         r.tlName.toLowerCase().includes(currentUser.name.toLowerCase()) ||
-        currentUser.name.toLowerCase().includes(r.tlName.toLowerCase())
+        (currentUser.name ?? '').toLowerCase().includes(r.tlName.toLowerCase())
       )) ||
-      (r.tlEmail && currentUser.email && r.tlEmail.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (r.tlEmail && currentUser.email && r.tlEmail.toLowerCase() === (currentUser.email ?? '').toLowerCase()) ||
       teamMembers.some(m => m.id === r.empId || m.name?.toLowerCase() === r.empName?.toLowerCase());
     return isSentToMe && r.empId !== currentUser.id && r.empId !== currentUser.empId;
   });

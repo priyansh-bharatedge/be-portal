@@ -294,7 +294,7 @@ export const Deals = () => {
     let errorMsg = '';
 
     for (const file of newFiles) {
-      const extension = file.name.split('.').pop()?.toLowerCase();
+      const extension = (file.name ?? '').split('.').pop()?.toLowerCase();
       const isAllowedExt = extension && ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'].includes(extension);
 
       if (!ALLOWED_TYPES.includes(file.type) && !isAllowedExt) {
@@ -480,7 +480,7 @@ export const Deals = () => {
         const rawClients = localStorage.getItem('be_clients');
         const existingClients = rawClients ? JSON.parse(rawClients) : [];
         const existingClient = existingClients.find((cl: any) => 
-          (cl.email && formData.email && cl.email.toLowerCase() === formData.email.trim().toLowerCase()) ||
+          (cl.email && formData.email && (cl.email ?? '').toLowerCase() === (formData.email ?? '').trim().toLowerCase()) ||
           (cl.phone && formData.mobile && cl.phone === formData.mobile.replace(/[^0-9]/g, '')) ||
           (cl.name?.toLowerCase() === formData.clientName.trim().toLowerCase())
         );
@@ -489,7 +489,7 @@ export const Deals = () => {
           id: existingClient?.id || `CL-${Math.floor(1000 + Math.random() * 9000)}`,
           name: formData.clientName.trim(),
           company: formData.companyName ? formData.companyName.trim() : (existingClient?.company || 'Individual'),
-          email: formData.email ? formData.email.trim() : (existingClient?.email || ''),
+          email: formData.email ? (formData.email ?? '').trim() : (existingClient?.email || ''),
           phone: formData.mobile ? formData.mobile.replace(/[^0-9]/g, '') : (existingClient?.phone || ''),
           status: 'Active',
           source: existingClient?.source || 'From Deals',
@@ -732,7 +732,7 @@ export const Deals = () => {
         const existingClients = rawClients ? JSON.parse(rawClients) : [];
         const existingClient = existingClients.find((cl: any) => 
           (cl.name?.toLowerCase() === clientName.trim().toLowerCase()) ||
-          (cl.email && deal.formData?.email && cl.email.toLowerCase() === deal.formData.email.trim().toLowerCase())
+          (cl.email && deal.formData?.email && (cl.email ?? '').toLowerCase() === deal.formData.email.trim().toLowerCase())
         );
         const clientToSave: any = {
           id: existingClient?.id || `CL-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -1069,7 +1069,7 @@ export const Deals = () => {
                   const matchClient = deal.client && deal.client.toLowerCase().includes(q);
                   const matchCompany = deal.company && deal.company.toLowerCase().includes(q);
                   const matchService = deal.service && deal.service.toLowerCase().includes(q);
-                  const matchId = deal.id && deal.id.toLowerCase().includes(q);
+                  const matchId = deal.id && (deal.id ?? '').toLowerCase().includes(q);
                   if (!matchClient && !matchCompany && !matchService && !matchId) return false;
                 }
                 return true;
@@ -1163,7 +1163,7 @@ export const Deals = () => {
                   const matchClient = deal.client && deal.client.toLowerCase().includes(q);
                   const matchCompany = deal.company && deal.company.toLowerCase().includes(q);
                   const matchService = deal.service && deal.service.toLowerCase().includes(q);
-                  const matchId = deal.id && deal.id.toLowerCase().includes(q);
+                  const matchId = deal.id && (deal.id ?? '').toLowerCase().includes(q);
                   if (!matchClient && !matchCompany && !matchService && !matchId) return false;
                 }
                 return true;
@@ -1561,7 +1561,7 @@ export const Deals = () => {
                       <div className="space-y-3">
                         <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Files ({documents.length})</h4>
                         {documents.map((file, idx) => {
-                          const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+                          const ext = (file.name ?? '').split('.').pop()?.toUpperCase() || 'FILE';
                           const isPdf = ext === 'PDF';
                           const isImg = ['JPG', 'JPEG', 'PNG'].includes(ext);
 

@@ -90,7 +90,7 @@ export const MyTeam = () => {
 
     const hodId = hod.id ? String(hod.id).trim().toLowerCase() : '';
     const hodEmpId = hod.formData?.empId ? String(hod.formData.empId).trim().toLowerCase() : '';
-    const hodName = hod.name ? hod.name.trim().toLowerCase() : '';
+    const hodName = hod.name ? (hod.name ?? '').trim().toLowerCase() : '';
 
     const tlMgrId = tl.reportingManagerId ? String(tl.reportingManagerId).trim().toLowerCase() : '';
     const tlFormMgrId = tl.formData?.reportingManagerId ? String(tl.formData.reportingManagerId).trim().toLowerCase() : '';
@@ -103,7 +103,7 @@ export const MyTeam = () => {
     if (hodName && (tlMgrName.includes(hodName) || tlFormMgrName.includes(hodName))) return true;
 
     // Same Department match
-    if (tl.dept && hod.dept && tl.dept.toLowerCase().trim() === hod.dept.toLowerCase().trim()) return true;
+    if (tl.dept && hod.dept && (tl.dept ?? '').toLowerCase().trim() === (hod.dept ?? '').toLowerCase().trim()) return true;
 
     return false;
   };
@@ -116,7 +116,7 @@ export const MyTeam = () => {
 
     const tlId = tl.id ? String(tl.id).trim().toLowerCase() : '';
     const tlEmpId = tl.formData?.empId ? String(tl.formData.empId).trim().toLowerCase() : '';
-    const tlName = tl.name ? tl.name.trim().toLowerCase() : '';
+    const tlName = tl.name ? (tl.name ?? '').trim().toLowerCase() : '';
 
     const mTLId = member.teamLeaderId ? String(member.teamLeaderId).trim().toLowerCase() : '';
     const mFormTLId = member.formData?.teamLeaderId ? String(member.formData.teamLeaderId).trim().toLowerCase() : '';
@@ -131,7 +131,7 @@ export const MyTeam = () => {
 
     // Fallback by department if not explicitly assigned to another TL
     if (!mTLId && !mFormTLId && !mTLName && !mFormTLName) {
-      if (member.dept && tl.dept && member.dept.toLowerCase().trim() === tl.dept.toLowerCase().trim() && (member.systemRole === 'TM' || !member.systemRole)) {
+      if (member.dept && tl.dept && (member.dept ?? '').toLowerCase().trim() === (tl.dept ?? '').toLowerCase().trim() && (member.systemRole === 'TM' || !member.systemRole)) {
         return true;
       }
     }
@@ -146,7 +146,7 @@ export const MyTeam = () => {
 
     const hodId = hod.id ? String(hod.id).trim().toLowerCase() : '';
     const hodEmpId = hod.formData?.empId ? String(hod.formData.empId).trim().toLowerCase() : '';
-    const hodName = hod.name ? hod.name.trim().toLowerCase() : '';
+    const hodName = hod.name ? (hod.name ?? '').trim().toLowerCase() : '';
 
     const mMgrId = member.reportingManagerId ? String(member.reportingManagerId).trim().toLowerCase() : '';
     const mFormMgrId = member.formData?.reportingManagerId ? String(member.formData.reportingManagerId).trim().toLowerCase() : '';
@@ -166,7 +166,7 @@ export const MyTeam = () => {
     if (memberTL && isTLOfHOD(memberTL, hod)) return true;
 
     // Fallback: same department
-    if (member.dept && hod.dept && member.dept.toLowerCase().trim() === hod.dept.toLowerCase().trim()) return true;
+    if (member.dept && hod.dept && (member.dept ?? '').toLowerCase().trim() === (hod.dept ?? '').toLowerCase().trim()) return true;
 
     return false;
   };
@@ -260,50 +260,50 @@ export const MyTeam = () => {
   const filteredHODs = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return hodsList.filter(hod => 
-      hod.name.toLowerCase().includes(q) ||
-      hod.id.toLowerCase().includes(q) ||
-      hod.dept.toLowerCase().includes(q) ||
-      hod.role.toLowerCase().includes(q)
+      (hod.name ?? '').toLowerCase().includes(q) ||
+      (hod.id ?? '').toLowerCase().includes(q) ||
+      (hod.dept ?? '').toLowerCase().includes(q) ||
+      (hod.role ?? '').toLowerCase().includes(q)
     );
   }, [hodsList, searchQuery]);
 
   const filteredTeamLeaders = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return activeTLsList.filter(tl => 
-      tl.name.toLowerCase().includes(q) ||
-      tl.id.toLowerCase().includes(q) ||
-      tl.dept.toLowerCase().includes(q) ||
-      tl.role.toLowerCase().includes(q)
+      (tl.name ?? '').toLowerCase().includes(q) ||
+      (tl.id ?? '').toLowerCase().includes(q) ||
+      (tl.dept ?? '').toLowerCase().includes(q) ||
+      (tl.role ?? '').toLowerCase().includes(q)
     );
   }, [activeTLsList, searchQuery]);
 
   const filteredDirectTLs = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return directTLsUnderMD.filter(tl => 
-      tl.name.toLowerCase().includes(q) ||
-      tl.id.toLowerCase().includes(q) ||
-      tl.dept.toLowerCase().includes(q) ||
-      tl.role.toLowerCase().includes(q)
+      (tl.name ?? '').toLowerCase().includes(q) ||
+      (tl.id ?? '').toLowerCase().includes(q) ||
+      (tl.dept ?? '').toLowerCase().includes(q) ||
+      (tl.role ?? '').toLowerCase().includes(q)
     );
   }, [directTLsUnderMD, searchQuery]);
 
   const filteredMembers = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return activeMembersList.filter(e =>
-      e.name.toLowerCase().includes(q) ||
-      e.id.toLowerCase().includes(q) ||
-      e.role.toLowerCase().includes(q) ||
-      e.dept.toLowerCase().includes(q)
+      (e.name ?? '').toLowerCase().includes(q) ||
+      (e.id ?? '').toLowerCase().includes(q) ||
+      (e.role ?? '').toLowerCase().includes(q) ||
+      (e.dept ?? '').toLowerCase().includes(q)
     );
   }, [activeMembersList, searchQuery]);
 
   const filteredDirectHODMembers = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return activeHODDirectMembers.filter(e =>
-      e.name.toLowerCase().includes(q) ||
-      e.id.toLowerCase().includes(q) ||
-      e.role.toLowerCase().includes(q) ||
-      e.dept.toLowerCase().includes(q)
+      (e.name ?? '').toLowerCase().includes(q) ||
+      (e.id ?? '').toLowerCase().includes(q) ||
+      (e.role ?? '').toLowerCase().includes(q) ||
+      (e.dept ?? '').toLowerCase().includes(q)
     );
   }, [activeHODDirectMembers, searchQuery]);
 
@@ -677,7 +677,7 @@ export const MyTeam = () => {
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center space-x-3.5">
                           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-lg shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
-                            {hod.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                            {(hod.name ?? '').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                           </div>
                           <div>
                             <h3 className="font-extrabold text-gray-900 text-base group-hover:text-blue-600 transition-colors">
@@ -805,7 +805,7 @@ export const MyTeam = () => {
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center space-x-3.5">
                             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-be-orange to-amber-500 text-white flex items-center justify-center font-extrabold text-lg shadow-lg shadow-orange-500/20 group-hover:scale-105 transition-transform">
-                              {tl.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                              {(tl.name ?? '').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                             </div>
                             <div>
                               <h3 className="font-extrabold text-gray-900 text-base group-hover:text-be-orange transition-colors">
@@ -942,7 +942,7 @@ export const MyTeam = () => {
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center space-x-3.5">
                             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-be-orange to-amber-500 text-white flex items-center justify-center font-extrabold text-lg shadow-lg shadow-orange-500/20 group-hover:scale-105 transition-transform">
-                              {tl.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                              {(tl.name ?? '').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                             </div>
                             <div>
                               <h3 className="font-extrabold text-gray-900 text-base group-hover:text-be-orange transition-colors">
@@ -1032,7 +1032,7 @@ export const MyTeam = () => {
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-center space-x-3">
                             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-md shadow-blue-500/20">
-                              {member.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                              {(member.name ?? '').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                             </div>
                             <div>
                               <h3 className="font-extrabold text-gray-900 text-base">{member.name}</h3>
@@ -1193,7 +1193,7 @@ export const MyTeam = () => {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-400 to-amber-500 text-white flex items-center justify-center font-bold text-base shadow-md shadow-orange-500/20">
-                          {member.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                          {(member.name ?? '').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                         </div>
                         <div>
                           <h3 className="font-extrabold text-gray-900 text-base">{member.name}</h3>

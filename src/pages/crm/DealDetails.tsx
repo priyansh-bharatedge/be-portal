@@ -47,7 +47,7 @@ export const DealDetails = () => {
     }
     
     // Fallback to mockup if file wasn't found in IndexedDB
-    const ext = doc.name.split('.').pop()?.toLowerCase() || '';
+    const ext = (doc.name ?? '').split('.').pop()?.toLowerCase() || '';
     let blob;
     
     if (ext === 'png' || ext === 'jpg' || ext === 'jpeg') {
@@ -200,7 +200,7 @@ export const DealDetails = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {deal.documentsData && deal.documentsData.length > 0 ? (
                 deal.documentsData.map((doc: any, idx: number) => {
-                  const ext = doc.name.split('.').pop()?.toUpperCase() || 'FILE';
+                  const ext = (doc.name ?? '').split('.').pop()?.toUpperCase() || 'FILE';
                   const isPdf = ext === 'PDF';
                   const isImg = ['JPG', 'JPEG', 'PNG'].includes(ext);
                   const sizeMb = (doc.size / (1024 * 1024)).toFixed(2);

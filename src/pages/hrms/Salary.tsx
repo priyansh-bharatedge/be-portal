@@ -237,7 +237,7 @@ export const Salary = () => {
   const isEmployeeSelfOnly = isTM || currentUser.role === 'TM' || (!isSuperAdmin && !isHR);
 
   const displayedSalaries = salaries.filter(s => {
-    const matchesSearch = s.empName.toLowerCase().includes(searchQuery.toLowerCase()) || s.empId.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (s.empName ?? '').toLowerCase().includes(searchQuery.toLowerCase()) || (s.empId ?? '').toLowerCase().includes(searchQuery.toLowerCase());
     if (isEmployeeSelfOnly) {
       return matchesSearch && (
         s.empId === currentUser.empId || 
