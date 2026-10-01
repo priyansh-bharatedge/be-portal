@@ -1,0 +1,89 @@
+export type SystemRole = 'Super Admin' | 'HR' | 'HOD' | 'TL' | 'TM';
+
+export interface RoleInfo {
+  role: SystemRole;
+  label: string;
+  shortLabel: string;
+  level: number; // 5: Super Admin, 4: HR, 3: HOD, 2: TL, 1: TM
+  description: string;
+  badgeClass: string;
+  borderClass: string;
+  bgClass: string;
+  textClass: string;
+}
+
+export const ROLE_DEFINITIONS: Record<SystemRole, RoleInfo> = {
+  'Super Admin': {
+    role: 'Super Admin',
+    label: 'Super Admin',
+    shortLabel: 'Super Admin',
+    level: 5,
+    description: 'Full organizational control, all module privileges, user & policy management',
+    badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
+    borderClass: 'border-purple-500',
+    bgClass: 'bg-purple-50',
+    textClass: 'text-purple-700'
+  },
+  'HR': {
+    role: 'HR',
+    label: 'HR / HR Admin',
+    shortLabel: 'HR Admin',
+    level: 4,
+    description: 'Create & manage employee directory, onboarding, policies, leaves & salary processing',
+    badgeClass: 'bg-rose-100 text-rose-800 border-rose-200',
+    borderClass: 'border-rose-500',
+    bgClass: 'bg-rose-50',
+    textClass: 'text-rose-700'
+  },
+  'HOD': {
+    role: 'HOD',
+    label: 'Admin (HOD)',
+    shortLabel: 'Admin (HOD)',
+    level: 3,
+    description: 'Admin level operations management, oversees TLs & TMs across CRM & Quality modules',
+    badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+    borderClass: 'border-blue-500',
+    bgClass: 'bg-blue-50',
+    textClass: 'text-blue-700'
+  },
+  'TL': {
+    role: 'TL',
+    label: 'Team Leader (TL)',
+    shortLabel: 'Team Leader',
+    level: 2,
+    description: 'Leads team members, assigns tasks/deals, first-level approval of team leaves',
+    badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
+    borderClass: 'border-amber-500',
+    bgClass: 'bg-amber-50',
+    textClass: 'text-amber-700'
+  },
+  'TM': {
+    role: 'TM',
+    label: 'Team Member (TM)',
+    shortLabel: 'Team Member',
+    level: 1,
+    description: 'Individual contributor, manages assigned deals & tasks, self-service leaves & salary',
+    badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    borderClass: 'border-emerald-500',
+    bgClass: 'bg-emerald-50',
+    textClass: 'text-emerald-700'
+  }
+};
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  personalEmail?: string;
+  workEmail?: string;
+  role: SystemRole;
+  department: string;
+  designation: string;
+  empId: string;
+  avatar?: string;
+  reportingManagerId?: string;
+  reportingManagerName?: string;
+  teamLeaderId?: string;
+  teamLeaderName?: string;
+  zohoId?: string;
+}
