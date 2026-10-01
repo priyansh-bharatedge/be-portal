@@ -749,12 +749,25 @@ async function getRequestBody(req: ApiRequest): Promise<any> {
     return req.body;
   }
 
+  if (req.readableEnded || (req as any).complete) {
+    return {};
+  }
+
   return new Promise((resolve) => {
     let body = '';
+    const timer = setTimeout(() => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch {
+        resolve({});
+      }
+    }, 1500);
+
     req.on('data', (chunk) => {
       body += chunk;
     });
     req.on('end', () => {
+      clearTimeout(timer);
       try {
         resolve(body ? JSON.parse(body) : {});
       } catch {
@@ -762,6 +775,7 @@ async function getRequestBody(req: ApiRequest): Promise<any> {
       }
     });
     req.on('error', () => {
+      clearTimeout(timer);
       resolve({});
     });
   });
