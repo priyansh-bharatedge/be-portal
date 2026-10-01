@@ -785,6 +785,31 @@ async function getRequestBody(req: ApiRequest): Promise<any> {
 }
 
 
+
+// Helper to build Zoho pagination query parameters from request
+function buildZohoPaginationQuery(req: ApiRequest, urlObj: URL): string {
+  const queryParts: string[] = [];
+  
+  const page = urlObj.searchParams.get('page') || (typeof req.query?.page === 'string' ? req.query.page : '') || (Array.isArray(req.query?.page) ? req.query.page[0] : '');
+  const perPage = urlObj.searchParams.get('per_page') || (typeof req.query?.per_page === 'string' ? req.query.per_page : '') || (Array.isArray(req.query?.per_page) ? req.query.per_page[0] : '');
+  const pageToken = urlObj.searchParams.get('page_token') || (typeof req.query?.page_token === 'string' ? req.query.page_token : '') || (Array.isArray(req.query?.page_token) ? req.query.page_token[0] : '');
+
+  if (pageToken) {
+    queryParts.push(`page_token=${encodeURIComponent(pageToken)}`);
+  } else if (page) {
+    queryParts.push(`page=${encodeURIComponent(page)}`);
+  }
+  
+  if (perPage) {
+    const parsedPerPage = Math.min(Math.max(1, parseInt(perPage, 10) || 200), 200);
+    queryParts.push(`per_page=${parsedPerPage}`);
+  } else {
+    queryParts.push(`per_page=200`);
+  }
+
+  return queryParts.join('&');
+}
+
 function logZohoApiCall(actionName: string, method: string, endpoint: string, payload: any, statusCode: number, responseData: any) {
   console.log('\n==================== [ZOHO CRM API CALL] ====================');
   console.log('📌 Action:      ' + actionName);
@@ -897,7 +922,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_MODULE_NAME || 'Quotations';
       const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${quotationFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${quotationFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -996,7 +1022,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
       const dealFields = 'id,Deal_Name,Name1,Amount,Amount_Without_GST,GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Total_deal_amount_inclusive_of_gst,Stage,Pipeline,Closing_Date,Booking_Date,Date,Company_name,Company_Name,Account_Name,Client_Name,Contact_Name,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Billing_address,Created_Time,Modified_Time,Choose_Wisely,Branches,Subform_1';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1091,7 +1118,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
       const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Contact_Number,Personal_Email_Address,Email,Gender,Marital_Status,Nationality,Blood_Group,Date_of_Birth,Date_of_Joining,Department,Designation_Job_Title,System_Role,Employment_Type,Permanent_Address,Current_Address,Education_Qualification,Professional_Certifications,Key_Skills,Languages_Known,Previous_Employer,Total_Experience,Emergency_Contact_First_Name,Emergency_Contact_Last_Name,Emergency_Contact_Number,Relationship_with_Contact,Who_is_the_Team_Leader_TL,Reporting_Manager,Pan_Number,Aadhaar_Number,Passport_Number,Driving_License_Number,Bank_Account_Number,Bank_Name,IFSC_Code,PF_Applicable,PF_Number,ESIC_Number,UAN_Number,Medical_Insurance_Number,Salary_Entity,Company_Entity,Password,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1180,7 +1208,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_LEAVE_MODULE_NAME || 'Leave_Management';
       const leaveFields = 'id,Name,Leave_Type,Start_Date,End_Date,Approved_by_TL,Approved_by_HR,Approved_by_MD,Email,Secondary_Email,Employee,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${leaveFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${leaveFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1269,7 +1298,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_COMPANIES_MODULE_NAME || 'Companies';
       const companyFields = 'id,Name,Business_Type,Date_of_Incorporation,GST_Number,Email,Secondary_Email,Status,Tag,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${companyFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${companyFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1358,7 +1388,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_CLIENTS_MODULE_NAME || 'Clients';
       const clientFields = 'id,Name,Company_Name,Email,Mobile_Number,Secondary_Email,Status,Tag,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${clientFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${clientFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1453,7 +1484,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_COMPANY_POLICIES_MODULE_NAME || 'Company_Policies';
       const policyFields = 'id,Name,Policy_Content,Department,Email,Secondary_Email,Tag,Email_Opt_Out,Created_By,Modified_By,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${policyFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${policyFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1548,7 +1580,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_CALENDAR_MODULE_NAME || 'Company_Calendar';
       const calFields = 'id,Name,Date,Category_Type,Description,Email,Secondary_Email,Tag,Email_Opt_Out,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${calFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${calFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1643,7 +1676,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_DSR_MODULE_NAME || 'DSR';
       const dsrFields = 'id,Name,Date,Description,Email,Secondary_Email,Tag,Employee,Email_Opt_Out,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dsrFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dsrFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1675,7 +1709,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
       const attFields = 'id,Name,Attendance_Date,Employee_Code,First_In,Last_Out,Punch_Status,Punches,Total_Minutes,Late_Minutes,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1707,7 +1742,8 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = 'Cases';
       const caseFields = 'id,Case_Number,Subject,Description,Status,Priority,Created_Time,Modified_Time';
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${caseFields}&per_page=200`;
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${caseFields}&${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',

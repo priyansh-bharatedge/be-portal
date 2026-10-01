@@ -8,6 +8,39 @@
  *   Example: POST https://www.zohoapis.com/crm/v8/Leads/{record_id}/Attachments
  */
 
+
+export interface ZohoFetchOptions {
+  page?: number;
+  per_page?: number;
+  page_token?: string;
+  fetch_all?: boolean;
+}
+
+export interface ZohoFetchResult<T = any> {
+  success: boolean;
+  data: T[];
+  info?: {
+    per_page?: number;
+    count?: number;
+    page?: number;
+    more_records?: boolean;
+    next_page_token?: string | null;
+    previous_page_token?: string | null;
+  };
+  message?: string;
+}
+
+function buildQueryString(options?: ZohoFetchOptions): string {
+  if (!options) return '';
+  const params = new URLSearchParams();
+  if (options.page) params.set('page', String(options.page));
+  if (options.per_page) params.set('per_page', String(options.per_page));
+  if (options.page_token) params.set('page_token', options.page_token);
+  if (options.fetch_all) params.set('fetch_all', 'true');
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
 export interface ZohoApiResponse {
   success: boolean;
   zohoId?: string;
@@ -538,20 +571,23 @@ export async function deleteZohoLeave(zohoId: string): Promise<ZohoApiResponse> 
 /**
  * Fetches all live quotation records from Zoho CRM Quotations module.
  */
-export async function fetchZohoQuotations(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoQuotations(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-quotations');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-quotations' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Quotations fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch quotations from Zoho CRM'
     };
   } catch (error: any) {
@@ -559,7 +595,7 @@ export async function fetchZohoQuotations(): Promise<{ success: boolean; data: a
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-quotations endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-quotations endpoint'
     };
   }
 }
@@ -567,20 +603,23 @@ export async function fetchZohoQuotations(): Promise<{ success: boolean; data: a
 /**
  * Fetches all live employee records from Zoho CRM Employee module.
  */
-export async function fetchZohoEmployees(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoEmployees(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-employees');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-employees' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Employees fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch employees from Zoho CRM'
     };
   } catch (error: any) {
@@ -588,7 +627,7 @@ export async function fetchZohoEmployees(): Promise<{ success: boolean; data: an
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-employees endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-employees endpoint'
     };
   }
 }
@@ -596,20 +635,23 @@ export async function fetchZohoEmployees(): Promise<{ success: boolean; data: an
 /**
  * Fetches all live leave records from Zoho CRM Leave_Management module.
  */
-export async function fetchZohoLeaves(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoLeaves(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-leaves');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-leaves' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Leaves fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch leaves from Zoho CRM'
     };
   } catch (error: any) {
@@ -617,7 +659,7 @@ export async function fetchZohoLeaves(): Promise<{ success: boolean; data: any[]
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-leaves endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-leaves endpoint'
     };
   }
 }
@@ -751,20 +793,23 @@ export async function deleteZohoCompany(zohoId: string): Promise<ZohoApiResponse
 /**
  * Fetches all live company records from Zoho CRM Companies module.
  */
-export async function fetchZohoCompanies(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoCompanies(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-companies');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-companies' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Companies fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch companies from Zoho CRM'
     };
   } catch (error: any) {
@@ -772,7 +817,7 @@ export async function fetchZohoCompanies(): Promise<{ success: boolean; data: an
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-companies endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-companies endpoint'
     };
   }
 }
@@ -906,20 +951,23 @@ export async function deleteZohoClient(zohoId: string): Promise<ZohoApiResponse>
 /**
  * Fetches all live client records from Zoho CRM Clients module.
  */
-export async function fetchZohoClients(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoClients(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-clients');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-clients' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Clients fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch clients from Zoho CRM'
     };
   } catch (error: any) {
@@ -927,7 +975,7 @@ export async function fetchZohoClients(): Promise<{ success: boolean; data: any[
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-clients endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-clients endpoint'
     };
   }
 }
@@ -1038,20 +1086,23 @@ export async function deleteZohoQuotation(zohoId: string): Promise<ZohoApiRespon
 /**
  * Fetches all live deal records from Zoho CRM Deals module.
  */
-export async function fetchZohoDeals(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoDeals(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-deals');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-deals' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Deals fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch deals from Zoho CRM'
     };
   } catch (error: any) {
@@ -1059,7 +1110,7 @@ export async function fetchZohoDeals(): Promise<{ success: boolean; data: any[];
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-deals endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-deals endpoint'
     };
   }
 }
@@ -1193,20 +1244,23 @@ export async function deleteZohoPolicy(zohoId: string): Promise<ZohoApiResponse>
 /**
  * Fetches all live company policy records from Zoho CRM Company_Policies module.
  */
-export async function fetchZohoPolicies(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoPolicies(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-policies');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-policies' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Company Policies fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch company policies from Zoho CRM'
     };
   } catch (error: any) {
@@ -1214,7 +1268,7 @@ export async function fetchZohoPolicies(): Promise<{ success: boolean; data: any
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-policies endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-policies endpoint'
     };
   }
 }
@@ -1399,20 +1453,23 @@ export async function deleteZohoCalendarEvent(zohoId: string): Promise<ZohoApiRe
 /**
  * Fetches all live calendar events from Zoho CRM Company_Calendar module.
  */
-export async function fetchZohoCalendarEvents(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoCalendarEvents(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-calendar');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-calendar' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Calendar events fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch calendar events from Zoho CRM'
     };
   } catch (error: any) {
@@ -1420,7 +1477,7 @@ export async function fetchZohoCalendarEvents(): Promise<{ success: boolean; dat
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-calendar endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-calendar endpoint'
     };
   }
 }
@@ -1554,28 +1611,31 @@ export async function deleteZohoDsr(zohoId: string): Promise<ZohoApiResponse> {
 /**
  * Fetches all live DSR records from Zoho CRM DSR module.
  */
-export async function fetchZohoDsr(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoDsr(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-dsr');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-dsr' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'DSR records fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
-      message: result.message || 'Failed to fetch DSR records from Zoho CRM'
+      info: result.info,
+      message: result.message || 'Failed to fetch dsr records from Zoho CRM'
     };
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching DSR records:', error);
+    console.error('[Zoho CRM] Client exception while fetching dsr records:', error);
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-dsr endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-dsr endpoint'
     };
   }
 }
@@ -1583,20 +1643,23 @@ export async function fetchZohoDsr(): Promise<{ success: boolean; data: any[]; m
 /**
  * Fetches all live attendance records from Zoho CRM Daily_Attendance module.
  */
-export async function fetchZohoAttendance(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoAttendance(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-attendance');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-attendance' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Attendance records fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch attendance records from Zoho CRM'
     };
   } catch (error: any) {
@@ -1604,7 +1667,7 @@ export async function fetchZohoAttendance(): Promise<{ success: boolean; data: a
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-attendance endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-attendance endpoint'
     };
   }
 }
@@ -1612,20 +1675,23 @@ export async function fetchZohoAttendance(): Promise<{ success: boolean; data: a
 /**
  * Fetches all live query records from Zoho CRM Cases module.
  */
-export async function fetchZohoQueries(): Promise<{ success: boolean; data: any[]; message?: string }> {
+export async function fetchZohoQueries(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
-    const response = await fetch('/api/zoho/get-queries');
+    const qs = buildQueryString(options);
+    const response = await fetch('/api/zoho/get-queries' + qs);
     const result = await safeParseResponse(response);
     if (response.ok && result.success && Array.isArray(result.data)) {
       return {
         success: true,
         data: result.data,
+        info: result.info,
         message: 'Queries fetched successfully from Zoho CRM'
       };
     }
     return {
       success: false,
       data: [],
+      info: result.info,
       message: result.message || 'Failed to fetch queries from Zoho CRM'
     };
   } catch (error: any) {
@@ -1633,7 +1699,7 @@ export async function fetchZohoQueries(): Promise<{ success: boolean; data: any[
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM get-queries endpoint'
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-queries endpoint'
     };
   }
 }
@@ -1721,3 +1787,45 @@ export async function deleteZohoQuery(zohoId: string): Promise<ZohoApiResponse> 
   return deleteZohoRecord('Cases', zohoId);
 }
 
+
+
+/**
+ * Iteratively fetches multiple batches of Zoho records (e.g. 10,000+ Deals) with live progress tracking
+ * to prevent server execution timeouts while retrieving all historical records.
+ */
+export async function fetchAllZohoRecordsInBatches(
+  fetchFn: (options?: ZohoFetchOptions) => Promise<ZohoFetchResult>,
+  maxRecords: number = 10000,
+  onProgress?: (loadedCount: number, moreRecords: boolean, batchCount: number) => void
+): Promise<{ success: boolean; data: any[]; totalFetched: number }> {
+  let allData: any[] = [];
+  let pageToken: string | undefined = undefined;
+  let pageNumber = 1;
+  let hasMore = true;
+  let batchCount = 0;
+
+  while (hasMore && allData.length < maxRecords) {
+    batchCount++;
+    const res = await fetchFn({ per_page: 200, page_token: pageToken, page: pageToken ? undefined : pageNumber });
+    if (!res.success || !Array.isArray(res.data) || res.data.length === 0) {
+      break;
+    }
+
+    allData = [...allData, ...res.data];
+    hasMore = Boolean(res.info?.more_records && res.info?.next_page_token);
+    pageToken = res.info?.next_page_token || undefined;
+    pageNumber++;
+
+    if (onProgress) {
+      onProgress(allData.length, hasMore, batchCount);
+    }
+
+    if (!hasMore) break;
+  }
+
+  return {
+    success: true,
+    data: allData,
+    totalFetched: allData.length
+  };
+}

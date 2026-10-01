@@ -7,11 +7,14 @@ import {
   saveOrUpdateZohoDeal,
   deleteZohoDeal,
   fetchZohoDeals,
+  fetchAllZohoRecordsInBatches,
   uploadZohoAttachment,
   saveOrUpdateZohoCompany,
   saveOrUpdateZohoClient,
   deleteZohoRecord
 } from '../../services/zohoService';
+import { Pagination } from '../../components/ui/Pagination';
+import { Layers, DownloadCloud } from 'lucide-react';
 
 interface DealService {
   id: string;
@@ -35,6 +38,13 @@ export const Deals = () => {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
+  // Pagination & Batch Sync states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [hasMoreZohoRecords, setHasMoreZohoRecords] = useState(false);
+  const [isFetchingBatch, setIsFetchingBatch] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ loaded: number; batch: number } | null>(null);
 
   useEffect(() => {
     if (toast) {
@@ -381,6 +391,11 @@ export const Deals = () => {
   useEffect(() => {
     handleFetchFromZoho(false);
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery]);
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -813,10 +828,10 @@ export const Deals = () => {
     }
   };
 
-  const handleFetchFromZoho = async (showNotification = true) => {
+    const handleFetchFromZoho = async (showNotification = true, tokenToFetch?: string) => {
     setIsFetchingZoho(true);
     try {
-      const result = await fetchZohoDeals();
+      const result = await fetchZohoDeals({ per_page: 200, page_token: tokenToFetch });
       if (result.success && Array.isArray(result.data)) {
         let countAdded = 0;
         let countUpdated = 0;
@@ -887,7 +902,7 @@ export const Deals = () => {
             if (dealObj.company && dealObj.company !== 'N/A') {
               const rawCompanies = localStorage.getItem('be_companies');
               const localCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
-              if (!localCompanies.some((c: any) => c.name?.toLowerCase() === dealObj.company.toLowerCase())) {
+              if (!localCompanies.some((c: any) => (c.name ?? '').toLowerCase() === (dealObj.company ?? '').toLowerCase())) {
                 localCompanies.unshift({
                   id: `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
                   name: dealObj.company,
@@ -907,7 +922,7 @@ export const Deals = () => {
             if (dealObj.client && dealObj.client !== 'Client') {
               const rawClients = localStorage.getItem('be_clients');
               const localClients = rawClients ? JSON.parse(rawClients) : [];
-              if (!localClients.some((cl: any) => cl.name?.toLowerCase() === dealObj.client.toLowerCase())) {
+              if (!localClients.some((cl: any) => (cl.name ?? '').toLowerCase() === (dealObj.client ?? '').toLowerCase())) {
                 localClients.unshift({
                   id: `CL-${Math.floor(1000 + Math.random() * 9000)}`,
                   name: dealObj.client,
@@ -930,11 +945,15 @@ export const Deals = () => {
         setDeals(currentDeals);
         localStorage.setItem('be_deals', JSON.stringify(currentDeals));
 
+        const hasMore = Boolean(result.info?.more_records && result.info?.next_page_token);
+        setHasMoreZohoRecords(hasMore);
+        setNextPageToken(result.info?.next_page_token || null);
+
         if (showNotification) {
           setToast({
             type: 'success',
             message: 'Zoho Deals Synchronized',
-            submessage: `Fetched ${result.data.length} records from Zoho CRM (${countAdded} new, ${countUpdated} updated)`
+            submessage: `Fetched ${result.data.length} records from Zoho CRM (Total in portal: ${currentDeals.length})${hasMore ? ' • More records available on Zoho' : ''}`
           });
         }
       } else if (showNotification) {
@@ -954,6 +973,107 @@ export const Deals = () => {
       }
     } finally {
       setIsFetchingZoho(false);
+    }
+  };
+
+  const handleFetchAllBatchesFromZoho = async () => {
+    setIsFetchingBatch(true);
+    setBatchProgress({ loaded: 0, batch: 0 });
+
+    try {
+      const result = await fetchAllZohoRecordsInBatches(
+        fetchZohoDeals,
+        15000,
+        (loadedCount, moreRecords, batchCount) => {
+          setBatchProgress({ loaded: loadedCount, batch: batchCount });
+        }
+      );
+
+      if (result.success && result.data.length > 0) {
+        const currentDeals = [...deals];
+        let countAdded = 0;
+        let countUpdated = 0;
+
+        result.data.forEach((zDeal: any) => {
+          const existingIdx = currentDeals.findIndex((d: any) => 
+            d.zohoId === zDeal.id || (zDeal.Deal_Name && d.id && zDeal.Deal_Name.includes(d.id))
+          );
+
+          const servicesFromSubform = Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0
+            ? zDeal.Subform_1.map((sf: any, i: number) => {
+                const agreementAmount = sf.Agreement_amount || 0;
+                const withoutGst = sf.Without_GST || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0);
+                const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
+                return {
+                  id: String(sf.id || i + 1),
+                  name: sf.Schemas || 'Website Development',
+                  totalAmount: String(totalAmt || ''),
+                  baseAmount: String(withoutGst || 0),
+                };
+              })
+            : (currentDeals[existingIdx]?.servicesData || []);
+
+          const serviceTitle = servicesFromSubform.length === 1 
+            ? servicesFromSubform[0].name 
+            : servicesFromSubform.length > 1 
+              ? `${servicesFromSubform.length} Services` 
+              : (currentDeals[existingIdx]?.service || 'Services');
+
+          const dealObj: any = {
+            id: currentDeals[existingIdx]?.id || `DL-${Math.floor(1000 + Math.random() * 9000)}`,
+            client: zDeal.Contact_Name || zDeal.Name || currentDeals[existingIdx]?.client || 'Client',
+            company: zDeal.Account_Name?.name || zDeal.Company_Name || currentDeals[existingIdx]?.company || 'N/A',
+            service: serviceTitle,
+            amount: zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : (currentDeals[existingIdx]?.amount || '₹0'),
+            received: currentDeals[existingIdx]?.received || (zDeal.Deal_Received_Amount ? `₹${Number(zDeal.Deal_Received_Amount).toLocaleString()}` : '₹0'),
+            pending: currentDeals[existingIdx]?.pending || (zDeal.Deal_Pending_Amount ? `₹${Number(zDeal.Deal_Pending_Amount).toLocaleString()}` : zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : '₹0'),
+            status: zDeal.Stage === 'Closed Won' ? 'Won' : zDeal.Stage === 'Closed Lost' ? 'Lost' : zDeal.Stage || 'New',
+            owner: zDeal.Owner?.name || currentDeals[existingIdx]?.owner || 'Admin',
+            date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (currentDeals[existingIdx]?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })),
+            source: currentDeals[existingIdx]?.source || 'Zoho CRM',
+            zohoId: zDeal.id,
+            zohoStatus: 'synced',
+            zohoSyncedAt: new Date().toISOString(),
+            formData: currentDeals[existingIdx]?.formData || {
+              clientName: zDeal.Contact_Name || zDeal.Name || '',
+              companyName: zDeal.Account_Name?.name || zDeal.Company_Name || '',
+              email: zDeal.Email || '',
+              mobile: zDeal.Mobile || '',
+            },
+            servicesData: servicesFromSubform,
+            totals: currentDeals[existingIdx]?.totals || {
+              grandTotal: zDeal.Amount || 0,
+            }
+          };
+
+          if (existingIdx >= 0) {
+            currentDeals[existingIdx] = { ...currentDeals[existingIdx], ...dealObj };
+            countUpdated++;
+          } else {
+            currentDeals.unshift(dealObj);
+            countAdded++;
+          }
+        });
+
+        setDeals(currentDeals);
+        localStorage.setItem('be_deals', JSON.stringify(currentDeals));
+        setHasMoreZohoRecords(false);
+
+        setToast({
+          type: 'success',
+          message: `All Zoho Deals Synced (${result.data.length} records)`,
+          submessage: `Total ${currentDeals.length} deals now available in your portal with instant search and pagination.`
+        });
+      }
+    } catch (e: any) {
+      setToast({
+        type: 'error',
+        message: 'Batch Sync Error',
+        submessage: e?.message || 'Failed to sync all records in batch'
+      });
+    } finally {
+      setIsFetchingBatch(false);
+      setBatchProgress(null);
     }
   };
 
@@ -993,10 +1113,20 @@ export const Deals = () => {
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Deals</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage all your active and past deals.</p>
+          <div className="flex items-center space-x-3">
+            <h1 className="text-2xl font-bold text-gray-900">Deals</h1>
+            <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
+              {deals.length.toLocaleString()} Loaded
+            </span>
+            {hasMoreZohoRecords && (
+              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-semibold text-xs rounded-full border border-blue-200 animate-pulse">
+                More in Zoho CRM
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-500 mt-1">Manage all active deals with live Zoho CRM synchronization and pagination.</p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="relative">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -1007,15 +1137,36 @@ export const Deals = () => {
               className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none"
             />
           </div>
+
           <button
             onClick={() => handleFetchFromZoho(true)}
-            disabled={isFetchingZoho}
+            disabled={isFetchingZoho || isFetchingBatch}
             className="flex items-center px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm hover:shadow disabled:opacity-60"
             title="Fetch and sync live deals from Zoho CRM"
           >
             <RefreshCw size={15} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
             {isFetchingZoho ? 'Fetching...' : 'Fetch Zoho CRM'}
           </button>
+
+          <button
+            onClick={handleFetchAllBatchesFromZoho}
+            disabled={isFetchingBatch || isFetchingZoho}
+            className="flex items-center px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg text-sm font-semibold hover:from-orange-600 hover:to-amber-600 transition-all shadow-sm hover:shadow disabled:opacity-60"
+            title="Sequentially fetch all 10,000+ historical deals from Zoho CRM in batches"
+          >
+            {isFetchingBatch ? (
+              <>
+                <Loader2 size={15} className="mr-2 animate-spin" />
+                <span>Syncing ({batchProgress?.loaded.toLocaleString() || 0})...</span>
+              </>
+            ) : (
+              <>
+                <DownloadCloud size={15} className="mr-2" />
+                <span>Sync All Deals</span>
+              </>
+            )}
+          </button>
+
           <button
             onClick={() => handleOpenModal()}
             className="flex items-center px-4 py-2 bg-be-orange text-white rounded-lg text-sm font-medium hover:bg-be-orangeHover transition-colors shadow-sm"
@@ -1041,153 +1192,167 @@ export const Deals = () => {
         ))}
       </div>
 
+      
       {/* Deals Table */}
-      <div className="bg-transparent overflow-hidden mt-6">
-        <div className="overflow-x-auto pb-6">
-          <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-y-3">
-            <thead className="bg-transparent text-gray-500 font-bold uppercase tracking-wider text-xs">
-              <tr>
-                <th className="px-6 py-3">Deal ID</th>
-                <th className="px-6 py-3">Client</th>
-                <th className="px-6 py-3">Company</th>
-                <th className="px-6 py-3">Service</th>
-                <th className="px-6 py-3">Amount</th>
-                <th className="px-6 py-3">Received</th>
-                <th className="px-6 py-3">Pending</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Zoho Sync</th>
-                <th className="px-6 py-3">Owner</th>
-                <th className="px-6 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="text-gray-700">
-              {deals.filter((deal: any) => {
-                if (activeTab === 'Manual Deals' && deal.source === 'Quotation') return false;
-                if (activeTab === 'From Quotations' && deal.source !== 'Quotation') return false;
-                if (searchQuery) {
-                  const q = searchQuery.toLowerCase();
-                  const matchClient = deal.client && deal.client.toLowerCase().includes(q);
-                  const matchCompany = deal.company && deal.company.toLowerCase().includes(q);
-                  const matchService = deal.service && deal.service.toLowerCase().includes(q);
-                  const matchId = deal.id && (deal.id ?? '').toLowerCase().includes(q);
-                  if (!matchClient && !matchCompany && !matchService && !matchId) return false;
-                }
-                return true;
-              }).map((deal: any) => (
-                <tr key={deal.id} className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm">
-                  <td className="px-6 py-5 font-bold text-gray-900 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">{deal.id}</td>
-                  <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">{deal.client}</td>
-                  <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
-                    <span className="bg-gray-50 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200 group-hover:bg-white transition-colors">{deal.company}</span>
-                  </td>
-                  <td className="px-6 py-5 font-medium text-gray-800 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.service}</td>
-                  <td className="px-6 py-5 font-bold text-gray-900 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.amount}</td>
-                  <td className="px-6 py-5 font-bold text-emerald-600 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.received}</td>
-                  <td className="px-6 py-5 font-bold text-orange-600 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.pending}</td>
-                  <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(deal.status)}`}>
-                      {deal.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
-                    <div className="flex items-center space-x-2">
-                      {deal.zohoStatus === 'synced' ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          <Cloud className="w-3 h-3 mr-1 text-emerald-600" />
-                          Synced {deal.zohoId ? `#${deal.zohoId.slice(-4)}` : ''}
+      {(() => {
+        const filteredDeals = deals.filter((deal: any) => {
+          if (activeTab === 'Manual Deals' && deal.source === 'Quotation') return false;
+          if (activeTab === 'From Quotations' && deal.source !== 'Quotation') return false;
+          if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            const matchClient = deal.client && (deal.client ?? '').toLowerCase().includes(q);
+            const matchCompany = deal.company && (deal.company ?? '').toLowerCase().includes(q);
+            const matchService = deal.service && (deal.service ?? '').toLowerCase().includes(q);
+            const matchId = deal.id && (deal.id ?? '').toLowerCase().includes(q);
+            if (!matchClient && !matchCompany && !matchService && !matchId) return false;
+          }
+          return true;
+        });
+
+        const totalDealsCount = filteredDeals.length;
+        const paginatedDeals = filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+        return (
+          <div className="bg-transparent overflow-hidden mt-6">
+            <div className="overflow-x-auto pb-2">
+              <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-y-3">
+                <thead className="bg-transparent text-gray-500 font-bold uppercase tracking-wider text-xs">
+                  <tr>
+                    <th className="px-6 py-3">Deal ID</th>
+                    <th className="px-6 py-3">Client</th>
+                    <th className="px-6 py-3">Company</th>
+                    <th className="px-6 py-3">Service</th>
+                    <th className="px-6 py-3">Amount</th>
+                    <th className="px-6 py-3">Received</th>
+                    <th className="px-6 py-3">Pending</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3">Zoho Sync</th>
+                    <th className="px-6 py-3">Owner</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="text-gray-700">
+                  {paginatedDeals.map((deal: any) => (
+                    <tr key={deal.id} className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm">
+                      <td className="px-6 py-5 font-bold text-gray-900 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">{deal.id}</td>
+                      <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">{deal.client}</td>
+                      <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
+                        <span className="bg-gray-50 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200 group-hover:bg-white transition-colors">{deal.company}</span>
+                      </td>
+                      <td className="px-6 py-5 font-medium text-gray-800 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.service}</td>
+                      <td className="px-6 py-5 font-bold text-gray-900 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.amount}</td>
+                      <td className="px-6 py-5 font-bold text-emerald-600 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.received}</td>
+                      <td className="px-6 py-5 font-bold text-orange-600 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.pending}</td>
+                      <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(deal.status)}`}>
+                          {deal.status}
                         </span>
-                      ) : deal.zohoStatus === 'failed' ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200" title={deal.zohoError}>
-                          <AlertCircle className="w-3 h-3 mr-1 text-rose-600" />
-                          Failed
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                          <Cloud className="w-3 h-3 mr-1 text-amber-600 opacity-60" />
-                          Pending
-                        </span>
-                      )}
-                      {deal.zohoStatus !== 'synced' && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleManualSyncDeal(deal); }}
-                          disabled={syncingId === deal.id}
-                          className="p-1 hover:bg-orange-100 text-orange-600 rounded transition-colors"
-                          title="Retry sync with Zoho CRM"
-                        >
-                          <RefreshCw size={12} className={syncingId === deal.id ? 'animate-spin' : ''} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100 flex items-center space-x-2">
-                    <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">
-                      {deal.owner ? deal.owner.charAt(0) : '?'}
-                    </div>
-                    <span>{deal.owner || 'Admin'}</span>
-                  </td>
-                  <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100">
-                    <div className="flex items-center justify-end space-x-2">
-                      <button
-                        className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                        title="View Deal"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/crm/deals/${deal.id}`); }}
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Edit Deal"
-                        onClick={(e) => { e.stopPropagation(); handleOpenModal(deal); }}
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                        title="Delete Deal"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteDeal(deal);
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {deals.filter((deal: any) => {
-                if (activeTab === 'Manual Deals' && deal.source === 'Quotation') return false;
-                if (activeTab === 'From Quotations' && deal.source !== 'Quotation') return false;
-                if (searchQuery) {
-                  const q = searchQuery.toLowerCase();
-                  const matchClient = deal.client && deal.client.toLowerCase().includes(q);
-                  const matchCompany = deal.company && deal.company.toLowerCase().includes(q);
-                  const matchService = deal.service && deal.service.toLowerCase().includes(q);
-                  const matchId = deal.id && (deal.id ?? '').toLowerCase().includes(q);
-                  if (!matchClient && !matchCompany && !matchService && !matchId) return false;
-                }
-                return true;
-              }).length === 0 && (
-                <tr>
-                  <td colSpan={11} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
-                    {isFetchingZoho ? (
-                      <div className="flex flex-col items-center justify-center py-4">
-                        <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
-                        <p className="text-sm font-semibold text-gray-800">Fetching live deals from Zoho CRM...</p>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-lg font-medium text-gray-900">No deals found</p>
-                        <p className="text-xs text-gray-400 mt-1">Create a new deal or fetch live records from Zoho CRM.</p>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                      </td>
+                      <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
+                        <div className="flex items-center space-x-2">
+                          {deal.zohoStatus === 'synced' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <Cloud className="w-3 h-3 mr-1 text-emerald-600" />
+                              Synced {deal.zohoId ? `#${String(deal.zohoId).slice(-4)}` : ''}
+                            </span>
+                          ) : deal.zohoStatus === 'failed' ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200" title={deal.zohoError}>
+                              <AlertCircle className="w-3 h-3 mr-1 text-rose-600" />
+                              Failed
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                              <Cloud className="w-3 h-3 mr-1 text-amber-600 opacity-60" />
+                              Pending
+                            </span>
+                          )}
+                          {deal.zohoStatus !== 'synced' && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleManualSyncDeal(deal); }}
+                              disabled={syncingId === deal.id}
+                              className="p-1 hover:bg-orange-100 text-orange-600 rounded transition-colors"
+                              title="Retry sync with Zoho CRM"
+                            >
+                              <RefreshCw size={12} className={syncingId === deal.id ? 'animate-spin' : ''} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100 flex items-center space-x-2">
+                        <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">
+                          {deal.owner ? deal.owner.charAt(0) : '?'}
+                        </div>
+                        <span>{deal.owner || 'Admin'}</span>
+                      </td>
+                      <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100">
+                        <div className="flex items-center justify-end space-x-2">
+                          <button
+                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                            title="View Deal"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/crm/deals/${deal.id}`); }}
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Edit Deal"
+                            onClick={(e) => { e.stopPropagation(); handleOpenModal(deal); }}
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                            title="Delete Deal"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteDeal(deal);
+                            }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {paginatedDeals.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
+                        {isFetchingZoho ? (
+                          <div className="flex flex-col items-center justify-center py-4">
+                            <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
+                            <p className="text-sm font-semibold text-gray-800">Fetching live deals from Zoho CRM...</p>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-lg font-medium text-gray-900">No deals found</p>
+                            <p className="text-xs text-gray-400 mt-1">Create a new deal or fetch live records from Zoho CRM.</p>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination component */}
+            {totalDealsCount > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalItems={totalDealsCount}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={setItemsPerPage}
+                itemLabel="deals"
+                hasMoreOnServer={hasMoreZohoRecords}
+                onLoadMoreServer={() => nextPageToken && handleFetchFromZoho(true, nextPageToken)}
+                isLoadingMoreServer={isFetchingZoho}
+              />
+            )}
+          </div>
+        );
+      })()}
+
 
       {/* Create Deal Modal Drawer */}
       <AnimatePresence>

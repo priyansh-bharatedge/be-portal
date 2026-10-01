@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, Filter, Edit, Trash2, Building2, FileText, Calendar, CheckCircle2, X, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, Mail } from 'lucide-react';
 import { saveOrUpdateZohoCompany, deleteZohoCompany, insertZohoCompany, fetchZohoCompanies } from '../../services/zohoService';
+import { Pagination } from '../../components/ui/Pagination';
 
 export interface Company {
   id: string;
@@ -353,6 +354,14 @@ export const Companies = () => {
     setFormErrors({});
   };
 
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeTab]);
+
   const filteredCompanies = companies.filter(c => {
     const source = c.source || 'Manual';
     if (activeTab === 'Manual Companies' && source !== 'Manual') return false;
@@ -364,6 +373,12 @@ export const Companies = () => {
            (c.type && (c.type ?? '').toLowerCase().includes(searchQuery.toLowerCase())) ||
            (c.email && (c.email ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
   });
+
+  const totalCompaniesCount = filteredCompanies.length;
+  const paginatedCompanies = filteredCompanies.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   return (
     <div className="space-y-6">
@@ -485,7 +500,7 @@ export const Companies = () => {
               </tr>
             </thead>
             <tbody className="text-gray-700">
-              {filteredCompanies.map((company) => (
+              {paginatedCompanies.map((company) => (
                 <tr key={company.id} className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm">
                   <td className="px-6 py-5 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">
                     <div className="flex items-center">
@@ -604,6 +619,16 @@ export const Companies = () => {
             </tbody>
           </table>
         </div>
+        {totalCompaniesCount > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalCompaniesCount}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemLabel="companies"
+          />
+        )}
       </div>
 
       {/* Centered Modal for Add/Edit Company */}

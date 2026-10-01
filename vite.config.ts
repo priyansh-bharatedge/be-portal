@@ -53,6 +53,29 @@ function zohoApiPlugin(): Plugin {
     return token;
   }
 
+  
+  function buildZohoPaginationQuery(urlObj: URL): string {
+    const queryParts: string[] = [];
+    const page = urlObj.searchParams.get('page') || '';
+    const perPage = urlObj.searchParams.get('per_page') || '200';
+    const pageToken = urlObj.searchParams.get('page_token') || '';
+
+    if (pageToken) {
+      queryParts.push(`page_token=${encodeURIComponent(pageToken)}`);
+    } else if (page) {
+      queryParts.push(`page=${encodeURIComponent(page)}`);
+    }
+    
+    if (perPage) {
+      const parsedPerPage = Math.min(Math.max(1, parseInt(perPage, 10) || 200), 200);
+      queryParts.push(`per_page=${parsedPerPage}`);
+    } else {
+      queryParts.push(`per_page=200`);
+    }
+
+    return queryParts.join('&');
+  }
+
   function formatDateForZoho(dateStr?: string | null): string | null {
     if (!dateStr || !dateStr.trim()) return null;
     const s = dateStr.trim();
@@ -840,7 +863,8 @@ function zohoApiPlugin(): Plugin {
     name: 'zoho-crm-middleware',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const pathname = req.url ? req.url.split('?')[0] : '';
+        const urlObj = new URL(req.url || '', 'http://localhost');
+        const pathname = urlObj.pathname;
         if (!pathname.startsWith('/api/zoho/') && pathname !== '/api/send-otp') {
           return next();
         }
@@ -949,7 +973,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_MODULE_NAME || 'Quotations';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${quotationFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${quotationFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Quotations from Zoho CRM (${moduleName})`);
 
@@ -1098,7 +1122,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const dealFields = 'id,Deal_Name,Name1,Amount,Amount_Without_GST,GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Total_deal_amount_inclusive_of_gst,Stage,Pipeline,Closing_Date,Booking_Date,Date,Company_name,Company_Name,Account_Name,Client_Name,Contact_Name,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Billing_address,Created_Time,Modified_Time,Choose_Wisely,Branches,Subform_1';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Deals from Zoho CRM (${moduleName})`);
 
@@ -1241,7 +1265,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Contact_Number,Personal_Email_Address,Email,Gender,Marital_Status,Nationality,Blood_Group,Date_of_Birth,Date_of_Joining,Department,Designation_Job_Title,System_Role,Employment_Type,Permanent_Address,Current_Address,Education_Qualification,Professional_Certifications,Key_Skills,Languages_Known,Previous_Employer,Total_Experience,Emergency_Contact_First_Name,Emergency_Contact_Last_Name,Emergency_Contact_Number,Relationship_with_Contact,Who_is_the_Team_Leader_TL,Reporting_Manager,Pan_Number,Aadhaar_Number,Passport_Number,Driving_License_Number,Bank_Account_Number,Bank_Name,IFSC_Code,PF_Applicable,PF_Number,ESIC_Number,UAN_Number,Medical_Insurance_Number,Salary_Entity,Company_Entity,Password,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Employees from Zoho CRM (${moduleName})`);
 
@@ -1383,7 +1407,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_LEAVE_MODULE_NAME || 'Leave_Management';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const leaveFields = 'id,Name,Leave_Type,Start_Date,End_Date,Approved_by_TL,Approved_by_HR,Approved_by_MD,Email,Secondary_Email,Employee,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${leaveFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${leaveFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Leaves from Zoho CRM (${moduleName})`);
 
@@ -1525,7 +1549,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_COMPANIES_MODULE_NAME || 'Companies';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const companyFields = 'id,Name,Business_Type,Date_of_Incorporation,GST_Number,Email,Secondary_Email,Status,Tag,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${companyFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${companyFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Companies from Zoho CRM (${moduleName})`);
 
@@ -1667,7 +1691,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_CLIENTS_MODULE_NAME || 'Clients';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const clientFields = 'id,Name,Company_Name,Email,Mobile_Number,Secondary_Email,Status,Tag,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${clientFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${clientFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Clients from Zoho CRM (${moduleName})`);
 
@@ -1816,7 +1840,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_COMPANY_POLICIES_MODULE_NAME || 'Company_Policies';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const policyFields = 'id,Name,Policy_Content,Department,Email,Secondary_Email,Tag,Email_Opt_Out,Created_By,Modified_By,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${policyFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${policyFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Company Policies from Zoho CRM (${moduleName})`);
 
@@ -1965,7 +1989,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_CALENDAR_MODULE_NAME || 'Company_Calendar';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const calFields = 'id,Name,Date,Category_Type,Description,Email,Secondary_Email,Tag,Email_Opt_Out,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${calFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${calFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Calendar Events from Zoho CRM (${moduleName})`);
 
@@ -2114,7 +2138,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_DSR_MODULE_NAME || 'DSR';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const dsrFields = 'id,Name,Date,Description,Email,Secondary_Email,Tag,Employee,Email_Opt_Out,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dsrFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dsrFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live DSRs from Zoho CRM (${moduleName})`);
 
@@ -2174,7 +2198,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const attFields = 'id,Name,Attendance_Date,Employee_Code,First_In,Last_Out,Punch_Status,Punches,Total_Minutes,Late_Minutes,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Attendance from Zoho CRM (${moduleName})`);
 
@@ -2226,7 +2250,7 @@ function zohoApiPlugin(): Plugin {
             const moduleName = 'Cases';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const caseFields = 'id,Case_Number,Subject,Description,Status,Priority,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${caseFields}&per_page=200`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${caseFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Queries from Zoho CRM (${moduleName})`);
 

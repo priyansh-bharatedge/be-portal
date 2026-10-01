@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { saveDocument } from '../../lib/db';
 import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal, fetchZohoQuotations } from '../../services/zohoService';
 import { downloadQuotationPDF, downloadQuotationHTML, printQuotation, generateQuotationPDFBlob } from '../../utils/quotationTemplate';
+import { Pagination } from '../../components/ui/Pagination';
 
 interface DealService {
   id: string;
@@ -465,10 +466,24 @@ export const Quotations = () => {
     handleFetchFromZoho(false);
   }, []);
 
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeTab]);
+
   const filteredQuotations = quotations.filter((q: any) =>
     (q.client && String(q.client).toLowerCase().includes(searchQuery.toLowerCase())) ||
     (q.company && String(q.company).toLowerCase().includes(searchQuery.toLowerCase())) ||
     (q.id && String(q.id).toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const totalQuotationsCount = filteredQuotations.length;
+  const paginatedQuotations = filteredQuotations.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
   );
 
   const getStatusColor = (status: string) => {
@@ -1090,7 +1105,7 @@ export const Quotations = () => {
               </tr>
             </thead>
             <tbody className="text-gray-700">
-              {filteredQuotations.map((deal: any) => (
+              {paginatedQuotations.map((deal: any) => (
                 <tr key={deal.id} className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm">
                   <td className="px-6 py-5 font-bold text-gray-900 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">{deal.id}</td>
                   <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">{deal.client}</td>
@@ -1222,6 +1237,16 @@ export const Quotations = () => {
             </tbody>
           </table>
         </div>
+        {totalQuotationsCount > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalQuotationsCount}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemLabel="quotations"
+          />
+        )}
       </div>
 
       {/* Create Quotation Modal Drawer */}

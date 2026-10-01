@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, Filter, X, UserCircle, Building2, Phone, Mail, Edit, Trash2, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import { Pagination } from '../../components/ui/Pagination';
 import { saveOrUpdateZohoClient, deleteZohoClient, insertZohoClient, fetchZohoClients } from '../../services/zohoService';
 
 export interface Client {
@@ -29,6 +30,8 @@ export const Clients = () => {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Form State
   const initialFormData = {
@@ -42,6 +45,10 @@ export const Clients = () => {
 
   const [formData, setFormData] = useState(initialFormData);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery]);
 
   useEffect(() => {
     const saved = localStorage.getItem('be_clients');
@@ -363,6 +370,9 @@ export const Clients = () => {
            (c.phone && String(c.phone).includes(searchQuery));
   });
 
+  const totalClientsCount = filteredClients.length;
+  const paginatedClients = filteredClients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="space-y-6">
       {/* Toast Notification */}
@@ -483,7 +493,7 @@ export const Clients = () => {
               </tr>
             </thead>
             <tbody className="text-gray-700">
-              {filteredClients.map((client) => (
+              {paginatedClients.map((client) => (
                 <tr key={client.id} className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm">
                   <td className="px-6 py-5 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">
                     <div className="flex items-center">
@@ -590,6 +600,16 @@ export const Clients = () => {
             </tbody>
           </table>
         </div>
+        {totalClientsCount > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalClientsCount}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemLabel="clients"
+          />
+        )}
       </div>
 
       {/* Centered Modal for Add/Edit Client */}
