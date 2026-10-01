@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
+import nodemailer from 'nodemailer'
 
 function zohoApiPlugin(): Plugin {
   let cachedToken: string | null = null;
@@ -2258,6 +2259,69 @@ function zohoApiPlugin(): Plugin {
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ success: false, message: err.message }));
           }
+        }
+
+        // --- DEV ENDPOINT: /api/send-otp ---
+        if (req.url === '/api/send-otp' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const { toEmail, empName, otpCode } = JSON.parse(body || '{}');
+              const env = loadEnv('development', process.cwd(), '');
+              const host = env.SMTP_HOST || 'smtp.gmail.com';
+              const port = parseInt(env.SMTP_PORT || '465', 10);
+              const secure = port === 465 || env.SMTP_SECURE === 'true';
+              const user = env.SMTP_USER || 'testerbemain@gmail.com';
+              const pass = env.SMTP_PASS || 'qyquibvuwwefczsy';
+              const from = env.SMTP_FROM || `"BharatEdge Support" <${user}>`;
+
+              const transporter = nodemailer.createTransport({
+                host,
+                port,
+                secure,
+                auth: { user, pass }
+              });
+
+              const htmlContent = `
+                <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px;">
+                  <div style="background: #ea580c; padding: 20px; text-align: center; border-radius: 12px; color: #fff;">
+                    <h2 style="margin: 0;">BharatEdge Portal</h2>
+                  </div>
+                  <div style="padding: 20px 0;">
+                    <p>Hello <strong>${empName || 'Team Member'}</strong>,</p>
+                    <p>Your 6-digit verification code to activate your account or set your password is:</p>
+                    <div style="background: #fff7ed; border: 2px dashed #ea580c; border-radius: 12px; padding: 15px; text-align: center; margin: 20px 0;">
+                      <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #ea580c; font-family: monospace;">${otpCode}</span>
+                    </div>
+                    <p style="font-size: 12px; color: #64748b;">⏱️ This code is valid for 5 minutes. Do not share it with anyone.</p>
+                  </div>
+                  <div style="border-top: 1px solid #e2e8f0; padding-top: 15px; text-align: center; font-size: 11px; color: #94a3b8;">
+                    Sent automatically from BharatEdge Support
+                  </div>
+                </div>
+              `;
+
+              const info = await transporter.sendMail({
+                from,
+                to: toEmail,
+                subject: `Your BharatEdge Portal Verification Code: ${otpCode}`,
+                text: `Hello ${empName || 'Team Member'},\n\nYour verification code is: ${otpCode}\n\nValid for 5 minutes.`,
+                html: htmlContent
+              });
+
+              console.log('[Dev Nodemailer] OTP sent to:', toEmail, 'MessageId:', info.messageId);
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: true, messageId: info.messageId, recipient: toEmail }));
+            } catch (err: any) {
+              console.error('[Dev Nodemailer] Error sending OTP:', err);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
         }
 
         next();
