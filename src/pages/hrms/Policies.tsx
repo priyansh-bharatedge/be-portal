@@ -403,8 +403,8 @@ export const Policies = () => {
       const q = searchQuery.toLowerCase().trim();
       const matchesQuery = !q || 
         (pol.title ?? '').toLowerCase().includes(q) ||
-        pol.content.toLowerCase().includes(q) ||
-        (pol.tag && pol.tag.toLowerCase().includes(q)) ||
+        (pol.content ?? '').toLowerCase().includes(q) ||
+        (pol.tag && (pol.tag ?? '').toLowerCase().includes(q)) ||
         (pol.department && (pol.department ?? '').toLowerCase().includes(q)) ||
         (pol.email && (pol.email ?? '').toLowerCase().includes(q));
 

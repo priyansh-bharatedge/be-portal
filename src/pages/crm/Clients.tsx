@@ -358,9 +358,9 @@ export const Clients = () => {
     if (activeTab === 'Zoho CRM' && source !== 'Zoho CRM') return false;
     
     return (c.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-           c.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           (c.company ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
            (c.email ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-           (c.phone && c.phone.includes(searchQuery));
+           (c.phone && String(c.phone).includes(searchQuery));
   });
 
   return (
@@ -488,10 +488,10 @@ export const Clients = () => {
                   <td className="px-6 py-5 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">
                     <div className="flex items-center">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-100 to-orange-50 text-be-orange flex items-center justify-center font-bold mr-3 border border-orange-200 shrink-0 shadow-sm">
-                        {client.name.substring(0, 2).toUpperCase()}
+                        {(client.name ?? 'CL').substring(0, 2).toUpperCase()}
                       </div>
                       <div>
-                        <div className="font-bold text-gray-900">{client.name}</div>
+                        <div className="font-bold text-gray-900">{client.name || 'Unnamed Client'}</div>
                         <div className="text-gray-500 text-xs font-medium">{client.id}</div>
                       </div>
                     </div>
@@ -500,25 +500,25 @@ export const Clients = () => {
                     <div className="flex flex-col space-y-1">
                       <div className="flex items-center text-gray-700 font-medium">
                         <Mail size={14} className="mr-2 text-gray-400 shrink-0" />
-                        <span className="truncate max-w-[170px]" title={client.email}>{client.email}</span>
+                        <span className="truncate max-w-[170px]" title={client.email || ''}>{client.email || '—'}</span>
                       </div>
                       <div className="flex items-center text-gray-700 font-medium">
                         <Phone size={14} className="mr-2 text-gray-400 shrink-0" />
-                        <span>{client.phone}</span>
+                        <span>{client.phone || '—'}</span>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
                     <div className="flex items-center text-gray-800 font-medium">
                       <Building2 size={16} className="mr-2 text-gray-400" />
-                      {client.company}
+                      {client.company || '—'}
                     </div>
                   </td>
                   <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${
                       client.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-gray-50 text-gray-700 border border-gray-200'
                     }`}>
-                      {client.status}
+                      {client.status || 'Active'}
                     </span>
                   </td>
                   <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">

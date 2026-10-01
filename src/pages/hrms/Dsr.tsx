@@ -159,13 +159,13 @@ export const DSR = () => {
       e.teamLeaderId === currentUser.id ||
       e.teamLeaderId === currentUser.empId ||
       (e.teamLeaderName && currentUser.name && (
-        e.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase()) ||
-        (currentUser.name ?? '').toLowerCase().includes(e.teamLeaderName.toLowerCase())
+        (e.teamLeaderName ?? '').toLowerCase().includes((currentUser.name ?? '').toLowerCase()) ||
+        (currentUser.name ?? '').toLowerCase().includes((e.teamLeaderName ?? '').toLowerCase())
       )) ||
       (e.formData?.teamLeaderId && (e.formData.teamLeaderId === currentUser.id || e.formData.teamLeaderId === currentUser.empId)) ||
       (e.formData?.teamLeaderName && currentUser.name && (
-        e.formData.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase()) ||
-        (currentUser.name ?? '').toLowerCase().includes(e.formData.teamLeaderName.toLowerCase())
+        (e.formData.teamLeaderName ?? '').toLowerCase().includes((currentUser.name ?? '').toLowerCase()) ||
+        (currentUser.name ?? '').toLowerCase().includes((e.formData.teamLeaderName ?? '').toLowerCase())
       ));
     return isSubordinate && e.id !== currentUser.id && e.id !== currentUser.empId;
   });
@@ -174,8 +174,8 @@ export const DSR = () => {
   const myReports = reports.filter(r => 
     r.empId === currentUser.id || 
     r.empId === currentUser.empId || 
-    r.empEmail?.toLowerCase() === currentUser.email?.toLowerCase() ||
-    (currentUser.name && r.empName?.toLowerCase() === (currentUser.name ?? '').toLowerCase())
+    (r.empEmail ?? '').toLowerCase() === (currentUser.email ?? '').toLowerCase() ||
+    (currentUser.name && (r.empName ?? '').toLowerCase() === (currentUser.name ?? '').toLowerCase())
   );
 
   // Filter: Team Reports (Submitted to current user as TL, or all if Super Admin/HR)
@@ -185,11 +185,11 @@ export const DSR = () => {
       r.tlId === currentUser.id || 
       r.tlId === currentUser.empId || 
       (r.tlName && currentUser.name && (
-        r.tlName.toLowerCase().includes(currentUser.name.toLowerCase()) ||
-        (currentUser.name ?? '').toLowerCase().includes(r.tlName.toLowerCase())
+        (r.tlName ?? '').toLowerCase().includes((currentUser.name ?? '').toLowerCase()) ||
+        (currentUser.name ?? '').toLowerCase().includes((r.tlName ?? '').toLowerCase())
       )) ||
-      (r.tlEmail && currentUser.email && r.tlEmail.toLowerCase() === (currentUser.email ?? '').toLowerCase()) ||
-      teamMembers.some(m => m.id === r.empId || m.name?.toLowerCase() === r.empName?.toLowerCase());
+      (r.tlEmail && currentUser.email && (r.tlEmail ?? '').toLowerCase() === (currentUser.email ?? '').toLowerCase()) ||
+      teamMembers.some(m => m.id === r.empId || (m.name ?? '').toLowerCase() === (r.empName ?? '').toLowerCase());
     return isSentToMe && r.empId !== currentUser.id && r.empId !== currentUser.empId;
   });
 

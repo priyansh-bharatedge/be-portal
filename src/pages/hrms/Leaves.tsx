@@ -393,7 +393,7 @@ export const Leaves = () => {
         (l.empName ?? '').toLowerCase().includes(q) ||
         (l.id ?? '').toLowerCase().includes(q) ||
         (l.type ?? '').toLowerCase().includes(q) ||
-        l.reason.toLowerCase().includes(q);
+        (l.reason ?? '').toLowerCase().includes(q);
 
       const matchesType = typeFilter === 'All' || l.type === typeFilter;
       const matchesStatus = statusFilter === 'All' || l.status === statusFilter;
