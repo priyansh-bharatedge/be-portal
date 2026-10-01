@@ -168,7 +168,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    const targetEmail = foundEmp.formData?.workEmail || foundEmp.formData?.email || foundEmp.email || 'support@bharat-edge.com';
+    const targetEmail = clean.includes('@') 
+      ? clean 
+      : (foundEmp.formData?.workEmail || foundEmp.formData?.email || foundEmp.email || 'support@bharat-edge.com');
     
     // Create masked email (e.g. r****l@bharat-edge.com)
     let maskedEmail = targetEmail;
@@ -196,11 +198,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.setItem('be_active_otp_session', JSON.stringify(otpSession));
 
     // Dispatch email via Nodemailer API
-    sendOtpEmail({
-      toEmail: targetEmail,
-      empName: foundEmp.name,
-      otpCode: generatedOtp
-    }).catch(err => console.warn('Background email delivery attempt:', err));
+    try {
+      await sendOtpEmail({
+        toEmail: targetEmail,
+        empName: foundEmp.name,
+        otpCode: generatedOtp
+      });
+    } catch (err) {
+      console.warn('Background email delivery attempt:', err);
+    }
 
     return {
       success: true,
