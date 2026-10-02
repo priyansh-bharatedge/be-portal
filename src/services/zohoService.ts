@@ -785,6 +785,36 @@ export async function fetchZohoEmployees(options?: ZohoFetchOptions): Promise<Zo
 }
 
 /**
+ * Fetches all live Sales employees & BDMs from Zoho CRM (combining Employee module and Zoho CRM Active BDM Users).
+ */
+export async function fetchSalesEmployees(): Promise<ZohoFetchResult> {
+  try {
+    const response = await fetch('/api/zoho/get-sales-employees');
+    const result = await safeParseResponse(response);
+    if (response.ok && result.success && Array.isArray(result.data)) {
+      return {
+        success: true,
+        data: result.data,
+        info: result.info,
+        message: 'Sales employees fetched successfully from Zoho CRM'
+      };
+    }
+    return {
+      success: false,
+      data: [],
+      message: result.message || 'Failed to fetch sales employees from Zoho CRM'
+    };
+  } catch (error: any) {
+    console.error('[Zoho CRM] Client exception while fetching sales employees:', error);
+    return {
+      success: false,
+      data: [],
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-sales-employees endpoint'
+    };
+  }
+}
+
+/**
  * Fetches all live leave records from Zoho CRM Leave_Management module.
  */
 export async function fetchZohoLeaves(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {

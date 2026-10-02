@@ -1350,6 +1350,119 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // 6b. Get Sales Employees & BDMs
+    if (action === 'get-sales-employees' && method === 'GET') {
+      try {
+        let accessToken = await getAccessToken();
+        const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
+
+        // 1. Fetch from Employee module
+        let empRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200`, {
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+        });
+        let empData: any = empRes.status === 204 ? { code: 'NO_CONTENT' } : await empRes.json();
+        if (empRes.status === 401 || empData?.code === 'INVALID_TOKEN') {
+          cachedToken = null;
+          accessToken = await getAccessToken();
+          empRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200`, {
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+          });
+          empData = empRes.status === 204 ? { code: 'NO_CONTENT' } : await empRes.json();
+        }
+
+        // 2. Fetch Active Users from Zoho CRM
+        let usersRes = await fetch(`${apiBase}/crm/v8/users?type=ActiveUsers`, {
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+        });
+        let usersData: any = usersRes.status === 204 ? { code: 'NO_CONTENT' } : await usersRes.json();
+
+        const rawEmps = empData?.data || [];
+        const rawUsers = usersData?.users || [];
+        const salesList: any[] = [];
+        const seenKeys = new Set<string>();
+
+        // Process Employee module records (Department === 'Sales' or BDM/sales designation)
+        for (const z of rawEmps) {
+          const dept = (z.Department || '').toLowerCase();
+          const designation = (z.Designation_Job_Title || '').toLowerCase();
+          const role = (z.System_Role || '').toLowerCase();
+          const isSales = dept.includes('sales') || dept.includes('bdm') || designation.includes('sales') || designation.includes('bdm') || role.includes('sales');
+
+          if (isSales || dept === 'sales') {
+            const fullName = [z.Name, z.Middle_Name, z.Last_Name].filter(Boolean).join(' ') || z.Name || 'Sales Employee';
+            const email = (z.Email || z.Personal_Email_Address || '').toLowerCase().trim();
+            const nameKey = fullName.toLowerCase().trim();
+            const uniqueKey = email || nameKey;
+
+            if (!seenKeys.has(uniqueKey)) {
+              seenKeys.add(uniqueKey);
+              if (nameKey) seenKeys.add(nameKey);
+              salesList.push({
+                id: String(z.id || z.Employment_ID),
+                zohoId: String(z.id),
+                name: fullName,
+                email: z.Email || z.Personal_Email_Address || '',
+                dept: z.Department || 'Sales',
+                role: z.Designation_Job_Title || z.System_Role || 'Sales',
+                empId: z.Employment_ID || String(z.id),
+                status: 'Active',
+                source: 'Employee Module'
+              });
+            }
+          }
+        }
+
+        // Process Zoho CRM Active Users (BDMs, Sales team, NSMs, CDMs)
+        for (const u of rawUsers) {
+          const profileName = (u.profile?.name || '').toLowerCase();
+          const roleName = (u.role?.name || '').toLowerCase();
+          const isSales = profileName.includes('business development') || 
+                          profileName.includes('bdm') || 
+                          profileName.includes('sales') || 
+                          profileName.includes('nsm') || 
+                          profileName.includes('cdm') || 
+                          roleName.includes('bdm') || 
+                          roleName.includes('sales') || 
+                          roleName.includes('business development');
+
+          if (isSales) {
+            const fullName = (u.full_name || u.name || '').trim();
+            const email = (u.email || '').toLowerCase().trim();
+            const nameKey = fullName.toLowerCase().trim();
+            const uniqueKey = email || nameKey;
+
+            if (!seenKeys.has(uniqueKey) && !seenKeys.has(nameKey)) {
+              seenKeys.add(uniqueKey);
+              seenKeys.add(nameKey);
+              salesList.push({
+                id: String(u.id),
+                zohoId: String(u.id),
+                name: fullName,
+                email: u.email || '',
+                dept: 'Sales',
+                role: u.profile?.name || u.role?.name || 'Business Development Manager',
+                empId: String(u.id),
+                status: 'Active',
+                source: 'Zoho CRM User'
+              });
+            }
+          }
+        }
+
+        // Sort alphabetically by name
+        salesList.sort((a, b) => a.name.localeCompare(b.name));
+
+        return sendJson(res, 200, {
+          success: true,
+          data: salesList,
+          total: salesList.length
+        });
+      } catch (err: any) {
+        console.error('[API Zoho] Fetch sales employees error:', err);
+        return sendJson(res, 500, { success: false, message: err.message, data: [] });
+      }
+    }
+
     // 7. Insert / Update Leave
     if ((action === 'insert-leave' || action === 'update-leave') && (method === 'POST' || method === 'PUT')) {
       const leave = await getRequestBody(req);
