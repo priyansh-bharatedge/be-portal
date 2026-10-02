@@ -6,7 +6,7 @@ import {
   IndianRupee, CreditCard, Receipt, Cloud, ShieldCheck, 
   Briefcase, Calendar, Layers, Tag, ExternalLink, User, RefreshCw, Loader2,
   AlertTriangle, Bell, Eye, Upload, Paperclip, X, FileSpreadsheet, Image as ImageIcon,
-  Check, Maximize2, Minimize2, FileCode, HardDrive, CheckCircle
+  Check, Maximize2, Minimize2, FileCode, HardDrive, CheckCircle, Users, Percent, Calculator, Info
 } from 'lucide-react';
 import { getDocument, getAllDealsFromIndexedDB, saveDealToIndexedDB, saveDocument } from '../../lib/db';
 import { 
@@ -177,7 +177,41 @@ export const DealDetails = () => {
         const email = rawZoho.Client_Email_address || rawZoho.Client_Email_address_cs || rawZoho.Client_Email_address_fnf || rawZoho.Client_Email_address_bp || rawZoho.client_email_address_st || rawZoho.Email || '';
         const gst = rawZoho.Gst_number || rawZoho.GST_Number || rawZoho.GSTIN || '';
         const panVal = rawZoho.Pan_number || rawZoho.PAN_Number || rawZoho.PAN_Card || rawZoho.PAN || '';
-        const aadh = rawZoho.Aadhaar_Card || rawZoho.Aadhaar_number || rawZoho.Aadhaar_Number || rawZoho.Aadhar_Card || '';
+        const aadhVal = rawZoho.Aadhaar_Card || rawZoho.Aadhaar_number || rawZoho.Aadhaar_Number || rawZoho.Aadhar_Card || rawZoho.Aadhaar || '';
+        const hasPartnerBdm = Boolean(
+          rawZoho.Has_Partner_BDM || 
+          rawZoho.has_partner_bdm || 
+          rawZoho.Partner_BDM || 
+          rawZoho.Partner_BDM_Name || 
+          rawZoho.Partner_BDM_name || 
+          rawZoho.Partner_BDM_Names || 
+          rawZoho.Partner_BDM_amount ||
+          deal?.hasPartnerBdm ||
+          deal?.formData?.hasPartnerBdm
+        );
+
+        const partnerBdmName = 
+          rawZoho.Partner_BDM_Name || 
+          rawZoho.Partner_BDM_name || 
+          rawZoho.Partner_BDM_Names || 
+          rawZoho.Partner_BDM_Names_bp || 
+          rawZoho.Partner_BDM_Names_st || 
+          rawZoho.partner_bdm_name ||
+          deal?.partnerBdmName ||
+          deal?.formData?.partnerBdmName ||
+          '';
+
+        const partnerBdmId = 
+          rawZoho.Partner_BDM_ID || 
+          rawZoho.partner_bdm_id || 
+          deal?.partnerBdmId ||
+          deal?.formData?.partnerBdmId ||
+          '';
+
+        let partnerBdmAmount = Number(rawZoho.Partner_BDM_Amount || rawZoho.Partner_BDM_amount || rawZoho.partner_bdm_amount || deal?.partnerBdmAmount || deal?.formData?.partnerBdmAmount || 0);
+        if (hasPartnerBdm && (!partnerBdmAmount || partnerBdmAmount === 0) && recNum > 0) {
+          partnerBdmAmount = Number(((recNum / 1.18) / 2).toFixed(2));
+        }
 
         const updatedObj = {
           id: deal?.id || (id && id.startsWith('DL-') ? id : `DL-${String(rawZoho.id).slice(-4)}`),
@@ -190,9 +224,17 @@ export const DealDetails = () => {
           pending: formatRupee(pendNum),
           status: rawZoho.Stage === 'Closed Won' ? 'Won' : rawZoho.Stage === 'Closed Lost' ? 'Lost' : (rawZoho.Stage || rawZoho.Status || 'New'),
           stage: rawZoho.Stage || rawZoho.Status || 'Operations',
-          owner: rawZoho.Owner?.name || rawZoho.Owner || rawZoho.BDM_names?.name || rawZoho.BDM_name || 'Admin',
+          owner: rawZoho.Owner?.name || rawZoho.Owner || rawZoho.BDM_names?.name || rawZoho.BDM_name || deal?.owner || 'Admin',
           date: rawZoho.Closing_Date ? new Date(rawZoho.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (rawZoho.Booking_Date ? new Date(rawZoho.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })),
           source: 'Zoho CRM',
+          hasPartnerBdm,
+          has_partner_bdm: hasPartnerBdm,
+          partnerBdmId,
+          partner_bdm_id: partnerBdmId,
+          partnerBdmName,
+          partner_bdm_name: partnerBdmName,
+          partnerBdmAmount,
+          partner_bdm_amount: partnerBdmAmount,
           zohoStatus: 'synced',
           zohoSyncedAt: new Date().toISOString(),
           formData: {
@@ -202,11 +244,19 @@ export const DealDetails = () => {
             mobile: phone,
             gstNumber: gst,
             panCard: panVal,
-            aadhaarCard: aadh,
+            aadhaarCard: aadhVal,
             billingAddress: rawZoho.Billing_address || rawZoho.Company_address || '',
             city: rawZoho.City || '',
             state: rawZoho.State || '',
             businessType: rawZoho.Company_Type || rawZoho.Choose_Wisely || rawZoho.Compliance_type || 'Private Limited',
+            hasPartnerBdm,
+            has_partner_bdm: hasPartnerBdm,
+            partnerBdmId,
+            partner_bdm_id: partnerBdmId,
+            partnerBdmName,
+            partner_bdm_name: partnerBdmName,
+            partnerBdmAmount,
+            partner_bdm_amount: partnerBdmAmount,
           },
           servicesData: servicesSubform,
           totals: {
@@ -215,6 +265,7 @@ export const DealDetails = () => {
             totalGst: gstNum,
             receivedAmount: recNum,
             pendingAmount: pendNum,
+            partnerBdmAmount,
           },
           rawZohoDeal: rawZoho
         };
@@ -472,6 +523,56 @@ export const DealDetails = () => {
   );
 
   const initials = clientName && clientName !== 'Client' ? clientName.substring(0, 2).toUpperCase() : (companyName !== 'N/A' ? companyName.substring(0, 2).toUpperCase() : 'DL');
+
+  // Extract BDM and Partner BDM Details
+  const primaryBdmName = 
+    deal.bdmName ||
+    deal.owner ||
+    raw.BDM_names?.name ||
+    raw.BDM_names ||
+    raw.BDM_name ||
+    raw.BDM_name_cs ||
+    raw.BDM_name_bp ||
+    raw.BDM_name_st ||
+    fd.bdmName ||
+    'Admin';
+
+  const hasPartnerBdm = Boolean(
+    deal.hasPartnerBdm ||
+    deal.has_partner_bdm ||
+    raw.Has_Partner_BDM === true ||
+    raw.Has_Partner_BDM === 'true' ||
+    raw.has_partner_bdm === true ||
+    raw.has_partner_bdm === 'true' ||
+    raw.Partner_BDM_name ||
+    raw.Partner_BDM_Names ||
+    raw.Partner_BDM ||
+    deal.partnerBdmName ||
+    deal.partner_bdm_name ||
+    fd.partnerBdmName
+  );
+
+  const partnerBdmName = 
+    deal.partnerBdmName ||
+    deal.partner_bdm_name ||
+    raw.Partner_BDM_name ||
+    raw.Partner_BDM_Names ||
+    raw.Partner_BDM_Names_bp ||
+    raw.Partner_BDM_Names_st ||
+    raw.Partner_BDM ||
+    fd.partnerBdmName ||
+    '';
+
+  const preGstReceivedNum = receivedAmountNum > 0 ? Number((receivedAmountNum / 1.18).toFixed(2)) : 0;
+
+  const partnerBdmAmount = Number(
+    deal.partnerBdmAmount !== undefined && deal.partnerBdmAmount !== null && Number(deal.partnerBdmAmount) > 0 ? deal.partnerBdmAmount :
+    deal.partner_bdm_amount !== undefined && deal.partner_bdm_amount !== null && Number(deal.partner_bdm_amount) > 0 ? deal.partner_bdm_amount :
+    raw.Partner_BDM_Amount !== undefined && raw.Partner_BDM_Amount !== null && Number(raw.Partner_BDM_Amount) > 0 ? raw.Partner_BDM_Amount :
+    raw.Partner_BDM_amount !== undefined && raw.Partner_BDM_amount !== null && Number(raw.Partner_BDM_amount) > 0 ? raw.Partner_BDM_amount :
+    raw.partner_bdm_amount !== undefined && raw.partner_bdm_amount !== null && Number(raw.partner_bdm_amount) > 0 ? raw.partner_bdm_amount :
+    (hasPartnerBdm && receivedAmountNum > 0 ? Number(((receivedAmountNum / 1.18) / 2).toFixed(2)) : 0)
+  );
 
   // Extract Services (Subform_1)
   let services = deal.servicesData || [];
@@ -1668,30 +1769,78 @@ export const DealDetails = () => {
           </div>
 
           {/* Partner & BDM Card */}
-          {(raw.BDM_names || raw.BDM_name || raw.Partner_BDM_name || raw.Partner_BDM_Names || raw.Partner_BDM_amount) && (
-            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-3">
-              <h2 className="text-base font-bold text-gray-900 flex items-center">
-                <User size={18} className="mr-2 text-be-orange" />
-                BDM & Partner Info
-              </h2>
-              <div className="space-y-2.5 text-xs">
-                {(raw.BDM_names?.name || raw.BDM_names || raw.BDM_name || raw.BDM_name_cs || raw.BDM_name_bp || raw.BDM_name_st) && (
-                  <div className="flex justify-between py-1.5 border-b border-gray-100">
-                    <span className="text-gray-400">BDM Name:</span>
-                    <span className="font-bold text-gray-900">{raw.BDM_names?.name || raw.BDM_names || raw.BDM_name || raw.BDM_name_cs || raw.BDM_name_bp || raw.BDM_name_st}</span>
-                  </div>
+          {(primaryBdmName || hasPartnerBdm || partnerBdmName || partnerBdmAmount > 0) && (
+            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <h2 className="text-base font-bold text-gray-900 flex items-center">
+                  <User size={18} className="mr-2 text-be-orange" />
+                  BDM & Partner Info
+                </h2>
+                {hasPartnerBdm ? (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                    <Users size={11} className="mr-1" />
+                    50/50 Split Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-gray-50 text-gray-600 border border-gray-200">
+                    Single BDM (100%)
+                  </span>
                 )}
-                {(raw.Partner_BDM_name || raw.Partner_BDM_Names || raw.Partner_BDM_Names_bp || raw.Partner_BDM_Names_st) && (
-                  <div className="flex justify-between py-1.5 border-b border-gray-100">
-                    <span className="text-gray-400">Partner BDM:</span>
-                    <span className="font-bold text-gray-900">{raw.Partner_BDM_name || raw.Partner_BDM_Names || raw.Partner_BDM_Names_bp || raw.Partner_BDM_Names_st}</span>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                {/* Primary BDM */}
+                <div className="flex justify-between items-center py-1.5 border-b border-gray-50">
+                  <span className="text-gray-500 font-medium">Primary BDM:</span>
+                  <div className="text-right">
+                    <span className="font-bold text-gray-900">{primaryBdmName}</span>
+                    <span className="block text-[10px] text-gray-400 font-normal">Deal Owner / Primary</span>
                   </div>
-                )}
-                {raw.Partner_BDM_amount && (
-                  <div className="flex justify-between py-1.5 border-b border-gray-100">
-                    <span className="text-gray-400">Partner BDM Amount:</span>
-                    <span className="font-bold text-emerald-600">₹{Number(raw.Partner_BDM_amount).toLocaleString('en-IN')}</span>
-                  </div>
+                </div>
+
+                {/* Partner BDM Section */}
+                {hasPartnerBdm && (
+                  <>
+                    <div className="flex justify-between items-center py-1.5 border-b border-gray-50">
+                      <span className="text-purple-700 font-semibold flex items-center">
+                        <Users size={12} className="mr-1 text-purple-600" />
+                        Partner BDM:
+                      </span>
+                      <div className="text-right">
+                        <span className="font-bold text-purple-900 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                          {partnerBdmName || 'Unassigned Partner'}
+                        </span>
+                        <span className="block text-[10px] text-purple-600 font-medium mt-0.5">50% Shareholder</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-gradient-to-br from-purple-50/60 to-indigo-50/40 rounded-xl border border-purple-100 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-purple-800 font-semibold text-xs flex items-center">
+                          <IndianRupee size={13} className="mr-0.5 text-purple-600" />
+                          Partner BDM Amount:
+                        </span>
+                        <span className="font-extrabold text-sm text-purple-900">
+                          ₹{partnerBdmAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      <div className="pt-2 border-t border-purple-200/60 text-[10px] text-purple-700 space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Received (Incl. GST):</span>
+                          <span className="font-semibold text-gray-800">₹{receivedAmountNum.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Pre-GST Received (÷ 1.18):</span>
+                          <span className="font-semibold text-gray-800">₹{preGstReceivedNum.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-purple-800 pt-0.5">
+                          <span>Partner Share (50%):</span>
+                          <span>₹{partnerBdmAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>

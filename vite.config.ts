@@ -371,6 +371,31 @@ function zohoApiPlugin(): Plugin {
       payload.Quotation = { id: String(deal.quotationZohoId || deal.zohoQuotationId) };
     }
 
+    // Partner BDM Split (50/50 pre-GST share of Received Amount)
+    const hasPartnerBdm = Boolean(deal.hasPartnerBdm || deal.has_partner_bdm || fd.hasPartnerBdm || fd.has_partner_bdm);
+    const partnerBdmId = hasPartnerBdm ? (deal.partnerBdmId || deal.partner_bdm_id || fd.partnerBdmId || fd.partner_bdm_id || '') : '';
+    const partnerBdmName = hasPartnerBdm ? (deal.partnerBdmName || deal.partner_bdm_name || fd.partnerBdmName || fd.partner_bdm_name || '') : '';
+
+    // Server-side validation and calculation: Partner BDM Amount = (Received Amount / 1.18) / 2
+    let partnerBdmAmount = 0;
+    if (hasPartnerBdm && amountReceivedNum > 0) {
+      const preGstReceived = amountReceivedNum / 1.18;
+      partnerBdmAmount = to2Dec(preGstReceived / 2);
+    }
+
+    payload.Has_Partner_BDM = hasPartnerBdm;
+    payload.has_partner_bdm = hasPartnerBdm;
+    payload.Partner_BDM = hasPartnerBdm;
+    payload.Partner_BDM_Name = partnerBdmName;
+    payload.partner_bdm_name = partnerBdmName;
+    payload.Partner_BDM_Names = partnerBdmName;
+    payload.Partner_BDM_Amount = partnerBdmAmount;
+    payload.partner_bdm_amount = partnerBdmAmount;
+    if (partnerBdmId) {
+      payload.Partner_BDM_ID = String(partnerBdmId);
+      payload.partner_bdm_id = String(partnerBdmId);
+    }
+
     return payload;
   }
 
@@ -1175,7 +1200,7 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const dealFields = 'id,Deal_Name,Client_Name,Clients,Contact_Name,Company,Company_name,Company_name_bp,Company_name_cs,Company_name_st,Company_Name,Account_Name,Amount,Amount_Without_GST,GST_Amount,Total_deal_amount_inclusive_of_gst,Total_Received_Amount,Total_Pending_Amount,Received_amount,Pending_amount,Deal_Amount,Deal_Amount_Without_GST,Deal_GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Stage,Status,Choose_Wisely,Service_Name,Owner,Created_By,Closing_Date,Booking_Date,Date,Created_Time,Modified_Time,Client_contact_detail,Mobile,Phone,Client_Email_address,Email,Gst_number,Pan_number,Billing_address,City,State,Branches,Bank_details';
+            const dealFields = 'id,Deal_Name,Client_Name,Clients,Contact_Name,Company,Company_name,Company_name_bp,Company_name_cs,Company_name_st,Company_Name,Account_Name,Amount,Amount_Without_GST,GST_Amount,Total_deal_amount_inclusive_of_gst,Total_Received_Amount,Total_Pending_Amount,Received_amount,Pending_amount,Deal_Amount,Deal_Amount_Without_GST,Deal_GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Stage,Status,Choose_Wisely,Service_Name,Owner,Created_By,Closing_Date,Booking_Date,Date,Created_Time,Modified_Time,Client_contact_detail,Mobile,Phone,Client_Email_address,Email,Gst_number,Pan_number,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,has_partner_bdm,Partner_BDM,Partner_BDM_Name,Partner_BDM_name,Partner_BDM_Names,Partner_BDM_Amount,Partner_BDM_amount,Partner_BDM_ID,partner_bdm_id,BDM_names,BDM_name';
             const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Deals from Zoho CRM (${moduleName})`);

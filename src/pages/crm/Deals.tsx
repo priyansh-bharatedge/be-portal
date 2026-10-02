@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
+import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink, Users, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
 import { saveDocument, saveAllDealsToIndexedDB, getAllDealsFromIndexedDB, bulkUpsertDealsToIndexedDB } from '../../lib/db';
 import {
   saveOrUpdateZohoDeal,
@@ -11,7 +12,8 @@ import {
   uploadZohoAttachment,
   saveOrUpdateZohoCompany,
   saveOrUpdateZohoClient,
-  deleteZohoRecord
+  deleteZohoRecord,
+  fetchZohoEmployees
 } from '../../services/zohoService';
 import { Pagination } from '../../components/ui/Pagination';
 import { Layers, DownloadCloud } from 'lucide-react';
@@ -25,6 +27,7 @@ interface DealService {
 
 export const Deals = () => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
@@ -45,6 +48,58 @@ export const Deals = () => {
   const [hasMoreZohoRecords, setHasMoreZohoRecords] = useState(false);
   const [isFetchingBatch, setIsFetchingBatch] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ loaded: number; batch: number; percent?: number } | null>(null);
+
+  // Employees & Partner BDM states
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
+  const [hasPartnerBdm, setHasPartnerBdm] = useState<boolean>(false);
+  const [partnerBdmId, setPartnerBdmId] = useState<string>('');
+  const [partnerBdmName, setPartnerBdmName] = useState<string>('');
+
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const local = localStorage.getItem('be_employees');
+        let emps = local ? JSON.parse(local) : [];
+        if (!Array.isArray(emps) || emps.length === 0) {
+          const res = await fetchZohoEmployees();
+          if (res.success && Array.isArray(res.data)) {
+            emps = res.data;
+          }
+        }
+        setEmployeesList(emps);
+      } catch (e) {
+        console.warn('Failed to load employees for Partner BDM dropdown:', e);
+      }
+    };
+    loadEmployees();
+  }, []);
+
+  // Filter only active employees from the Sales department, excluding primary BDM
+  const salesEmployees = useMemo(() => {
+    return employeesList.filter((emp: any) => {
+      // 1. Department must be Sales
+      const dept = (emp.dept || emp.Department || emp.formData?.dept || '').toLowerCase();
+      const isSales = dept.includes('sales') || dept === 'sales';
+      if (!isSales) return false;
+
+      // 2. Status must be Active (if present)
+      const status = (emp.status || emp.Status || emp.formData?.status || 'Active').toLowerCase();
+      if (status !== 'active') return false;
+
+      // 3. Exclude primary BDM (current user / deal creator)
+      const empId = String(emp.id || emp.zohoId || '').toLowerCase();
+      const empName = String(emp.name || emp.Name || '').toLowerCase();
+      const empEmail = String(emp.email || emp.Email || emp.workEmail || '').toLowerCase();
+
+      if (currentUser) {
+        if (currentUser.id && empId === currentUser.id.toLowerCase()) return false;
+        if (currentUser.name && empName === currentUser.name.toLowerCase()) return false;
+        if (currentUser.email && empEmail === currentUser.email.toLowerCase()) return false;
+      }
+
+      return true;
+    });
+  }, [employeesList, currentUser]);
 
   useEffect(() => {
     if (toast) {
@@ -99,6 +154,16 @@ export const Deals = () => {
     'Annual Based Compliance for LLP', 'Event Based Compliance for LLP'
   ].sort();
 
+  // Real-time calculation: Pre-GST Received Amount = Received Amount / 1.18, Partner BDM Amount = Pre-GST / 2
+  const partnerBdmAmount = useMemo(() => {
+    if (!hasPartnerBdm) return 0;
+    const rec = Number(amountReceived) || 0;
+    if (rec <= 0 || isNaN(rec)) return 0;
+    const preGst = rec / 1.18;
+    const split = preGst / 2;
+    return Math.round(split * 100) / 100;
+  }, [hasPartnerBdm, amountReceived]);
+
   const handleOpenModal = (deal?: any) => {
     setIsCreateModalOpen(true);
     setCurrentStep(1);
@@ -127,9 +192,12 @@ export const Deals = () => {
           baseAmount: b,
         };
       }));
-      setAmountReceived(deal.totals?.amountReceived || (deal.received ? deal.received.replace(/[^0-9]/g, '') : ''));
+      setAmountReceived(deal.totals?.amountReceived || (deal.received ? deal.received.replace(/[^0-9.]/g, '') : ''));
       setPaymentScreenshotName(deal.paymentScreenshotName || '');
       setPaymentScreenshotFile(null);
+      setHasPartnerBdm(Boolean(deal.hasPartnerBdm || deal.has_partner_bdm || deal.formData?.hasPartnerBdm || deal.formData?.has_partner_bdm));
+      setPartnerBdmId(deal.partnerBdmId || deal.partner_bdm_id || deal.formData?.partnerBdmId || deal.formData?.partner_bdm_id || '');
+      setPartnerBdmName(deal.partnerBdmName || deal.partner_bdm_name || deal.formData?.partnerBdmName || deal.formData?.partner_bdm_name || '');
     } else {
       setEditingDealId(null);
       setFormData({
@@ -142,6 +210,9 @@ export const Deals = () => {
       setAmountReceived('');
       setPaymentScreenshotName('');
       setPaymentScreenshotFile(null);
+      setHasPartnerBdm(false);
+      setPartnerBdmId('');
+      setPartnerBdmName('');
     }
   };
 
@@ -161,6 +232,9 @@ export const Deals = () => {
       setAmountReceived('');
       setDocuments([]);
       setFileError('');
+      setHasPartnerBdm(false);
+      setPartnerBdmId('');
+      setPartnerBdmName('');
     }, 300);
   };
 
@@ -206,6 +280,9 @@ export const Deals = () => {
       if (dealServices.some(s => !s.totalAmount && !s.baseAmount)) errors.totalAmount = 'Enter total amounts for all selected services';
       if (!amountReceived || amountReceived.trim() === '') errors.amountReceived = 'Amount Received is required';
       if (!paymentScreenshotFile && !paymentScreenshotName) errors.paymentScreenshot = 'Payment Screenshot is required';
+      if (hasPartnerBdm && (!partnerBdmId || !partnerBdmName)) {
+        errors.partnerBdm = 'Please select a Partner BDM from the Sales department.';
+      }
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -566,7 +643,7 @@ export const Deals = () => {
       }
     }
 
-    // 4. Build Deal Object with Linked Company and Client Zoho IDs
+    // 4. Build Deal Object with Linked Company, Client, and Partner BDM details
     const dealData: any = {
       id: dealId,
       client: formData.clientName,
@@ -579,11 +656,32 @@ export const Deals = () => {
       pending: `₹${pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
       status: existingDeal?.status || 'New',
       stage: existingDeal?.stage || 'Sales',
-      owner: existingDeal?.owner || 'Admin',
+      owner: existingDeal?.owner || currentUser?.name || 'Admin',
       date: existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       source: existingDeal?.source || 'Manual',
+      // Partner BDM split details
+      hasPartnerBdm: hasPartnerBdm,
+      has_partner_bdm: hasPartnerBdm,
+      partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
+      partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
+      partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
+      partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
+      partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
+      partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
       // Full details
-      formData: { ...formData, companyZohoId, clientZohoId },
+      formData: {
+        ...formData,
+        companyZohoId,
+        clientZohoId,
+        hasPartnerBdm,
+        has_partner_bdm: hasPartnerBdm,
+        partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
+        partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
+        partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
+        partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
+        partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
+        partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
+      },
       servicesData: dealServices.map(s => {
         const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
         const gstVal = t > 0 ? Number((t * 0.18).toFixed(2)) : 0;
@@ -1108,6 +1206,41 @@ export const Deals = () => {
         ? updatedDeals[existingIdx]?.id 
         : (zDeal.id ? String(zDeal.id) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
 
+      // Resolve Partner BDM details from Zoho CRM Deal
+      const hasPartnerBdm = Boolean(
+        zDeal.Has_Partner_BDM || 
+        zDeal.has_partner_bdm || 
+        zDeal.Partner_BDM || 
+        zDeal.Partner_BDM_Name || 
+        zDeal.Partner_BDM_name || 
+        zDeal.Partner_BDM_Names || 
+        zDeal.Partner_BDM_amount ||
+        (existingIdx >= 0 && updatedDeals[existingIdx]?.hasPartnerBdm)
+      );
+
+      const partnerBdmName = 
+        zDeal.Partner_BDM_Name || 
+        zDeal.Partner_BDM_name || 
+        zDeal.Partner_BDM_Names || 
+        zDeal.Partner_BDM_Names_bp || 
+        zDeal.Partner_BDM_Names_st || 
+        zDeal.partner_bdm_name ||
+        (existingIdx >= 0 ? updatedDeals[existingIdx]?.partnerBdmName : '') || 
+        '';
+
+      const partnerBdmId = 
+        zDeal.Partner_BDM_ID || 
+        zDeal.partner_bdm_id || 
+        (existingIdx >= 0 ? updatedDeals[existingIdx]?.partnerBdmId : '') || 
+        '';
+
+      let partnerBdmAmount = Number(zDeal.Partner_BDM_Amount || zDeal.Partner_BDM_amount || zDeal.partner_bdm_amount || 0);
+      if (hasPartnerBdm && (!partnerBdmAmount || partnerBdmAmount === 0) && receivedAmountNum > 0) {
+        partnerBdmAmount = Number(((receivedAmountNum / 1.18) / 2).toFixed(2));
+      } else if (!partnerBdmAmount && existingIdx >= 0 && updatedDeals[existingIdx]?.partnerBdmAmount) {
+        partnerBdmAmount = updatedDeals[existingIdx].partnerBdmAmount;
+      }
+
       const dealObj: any = {
         id: resolvedDealId,
         client: resolvedClientName,
@@ -1121,6 +1254,14 @@ export const Deals = () => {
         owner: zDeal.Owner?.name || (existingIdx >= 0 ? updatedDeals[existingIdx]?.owner : 'Admin') || 'Admin',
         date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (zDeal.Booking_Date ? new Date(zDeal.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingIdx >= 0 ? updatedDeals[existingIdx]?.date : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))),
         source: (existingIdx >= 0 ? updatedDeals[existingIdx]?.source : 'Zoho CRM') || 'Zoho CRM',
+        hasPartnerBdm,
+        has_partner_bdm: hasPartnerBdm,
+        partnerBdmId,
+        partner_bdm_id: partnerBdmId,
+        partnerBdmName,
+        partner_bdm_name: partnerBdmName,
+        partnerBdmAmount,
+        partner_bdm_amount: partnerBdmAmount,
         zohoId: zDeal.id,
         zohoStatus: 'synced',
         zohoSyncedAt: new Date().toISOString(),
@@ -1135,6 +1276,14 @@ export const Deals = () => {
           city: zDeal.City || '',
           state: stateName,
           businessType: zDeal.Company_Type || zDeal.Choose_Wisely || 'Private Limited',
+          hasPartnerBdm,
+          has_partner_bdm: hasPartnerBdm,
+          partnerBdmId,
+          partner_bdm_id: partnerBdmId,
+          partnerBdmName,
+          partner_bdm_name: partnerBdmName,
+          partnerBdmAmount,
+          partner_bdm_amount: partnerBdmAmount,
           ...(existingIdx >= 0 ? updatedDeals[existingIdx]?.formData : {})
         },
         servicesData: servicesFromSubform,
@@ -1145,6 +1294,7 @@ export const Deals = () => {
           totalGst: gstAmountNum,
           receivedAmount: receivedAmountNum,
           pendingAmount: pendingAmountNum,
+          partnerBdmAmount: partnerBdmAmount,
         },
       };
 
@@ -1621,11 +1771,19 @@ export const Deals = () => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100 flex items-center space-x-2">
-                        <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">
-                          {deal.owner ? deal.owner.charAt(0) : '?'}
+                      <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">
+                        <div className="flex items-center space-x-2">
+                          <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">
+                            {deal.owner ? deal.owner.charAt(0) : '?'}
+                          </div>
+                          <span className="font-semibold text-gray-900">{deal.owner || 'Admin'}</span>
                         </div>
-                        <span>{deal.owner || 'Admin'}</span>
+                        {(deal.hasPartnerBdm || deal.has_partner_bdm || deal.partnerBdmName || deal.formData?.hasPartnerBdm || deal.formData?.partnerBdmName) && (
+                          <div className="mt-1 flex items-center text-[11px] text-orange-600 font-medium">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5"></span>
+                            Partner: {deal.partnerBdmName || deal.partner_bdm_name || deal.formData?.partnerBdmName} (₹{Number(deal.partnerBdmAmount || deal.partner_bdm_amount || deal.formData?.partnerBdmAmount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })})
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100">
                         <div className="flex items-center justify-end space-x-2">
@@ -2019,6 +2177,86 @@ export const Deals = () => {
                       <div className="flex justify-between text-orange-600 font-semibold items-center">
                         <span>Pending Amount</span>
                         <span className="text-base">₹{pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                      </div>
+
+                      {/* Partner BDM Split Checkbox & Conditional Fields */}
+                      <div className="pt-3 border-t border-gray-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center space-x-2.5 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={hasPartnerBdm}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setHasPartnerBdm(checked);
+                                if (!checked) {
+                                  setPartnerBdmId('');
+                                  setPartnerBdmName('');
+                                }
+                              }}
+                              className="w-4 h-4 text-be-orange rounded border-gray-300 focus:ring-be-orange accent-be-orange cursor-pointer"
+                            />
+                            <span className="font-semibold text-gray-800 text-sm">Partner BDM (50/50 Pre-GST Split)</span>
+                          </label>
+                          {hasPartnerBdm && (
+                            <span className="text-xs bg-orange-100 text-orange-800 font-semibold px-2.5 py-0.5 rounded-full border border-orange-200 flex items-center">
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5 animate-pulse"></span>
+                              Split Active
+                            </span>
+                          )}
+                        </div>
+
+                        {hasPartnerBdm && (
+                          <div className="p-4 bg-orange-50/70 border border-orange-100 rounded-xl space-y-3 transition-all">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                  Partner BDM Name <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                  value={partnerBdmId}
+                                  onChange={(e) => {
+                                    const selectedId = e.target.value;
+                                    setPartnerBdmId(selectedId);
+                                    const found = salesEmployees.find(emp => (emp.id === selectedId || emp.zohoId === selectedId));
+                                    setPartnerBdmName(found ? found.name : '');
+                                  }}
+                                  className={`w-full px-3 py-2 bg-white border rounded-lg text-sm font-medium text-gray-800 outline-none focus:ring-2 focus:ring-be-orange ${formErrors.partnerBdm ? 'border-red-500' : 'border-gray-300'}`}
+                                >
+                                  <option value="">Select Sales Partner BDM...</option>
+                                  {salesEmployees.map(emp => (
+                                    <option key={emp.id || emp.zohoId} value={emp.id || emp.zohoId}>
+                                      {emp.name} ({emp.dept || 'Sales'}{emp.role ? ` - ${emp.role}` : ''})
+                                    </option>
+                                  ))}
+                                </select>
+                                {formErrors.partnerBdm && <p className="text-red-500 text-xs mt-1">{formErrors.partnerBdm}</p>}
+                                {salesEmployees.length === 0 && (
+                                  <p className="text-gray-400 text-[11px] mt-1">No other active Sales employees found.</p>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                                  Partner BDM Amount (₹)
+                                </label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium text-sm">₹</span>
+                                  <input
+                                    type="text"
+                                    disabled
+                                    readOnly
+                                    value={partnerBdmAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    className="w-full pl-7 pr-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm font-bold text-gray-800 cursor-not-allowed select-none"
+                                  />
+                                </div>
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                  (Pre-GST: ₹{((Number(amountReceived) || 0) / 1.18).toLocaleString('en-IN', { maximumFractionDigits: 2 })} ÷ 2)
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>
