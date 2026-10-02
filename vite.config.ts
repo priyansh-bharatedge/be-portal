@@ -1336,7 +1336,7 @@ function zohoApiPlugin(): Plugin {
               // 1. If zohoId is not provided, search by email in Employee module
               if (!zohoId && email) {
                 try {
-                  const criteria = `((Personal_Email_Address:equals:${email})or(Email:equals:${email}))`;
+                  const criteria = `(((Personal_Email_Address:equals:${email})or(Email:equals:${email}))or(Employment_ID:equals:${email}))`;
                   const searchUrl = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteria)}`;
                   
                   let searchRes = await fetch(searchUrl, {
@@ -1359,7 +1359,7 @@ function zohoApiPlugin(): Plugin {
                   }
 
                   // Fallback: search?email=...
-                  if (!zohoId) {
+                  if (!zohoId && email.includes('@')) {
                     const emailSearchUrl = `${apiBase}/crm/v8/${moduleName}/search?email=${encodeURIComponent(email)}`;
                     let emailRes = await fetch(emailSearchUrl, {
                       headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
@@ -1374,7 +1374,7 @@ function zohoApiPlugin(): Plugin {
 
                   // Fallback 2: list scan if search did not catch
                   if (!zohoId) {
-                    const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=id,Personal_Email_Address,Email&per_page=200`;
+                    const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=id,Personal_Email_Address,Email,Employment_ID,Name&per_page=200`;
                     let listRes = await fetch(listUrl, {
                       headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
                     });
@@ -1382,7 +1382,9 @@ function zohoApiPlugin(): Plugin {
                       const listData: any = await listRes.json();
                       const matched = listData?.data?.find((x: any) => 
                         (x.Personal_Email_Address && x.Personal_Email_Address.toLowerCase() === email.toLowerCase()) ||
-                        (x.Email && x.Email.toLowerCase() === email.toLowerCase())
+                        (x.Email && x.Email.toLowerCase() === email.toLowerCase()) ||
+                        (x.Employment_ID && String(x.Employment_ID).toLowerCase() === email.toLowerCase()) ||
+                        (x.Name && x.Name.toLowerCase() === email.toLowerCase())
                       );
                       if (matched?.id) {
                         zohoId = String(matched.id);

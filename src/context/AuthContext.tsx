@@ -3,7 +3,7 @@ import { ROLE_DEFINITIONS } from '../types/roles';
 import type { AuthUser, SystemRole } from '../types/roles';
 import { DEMO_USERS, INITIAL_EMPLOYEES, INITIAL_DSR_REPORTS } from '../utils/initialData';
 import { sendOtpEmail } from '../services/emailService';
-import { saveOrUpdateZohoEmployee, updateZohoEmployeePassword } from '../services/zohoService';
+import { saveOrUpdateZohoEmployee, updateZohoEmployeePassword, fetchZohoEmployees } from '../services/zohoService';
 
 interface AuthContextType {
   currentUser: AuthUser;
@@ -21,7 +21,7 @@ interface AuthContextType {
   login: (email: string, password?: string, role?: SystemRole) => { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser };
   requestOtp: (emailOrId: string) => Promise<{ success: boolean; error?: string; maskedEmail?: string; otp?: string; empName?: string; targetEmail?: string }>;
   verifyOtp: (emailOrId: string, otp: string) => { success: boolean; error?: string };
-  setPasswordAndActivate: (emailOrId: string, otp: string, newPassword: string) => { success: boolean; error?: string; user?: AuthUser };
+  setPasswordAndActivate: (emailOrId: string, otp: string, newPassword: string) => Promise<{ success: boolean; error?: string; user?: AuthUser }>;
   logout: () => void;
 }
 
@@ -151,16 +151,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const savedEmps = localStorage.getItem('be_employees');
-    const emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
+    let emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
     
     // Find matching employee across email, workEmail, personalEmail, and ID
-    const foundEmp = emps.find((e: any) => {
+    let foundEmp = emps.find((e: any) => {
       const emailMatches = e.email?.trim().toLowerCase() === clean;
       const personalEmailMatches = e.formData?.email?.trim().toLowerCase() === clean;
       const workEmailMatches = e.formData?.workEmail?.trim().toLowerCase() === clean;
       const idMatches = e.id?.toString().trim().toLowerCase() === clean || e.empId?.toString().trim().toLowerCase() === clean;
-      return emailMatches || personalEmailMatches || workEmailMatches || idMatches;
+      const nameMatches = e.name?.trim().toLowerCase() === clean;
+      return emailMatches || personalEmailMatches || workEmailMatches || idMatches || nameMatches;
     });
+
+    // If not found in local cache, query live from Zoho CRM
+    if (!foundEmp) {
+      try {
+        const zohoRes = await fetchZohoEmployees();
+        if (zohoRes.success && Array.isArray(zohoRes.data)) {
+          const zMatch = zohoRes.data.find((z: any) => {
+            const zId = (z.Employment_ID || String(z.id || '')).trim().toLowerCase();
+            const zEmail = (z.Email || '').trim().toLowerCase();
+            const zPersonalEmail = (z.Personal_Email_Address || '').trim().toLowerCase();
+            const zName = (z.Name || '').trim().toLowerCase();
+            return zId === clean || zEmail === clean || zPersonalEmail === clean || zName === clean;
+          });
+          if (zMatch) {
+            foundEmp = {
+              id: zMatch.Employment_ID || `EMP-${String(zMatch.id).slice(-4)}`,
+              name: [zMatch.Name, zMatch.Middle_Name, zMatch.Last_Name].filter(Boolean).join(' ') || zMatch.Name,
+              email: zMatch.Email || zMatch.Personal_Email_Address || '',
+              mobile: zMatch.Contact_Number || '',
+              dept: zMatch.Department || 'Sales',
+              role: zMatch.Designation_Job_Title || 'Team Member',
+              systemRole: zMatch.System_Role || 'TM',
+              joined: zMatch.Date_of_Joining || '2026-02-03',
+              zohoId: String(zMatch.id),
+              formData: {
+                email: zMatch.Personal_Email_Address || zMatch.Email || '',
+                workEmail: zMatch.Email || '',
+                mobile: zMatch.Contact_Number || '',
+                empId: zMatch.Employment_ID || `EMP-${String(zMatch.id).slice(-4)}`,
+                firstName: zMatch.Name || '',
+                lastName: zMatch.Last_Name || '',
+              }
+            };
+            emps.push(foundEmp);
+            localStorage.setItem('be_employees', JSON.stringify(emps));
+          }
+        }
+      } catch (err) {
+        console.warn('Could not query Zoho employees during OTP request:', err);
+      }
+    }
 
     if (!foundEmp) {
       return { 
@@ -243,7 +285,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const setPasswordAndActivate = (emailOrId: string, inputOtp: string, newPassword: string): { success: boolean; error?: string; user?: AuthUser } => {
+  const setPasswordAndActivate = async (emailOrId: string, inputOtp: string, newPassword: string): Promise<{ success: boolean; error?: string; user?: AuthUser }> => {
     const otpResult = verifyOtp(emailOrId, inputOtp);
     if (!otpResult.success) {
       return { success: false, error: otpResult.error };
@@ -261,10 +303,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const savedEmps = localStorage.getItem('be_employees');
     let emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
 
+    const cleanId = (emailOrId || '').trim().toLowerCase();
     const empIndex = emps.findIndex((e: any) => 
       e.id === empId || 
-      e.id?.toLowerCase() === emailOrId.toLowerCase() ||
-      e.email?.toLowerCase() === emailOrId.toLowerCase()
+      e.id?.toLowerCase() === cleanId ||
+      e.empId?.toLowerCase() === cleanId ||
+      e.email?.toLowerCase() === cleanId ||
+      e.formData?.email?.toLowerCase() === cleanId ||
+      e.formData?.workEmail?.toLowerCase() === cleanId ||
+      (session?.targetEmail && (e.email?.toLowerCase() === session.targetEmail.toLowerCase() || e.formData?.email?.toLowerCase() === session.targetEmail.toLowerCase()))
     );
 
     if (empIndex === -1) {
@@ -316,42 +363,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     // 1. Direct targeted password update in Zoho CRM Employee module by finding the record via email
-    const userEmail = updatedEmp.formData?.email || updatedEmp.email || updatedEmp.formData?.workEmail || (emailOrId.includes('@') ? emailOrId : '');
+    const userEmail = updatedEmp.formData?.email || updatedEmp.email || updatedEmp.formData?.workEmail || session?.targetEmail || (emailOrId.includes('@') ? emailOrId : '');
     if (userEmail) {
-      updateZohoEmployeePassword(userEmail, cleanPassword, updatedEmp.zohoId).then((res) => {
-        if (res.success && res.zohoId) {
-          console.log(`[Zoho CRM] Password field updated in Zoho CRM for employee ${userEmail} (Zoho ID: ${res.zohoId})`);
-          const saved = localStorage.getItem('be_employees');
-          if (saved) {
-            const arr = JSON.parse(saved);
-            const idx = arr.findIndex((x: any) => x.id === updatedEmp.id);
-            if (idx !== -1 && !arr[idx].zohoId) {
-              arr[idx].zohoId = res.zohoId;
-              arr[idx].zohoStatus = 'synced';
-              localStorage.setItem('be_employees', JSON.stringify(arr));
-              window.dispatchEvent(new Event('be_employees_updated'));
-            }
-          }
+      try {
+        const passSyncRes = await updateZohoEmployeePassword(userEmail, cleanPassword, updatedEmp.zohoId);
+        console.log(`[Zoho CRM] Direct password update response:`, passSyncRes);
+        if (passSyncRes.success && passSyncRes.zohoId && !updatedEmp.zohoId) {
+          updatedEmp.zohoId = passSyncRes.zohoId;
+          emps[empIndex].zohoId = passSyncRes.zohoId;
+          localStorage.setItem('be_employees', JSON.stringify(emps));
+          window.dispatchEvent(new Event('be_employees_updated'));
         }
-      }).catch((err) => console.warn('[Zoho CRM] Direct password update to Zoho CRM failed:', err));
+      } catch (err) {
+        console.warn('[Zoho CRM] Direct password update to Zoho CRM failed:', err);
+      }
     }
 
-    // 2. Sync updated employee record to Zoho CRM
-    saveOrUpdateZohoEmployee(updatedEmp).then((res) => {
-      if (res.success && res.zohoId && !updatedEmp.zohoId) {
-        const saved = localStorage.getItem('be_employees');
-        if (saved) {
-          const arr = JSON.parse(saved);
-          const idx = arr.findIndex((x: any) => x.id === updatedEmp.id);
-          if (idx !== -1) {
-            arr[idx].zohoId = res.zohoId;
-            arr[idx].zohoStatus = 'synced';
-            localStorage.setItem('be_employees', JSON.stringify(arr));
-            window.dispatchEvent(new Event('be_employees_updated'));
-          }
-        }
-      }
-    }).catch((err) => console.warn('[Zoho CRM] Background sync of updated employee password failed:', err));
+    // 2. Sync updated employee record to Zoho CRM in background
+    saveOrUpdateZohoEmployee(updatedEmp).catch((err) => console.warn('[Zoho CRM] Background sync of updated employee password failed:', err));
 
     switchUser(authUser);
     return { success: true, user: authUser };

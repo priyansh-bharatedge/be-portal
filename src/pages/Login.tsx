@@ -160,7 +160,7 @@ export const Login = () => {
   };
 
   // Step 3: Set Password
-  const handleSetPassword = (e: React.FormEvent) => {
+  const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setOtpError('');
 
@@ -175,7 +175,7 @@ export const Login = () => {
 
     const fullCode = otpBoxes.join('');
     setLoading(true);
-    const result = setPasswordAndActivate(otpIdentifier, fullCode, newPassword);
+    const result = await setPasswordAndActivate(otpIdentifier, fullCode, newPassword);
     setLoading(false);
 
     if (result.success) {
