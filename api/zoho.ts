@@ -1,23 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { IncomingMessage, ServerResponse } from 'http';
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '15mb',
-    },
-  },
-};
 
 // Interface for standard Vercel request/response (compatible with Node http)
-export interface ApiRequest extends IncomingMessage {
+interface ApiRequest extends IncomingMessage {
   query?: Record<string, string | string[]>;
   body?: any;
   method?: string;
   url?: string;
 }
 
-export interface ApiResponse extends ServerResponse {
+interface ApiResponse extends ServerResponse {
   status?: (statusCode: number) => ApiResponse;
   json?: (data: any) => void;
   send?: (data: any) => void;
@@ -26,7 +19,7 @@ export interface ApiResponse extends ServerResponse {
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
-export async function getAccessToken(): Promise<string> {
+async function getAccessToken(): Promise<string> {
   const clientId = process.env.VITE_ZOHO_CLIENT_ID || process.env.ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
   const clientSecret = process.env.VITE_ZOHO_CLIENT_SECRET || process.env.ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
   const refreshToken = process.env.VITE_ZOHO_REFRESH_TOKEN || process.env.ZOHO_REFRESH_TOKEN || '1000.bdf58bb9452babb83e6f001ec50ea44f.7c72197a07b2fb22502ce57112cbae91';
@@ -58,7 +51,7 @@ export async function getAccessToken(): Promise<string> {
   return token;
 }
 
-export function formatDateForZoho(dateStr?: string | null): string | null {
+function formatDateForZoho(dateStr?: string | null): string | null {
   if (!dateStr || !dateStr.trim()) return null;
   const s = dateStr.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
@@ -75,7 +68,7 @@ export function formatDateForZoho(dateStr?: string | null): string | null {
   return null;
 }
 
-export function buildQuotationZohoPayload(quotation: any): Record<string, any> {
+function buildQuotationZohoPayload(quotation: any): Record<string, any> {
   const fd = quotation.formData || {};
   const servicesData = quotation.servicesData || [];
   const totals = quotation.totals || {};
@@ -148,7 +141,7 @@ export function buildQuotationZohoPayload(quotation: any): Record<string, any> {
   return payload;
 }
 
-export function buildDealZohoPayload(deal: any): Record<string, any> {
+function buildDealZohoPayload(deal: any): Record<string, any> {
   const fd = deal.formData || {};
   const clientName = fd.clientName || deal.client || '';
   const companyName = fd.companyName || deal.company || '';
@@ -348,7 +341,7 @@ export function buildDealZohoPayload(deal: any): Record<string, any> {
   return payload;
 }
 
-export function buildEmployeeZohoPayload(employee: any): Record<string, any> {
+function buildEmployeeZohoPayload(employee: any): Record<string, any> {
   const fd = employee.formData || {};
   const fullName = `${fd.firstName || ''} ${fd.middleName || ''} ${fd.lastName || ''}`.trim() || employee.name || 'New Employee';
   const empId = fd.empId || employee.id || '';
@@ -458,7 +451,7 @@ export function buildEmployeeZohoPayload(employee: any): Record<string, any> {
   return payload;
 }
 
-export function buildLeaveZohoPayload(leave: any): Record<string, any> {
+function buildLeaveZohoPayload(leave: any): Record<string, any> {
   const reasonText = leave.reason || leave.Name || `${leave.type || 'Leave'} - ${leave.empName || 'Employee'}`;
   
   const payload: Record<string, any> = {
@@ -511,7 +504,7 @@ export function buildLeaveZohoPayload(leave: any): Record<string, any> {
   return payload;
 }
 
-export function buildCompanyZohoPayload(company: any): Record<string, any> {
+function buildCompanyZohoPayload(company: any): Record<string, any> {
   const fd = company.formData || company;
   const companyName = company.name || fd.name || company.companyName || fd.companyName || 'New Company';
 
@@ -547,7 +540,7 @@ export function buildCompanyZohoPayload(company: any): Record<string, any> {
   return payload;
 }
 
-export function buildClientZohoPayload(client: any): Record<string, any> {
+function buildClientZohoPayload(client: any): Record<string, any> {
   const fd = client.formData || client;
   const clientName = client.name || fd.name || client.clientName || fd.clientName || 'New Client';
 
@@ -580,7 +573,7 @@ export function buildClientZohoPayload(client: any): Record<string, any> {
   return payload;
 }
 
-export function buildCompanyPolicyZohoPayload(policy: any): Record<string, any> {
+function buildCompanyPolicyZohoPayload(policy: any): Record<string, any> {
   const fd = policy.formData || policy;
   const policyTitle = policy.title || fd.title || policy.name || fd.name || policy.Name || 'Company Policy';
 
@@ -626,7 +619,7 @@ export function buildCompanyPolicyZohoPayload(policy: any): Record<string, any> 
   return payload;
 }
 
-export function buildCompanyCalendarZohoPayload(event: any): Record<string, any> {
+function buildCompanyCalendarZohoPayload(event: any): Record<string, any> {
   const fd = event.formData || event;
   const eventTitle = event.title || fd.title || event.name || fd.name || event.Name || 'Company Calendar Event';
 
@@ -677,7 +670,7 @@ export function buildCompanyCalendarZohoPayload(event: any): Record<string, any>
   return payload;
 }
 
-export function buildDsrZohoPayload(dsr: any): Record<string, any> {
+function buildDsrZohoPayload(dsr: any): Record<string, any> {
   const fd = dsr.formData || dsr;
   const empName = dsr.empName || fd.empName || dsr.name || fd.name || 'Employee';
   const dateVal = dsr.reportDate || fd.reportDate || dsr.date || fd.date || dsr.Date;
@@ -841,7 +834,7 @@ function logZohoApiCall(actionName: string, method: string, endpoint: string, pa
 }
 
 // Main Zoho API Handler
-export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
+async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
   const urlObj = new URL(req.url || '/', 'http://localhost');
   const pathname = urlObj.pathname;
   const rawAction = (Array.isArray(req.query?.action) 
@@ -2477,7 +2470,7 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
   }
 }
 
-export default async function handler(req: any, res: any) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
