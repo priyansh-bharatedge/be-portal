@@ -1737,9 +1737,38 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     if (action === 'get-attendance' && method === 'GET') {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
-      const attFields = 'id,Name,Attendance_Date,Employee_Code,First_In,Last_Out,Punch_Status,Punches,Total_Minutes,Late_Minutes,Created_Time,Modified_Time';
+      const attFields = 'id,Name,Attendance_Date,Employee,Employee_Code,First_In,Last_Out,Mark_Attendance,Punch_Status,Punch_Count,Punches,Late_Minutes,Early_Out_Minutes,Total_Minutes,Owner,Email,Record_Image,Secondary_Email,Created_Time,Modified_Time';
+      
+      const dateParam = urlObj.searchParams.get('date') || urlObj.searchParams.get('attendance_date') || '';
+      const startDateParam = urlObj.searchParams.get('start_date') || urlObj.searchParams.get('startDate') || '';
+      const endDateParam = urlObj.searchParams.get('end_date') || urlObj.searchParams.get('endDate') || '';
+      const empCodeParam = urlObj.searchParams.get('employee_code') || urlObj.searchParams.get('emp_code') || '';
+      const modifiedSince = urlObj.searchParams.get('modified_since') || urlObj.searchParams.get('modified_time') || '';
       const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&${paginationQuery}`;
+
+      const criteriaParts: string[] = [];
+      if (startDateParam && endDateParam) {
+        criteriaParts.push(`(Attendance_Date:greater_equal:${startDateParam})`);
+        criteriaParts.push(`(Attendance_Date:less_equal:${endDateParam})`);
+      } else if (dateParam) {
+        criteriaParts.push(`(Attendance_Date:equals:${dateParam})`);
+      }
+      if (empCodeParam) {
+        criteriaParts.push(`(Employee_Code:equals:${empCodeParam})`);
+      }
+      if (modifiedSince) {
+        criteriaParts.push(`(Modified_Time:greater_equal:${modifiedSince})`);
+      }
+
+      let crmEndpoint: string;
+      if (criteriaParts.length > 1) {
+        const combined = criteriaParts.reduce((acc, curr) => `(${acc}and${curr})`);
+        crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(combined)}&fields=${attFields}&${paginationQuery}`;
+      } else if (criteriaParts.length === 1) {
+        crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteriaParts[0])}&fields=${attFields}&${paginationQuery}`;
+      } else {
+        crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&${paginationQuery}`;
+      }
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
@@ -1763,6 +1792,131 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         return sendJson(res, 200, { success: true, data: [] });
       } else {
         return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch attendance from Zoho CRM', errorDetails: crmData });
+      }
+    }
+
+    // 19b. Insert / Upsert Attendance record
+    if (action === 'save-attendance' && method === 'POST') {
+      try {
+        const record = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+        let accessToken = await getAccessToken();
+        const moduleName = process.env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
+
+        const empCode = record.employeeCode || record.empCode || record.Employee_Code || 'EMP';
+        const attDate = record.attendanceDate || record.date || record.Attendance_Date || new Date().toISOString().split('T')[0];
+        const keyName = record.name || record.Name || `${empCode} - ${attDate}`;
+
+        const zohoPayload: Record<string, any> = {
+          Name: keyName,
+          Attendance_Date: attDate,
+          Employee_Code: empCode,
+          Mark_Attendance: record.markAttendance || record.status || record.Mark_Attendance || 'Present',
+          Punch_Status: record.punchStatus || record.Punch_Status || (record.lastOut ? 'Complete' : 'Single Punch'),
+          Punch_Count: record.punchCount !== undefined ? Number(record.punchCount) : (record.lastOut ? 2 : 1),
+          Punches: record.punches || record.punchesLog || record.Punches || '',
+          Late_Minutes: Number(record.lateMinutes ?? record.Late_Minutes ?? 0),
+          Early_Out_Minutes: Number(record.earlyOutMinutes ?? record.Early_Out_Minutes ?? 0),
+          Total_Minutes: Number(record.totalMinutes ?? record.Total_Minutes ?? 0),
+        };
+
+        if (record.firstIn || record.First_In) {
+          zohoPayload.First_In = record.firstIn || record.First_In;
+        }
+        if (record.lastOut || record.Last_Out) {
+          zohoPayload.Last_Out = record.lastOut || record.Last_Out;
+        }
+        if (record.employeeZohoId || (record.Employee && typeof record.Employee === 'object' && record.Employee.id)) {
+          zohoPayload.Employee = { id: record.employeeZohoId || record.Employee.id };
+        }
+
+        const isUpdate = Boolean(record.zohoId || (record.id && /^\d+$/.test(String(record.id))));
+        const targetZohoId = record.zohoId || record.id;
+        const crmEndpoint = isUpdate 
+          ? `${apiBase}/crm/v8/${moduleName}/${targetZohoId}`
+          : `${apiBase}/crm/v8/${moduleName}/upsert`;
+
+        const requestBody: any = isUpdate
+          ? { data: [zohoPayload] }
+          : { data: [zohoPayload], duplicate_check_fields: ['Name'] };
+
+        let crmRes = await fetch(crmEndpoint, {
+          method: isUpdate ? 'PUT' : 'POST',
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        let crmData: any = await crmRes.json();
+
+        if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+          cachedToken = null;
+          accessToken = await getAccessToken();
+          crmRes = await fetch(crmEndpoint, {
+            method: isUpdate ? 'PUT' : 'POST',
+            headers: {
+              'Authorization': `Zoho-oauthtoken ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          });
+          crmData = await crmRes.json();
+        }
+
+        if (crmData.data?.[0]?.code === 'SUCCESS') {
+          const zohoId = crmData.data[0].details?.id;
+          return sendJson(res, 200, {
+            success: true,
+            zohoId,
+            message: isUpdate ? 'Attendance updated in Zoho CRM' : 'Attendance saved in Zoho CRM',
+            data: crmData.data[0],
+          });
+        } else {
+          const errMsg = crmData.data?.[0]?.message || crmData.message || 'Failed to save attendance in Zoho CRM';
+          return sendJson(res, 400, { success: false, message: errMsg, errorDetails: crmData });
+        }
+      } catch (err: any) {
+        return sendJson(res, 500, { success: false, message: err.message });
+      }
+    }
+
+    // 19c. Delete Attendance record
+    if (action === 'delete-attendance' && (method === 'DELETE' || method === 'POST')) {
+      try {
+        const record = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+        const zohoId = urlObj.searchParams.get('id') || record.id || record.zohoId;
+        if (!zohoId) {
+          return sendJson(res, 400, { success: false, message: 'Missing record ID to delete' });
+        }
+        let accessToken = await getAccessToken();
+        const moduleName = process.env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
+        const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${zohoId}`;
+
+        let crmRes = await fetch(crmEndpoint, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+        });
+        let crmData: any = await crmRes.json();
+
+        if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
+          cachedToken = null;
+          accessToken = await getAccessToken();
+          crmRes = await fetch(crmEndpoint, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+          });
+          crmData = await crmRes.json();
+        }
+
+        if (crmData?.data?.[0]?.code === 'SUCCESS') {
+          return sendJson(res, 200, { success: true, message: 'Attendance record deleted from Zoho CRM' });
+        } else {
+          const errMsg = crmData?.data?.[0]?.message || crmData?.message || 'Failed to delete attendance record from Zoho CRM';
+          return sendJson(res, 400, { success: false, message: errMsg, errorDetails: crmData });
+        }
+      } catch (err: any) {
+        return sendJson(res, 500, { success: false, message: err.message });
       }
     }
 

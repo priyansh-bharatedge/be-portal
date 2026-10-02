@@ -30,13 +30,24 @@ export interface ZohoFetchResult<T = any> {
   message?: string;
 }
 
-function buildQueryString(options?: ZohoFetchOptions): string {
+export interface ZohoAttendanceFetchOptions extends ZohoFetchOptions {
+  date?: string;
+  attendance_date?: string;
+  start_date?: string;
+  end_date?: string;
+  employee_code?: string;
+  emp_code?: string;
+  modified_since?: string;
+}
+
+function buildQueryString(options?: Record<string, any>): string {
   if (!options) return '';
   const params = new URLSearchParams();
-  if (options.page) params.set('page', String(options.page));
-  if (options.per_page) params.set('per_page', String(options.per_page));
-  if (options.page_token) params.set('page_token', options.page_token);
-  if (options.fetch_all) params.set('fetch_all', 'true');
+  for (const [k, v] of Object.entries(options)) {
+    if (v !== undefined && v !== null && v !== '') {
+      params.set(k, String(v));
+    }
+  }
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
@@ -1772,10 +1783,69 @@ export async function fetchZohoDsr(options?: ZohoFetchOptions): Promise<ZohoFetc
   }
 }
 
+export interface ZohoAttendanceRecord {
+  id: string;
+  Name?: string;
+  Attendance_Date?: string;
+  Employee?: { id: string; name: string };
+  Employee_Code?: string;
+  First_In?: string;
+  Last_Out?: string;
+  Mark_Attendance?: 'Present' | 'Absent' | 'Half Day' | 'On Duty' | 'Leave' | 'Late' | string;
+  Punch_Status?: 'Complete' | 'Single Punch' | 'Incomplete' | 'Absent' | string;
+  Punch_Count?: number;
+  Punches?: string;
+  Late_Minutes?: number;
+  Early_Out_Minutes?: number;
+  Total_Minutes?: number;
+  Owner?: { id: string; name: string; email?: string };
+  Email?: string;
+  Secondary_Email?: string;
+  Record_Image?: string;
+  Tag?: string[] | string;
+  Created_Time?: string;
+  Modified_Time?: string;
+}
+
+export interface ZohoAttendancePayload {
+  id?: string;
+  zohoId?: string;
+  name?: string;
+  Name?: string;
+  attendanceDate?: string;
+  date?: string;
+  Attendance_Date?: string;
+  employeeCode?: string;
+  empCode?: string;
+  Employee_Code?: string;
+  employeeName?: string;
+  employeeZohoId?: string;
+  Employee?: { id: string; name?: string };
+  firstIn?: string;
+  First_In?: string;
+  lastOut?: string;
+  Last_Out?: string;
+  markAttendance?: string;
+  Mark_Attendance?: string;
+  punchStatus?: string;
+  Punch_Status?: string;
+  punchCount?: number;
+  Punch_Count?: number;
+  punches?: string;
+  punchesLog?: string;
+  Punches?: string;
+  lateMinutes?: number;
+  Late_Minutes?: number;
+  earlyOutMinutes?: number;
+  Early_Out_Minutes?: number;
+  totalMinutes?: number;
+  Total_Minutes?: number;
+}
+
 /**
  * Fetches all live attendance records from Zoho CRM Daily_Attendance module.
  */
-export async function fetchZohoAttendance(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
+export async function fetchZohoAttendance(options?: ZohoAttendanceFetchOptions): Promise<ZohoFetchResult<ZohoAttendanceRecord>> {
   try {
     const qs = buildQueryString(options);
     const response = await fetch('/api/zoho/get-attendance' + qs);
@@ -1802,6 +1872,113 @@ export async function fetchZohoAttendance(options?: ZohoFetchOptions): Promise<Z
       message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-attendance endpoint'
     };
   }
+}
+
+/**
+ * Inserts or updates (upserts) attendance record into Zoho CRM Daily_Attendance module.
+ * Uses duplicate check on `Name` (`${Employee_Code} - ${Attendance_Date}`).
+ */
+export async function saveOrUpdateZohoAttendance(record: ZohoAttendancePayload): Promise<ZohoApiResponse> {
+  try {
+    const response = await fetch('/api/zoho/save-attendance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record),
+    });
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        zohoId: data.zohoId || data.data?.details?.id,
+        message: data.message || 'Attendance record saved successfully in Zoho CRM',
+        data: data.data,
+      };
+    }
+    return {
+      success: false,
+      message: data.message || 'Failed to save attendance record in Zoho CRM',
+      errorDetails: data.errorDetails || data,
+    };
+  } catch (error: any) {
+    console.error('[Zoho CRM] Client exception while saving attendance record:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/save-attendance endpoint'
+    };
+  }
+}
+
+/**
+ * Deletes attendance record from Zoho CRM Daily_Attendance module.
+ */
+export async function deleteZohoAttendance(zohoId: string): Promise<ZohoApiResponse> {
+  try {
+    const response = await fetch(`/api/zoho/delete-attendance?id=${encodeURIComponent(zohoId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: zohoId }),
+    });
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        message: data.message || 'Attendance record deleted successfully from Zoho CRM',
+      };
+    }
+    return {
+      success: false,
+      message: data.message || 'Failed to delete attendance record from Zoho CRM',
+      errorDetails: data.errorDetails || data,
+    };
+  } catch (error: any) {
+    console.error('[Zoho CRM] Client exception while deleting attendance record:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/delete-attendance endpoint'
+    };
+  }
+}
+
+/**
+ * Formats ISO DateTime string (e.g. 2026-09-30T09:35:42+05:30) to human-readable 12-hour time (e.g. 09:35 AM).
+ */
+export function formatAttendanceTime(isoStr?: string | null): string {
+  if (!isoStr || !isoStr.trim()) return '--';
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) {
+      if (/^\d{1,2}:\d{2}/.test(isoStr)) return isoStr;
+      return '--';
+    }
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  } catch {
+    return isoStr;
+  }
+}
+
+/**
+ * Formats total working minutes into readable duration string (e.g. "8h 45m").
+ */
+export function formatAttendanceDuration(totalMinutes?: number | null): string {
+  if (totalMinutes === undefined || totalMinutes === null || isNaN(totalMinutes) || totalMinutes <= 0) {
+    return '--';
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = Math.round(totalMinutes % 60);
+  if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${mins}m`;
+}
+
+/**
+ * Parses comma/newline separated punches log into clean timestamp array.
+ */
+export function parsePunchesTimeline(punchesStr?: string | null): string[] {
+  if (!punchesStr || !punchesStr.trim()) return [];
+  return punchesStr
+    .split(/[,\n]/)
+    .map(p => p.trim())
+    .filter(Boolean);
 }
 
 /**

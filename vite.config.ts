@@ -2251,8 +2251,38 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const attFields = 'id,Name,Attendance_Date,Employee_Code,First_In,Last_Out,Punch_Status,Punches,Total_Minutes,Late_Minutes,Created_Time,Modified_Time';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&${buildZohoPaginationQuery(urlObj)}`;
+            const attFields = 'id,Name,Attendance_Date,Employee,Employee_Code,First_In,Last_Out,Mark_Attendance,Punch_Status,Punch_Count,Punches,Late_Minutes,Early_Out_Minutes,Total_Minutes,Owner,Email,Record_Image,Secondary_Email,Created_Time,Modified_Time';
+            
+            const dateParam = urlObj.searchParams.get('date') || urlObj.searchParams.get('attendance_date') || '';
+            const startDateParam = urlObj.searchParams.get('start_date') || urlObj.searchParams.get('startDate') || '';
+            const endDateParam = urlObj.searchParams.get('end_date') || urlObj.searchParams.get('endDate') || '';
+            const empCodeParam = urlObj.searchParams.get('employee_code') || urlObj.searchParams.get('emp_code') || '';
+            const modifiedSince = urlObj.searchParams.get('modified_since') || urlObj.searchParams.get('modified_time') || '';
+            const paginationQuery = buildZohoPaginationQuery(urlObj);
+
+            const criteriaParts: string[] = [];
+            if (startDateParam && endDateParam) {
+              criteriaParts.push(`(Attendance_Date:greater_equal:${startDateParam})`);
+              criteriaParts.push(`(Attendance_Date:less_equal:${endDateParam})`);
+            } else if (dateParam) {
+              criteriaParts.push(`(Attendance_Date:equals:${dateParam})`);
+            }
+            if (empCodeParam) {
+              criteriaParts.push(`(Employee_Code:equals:${empCodeParam})`);
+            }
+            if (modifiedSince) {
+              criteriaParts.push(`(Modified_Time:greater_equal:${modifiedSince})`);
+            }
+
+            let crmEndpoint: string;
+            if (criteriaParts.length > 1) {
+              const combined = criteriaParts.reduce((acc, curr) => `(${acc}and${curr})`);
+              crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(combined)}&fields=${attFields}&${paginationQuery}`;
+            } else if (criteriaParts.length === 1) {
+              crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteriaParts[0])}&fields=${attFields}&${paginationQuery}`;
+            } else {
+              crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&${paginationQuery}`;
+            }
 
             console.log(`[Vite Zoho Plugin] Fetching live Attendance from Zoho CRM (${moduleName})`);
 
@@ -2295,6 +2325,165 @@ function zohoApiPlugin(): Plugin {
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ success: false, message: err.message }));
           }
+        }
+
+        // Insert / Upsert Attendance record endpoint (Module API Name: Daily_Attendance)
+        if (pathname === '/api/zoho/save-attendance' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const record = JSON.parse(body || '{}');
+              let accessToken = await getAccessToken(env);
+              const moduleName = env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
+              const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+
+              const empCode = record.employeeCode || record.empCode || record.Employee_Code || 'EMP';
+              const attDate = record.attendanceDate || record.date || record.Attendance_Date || new Date().toISOString().split('T')[0];
+              const keyName = record.name || record.Name || `${empCode} - ${attDate}`;
+
+              const zohoPayload: Record<string, any> = {
+                Name: keyName,
+                Attendance_Date: attDate,
+                Employee_Code: empCode,
+                Mark_Attendance: record.markAttendance || record.status || record.Mark_Attendance || 'Present',
+                Punch_Status: record.punchStatus || record.Punch_Status || (record.lastOut ? 'Complete' : 'Single Punch'),
+                Punch_Count: record.punchCount !== undefined ? Number(record.punchCount) : (record.lastOut ? 2 : 1),
+                Punches: record.punches || record.punchesLog || record.Punches || '',
+                Late_Minutes: Number(record.lateMinutes ?? record.Late_Minutes ?? 0),
+                Early_Out_Minutes: Number(record.earlyOutMinutes ?? record.Early_Out_Minutes ?? 0),
+                Total_Minutes: Number(record.totalMinutes ?? record.Total_Minutes ?? 0),
+              };
+
+              if (record.firstIn || record.First_In) {
+                zohoPayload.First_In = record.firstIn || record.First_In;
+              }
+              if (record.lastOut || record.Last_Out) {
+                zohoPayload.Last_Out = record.lastOut || record.Last_Out;
+              }
+              if (record.employeeZohoId || (record.Employee && typeof record.Employee === 'object' && record.Employee.id)) {
+                zohoPayload.Employee = { id: record.employeeZohoId || record.Employee.id };
+              }
+
+              const isUpdate = Boolean(record.zohoId || (record.id && /^\d+$/.test(String(record.id))));
+              const targetZohoId = record.zohoId || record.id;
+              const crmEndpoint = isUpdate 
+                ? `${apiBase}/crm/v8/${moduleName}/${targetZohoId}`
+                : `${apiBase}/crm/v8/${moduleName}/upsert`;
+
+              console.log(`[Vite Zoho Plugin] ${isUpdate ? 'Updating' : 'Upserting'} Attendance record in Zoho CRM (${moduleName})`);
+
+              const requestBody: any = isUpdate
+                ? { data: [zohoPayload] }
+                : { data: [zohoPayload], duplicate_check_fields: ['Name'] };
+
+              let crmRes = await fetch(crmEndpoint, {
+                method: isUpdate ? 'PUT' : 'POST',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+              });
+
+              let crmData: any = await crmRes.json();
+
+              if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+                cachedToken = null;
+                accessToken = await getAccessToken(env);
+                crmRes = await fetch(crmEndpoint, {
+                  method: isUpdate ? 'PUT' : 'POST',
+                  headers: {
+                    'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(requestBody),
+                });
+                crmData = await crmRes.json();
+              }
+
+              res.setHeader('Content-Type', 'application/json');
+              if (crmData.data?.[0]?.code === 'SUCCESS') {
+                const zohoId = crmData.data[0].details?.id;
+                return res.end(JSON.stringify({
+                  success: true,
+                  zohoId,
+                  message: isUpdate ? 'Attendance updated in Zoho CRM' : 'Attendance saved in Zoho CRM',
+                  data: crmData.data[0],
+                }));
+              } else {
+                res.statusCode = 400;
+                const errMsg = crmData.data?.[0]?.message || crmData.message || 'Failed to save attendance in Zoho CRM';
+                return res.end(JSON.stringify({
+                  success: false,
+                  message: errMsg,
+                  errorDetails: crmData,
+                }));
+              }
+            } catch (err: any) {
+              console.error('[Vite Zoho Plugin] Save Attendance error:', err);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+          });
+          return;
+        }
+
+        // Delete Attendance record endpoint
+        if (pathname === '/api/zoho/delete-attendance' && (req.method === 'DELETE' || req.method === 'POST')) {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const record = JSON.parse(body || '{}');
+              const zohoId = urlObj.searchParams.get('id') || record.id || record.zohoId;
+              if (!zohoId) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ success: false, message: 'Missing record ID to delete' }));
+              }
+
+              let accessToken = await getAccessToken(env);
+              const moduleName = env.VITE_ZOHO_ATTENDANCE_MODULE_NAME || 'Daily_Attendance';
+              const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+              const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${zohoId}`;
+
+              let crmRes = await fetch(crmEndpoint, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+              });
+              let crmData: any = await crmRes.json();
+
+              if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
+                cachedToken = null;
+                accessToken = await getAccessToken(env);
+                crmRes = await fetch(crmEndpoint, {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                });
+                crmData = await crmRes.json();
+              }
+
+              res.setHeader('Content-Type', 'application/json');
+              if (crmData?.data?.[0]?.code === 'SUCCESS') {
+                return res.end(JSON.stringify({ success: true, message: 'Attendance record deleted from Zoho CRM' }));
+              } else {
+                res.statusCode = 400;
+                return res.end(JSON.stringify({
+                  success: false,
+                  message: crmData?.data?.[0]?.message || crmData?.message || 'Failed to delete attendance record from Zoho CRM',
+                  errorDetails: crmData,
+                }));
+              }
+            } catch (err: any) {
+              console.error('[Vite Zoho Plugin] Delete Attendance error:', err);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+          });
+          return;
         }
 
         // Fetch / Get Raised Queries / Cases endpoint (Module API Name: Cases)
