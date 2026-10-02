@@ -22,7 +22,9 @@ import {
   UserX,
   AlertTriangle,
   ArrowUpDown,
-  Send
+  Send,
+  CalendarDays,
+  Layers
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
@@ -79,6 +81,30 @@ export const Attendance = () => {
   const isFullAdmin = isSuperAdmin || isHR;
   const isTeamLead = !isFullAdmin && (isTL || currentUser.role === 'TL');
 
+  // Employee list from local storage
+  const allEmployees = useMemo(() => {
+    try {
+      const emps = localStorage.getItem('be_employees');
+      return emps ? JSON.parse(emps) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Employee lookup map for fast name & dept resolution
+  const employeeMap = useMemo(() => {
+    const map = new Map<string, any>();
+    allEmployees.forEach((emp: any) => {
+      if (emp.id) map.set(String(emp.id).toLowerCase(), emp);
+      if (emp.empId) map.set(String(emp.empId).toLowerCase(), emp);
+      if (emp.Employment_ID) map.set(String(emp.Employment_ID).toLowerCase(), emp);
+      if (emp.Employee_Code) map.set(String(emp.Employee_Code).toLowerCase(), emp);
+      if (emp.formData?.employmentId) map.set(String(emp.formData.employmentId).toLowerCase(), emp);
+      if (emp.formData?.employeeId) map.set(String(emp.formData.employeeId).toLowerCase(), emp);
+    });
+    return map;
+  }, [allEmployees]);
+
   // Load from local storage and sync with Zoho
   const loadLocalAttendance = (): AttendanceItem[] => {
     try {
@@ -96,10 +122,15 @@ export const Attendance = () => {
   };
 
   const normalizeRecord = (item: any): AttendanceItem => {
-    const empCode = item.Employee_Code || item.empId || (item.Name ? item.Name.split(' - ')[0] : 'EMP');
-    const attDate = item.Attendance_Date || item.date || (item.Name && item.Name.includes(' - ') ? item.Name.split(' - ')[1] : new Date().toISOString().split('T')[0]);
+    const empCode = String(item.Employee_Code || item.empId || (item.Name ? item.Name.split(' - ')[0] : 'EMP')).trim();
+    const attDate = String(item.Attendance_Date || item.date || (item.Name && item.Name.includes(' - ') ? item.Name.split(' - ')[1] : new Date().toISOString().split('T')[0])).trim();
     const name = item.Name || item.name || `${empCode} - ${attDate}`;
-    const empName = item.empName || item.Employee?.name || `Employee ${empCode}`;
+    
+    // Resolve employee name from employeeMap or item
+    const matchedEmp = employeeMap.get(empCode.toLowerCase());
+    const empName = matchedEmp?.name || (item.Employee && item.Employee.name) || item.empName || `Employee ${empCode}`;
+    const department = matchedEmp?.department || matchedEmp?.formData?.department || item.department || '';
+    const email = matchedEmp?.email || matchedEmp?.formData?.email || item.Email || item.email || '';
     
     let status: AttendanceItem['status'] = 'Present';
     const markAtt = item.Mark_Attendance || item.status || '';
@@ -132,31 +163,27 @@ export const Attendance = () => {
       lateMinutes: lateMin,
       earlyOutMinutes: earlyOutMin,
       totalMinutes: totalMin,
-      department: item.department || '',
-      email: item.Email || item.email || '',
+      department,
+      email,
       ownerName: item.Owner?.name || item.ownerName || '',
       raw: item
     };
   };
 
-  const handleFetchAttendance = async (showNotification = true, specificDate?: string) => {
+  const handleFetchAttendance = async (showNotification = true, forceAll = true) => {
     setIsFetchingZoho(true);
     try {
-      const dateToQuery = specificDate !== undefined ? specificDate : (isAllDates ? undefined : selectedDate);
-      const res = await fetchZohoAttendance(dateToQuery ? { date: dateToQuery } : undefined);
+      const res = await fetchZohoAttendance({ fetch_all: forceAll });
 
-      if (res.success && Array.isArray(res.data)) {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         const fetchedItems: AttendanceItem[] = res.data.map(normalizeRecord);
 
         setRecords(prev => {
-          // Merge by unique key: `name` or `zohoId` or `${empId}-${date}`
           const keyMap = new Map<string, AttendanceItem>();
-          // Existing items
           prev.forEach(item => {
             const key = `${item.empId}_${item.date}`;
             keyMap.set(key, item);
           });
-          // Overwrite / append with latest Zoho records
           fetchedItems.forEach(item => {
             const key = `${item.empId}_${item.date}`;
             keyMap.set(key, item);
@@ -167,18 +194,27 @@ export const Attendance = () => {
           return merged;
         });
 
+        // Smart default: If selectedDate has no records or today has no records, select the latest date with records
+        const uniqueDates = [...new Set(fetchedItems.map(r => r.date).filter(Boolean))].sort().reverse();
+        if (uniqueDates.length > 0) {
+          setSelectedDate(prev => {
+            const hasPrev = fetchedItems.some(r => r.date === prev);
+            return hasPrev ? prev : uniqueDates[0];
+          });
+        }
+
         if (showNotification) {
           setToast({
             type: 'success',
-            message: `Synced ${res.data.length} Attendance Records with Zoho CRM`,
-            submessage: dateToQuery ? `Filtered for date: ${dateToQuery}` : 'All Daily Attendance records updated'
+            message: `Synced ${res.data.length} Attendance Records from Zoho CRM`,
+            submessage: `Found records across ${uniqueDates.length} dates (Latest: ${uniqueDates[0] || 'N/A'})`
           });
         }
       } else if (showNotification) {
         setToast({
           type: 'info',
-          message: 'No Zoho Attendance Records Found',
-          submessage: res.message || 'No records returned for the requested period'
+          message: 'No Attendance Records Found',
+          submessage: res.message || 'No records returned from Zoho CRM module Daily_Attendance'
         });
       }
     } catch (e: any) {
@@ -198,9 +234,13 @@ export const Attendance = () => {
     const localData = loadLocalAttendance();
     if (localData.length > 0) {
       setRecords(localData);
+      const uniqueDates = [...new Set(localData.map(r => r.date).filter(Boolean))].sort().reverse();
+      if (uniqueDates.length > 0) {
+        setSelectedDate(uniqueDates[0]);
+      }
     }
     // Fetch live Zoho attendance on initial load
-    handleFetchAttendance(false);
+    handleFetchAttendance(false, true);
   }, []);
 
   useEffect(() => {
@@ -210,22 +250,25 @@ export const Attendance = () => {
     }
   }, [toast]);
 
-  // Employee list from local storage
-  const allEmployees = useMemo(() => {
-    try {
-      const emps = localStorage.getItem('be_employees');
-      return emps ? JSON.parse(emps) : [];
-    } catch {
-      return [];
-    }
-  }, []);
+  // List of all unique dates present in records with counts
+  const availableDates = useMemo(() => {
+    const map = new Map<string, number>();
+    records.forEach(r => {
+      if (r.date) {
+        map.set(r.date, (map.get(r.date) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [records]);
 
   // Filter employees according to user's role permissions
   const visibleEmployees = useMemo(() => {
     if (isFullAdmin) return allEmployees;
     if (isTeamLead) {
       return allEmployees.filter((e: any) => {
-        const isSelf = e.id === currentUser.id || e.id === currentUser.empId || e.name?.toLowerCase() === currentUser.name?.toLowerCase();
+        const isSelf = e.id === currentUser.id || e.empId === currentUser.empId || e.name?.toLowerCase() === currentUser.name?.toLowerCase();
         const isSubordinate =
           e.teamLeaderId === currentUser.id ||
           e.teamLeaderId === currentUser.empId ||
@@ -235,10 +278,9 @@ export const Attendance = () => {
         return isSelf || isSubordinate;
       });
     }
-    // Team member view
     const filtered = allEmployees.filter((e: any) =>
       e.id === currentUser.id ||
-      e.id === currentUser.empId ||
+      e.empId === currentUser.empId ||
       (e.email && currentUser.email && (e.email ?? '').trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
       (e.name && currentUser.name && (e.name ?? '').trim().toLowerCase() === (currentUser.name ?? '').trim().toLowerCase())
     );
@@ -256,11 +298,20 @@ export const Attendance = () => {
       list = list.filter(r => r.date === selectedDate);
     }
 
-    // Filter by Role / Access
-    if (!isFullAdmin) {
-      const allowedEmpIds = new Set(visibleEmployees.map((e: any) => String(e.id)));
+    // Filter by Role / Access (if non-admin)
+    if (!isFullAdmin && currentUser) {
+      const allowedEmpIds = new Set(visibleEmployees.map((e: any) => String(e.id).toLowerCase()));
+      const allowedCodes = new Set(visibleEmployees.map((e: any) => String(e.empId || e.Employment_ID || e.formData?.employmentId || '').toLowerCase()).filter(Boolean));
       const allowedNames = new Set(visibleEmployees.map((e: any) => (e.name || '').toLowerCase()));
-      list = list.filter(r => allowedEmpIds.has(String(r.empId)) || allowedNames.has((r.empName || '').toLowerCase()));
+      
+      const filtered = list.filter(r => 
+        allowedEmpIds.has(String(r.empId).toLowerCase()) || 
+        allowedCodes.has(String(r.empId).toLowerCase()) ||
+        allowedNames.has((r.empName || '').toLowerCase())
+      );
+      if (filtered.length > 0) {
+        list = filtered;
+      }
     }
 
     // Filter by Status
@@ -286,19 +337,19 @@ export const Attendance = () => {
     }
 
     return list;
-  }, [records, isAllDates, selectedDate, isFullAdmin, visibleEmployees, statusFilter, punchFilter, searchQuery]);
+  }, [records, isAllDates, selectedDate, isFullAdmin, currentUser, visibleEmployees, statusFilter, punchFilter, searchQuery]);
 
   // Statistics calculation for KPI cards
   const stats = useMemo(() => {
-    const totalStaff = visibleEmployees.length || 1;
-    const dateRecords = records.filter(r => r.date === selectedDate);
-    const presentCount = dateRecords.filter(r => r.status === 'Present' || r.status === 'Late' || r.status === 'On Duty').length;
-    const lateCount = dateRecords.filter(r => r.status === 'Late' || r.lateMinutes > 0).length;
-    const earlyOutCount = dateRecords.filter(r => r.earlyOutMinutes > 0).length;
-    const singlePunchCount = dateRecords.filter(r => r.punchStatus === 'Single Punch' || (r.firstIn && !r.lastOut)).length;
-    const absentCount = dateRecords.filter(r => r.status === 'Absent').length;
+    const scopeRecords = isAllDates ? records : records.filter(r => r.date === selectedDate);
+    const totalStaff = scopeRecords.length || visibleEmployees.length || 0;
+    const presentCount = scopeRecords.filter(r => r.status === 'Present' || r.status === 'Late' || r.status === 'On Duty').length;
+    const lateCount = scopeRecords.filter(r => r.status === 'Late' || r.lateMinutes > 0).length;
+    const earlyOutCount = scopeRecords.filter(r => r.earlyOutMinutes > 0).length;
+    const singlePunchCount = scopeRecords.filter(r => r.punchStatus === 'Single Punch' || (r.firstIn && !r.lastOut)).length;
+    const absentCount = scopeRecords.filter(r => r.status === 'Absent').length;
 
-    const totalMinutesLogged = dateRecords.reduce((sum, r) => sum + (r.totalMinutes || 0), 0);
+    const totalMinutesLogged = scopeRecords.reduce((sum, r) => sum + (r.totalMinutes || 0), 0);
     const avgMinutes = presentCount > 0 ? Math.round(totalMinutesLogged / presentCount) : 0;
 
     return {
@@ -311,7 +362,7 @@ export const Attendance = () => {
       absentCount,
       avgWorkingHours: formatAttendanceDuration(avgMinutes)
     };
-  }, [visibleEmployees, records, selectedDate]);
+  }, [records, isAllDates, selectedDate, visibleEmployees]);
 
   // Handle Quick Status Change
   const handleQuickStatusChange = async (item: AttendanceItem, newStatus: AttendanceItem['status']) => {
@@ -326,7 +377,6 @@ export const Attendance = () => {
       punchStatus: newStatus === 'Absent' ? 'Absent' : item.punchStatus,
     };
 
-    // Update locally
     const updated = records.map(r => (r.id === item.id || (r.empId === item.empId && r.date === item.date)) ? updatedItem : r);
     setRecords(updated);
     localStorage.setItem('be_attendance', JSON.stringify(updated));
@@ -380,8 +430,8 @@ export const Attendance = () => {
       setEditingRecord({ ...item });
     } else {
       setEditingRecord({
-        empId: visibleEmployees[0]?.id || 'EMP-101',
-        empName: visibleEmployees[0]?.name || 'Employee',
+        empId: visibleEmployees[0]?.id || '255',
+        empName: visibleEmployees[0]?.name || 'Employee 255',
         date: selectedDate,
         status: 'Present',
         punchStatus: 'Complete',
@@ -491,16 +541,6 @@ export const Attendance = () => {
     d.setDate(d.getDate() + days);
     const newDateStr = d.toISOString().split('T')[0];
     setSelectedDate(newDateStr);
-    handleFetchAttendance(false, newDateStr);
-  };
-
-  const setDateShortcut = (type: 'today' | 'yesterday') => {
-    setIsAllDates(false);
-    const d = new Date();
-    if (type === 'yesterday') d.setDate(d.getDate() - 1);
-    const dateStr = d.toISOString().split('T')[0];
-    setSelectedDate(dateStr);
-    handleFetchAttendance(false, dateStr);
   };
 
   // Export to CSV
@@ -554,7 +594,7 @@ export const Attendance = () => {
     document.body.removeChild(link);
   };
 
-  // Status Styling Badge
+  // Status Styling Badges
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Present':
@@ -634,8 +674,9 @@ export const Attendance = () => {
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">
               {isFullAdmin ? 'Daily Attendance Management' : isTeamLead ? 'Team Daily Attendance' : 'My Daily Attendance'}
             </h1>
-            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-orange-50 text-be-orange border border-orange-200">
-              Zoho CRM v8 Integrated
+            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-orange-50 text-be-orange border border-orange-200 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              {records.length} Records in Zoho CRM
             </span>
           </div>
           <p className="text-gray-500 text-sm mt-1">
@@ -649,41 +690,6 @@ export const Attendance = () => {
 
         {/* Date Selector & Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto">
-          {/* Quick Date Pills */}
-          <div className="flex items-center bg-gray-100/80 p-1 rounded-xl border border-gray-200 text-xs font-semibold">
-            <button
-              onClick={() => setDateShortcut('today')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                !isAllDates && selectedDate === new Date().toISOString().split('T')[0]
-                  ? 'bg-white text-gray-900 shadow-sm font-bold'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setDateShortcut('yesterday')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                !isAllDates && selectedDate === new Date(Date.now() - 86400000).toISOString().split('T')[0]
-                  ? 'bg-white text-gray-900 shadow-sm font-bold'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Yesterday
-            </button>
-            <button
-              onClick={() => {
-                setIsAllDates(!isAllDates);
-                if (!isAllDates) handleFetchAttendance(false);
-              }}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                isAllDates ? 'bg-be-orange text-white shadow-sm font-bold' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              All Dates
-            </button>
-          </div>
-
           {/* Date Picker with Prev/Next Controls */}
           <div className={`flex items-center bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 shadow-sm ${isAllDates ? 'opacity-50 pointer-events-none' : ''}`}>
             <button
@@ -701,7 +707,6 @@ export const Attendance = () => {
                 onChange={e => {
                   setIsAllDates(false);
                   setSelectedDate(e.target.value);
-                  handleFetchAttendance(false, e.target.value);
                 }}
                 className="outline-none text-xs font-bold text-gray-800 bg-transparent cursor-pointer"
               />
@@ -717,10 +722,10 @@ export const Attendance = () => {
 
           {/* Zoho Sync Button */}
           <button
-            onClick={() => handleFetchAttendance(true)}
+            onClick={() => handleFetchAttendance(true, true)}
             disabled={isFetchingZoho}
-            className="px-4 py-2 border border-orange-200 bg-orange-50/60 hover:bg-orange-100/80 text-orange-950 rounded-xl text-xs font-bold flex items-center shadow-sm transition-all disabled:opacity-60"
-            title="Fetch live records directly from Zoho CRM Daily_Attendance module"
+            className="px-4 py-2 border border-orange-200 bg-orange-50/70 hover:bg-orange-100 text-orange-950 rounded-xl text-xs font-bold flex items-center shadow-sm transition-all disabled:opacity-60"
+            title="Fetch all 450+ records directly from Zoho CRM Daily_Attendance module"
           >
             <RefreshCw size={14} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
             {isFetchingZoho ? 'Syncing...' : 'Sync Zoho CRM'}
@@ -747,6 +752,42 @@ export const Attendance = () => {
         </div>
       </div>
 
+      {/* Available Dates Quick Filter Bar */}
+      {availableDates.length > 0 && (
+        <div className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-2 overflow-x-auto">
+          <span className="text-xs font-bold text-gray-500 flex items-center shrink-0 mr-1">
+            <CalendarDays size={14} className="mr-1.5 text-be-orange" /> Available Dates:
+          </span>
+          <button
+            onClick={() => setIsAllDates(true)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              isAllDates
+                ? 'bg-be-orange text-white shadow-sm'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <Layers size={13} />
+            All Dates ({records.length})
+          </button>
+          {availableDates.map(({ date, count }) => (
+            <button
+              key={date}
+              onClick={() => {
+                setIsAllDates(false);
+                setSelectedDate(date);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                !isAllDates && selectedDate === date
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-gray-100/90 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {date} <span className="text-[10px] opacity-75 font-mono">({count})</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* KPI Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
@@ -756,13 +797,13 @@ export const Attendance = () => {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-black text-gray-900">{stats.totalStaff}</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">Active Directory</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">{isAllDates ? 'All Dates Combined' : `Date: ${selectedDate}`}</p>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-500">
-            <span className="text-xs font-semibold uppercase tracking-wider">Present Today</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Present</span>
             <span className="p-2 rounded-xl bg-emerald-50 text-emerald-600"><CheckCircle2 size={16} /></span>
           </div>
           <div className="mt-2">
@@ -783,7 +824,7 @@ export const Attendance = () => {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-black text-amber-600">{stats.lateCount}</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">After 09:30 AM</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">Late arrival minutes</p>
           </div>
         </div>
 
@@ -1068,32 +1109,35 @@ export const Attendance = () => {
                       <div className="flex flex-col items-center justify-center py-4">
                         <Loader2 className="w-8 h-8 animate-spin text-be-orange mb-3" />
                         <p className="text-sm font-bold text-gray-900">Synchronizing Daily Attendance with Zoho CRM...</p>
-                        <p className="text-xs text-gray-400 mt-1">Connecting to module Daily_Attendance</p>
+                        <p className="text-xs text-gray-400 mt-1">Fetching records across all pages</p>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center py-6">
                         <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-be-orange mb-3">
                           <CalendarIcon size={24} />
                         </div>
-                        <p className="text-base font-bold text-gray-900">No Attendance Records Found</p>
+                        <p className="text-base font-bold text-gray-900">No Attendance Records for {selectedDate}</p>
                         <p className="text-xs text-gray-400 mt-1 max-w-sm">
-                          {isAllDates
-                            ? 'No attendance records logged yet. Click "Sync Zoho CRM" or "Log Attendance".'
-                            : `No attendance records logged for date ${selectedDate}. You can change the date or sync with Zoho.`}
+                          {availableDates.length > 0
+                            ? `Found ${records.length} records on other dates (e.g. ${availableDates[0]?.date}). Click an available date button above or "All Dates".`
+                            : 'No attendance records stored yet. Click "Sync Zoho CRM" to load live records.'}
                         </p>
                         <div className="mt-4 flex items-center space-x-3">
                           <button
-                            onClick={() => handleFetchAttendance(true)}
+                            onClick={() => handleFetchAttendance(true, true)}
                             className="px-4 py-2 border border-orange-200 bg-orange-50 text-be-orange rounded-xl text-xs font-bold shadow-xs hover:bg-orange-100 transition-colors"
                           >
-                            Fetch from Zoho
+                            Sync from Zoho CRM
                           </button>
-                          {canMarkAttendance && (
+                          {availableDates.length > 0 && (
                             <button
-                              onClick={() => handleOpenEditModal()}
-                              className="px-4 py-2 bg-be-orange text-white rounded-xl text-xs font-bold shadow-xs hover:bg-orange-600 transition-colors"
+                              onClick={() => {
+                                setIsAllDates(false);
+                                setSelectedDate(availableDates[0].date);
+                              }}
+                              className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-xs hover:bg-slate-800 transition-colors"
                             >
-                              Log First Entry
+                              View Latest Date ({availableDates[0].date})
                             </button>
                           )}
                         </div>
@@ -1148,25 +1192,22 @@ export const Attendance = () => {
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">
                       Employee <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <input
+                      type="text"
+                      placeholder="e.g. 255"
                       value={editingRecord.empId || ''}
                       onChange={e => {
-                        const selectedEmp = visibleEmployees.find((emp: any) => String(emp.id) === e.target.value);
+                        const val = e.target.value;
+                        const matched = employeeMap.get(val.toLowerCase());
                         setEditingRecord(prev => ({
                           ...prev,
-                          empId: e.target.value,
-                          empName: selectedEmp ? selectedEmp.name : prev?.empName
+                          empId: val,
+                          empName: matched ? matched.name : prev?.empName
                         }));
                       }}
                       className="w-full px-3.5 py-2.5 text-xs font-semibold border border-gray-200 rounded-xl focus:outline-none focus:border-be-orange bg-gray-50/40"
                       required
-                    >
-                      {visibleEmployees.map((emp: any) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.name} ({emp.id})
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   {/* Attendance Date */}
@@ -1226,7 +1267,7 @@ export const Attendance = () => {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. 2026-10-02T09:30:00+05:30"
+                      placeholder="e.g. 2026-09-30T09:30:00+05:30"
                       value={editingRecord.firstIn || ''}
                       onChange={e => setEditingRecord(prev => ({ ...prev, firstIn: e.target.value }))}
                       className="w-full px-3.5 py-2.5 text-xs font-mono border border-gray-200 rounded-xl focus:outline-none focus:border-be-orange bg-gray-50/40"
@@ -1240,7 +1281,7 @@ export const Attendance = () => {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. 2026-10-02T18:30:00+05:30"
+                      placeholder="e.g. 2026-09-30T18:30:00+05:30"
                       value={editingRecord.lastOut || ''}
                       onChange={e => setEditingRecord(prev => ({ ...prev, lastOut: e.target.value }))}
                       className="w-full px-3.5 py-2.5 text-xs font-mono border border-gray-200 rounded-xl focus:outline-none focus:border-be-orange bg-gray-50/40"

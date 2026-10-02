@@ -1744,7 +1744,7 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       const endDateParam = urlObj.searchParams.get('end_date') || urlObj.searchParams.get('endDate') || '';
       const empCodeParam = urlObj.searchParams.get('employee_code') || urlObj.searchParams.get('emp_code') || '';
       const modifiedSince = urlObj.searchParams.get('modified_since') || urlObj.searchParams.get('modified_time') || '';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const fetchAll = urlObj.searchParams.get('fetch_all') === 'true' || (!urlObj.searchParams.get('page') && !urlObj.searchParams.get('page_token'));
 
       const criteriaParts: string[] = [];
       if (startDateParam && endDateParam) {
@@ -1760,15 +1760,74 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         criteriaParts.push(`(Modified_Time:greater_equal:${modifiedSince})`);
       }
 
-      let crmEndpoint: string;
+      let baseEndpoint: string;
       if (criteriaParts.length > 1) {
         const combined = criteriaParts.reduce((acc, curr) => `(${acc}and${curr})`);
-        crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(combined)}&fields=${attFields}&${paginationQuery}`;
+        baseEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(combined)}&fields=${attFields}`;
       } else if (criteriaParts.length === 1) {
-        crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteriaParts[0])}&fields=${attFields}&${paginationQuery}`;
+        baseEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteriaParts[0])}&fields=${attFields}`;
       } else {
-        crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&${paginationQuery}`;
+        baseEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}`;
       }
+
+      if (fetchAll) {
+        let allRecords: any[] = [];
+        let pageToken: string | null = null;
+        let page = 1;
+        let hasMore = true;
+        let lastInfo: any = null;
+
+        while (hasMore && page <= 30) {
+          const sep = baseEndpoint.includes('?') ? '&' : '?';
+          let pageUrl = `${baseEndpoint}${sep}per_page=200`;
+          if (pageToken) {
+            pageUrl += `&page_token=${encodeURIComponent(pageToken)}`;
+          } else if (page > 1) {
+            pageUrl += `&page=${page}`;
+          }
+
+          let crmRes = await fetch(pageUrl, {
+            method: 'GET',
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+          });
+          let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+
+          if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
+            cachedToken = null;
+            accessToken = await getAccessToken();
+            crmRes = await fetch(pageUrl, {
+              method: 'GET',
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            });
+            crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+          }
+
+          if (crmData?.data && Array.isArray(crmData.data)) {
+            allRecords = allRecords.concat(crmData.data);
+            lastInfo = crmData.info;
+            if (crmData.info?.next_page_token) {
+              pageToken = crmData.info.next_page_token;
+              page++;
+            } else if (crmData.info?.more_records) {
+              page++;
+            } else {
+              hasMore = false;
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          data: allRecords,
+          info: { ...lastInfo, count: allRecords.length }
+        });
+      }
+
+      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+      const sep = baseEndpoint.includes('?') ? '&' : '?';
+      const crmEndpoint = `${baseEndpoint}${sep}${paginationQuery}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',
