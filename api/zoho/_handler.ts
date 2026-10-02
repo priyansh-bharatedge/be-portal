@@ -1017,11 +1017,40 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    // 4. Get Deals
+    // 4. Get Single Deal or Deals List
+    if ((action === 'get-deal' || (action === 'get-deals' && (urlObj.searchParams.get('id') || urlObj.searchParams.get('deal_id')))) && method === 'GET') {
+      let accessToken = await getAccessToken();
+      const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
+      const dealId = urlObj.searchParams.get('id') || urlObj.searchParams.get('deal_id');
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${dealId}`;
+
+      let crmRes = await fetch(crmEndpoint, {
+        method: 'GET',
+        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+      });
+      let crmData: any = await crmRes.json();
+
+      if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+        cachedToken = null;
+        accessToken = await getAccessToken();
+        crmRes = await fetch(crmEndpoint, {
+          method: 'GET',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+        });
+        crmData = await crmRes.json();
+      }
+
+      if (crmData.data) {
+        return sendJson(res, 200, { success: true, data: crmData.data });
+      } else {
+        return sendJson(res, 400, { success: false, message: crmData.message || 'Failed to fetch deal from Zoho CRM', errorDetails: crmData });
+      }
+    }
+
     if (action === 'get-deals' && method === 'GET') {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
-      const dealFields = 'id,Deal_Name,Name1,Amount,Amount_Without_GST,GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Total_deal_amount_inclusive_of_gst,Stage,Pipeline,Closing_Date,Booking_Date,Date,Company_name,Company_Name,Account_Name,Client_Name,Contact_Name,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Billing_address,Created_Time,Modified_Time,Choose_Wisely,Branches,Subform_1';
+      const dealFields = 'id,Deal_Name,Client_Name,Clients,Contact_Name,Company,Company_name,Company_name_bp,Company_name_cs,Company_name_st,Company_Name,Account_Name,Amount,Amount_Without_GST,GST_Amount,Total_deal_amount_inclusive_of_gst,Total_Received_Amount,Total_Pending_Amount,Received_amount,Pending_amount,Deal_Amount,Deal_Amount_Without_GST,Deal_GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Stage,Status,Choose_Wisely,Service_Name,Owner,Created_By,Closing_Date,Booking_Date,Date,Created_Time,Modified_Time,Client_contact_detail,Mobile,Phone,Client_Email_address,Email,Gst_number,Pan_number,Billing_address,City,State,Branches,Bank_details';
       const paginationQuery = buildZohoPaginationQuery(req, urlObj);
       const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${paginationQuery}`;
 
@@ -1878,6 +1907,115 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       } else {
         const errMsg = crmData.data?.[0]?.message || crmData.message || 'Failed to delete record in Zoho CRM';
         return sendJson(res, 400, { success: false, message: errMsg, errorDetails: crmData });
+      }
+    }
+
+    // 19b. Get Attachments
+    if (action === 'get-attachments' && method === 'GET') {
+      try {
+        const recordId = urlObj.searchParams.get('recordId') || urlObj.searchParams.get('id') || urlObj.searchParams.get('deal_id') || '';
+        const moduleName = urlObj.searchParams.get('module') || 'Deals';
+
+        if (!recordId) {
+          return sendJson(res, 400, { success: false, message: 'recordId is required to fetch attachments' });
+        }
+
+        let accessToken = await getAccessToken();
+        const attFields = 'id,File_Name,Size,Created_Time,Modified_Time,Created_By,$type,$attachment_type,$file_id,$link_url,Parent_Id';
+        const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=${attFields}`;
+
+        let crmRes = await fetch(crmEndpoint, {
+          method: 'GET',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+        });
+
+        if (crmRes.status === 204) {
+          return sendJson(res, 200, { success: true, data: [] });
+        }
+
+        let crmData: any = await crmRes.json();
+
+        if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+          cachedToken = null;
+          accessToken = await getAccessToken();
+          crmRes = await fetch(crmEndpoint, {
+            method: 'GET',
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+          });
+          if (crmRes.status === 204) {
+            return sendJson(res, 200, { success: true, data: [] });
+          }
+          crmData = await crmRes.json();
+        }
+
+        if (crmData.data) {
+          return sendJson(res, 200, {
+            success: true,
+            data: crmData.data,
+            info: crmData.info,
+          });
+        } else if (crmData.code === 'NO_CONTENT' || crmData.code === 'RECORD_NOT_FOUND') {
+          return sendJson(res, 200, { success: true, data: [] });
+        } else {
+          return sendJson(res, 400, {
+            success: false,
+            message: crmData.message || 'Failed to fetch attachments from Zoho CRM',
+            errorDetails: crmData,
+          });
+        }
+      } catch (err: any) {
+        return sendJson(res, 500, { success: false, message: err.message });
+      }
+    }
+
+    // 19c. Download Attachment
+    if (action === 'download-attachment' && method === 'GET') {
+      try {
+        const recordId = urlObj.searchParams.get('recordId') || urlObj.searchParams.get('id') || '';
+        const attachmentId = urlObj.searchParams.get('attachmentId') || urlObj.searchParams.get('attId') || '';
+        const moduleName = urlObj.searchParams.get('module') || 'Deals';
+        const isPreview = urlObj.searchParams.get('preview') === 'true';
+
+        if (!recordId || !attachmentId) {
+          return sendJson(res, 400, { success: false, message: 'Both "recordId" and "attachmentId" are required' });
+        }
+
+        let accessToken = await getAccessToken();
+        const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments/${attachmentId}`;
+
+        let crmRes = await fetch(crmEndpoint, {
+          method: 'GET',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+        });
+
+        if (crmRes.status === 401) {
+          cachedToken = null;
+          accessToken = await getAccessToken();
+          crmRes = await fetch(crmEndpoint, {
+            method: 'GET',
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+          });
+        }
+
+        if (!crmRes.ok) {
+          const errText = await crmRes.text();
+          return sendJson(res, crmRes.status, { success: false, message: 'Failed to download attachment from Zoho CRM', details: errText });
+        }
+
+        const contentType = crmRes.headers.get('content-type') || 'application/octet-stream';
+        const contentDisp = crmRes.headers.get('content-disposition') || (isPreview ? 'inline' : `attachment; filename="attachment-${attachmentId}"`);
+        const contentLength = crmRes.headers.get('content-length');
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', isPreview ? 'inline' : contentDisp);
+        if (contentLength) res.setHeader('Content-Length', contentLength);
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+
+        const arrayBuf = await crmRes.arrayBuffer();
+        return res.end(Buffer.from(arrayBuf));
+      } catch (err: any) {
+        return sendJson(res, 500, { success: false, message: err.message });
       }
     }
 

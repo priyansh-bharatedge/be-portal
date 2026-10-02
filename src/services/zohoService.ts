@@ -45,8 +45,9 @@ export interface ZohoApiResponse {
   success: boolean;
   zohoId?: string;
   attachmentId?: string;
-  message: string;
+  message?: string;
   data?: any;
+  info?: any;
   errorDetails?: any;
 }
 
@@ -208,6 +209,108 @@ export async function uploadZohoAttachment(
       errorDetails: error,
     };
   }
+}
+
+/**
+ * Fetches all attachments for a Zoho CRM record.
+ * Endpoint: GET /api/zoho/get-attachments?module={module}&recordId={recordId}
+ */
+export async function fetchZohoAttachments(
+  module: string = 'Deals',
+  recordId: string
+): Promise<ZohoApiResponse> {
+  if (!recordId) {
+    return { success: false, message: 'recordId is required to fetch attachments' };
+  }
+  try {
+    const qs = new URLSearchParams({ module, recordId }).toString();
+    const response = await fetch(`/api/zoho/get-attachments?${qs}`, {
+      method: 'GET',
+    });
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        data: data.data || [],
+        info: data.info,
+      };
+    } else {
+      return {
+        success: false,
+        message: data.message || 'Failed to fetch attachments from Zoho CRM',
+        errorDetails: data.errorDetails || data,
+      };
+    }
+  } catch (error: any) {
+    console.error('[Zoho CRM] Error fetching attachments:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error fetching attachments',
+      errorDetails: error,
+    };
+  }
+}
+
+/**
+ * Constructs a direct proxy URL to download or stream an attachment.
+ */
+export function getZohoAttachmentDownloadUrl(
+  module: string = 'Deals',
+  recordId: string,
+  attachmentId: string,
+  preview: boolean = false
+): string {
+  const qs = new URLSearchParams({
+    module,
+    recordId,
+    attachmentId,
+    preview: preview ? 'true' : 'false',
+  }).toString();
+  return `/api/zoho/download-attachment?${qs}`;
+}
+
+/**
+ * Triggers a direct file download for a Zoho CRM attachment.
+ */
+export async function downloadZohoAttachment(
+  module: string = 'Deals',
+  recordId: string,
+  attachmentId: string,
+  fileName: string = 'document'
+): Promise<void> {
+  try {
+    const url = getZohoAttachmentDownloadUrl(module, recordId, attachmentId, false);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to download file (HTTP ${response.status})`);
+    }
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error('[Zoho CRM] Direct download failed:', err);
+    // Fallback direct navigation
+    const url = getZohoAttachmentDownloadUrl(module, recordId, attachmentId, false);
+    window.open(url, '_blank');
+  }
+}
+
+/**
+ * Convenience helper to upload a file attachment to a Deal record.
+ * Endpoint: POST https://www.zohoapis.com/crm/v8/Deals/{dealId}/Attachments
+ */
+export async function uploadZohoAttachmentToDeal(
+  dealId: string,
+  file: File | Blob,
+  fileName?: string
+): Promise<ZohoApiResponse> {
+  return uploadZohoAttachment(dealId, file, fileName, 'Deals');
 }
 
 /**
@@ -1111,6 +1214,35 @@ export async function fetchZohoDeals(options?: ZohoFetchOptions): Promise<ZohoFe
       success: false,
       data: [],
       message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-deals endpoint'
+    };
+  }
+}
+
+/**
+ * Fetches a single live deal record by ID from Zoho CRM Deals module.
+ */
+export async function fetchZohoDealById(dealId: string): Promise<ZohoApiResponse> {
+  try {
+    const response = await fetch(`/api/zoho/get-deal?id=${encodeURIComponent(dealId)}`);
+    const result = await safeParseResponse(response);
+    if (response.ok && result.success) {
+      const dataObj = Array.isArray(result.data) ? result.data[0] : result.data;
+      return {
+        success: true,
+        data: dataObj,
+        message: 'Deal record fetched successfully from Zoho CRM'
+      };
+    }
+    return {
+      success: false,
+      message: result.message || 'Failed to fetch deal from Zoho CRM',
+      errorDetails: result
+    };
+  } catch (error: any) {
+    console.error('[Zoho CRM] Client error fetching deal by ID:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with Zoho CRM'
     };
   }
 }

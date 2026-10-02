@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { saveDocument } from '../../lib/db';
+import { saveDocument, saveAllDealsToIndexedDB, getAllDealsFromIndexedDB, bulkUpsertDealsToIndexedDB } from '../../lib/db';
 import {
   saveOrUpdateZohoDeal,
   deleteZohoDeal,
@@ -44,7 +44,7 @@ export const Deals = () => {
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [hasMoreZohoRecords, setHasMoreZohoRecords] = useState(false);
   const [isFetchingBatch, setIsFetchingBatch] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{ loaded: number; batch: number } | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ loaded: number; batch: number; percent?: number } | null>(null);
 
   useEffect(() => {
     if (toast) {
@@ -381,15 +381,42 @@ export const Deals = () => {
       const saved = localStorage.getItem('be_deals');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) { }
     return [];
   });
 
-  // Auto-fetch live deals from Zoho CRM on mount
+  // Load complete 10,000+ dataset from IndexedDB on mount, then fetch latest or auto-stream
   useEffect(() => {
-    handleFetchFromZoho(false);
+    let isMounted = true;
+    const loadDeals = async () => {
+      let count = 0;
+      let hasZeroAmounts = false;
+      try {
+        const idbDeals = await getAllDealsFromIndexedDB();
+        if (isMounted && Array.isArray(idbDeals) && idbDeals.length > 0) {
+          setDeals(idbDeals);
+          count = idbDeals.length;
+          // Check if cached deals have old ₹0 amounts
+          const sample = idbDeals.slice(0, 30);
+          hasZeroAmounts = sample.length > 0 && sample.every((d: any) => d.amount === '₹0' || !d.amount || d.amount === 0);
+        }
+      } catch (err) {
+        console.warn('IndexedDB initial load error:', err);
+      }
+      if (isMounted) {
+        if (count < 10470 || hasZeroAmounts) {
+          // If fresh, incomplete (< 10,470), or cached with ₹0, automatically stream fresh records with real amounts
+          handleFetchAllBatchesFromZoho(false, hasZeroAmounts);
+        } else {
+          // Otherwise fetch latest updates for page 1
+          handleFetchFromZoho(false);
+        }
+      }
+    };
+    loadDeals();
+    return () => { isMounted = false; };
   }, []);
 
   useEffect(() => {
@@ -398,14 +425,14 @@ export const Deals = () => {
 
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Won': return 'bg-emerald-100 text-emerald-700';
-      case 'Negotiation': return 'bg-blue-100 text-blue-700';
-      case 'Proposal': return 'bg-orange-100 text-orange-700';
-      case 'Qualified': return 'bg-purple-100 text-purple-700';
-      case 'New': return 'bg-gray-100 text-gray-700';
-      default: return 'bg-gray-100 text-gray-700';
-    }
+    const s = (status || '').toLowerCase();
+    if (s.includes('won') || s.includes('execut')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (s.includes('lost')) return 'bg-rose-100 text-rose-700 border-rose-200';
+    if (s.includes('negotiat') || s.includes('allocat')) return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (s.includes('propos') || s.includes('legal')) return 'bg-orange-100 text-orange-700 border-orange-200';
+    if (s.includes('qualif') || s.includes('account')) return 'bg-purple-100 text-purple-700 border-purple-200';
+    if (s.includes('sale')) return 'bg-amber-100 text-amber-700 border-amber-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
   const handleCreateDeal = async () => {
@@ -831,15 +858,19 @@ export const Deals = () => {
   const cancelSyncRef = useRef(false);
 
   const safeSaveDealsToStorage = (dealsList: any[]) => {
+    // 1. Save complete 10,000+ dataset to IndexedDB
+    saveAllDealsToIndexedDB(dealsList).catch(err => console.warn('IndexedDB save warning:', err));
+
+    // 2. Save 2,000 deals to localStorage as sync cache fallback
     try {
-      localStorage.setItem('be_deals', JSON.stringify(dealsList));
+      const trimmed = dealsList.slice(0, 2000);
+      localStorage.setItem('be_deals', JSON.stringify(trimmed));
     } catch (err) {
       try {
-        const trimmed = dealsList.slice(0, 2500);
+        const trimmed = dealsList.slice(0, 500);
         localStorage.setItem('be_deals', JSON.stringify(trimmed));
-        console.warn('LocalStorage quota limit reached, stored top 2,500 deals in cache. Full list preserved in memory.');
       } catch (e) {
-        console.warn('LocalStorage unavailable for caching:', e);
+        console.warn('LocalStorage unavailable for caching deals:', e);
       }
     }
   };
@@ -849,108 +880,333 @@ export const Deals = () => {
     let newCount = 0;
     let updatedCount = 0;
 
+    // Fast O(1) lookup index maps
+    const dealIndexByZohoId = new Map<string, number>();
+    const dealIndexById = new Map<string, number>();
+    updatedDeals.forEach((d, idx) => {
+      if (d.zohoId) dealIndexByZohoId.set(String(d.zohoId), idx);
+      if (d.id) dealIndexById.set(String(d.id), idx);
+    });
+
+    // Batch cache for companies and clients
+    let localCompanies: any[] = [];
+    let localClients: any[] = [];
+    try {
+      const rawComp = localStorage.getItem('be_companies');
+      if (rawComp) localCompanies = JSON.parse(rawComp);
+    } catch (e) {}
+    try {
+      const rawCl = localStorage.getItem('be_clients');
+      if (rawCl) localClients = JSON.parse(rawCl);
+    } catch (e) {}
+
+    const knownCompanyNames = new Set(localCompanies.map((c: any) => (c.name || '').toLowerCase().trim()));
+    const knownClientNames = new Set(localClients.map((c: any) => (c.name || '').toLowerCase().trim()));
+    let companiesChanged = false;
+    let clientsChanged = false;
+
     rawDeals.forEach((zDeal: any) => {
-      const existingIdx = updatedDeals.findIndex((d: any) => 
-        d.zohoId === zDeal.id || (zDeal.Deal_Name && d.id && zDeal.Deal_Name.includes(d.id))
+      const zIdStr = String(zDeal.id || '');
+      let existingIdx = zIdStr && dealIndexByZohoId.has(zIdStr) ? dealIndexByZohoId.get(zIdStr)! : -1;
+      if (existingIdx === -1 && zDeal.Deal_Name) {
+        for (const [idKey, idx] of dealIndexById.entries()) {
+          if (zDeal.Deal_Name.includes(idKey)) {
+            existingIdx = idx;
+            break;
+          }
+        }
+      }
+
+      // 1. Clean Client Name & Company Name
+      let resolvedClientName = '';
+      if (zDeal.Client_Name && typeof zDeal.Client_Name === 'string' && !/^\(\d+\)$/.test(zDeal.Client_Name.trim())) {
+        resolvedClientName = zDeal.Client_Name.trim();
+      } else if (zDeal.Clients && typeof zDeal.Clients === 'object' && zDeal.Clients.name && !/^\(\d+\)$/.test(zDeal.Clients.name.trim())) {
+        resolvedClientName = zDeal.Clients.name.trim();
+      } else if (zDeal.Contact_Name && typeof zDeal.Contact_Name === 'object' && zDeal.Contact_Name.name) {
+        resolvedClientName = zDeal.Contact_Name.name.trim();
+      } else if (zDeal.Company_name && !/^\(\d+\)$/.test(zDeal.Company_name.trim())) {
+        resolvedClientName = zDeal.Company_name.trim();
+      } else if (zDeal.Company_name_bp && !/^\(\d+\)$/.test(zDeal.Company_name_bp.trim())) {
+        resolvedClientName = zDeal.Company_name_bp.trim();
+      } else if (zDeal.Company_name_cs && !/^\(\d+\)$/.test(zDeal.Company_name_cs.trim())) {
+        resolvedClientName = zDeal.Company_name_cs.trim();
+      } else if (zDeal.Company && typeof zDeal.Company === 'object' && zDeal.Company.name && !/^\(\d+\)$/.test(zDeal.Company.name.trim())) {
+        resolvedClientName = zDeal.Company.name.trim();
+      } else if (zDeal.Deal_Name) {
+        const parts = zDeal.Deal_Name.split(' - ');
+        const candidate = parts[0]?.replace(/^\(|\)$/g, '').trim();
+        resolvedClientName = candidate && !/^\d+$/.test(candidate) ? candidate : 'Client';
+      } else {
+        resolvedClientName = 'Client';
+      }
+
+      const resolvedCompanyName = 
+        (zDeal.Company_name && !/^\(\d+\)$/.test(zDeal.Company_name.trim()) ? zDeal.Company_name.trim() : '') ||
+        (zDeal.Company_name_bp && !/^\(\d+\)$/.test(zDeal.Company_name_bp.trim()) ? zDeal.Company_name_bp.trim() : '') ||
+        (zDeal.Company_name_cs && !/^\(\d+\)$/.test(zDeal.Company_name_cs.trim()) ? zDeal.Company_name_cs.trim() : '') ||
+        (zDeal.Company_name_st && !/^\(\d+\)$/.test(zDeal.Company_name_st.trim()) ? zDeal.Company_name_st.trim() : '') ||
+        (zDeal.Company && typeof zDeal.Company === 'object' && zDeal.Company.name && !/^\(\d+\)$/.test(zDeal.Company.name.trim()) ? zDeal.Company.name.trim() : '') ||
+        (zDeal.Account_Name && typeof zDeal.Account_Name === 'object' && zDeal.Account_Name.name && !/^\(\d+\)$/.test(zDeal.Account_Name.name.trim()) ? zDeal.Account_Name.name.trim() : '') ||
+        (zDeal.Company_Name && !/^\(\d+\)$/.test(zDeal.Company_Name.trim()) ? zDeal.Company_Name.trim() : '') ||
+        (resolvedClientName && resolvedClientName !== 'Client' ? resolvedClientName : 'Individual');
+
+      // 2. Financials
+      const parseZohoNum = (val: any): number => {
+        if (val === null || val === undefined || val === '') return 0;
+        if (typeof val === 'number') return isNaN(val) ? 0 : val;
+        const cleaned = String(val).replace(/,/g, '').replace(/[^0-9.-]/g, '').trim();
+        const parsed = parseFloat(cleaned);
+        return isNaN(parsed) ? 0 : parsed;
+      };
+
+      const formatRupee = (val: number): string => {
+        if (!val || isNaN(val) || val <= 0) return '₹0';
+        return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+      };
+
+      const totalAmountNum = parseZohoNum(
+        zDeal.Total_deal_amount_inclusive_of_gst !== undefined && zDeal.Total_deal_amount_inclusive_of_gst !== null ? zDeal.Total_deal_amount_inclusive_of_gst :
+        (zDeal.Amount !== undefined && zDeal.Amount !== null ? zDeal.Amount :
+        (zDeal.Deal_Amount !== undefined && zDeal.Deal_Amount !== null ? zDeal.Deal_Amount :
+        (zDeal.Amount_Without_GST !== undefined && zDeal.Amount_Without_GST !== null ? Number(zDeal.Amount_Without_GST) / 0.82 :
+        (zDeal.amount_if_you_have_kindly_put_0 || zDeal.Amount_After_disbursement || 0))))
       );
 
-      const servicesFromSubform = Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0
-        ? zDeal.Subform_1.map((sf: any, i: number) => {
-            const agreementAmount = sf.Agreement_amount || 0;
-            const withoutGst = sf.Without_GST || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0);
-            const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
-            return {
-              id: String(sf.id || i + 1),
-              name: sf.Schemas || 'Website Development',
-              totalAmount: String(totalAmt || ''),
-              baseAmount: String(withoutGst || 0),
-            };
-          })
-        : (existingIdx >= 0 ? updatedDeals[existingIdx]?.servicesData || [] : []);
+      const withoutGstNum = parseZohoNum(
+        zDeal.Amount_Without_GST !== undefined && zDeal.Amount_Without_GST !== null ? zDeal.Amount_Without_GST :
+        (zDeal.Deal_Amount_Without_GST !== undefined && zDeal.Deal_Amount_Without_GST !== null ? zDeal.Deal_Amount_Without_GST :
+        (totalAmountNum > 0 ? Number((totalAmountNum * 0.82).toFixed(2)) : 0))
+      );
+
+      const gstAmountNum = parseZohoNum(
+        zDeal.GST_Amount !== undefined && zDeal.GST_Amount !== null ? zDeal.GST_Amount :
+        (zDeal.Deal_GST_Amount !== undefined && zDeal.Deal_GST_Amount !== null ? zDeal.Deal_GST_Amount :
+        (totalAmountNum > withoutGstNum ? Number((totalAmountNum - withoutGstNum).toFixed(2)) : 0))
+      );
+
+      const receivedAmountNum = parseZohoNum(
+        zDeal.Total_Received_Amount !== undefined && zDeal.Total_Received_Amount !== null ? zDeal.Total_Received_Amount :
+        (zDeal.Deal_Received_Amount !== undefined && zDeal.Deal_Received_Amount !== null ? zDeal.Deal_Received_Amount :
+        (zDeal.Received_amount || 0))
+      );
+
+      const pendingAmountNum = parseZohoNum(
+        zDeal.Total_Pending_Amount !== undefined && zDeal.Total_Pending_Amount !== null ? zDeal.Total_Pending_Amount :
+        (zDeal.Deal_Pending_Amount !== undefined && zDeal.Deal_Pending_Amount !== null ? zDeal.Deal_Pending_Amount :
+        (zDeal.Pending_amount !== undefined && zDeal.Pending_amount !== null ? zDeal.Pending_amount :
+        (totalAmountNum > receivedAmountNum ? totalAmountNum - receivedAmountNum : 0)))
+      );
+
+      // 3. Contact & Tax info
+      const contactPhone = zDeal.Client_contact_detail || zDeal.Client_contact_detail_cs || zDeal.Client_contact_detail_bp || zDeal.Client_contact_detail_fnf || zDeal.client_contact_detail_st || zDeal.Client_s_alternate_contact_detail || zDeal.Client_s_alternate_contact_detail_bp || zDeal.Mobile || zDeal.Phone || '';
+      const contactEmail = zDeal.Client_Email_address || zDeal.Client_Email_address_cs || zDeal.Client_Email_address_fnf || zDeal.Client_Email_address_bp || zDeal.client_email_address_st || zDeal.Email || '';
+      const gstNum = zDeal.Gst_number || zDeal.GST_Number || zDeal.GSTIN || '';
+      const panNum = zDeal.Pan_number || zDeal.PAN_Number || zDeal.PAN_Card || zDeal.PAN || '';
+      const aadhaarNum = zDeal.Aadhaar_Card || zDeal.Aadhaar_number || zDeal.Aadhaar_Number || zDeal.Aadhar_Card || '';
+      const billAddress = zDeal.Billing_address || zDeal.Company_address || '';
+      const stateName = zDeal.State || (billAddress ? billAddress.split(',').pop()?.trim() : '') || '';
+
+      // 4. Subform_1 (Choose Services)
+      let servicesFromSubform: any[] = [];
+      if (Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0) {
+        servicesFromSubform = zDeal.Subform_1.map((sf: any, i: number) => {
+          const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || 0);
+          const withoutGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0));
+          const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
+          return {
+            id: String(sf.id || i + 1),
+            name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service',
+            totalAmount: String(totalAmt || ''),
+            baseAmount: String(withoutGst || 0),
+            receivedAmount: sf.Received_amount || sf.Received || '',
+            pendingAmount: sf.Pending_amount || sf.Pending || '',
+            paymentStages: sf.Payment_stages || '',
+            paymentType: sf.Payment_type || '',
+            paymentDate: sf.Payment_received_date || '',
+            qualityProvided: sf.Quality_provided || '',
+            successFees: sf.Success_fees || '',
+          };
+        });
+      } else {
+        let inferredServiceName = '';
+        if (zDeal.Service_Name) {
+          inferredServiceName = zDeal.Service_Name;
+        } else if (zDeal.Choose_Wisely && zDeal.Choose_Wisely !== 'New Case Booking') {
+          inferredServiceName = zDeal.Choose_Wisely;
+        } else if (zDeal.Deal_Name && zDeal.Deal_Name.includes(' - ')) {
+          const afterHyphen = zDeal.Deal_Name.split(' - ').slice(1).join(' - ').trim();
+          if (afterHyphen && !/^\(\d+\)$/.test(afterHyphen)) {
+            inferredServiceName = afterHyphen;
+          }
+        }
+        if (!inferredServiceName) {
+          inferredServiceName = zDeal.Choose_Wisely || (existingIdx >= 0 ? updatedDeals[existingIdx]?.service : 'Services') || 'Services';
+        }
+
+        servicesFromSubform = [{
+          id: '1',
+          name: inferredServiceName || 'Services',
+          totalAmount: String(totalAmountNum || ''),
+          baseAmount: String(withoutGstNum || ''),
+          receivedAmount: String(receivedAmountNum || ''),
+          pendingAmount: String(pendingAmountNum || ''),
+        }];
+      }
 
       const serviceTitle = servicesFromSubform.length === 1 
         ? servicesFromSubform[0].name 
         : servicesFromSubform.length > 1 
           ? `${servicesFromSubform.length} Services` 
-          : (existingIdx >= 0 ? (updatedDeals[existingIdx]?.service || 'Services') : 'Services');
+          : 'Services';
+
+      // 5. Legal Subform
+      const legalSubform = Array.isArray(zDeal.Legal) && zDeal.Legal.length > 0
+        ? zDeal.Legal.map((lg: any, i: number) => ({
+            id: String(lg.id || i + 1),
+            schema: lg.Legal_Schemas || lg.Schemas || '',
+            tenure: lg.Tenure_of_Service || '',
+            docTypes: lg.Types_of_legal_documents || '',
+            terms1: lg.Agreement_Terms_I || '',
+            terms2: lg.Agreement_Terms_II || '',
+            dataChecker: lg.Data_checker_name_subform?.name || lg.Data_checker_name_subform || '',
+            dateCheckedDate: lg.Date_checked_date || '',
+            dateCheckerStatus: lg.Date_checker_status || '',
+            dprStatus: lg.DPR_status || '',
+            dateOfDprStatusChange: lg.Date_of_DPR_status_change || '',
+            dprTl: lg.Operation_team_leader?.name || lg.Operation_team_leader || '',
+            dprMember: lg.Operation_team_member?.name || lg.Operation_team_member || '',
+            financeStatus: lg.Finance_status || '',
+            dateOfFinanceStatusChange: lg.Date_of_finance_status_change || '',
+            financeTl: lg.Finance_team_leader?.name || lg.Finance_team_leader || '',
+            financeMember: lg.Finance_team_member?.name || lg.Finance_team_member || '',
+            legalStatus: lg.Internal_legal_status || '',
+            internalTeamType: lg.Internal_team_type || '',
+            qualityProvided: lg.Quality_provided || '',
+            distributionPaid: lg.Distribution_of_amount_paid_by_the_S || lg.Distribution_of_amount_paid_by_ || '',
+            remark: lg.Remark || ''
+          }))
+        : [];
+
+      const stageName = zDeal.Stage || 'Sales';
+      let statusName = 'New';
+      if (stageName === 'Closed Won' || stageName === 'Won' || stageName.includes('Won') || stageName === 'Operations executors') {
+        statusName = 'Won';
+      } else if (stageName === 'Closed Lost' || stageName === 'Lost' || stageName.includes('Lost')) {
+        statusName = 'Lost';
+      } else if (stageName.includes('Negotiat')) {
+        statusName = 'Negotiation';
+      } else if (stageName.includes('Propos')) {
+        statusName = 'Proposal';
+      } else if (stageName.includes('Qualif')) {
+        statusName = 'Qualified';
+      } else {
+        statusName = stageName;
+      }
+
+      const resolvedDealId = existingIdx >= 0 
+        ? updatedDeals[existingIdx]?.id 
+        : (zDeal.id ? String(zDeal.id) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
 
       const dealObj: any = {
-        id: existingIdx >= 0 ? updatedDeals[existingIdx]?.id : `DL-${Math.floor(1000 + Math.random() * 9000)}`,
-        client: zDeal.Contact_Name || zDeal.Name || (existingIdx >= 0 ? updatedDeals[existingIdx]?.client : 'Client') || 'Client',
-        company: zDeal.Account_Name?.name || zDeal.Company_Name || (existingIdx >= 0 ? updatedDeals[existingIdx]?.company : 'N/A') || 'N/A',
+        id: resolvedDealId,
+        client: resolvedClientName,
+        company: resolvedCompanyName,
         service: serviceTitle,
-        amount: zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : (existingIdx >= 0 ? updatedDeals[existingIdx]?.amount : '₹0') || '₹0',
-        received: (existingIdx >= 0 && updatedDeals[existingIdx]?.received) || (zDeal.Deal_Received_Amount ? `₹${Number(zDeal.Deal_Received_Amount).toLocaleString()}` : '₹0'),
-        pending: (existingIdx >= 0 && updatedDeals[existingIdx]?.pending) || (zDeal.Deal_Pending_Amount ? `₹${Number(zDeal.Deal_Pending_Amount).toLocaleString()}` : zDeal.Amount ? `₹${Number(zDeal.Amount).toLocaleString()}` : '₹0'),
-        status: zDeal.Stage === 'Closed Won' ? 'Won' : zDeal.Stage === 'Closed Lost' ? 'Lost' : zDeal.Stage || 'New',
+        amount: formatRupee(totalAmountNum),
+        received: formatRupee(receivedAmountNum),
+        pending: formatRupee(pendingAmountNum),
+        status: statusName,
+        stage: stageName,
         owner: zDeal.Owner?.name || (existingIdx >= 0 ? updatedDeals[existingIdx]?.owner : 'Admin') || 'Admin',
-        date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingIdx >= 0 ? updatedDeals[existingIdx]?.date : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })),
+        date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (zDeal.Booking_Date ? new Date(zDeal.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingIdx >= 0 ? updatedDeals[existingIdx]?.date : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))),
         source: (existingIdx >= 0 ? updatedDeals[existingIdx]?.source : 'Zoho CRM') || 'Zoho CRM',
         zohoId: zDeal.id,
         zohoStatus: 'synced',
         zohoSyncedAt: new Date().toISOString(),
-        formData: (existingIdx >= 0 && updatedDeals[existingIdx]?.formData) || {
-          clientName: zDeal.Contact_Name || zDeal.Name || '',
-          companyName: zDeal.Account_Name?.name || zDeal.Company_Name || '',
-          email: zDeal.Email || '',
-          mobile: zDeal.Mobile || '',
+        formData: {
+          clientName: resolvedClientName,
+          companyName: resolvedCompanyName,
+          email: contactEmail,
+          mobile: contactPhone,
+          gstNumber: gstNum,
+          panCard: panNum,
+          billingAddress: billAddress,
+          city: zDeal.City || '',
+          state: stateName,
+          businessType: zDeal.Company_Type || zDeal.Choose_Wisely || 'Private Limited',
+          ...(existingIdx >= 0 ? updatedDeals[existingIdx]?.formData : {})
         },
         servicesData: servicesFromSubform,
-        totals: (existingIdx >= 0 && updatedDeals[existingIdx]?.totals) || {
-          grandTotal: zDeal.Amount || 0,
-        }
+        legalData: legalSubform,
+        totals: {
+          grandTotal: totalAmountNum,
+          baseAmount: withoutGstNum,
+          totalGst: gstAmountNum,
+          receivedAmount: receivedAmountNum,
+          pendingAmount: pendingAmountNum,
+        },
       };
 
       if (existingIdx >= 0) {
         updatedDeals[existingIdx] = { ...updatedDeals[existingIdx], ...dealObj };
         updatedCount++;
       } else {
+        const newIdx = updatedDeals.length;
         updatedDeals.push(dealObj);
+        if (dealObj.zohoId) dealIndexByZohoId.set(String(dealObj.zohoId), newIdx);
+        if (dealObj.id) dealIndexById.set(String(dealObj.id), newIdx);
         newCount++;
       }
 
-      // Auto-populate companies and clients if missing
-      try {
-        if (dealObj.company && dealObj.company !== 'N/A') {
-          const rawCompanies = localStorage.getItem('be_companies');
-          const localCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
-          if (!localCompanies.some((c: any) => (c.name ?? '').toLowerCase() === (dealObj.company ?? '').toLowerCase())) {
-            localCompanies.unshift({
-              id: `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
-              name: dealObj.company,
-              type: 'Private Limited',
-              gstNumber: zDeal.Gst_number || '',
-              doi: '',
-              email: zDeal.Client_Email_address || zDeal.Email || '',
-              status: 'Active',
-              source: 'From Deals (Zoho)',
-              addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-              zohoStatus: 'synced'
-            });
-            localStorage.setItem('be_companies', JSON.stringify(localCompanies.slice(0, 2000)));
-          }
-        }
+      // Auto-populate companies and clients in batch memory
+      const compKey = (dealObj.company || '').toLowerCase().trim();
+      if (dealObj.company && dealObj.company !== 'N/A' && !knownCompanyNames.has(compKey)) {
+        knownCompanyNames.add(compKey);
+        localCompanies.unshift({
+          id: `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
+          name: dealObj.company,
+          type: 'Private Limited',
+          gstNumber: zDeal.Gst_number || '',
+          doi: '',
+          email: contactEmail,
+          status: 'Active',
+          source: 'From Deals (Zoho)',
+          addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          zohoStatus: 'synced'
+        });
+        companiesChanged = true;
+      }
 
-        if (dealObj.client && dealObj.client !== 'Client') {
-          const rawClients = localStorage.getItem('be_clients');
-          const localClients = rawClients ? JSON.parse(rawClients) : [];
-          if (!localClients.some((cl: any) => (cl.name ?? '').toLowerCase() === (dealObj.client ?? '').toLowerCase())) {
-            localClients.unshift({
-              id: `CL-${Math.floor(1000 + Math.random() * 9000)}`,
-              name: dealObj.client,
-              company: dealObj.company || 'Individual',
-              email: zDeal.Client_Email_address || zDeal.Email || '',
-              phone: zDeal.Client_contact_detail || zDeal.Mobile || '',
-              status: 'Active',
-              source: 'From Deals (Zoho)',
-              addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-              zohoStatus: 'synced'
-            });
-            localStorage.setItem('be_clients', JSON.stringify(localClients.slice(0, 2000)));
-          }
-        }
-      } catch (e) {}
+      const clientKey = (dealObj.client || '').toLowerCase().trim();
+      if (dealObj.client && dealObj.client !== 'Client' && !knownClientNames.has(clientKey)) {
+        knownClientNames.add(clientKey);
+        localClients.unshift({
+          id: `CL-${Math.floor(1000 + Math.random() * 9000)}`,
+          name: dealObj.client,
+          company: dealObj.company || 'Individual',
+          email: contactEmail,
+          phone: contactPhone,
+          status: 'Active',
+          source: 'From Deals (Zoho)',
+          addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          zohoStatus: 'synced'
+        });
+        clientsChanged = true;
+      }
     });
+
+    // Save companies & clients to localStorage once per batch
+    if (companiesChanged) {
+      try {
+        localStorage.setItem('be_companies', JSON.stringify(localCompanies.slice(0, 2000)));
+      } catch (e) {}
+    }
+    if (clientsChanged) {
+      try {
+        localStorage.setItem('be_clients', JSON.stringify(localClients.slice(0, 2000)));
+      } catch (e) {}
+    }
 
     return { updatedDeals, newCount, updatedCount };
   };
@@ -966,27 +1222,51 @@ export const Deals = () => {
     });
   };
 
-  const handleFetchAllBatchesFromZoho = async (showToast = true) => {
+  const handleFetchAllBatchesFromZoho = async (showToast = true, startFresh = false) => {
     setIsFetchingBatch(true);
     cancelSyncRef.current = false;
-    setBatchProgress({ loaded: deals.length, batch: 0 });
 
-    let currentDeals = [...deals];
+    // Load full IndexedDB dataset first so nothing is lost
+    const existingIdb = await getAllDealsFromIndexedDB();
+    let currentDeals = startFresh ? [] : (existingIdb.length >= deals.length ? existingIdb : [...deals]);
     let pageToken: string | undefined = undefined;
     let pageNumber = 1;
     let hasMore = true;
     let batchCount = 0;
+    const totalExpected = 10470;
+
+    setBatchProgress({
+      loaded: currentDeals.length,
+      batch: 0,
+      percent: Math.min(100, Math.round((currentDeals.length / totalExpected) * 100))
+    });
 
     try {
       while (hasMore && !cancelSyncRef.current && currentDeals.length < 50000) {
         batchCount++;
-        const res = await fetchZohoDeals({
-          per_page: 200,
-          page_token: pageToken,
-          page: pageToken ? undefined : pageNumber
-        });
+        let res: any = null;
+        let retries = 3;
 
-        if (!res.success || !Array.isArray(res.data) || res.data.length === 0) {
+        while (retries > 0 && !cancelSyncRef.current) {
+          try {
+            res = await fetchZohoDeals({
+              per_page: 200,
+              page_token: pageToken,
+              page: pageToken ? undefined : pageNumber
+            });
+            if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+              break;
+            }
+          } catch (fetchErr) {
+            console.warn(`[Zoho Sync] Retry ${4 - retries}/3 for batch ${batchCount}:`, fetchErr);
+          }
+          retries--;
+          if (retries > 0 && !cancelSyncRef.current) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
+
+        if (!res || !res.success || !Array.isArray(res.data) || res.data.length === 0) {
           break;
         }
 
@@ -995,22 +1275,28 @@ export const Deals = () => {
 
         // Real-time UI stream update
         setDeals([...currentDeals]);
-        setBatchProgress({ loaded: currentDeals.length, batch: batchCount });
-        safeSaveDealsToStorage(currentDeals);
+        const percent = Math.min(100, Math.round((currentDeals.length / totalExpected) * 100));
+        setBatchProgress({ loaded: currentDeals.length, batch: batchCount, percent });
 
         hasMore = Boolean(res.info?.more_records && res.info?.next_page_token);
         pageToken = res.info?.next_page_token || undefined;
         pageNumber++;
 
+        // Save progress every 2 batches or when finished
+        if (batchCount % 2 === 0 || !hasMore) {
+          safeSaveDealsToStorage(currentDeals);
+        }
+
         if (!hasMore || cancelSyncRef.current) break;
       }
 
+      safeSaveDealsToStorage(currentDeals);
       setHasMoreZohoRecords(false);
       if (showToast && !cancelSyncRef.current) {
         setToast({
           type: 'success',
           message: `All Zoho Deals Synced (${currentDeals.length.toLocaleString()} records)`,
-          submessage: `Total ${currentDeals.length.toLocaleString()} deals now available in your portal with instant search and pagination.`
+          submessage: `Total ${currentDeals.length.toLocaleString()} deals are now stored in local IndexedDB with instant search and pagination.`
         });
       }
     } catch (e: any) {
@@ -1028,16 +1314,26 @@ export const Deals = () => {
   };
 
   const handleFetchFromZoho = async (showNotification = true, tokenToFetch?: string) => {
-    // If no specific page token is requested, trigger full batch sync
-    if (!tokenToFetch) {
-      return handleFetchAllBatchesFromZoho(showNotification);
-    }
-
     setIsFetchingZoho(true);
     try {
       const result = await fetchZohoDeals({ per_page: 200, page_token: tokenToFetch });
       if (result.success && Array.isArray(result.data)) {
-        const { updatedDeals } = processZohoDealsBatch(result.data, deals);
+        if (result.data.length === 0) {
+          if (showNotification) {
+            setToast({
+              type: 'info',
+              message: 'No Deals in Zoho CRM',
+              submessage: 'Zoho Deals endpoint returned 0 records'
+            });
+          }
+          return;
+        }
+
+        // Always read current IndexedDB to merge into full 10,000+ dataset
+        const idbDeals = await getAllDealsFromIndexedDB();
+        const baseDeals = idbDeals.length >= deals.length ? idbDeals : deals;
+
+        const { updatedDeals } = processZohoDealsBatch(result.data, baseDeals);
         setDeals(updatedDeals);
         safeSaveDealsToStorage(updatedDeals);
 
@@ -1049,9 +1345,15 @@ export const Deals = () => {
           setToast({
             type: 'success',
             message: 'Zoho Deals Synchronized',
-            submessage: `Fetched ${result.data.length} records from Zoho CRM (Total in portal: ${updatedDeals.length.toLocaleString()})`
+            submessage: `Fetched latest ${result.data.length} records from Zoho CRM (Total in portal: ${updatedDeals.length.toLocaleString()})`
           });
         }
+      } else if (showNotification) {
+        setToast({
+          type: 'error',
+          message: 'Fetch Error',
+          submessage: result.message || 'Could not communicate with Zoho CRM endpoint'
+        });
       }
     } catch (err: any) {
       if (showNotification) {
@@ -1138,10 +1440,10 @@ export const Deals = () => {
           </button>
 
           <button
-            onClick={() => handleFetchAllBatchesFromZoho(true)}
+            onClick={() => handleFetchAllBatchesFromZoho(true, true)}
             disabled={isFetchingBatch || isFetchingZoho}
             className="flex items-center px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg text-sm font-semibold hover:from-orange-600 hover:to-amber-600 transition-all shadow-sm hover:shadow disabled:opacity-60"
-            title="Sequentially fetch all 10,000+ historical deals from Zoho CRM in batches"
+            title="Sequentially fetch all 10,000+ historical deals from Zoho CRM in batches with real amounts"
           >
             {isFetchingBatch ? (
               <>
@@ -1172,35 +1474,45 @@ export const Deals = () => {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-100/70 border border-orange-200/80 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+          className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-100/70 border border-orange-200/80 rounded-2xl p-4 shadow-sm flex flex-col gap-3"
         >
-          <div className="flex items-center space-x-3.5">
-            <div className="w-10 h-10 rounded-xl bg-be-orange/10 border border-be-orange/20 flex items-center justify-center text-be-orange shrink-0">
-              <Loader2 className="w-5 h-5 animate-spin" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h4 className="text-sm font-bold text-gray-900">
-                  Syncing All Deals from Zoho CRM
-                </h4>
-                <span className="px-2.5 py-0.5 bg-be-orange text-white text-xs font-bold rounded-full shadow-xs">
-                  {deals.length.toLocaleString()} Deals Loaded
-                </span>
-                <span className="text-xs text-gray-500 font-medium">
-                  Batch #{batchProgress?.batch || 1}
-                </span>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-10 h-10 rounded-xl bg-be-orange/10 border border-be-orange/20 flex items-center justify-center text-be-orange shrink-0">
+                <Loader2 className="w-5 h-5 animate-spin" />
               </div>
-              <p className="text-xs text-gray-600 mt-0.5">
-                Records are streaming in real-time. You can filter, search, and navigate existing deals without interruption.
-              </p>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h4 className="text-sm font-bold text-gray-900">
+                    Syncing All Deals from Zoho CRM
+                  </h4>
+                  <span className="px-2.5 py-0.5 bg-be-orange text-white text-xs font-bold rounded-full shadow-xs">
+                    {(batchProgress?.loaded || deals.length).toLocaleString()} / 10,470 Loaded ({batchProgress?.percent || Math.min(100, Math.round(((batchProgress?.loaded || deals.length) / 10470) * 100))}%)
+                  </span>
+                  <span className="text-xs text-gray-500 font-medium">
+                    Batch #{batchProgress?.batch || 1} of 53
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Downloading all 10,470 live records into local IndexedDB storage. You can search, filter, and view deals while sync is in progress.
+                </p>
+              </div>
             </div>
+            <button
+              onClick={handleStopSync}
+              className="px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl shadow-xs hover:shadow transition-all shrink-0"
+            >
+              Pause Sync
+            </button>
           </div>
-          <button
-            onClick={handleStopSync}
-            className="px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl shadow-xs hover:shadow transition-all shrink-0"
-          >
-            Pause Sync
-          </button>
+          
+          {/* Visual Progress Bar */}
+          <div className="w-full bg-orange-200/60 rounded-full h-2 overflow-hidden">
+            <div 
+              className="bg-gradient-to-r from-be-orange to-amber-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${batchProgress?.percent || Math.min(100, Math.max(3, (((batchProgress?.loaded || deals.length) || 0) / 10470) * 100))}%` }}
+            />
+          </div>
         </motion.div>
       )}
 
@@ -1260,7 +1572,11 @@ export const Deals = () => {
                 </thead>
                 <tbody className="text-gray-700">
                   {paginatedDeals.map((deal: any) => (
-                    <tr key={deal.id} className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm">
+                    <tr 
+                      key={deal.id} 
+                      onClick={() => navigate(`/crm/deals/${deal.id}`)}
+                      className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm cursor-pointer"
+                    >
                       <td className="px-6 py-5 font-bold text-gray-900 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">{deal.id}</td>
                       <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">{deal.client}</td>
                       <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
@@ -1315,7 +1631,7 @@ export const Deals = () => {
                         <div className="flex items-center justify-end space-x-2">
                           <button
                             className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                            title="View Deal"
+                            title="View Deal Details"
                             onClick={(e) => { e.stopPropagation(); navigate(`/crm/deals/${deal.id}`); }}
                           >
                             <Eye size={16} />

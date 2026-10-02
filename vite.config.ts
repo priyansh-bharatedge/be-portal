@@ -1115,13 +1115,67 @@ function zohoApiPlugin(): Plugin {
           return;
         }
 
+        // Fetch Single Deal by ID (Module API Name: Deals)
+        if ((pathname === '/api/zoho/get-deal' || (pathname === '/api/zoho/get-deals' && (urlObj.searchParams.get('id') || urlObj.searchParams.get('deal_id')))) && req.method === 'GET') {
+          try {
+            let accessToken = await getAccessToken(env);
+            const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
+            const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+            const dealId = urlObj.searchParams.get('id') || urlObj.searchParams.get('deal_id');
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${dealId}`;
+
+            console.log(`[Vite Zoho Plugin] Fetching single deal #${dealId} from Zoho CRM (${moduleName})`);
+
+            let crmRes = await fetch(crmEndpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${accessToken}`,
+              },
+            });
+
+            let crmData: any = await crmRes.json();
+
+            if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              crmRes = await fetch(crmEndpoint, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                },
+              });
+              crmData = await crmRes.json();
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            if (crmData.data) {
+              return res.end(JSON.stringify({
+                success: true,
+                data: crmData.data,
+              }));
+            } else {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({
+                success: false,
+                message: crmData.message || 'Failed to fetch deal from Zoho CRM',
+                errorDetails: crmData,
+              }));
+            }
+          } catch (err: any) {
+            console.error('[Vite Zoho Plugin] Fetch single deal error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
         // Fetch / Get Deals endpoint (Module API Name: Deals)
         if (pathname === '/api/zoho/get-deals' && req.method === 'GET') {
           try {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const dealFields = 'id,Deal_Name,Name1,Amount,Amount_Without_GST,GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Total_deal_amount_inclusive_of_gst,Stage,Pipeline,Closing_Date,Booking_Date,Date,Company_name,Company_Name,Account_Name,Client_Name,Contact_Name,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Billing_address,Created_Time,Modified_Time,Choose_Wisely,Branches,Subform_1';
+            const dealFields = 'id,Deal_Name,Client_Name,Clients,Contact_Name,Company,Company_name,Company_name_bp,Company_name_cs,Company_name_st,Company_Name,Account_Name,Amount,Amount_Without_GST,GST_Amount,Total_deal_amount_inclusive_of_gst,Total_Received_Amount,Total_Pending_Amount,Received_amount,Pending_amount,Deal_Amount,Deal_Amount_Without_GST,Deal_GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Stage,Status,Choose_Wisely,Service_Name,Owner,Created_By,Closing_Date,Booking_Date,Date,Created_Time,Modified_Time,Client_contact_detail,Mobile,Phone,Client_Email_address,Email,Gst_number,Pan_number,Billing_address,City,State,Branches,Bank_details';
             const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Deals from Zoho CRM (${moduleName})`);
@@ -2460,6 +2514,152 @@ function zohoApiPlugin(): Plugin {
             }
           });
           return;
+        }
+
+        // Get / List Attachments endpoint (v8 Attachments API)
+        // e.g. GET /api/zoho/get-attachments?module=Deals&recordId=1078476000025109014
+        if (pathname === '/api/zoho/get-attachments' && req.method === 'GET') {
+          try {
+            const recordId = urlObj.searchParams.get('recordId') || urlObj.searchParams.get('id') || urlObj.searchParams.get('deal_id') || '';
+            const moduleName = urlObj.searchParams.get('module') || 'Deals';
+
+            if (!recordId) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: 'recordId is required to fetch attachments' }));
+            }
+
+            let accessToken = await getAccessToken(env);
+            const domain = env.VITE_ZOHO_DOMAIN || 'in';
+            const apiBase = env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
+            const attFields = 'id,File_Name,Size,Created_Time,Modified_Time,Created_By,$type,$attachment_type,$file_id,$link_url,Parent_Id';
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=${attFields}`;
+
+            console.log(`[Vite Zoho Plugin] Fetching attachments for ${moduleName} ID: ${recordId}`);
+
+            let crmRes = await fetch(crmEndpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${accessToken}`,
+              },
+            });
+
+            if (crmRes.status === 204) {
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: true, data: [] }));
+            }
+
+            let crmData: any = await crmRes.json();
+
+            if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              crmRes = await fetch(crmEndpoint, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                },
+              });
+              if (crmRes.status === 204) {
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ success: true, data: [] }));
+              }
+              crmData = await crmRes.json();
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            if (crmData.data) {
+              return res.end(JSON.stringify({
+                success: true,
+                data: crmData.data,
+                info: crmData.info,
+              }));
+            } else if (crmData.code === 'NO_CONTENT' || crmData.code === 'RECORD_NOT_FOUND') {
+              return res.end(JSON.stringify({
+                success: true,
+                data: [],
+              }));
+            } else {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({
+                success: false,
+                message: crmData.message || 'Failed to fetch attachments from Zoho CRM',
+                errorDetails: crmData,
+              }));
+            }
+          } catch (err: any) {
+            console.error('[Vite Zoho Plugin] Get attachments server error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
+        // Download / Stream Attachment endpoint (v8 Attachments API)
+        // e.g. GET /api/zoho/download-attachment?module=Deals&recordId=1078476000025109014&attachmentId=1078476000025121469
+        if (pathname === '/api/zoho/download-attachment' && req.method === 'GET') {
+          try {
+            const recordId = urlObj.searchParams.get('recordId') || urlObj.searchParams.get('id') || '';
+            const attachmentId = urlObj.searchParams.get('attachmentId') || urlObj.searchParams.get('attId') || '';
+            const moduleName = urlObj.searchParams.get('module') || 'Deals';
+            const isPreview = urlObj.searchParams.get('preview') === 'true';
+
+            if (!recordId || !attachmentId) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: 'Both "recordId" and "attachmentId" are required' }));
+            }
+
+            let accessToken = await getAccessToken(env);
+            const domain = env.VITE_ZOHO_DOMAIN || 'in';
+            const apiBase = env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments/${attachmentId}`;
+
+            console.log(`[Vite Zoho Plugin] Downloading attachment ${attachmentId} from ${moduleName} ${recordId}`);
+
+            let crmRes = await fetch(crmEndpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${accessToken}`,
+              },
+            });
+
+            if (crmRes.status === 401) {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              crmRes = await fetch(crmEndpoint, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                },
+              });
+            }
+
+            if (!crmRes.ok) {
+              const errText = await crmRes.text();
+              res.statusCode = crmRes.status;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: 'Failed to download attachment from Zoho CRM', details: errText }));
+            }
+
+            const contentType = crmRes.headers.get('content-type') || 'application/octet-stream';
+            const contentDisp = crmRes.headers.get('content-disposition') || (isPreview ? 'inline' : `attachment; filename="attachment-${attachmentId}"`);
+            const contentLength = crmRes.headers.get('content-length');
+
+            res.statusCode = 200;
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Content-Disposition', isPreview ? 'inline' : contentDisp);
+            if (contentLength) res.setHeader('Content-Length', contentLength);
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+
+            const arrayBuf = await crmRes.arrayBuffer();
+            return res.end(Buffer.from(arrayBuf));
+          } catch (err: any) {
+            console.error('[Vite Zoho Plugin] Download attachment server error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
         }
 
         // Upload attachment endpoint (v8 Attachments API)
