@@ -24,7 +24,16 @@ import {
   ArrowUpDown,
   Send,
   CalendarDays,
-  Layers
+  Layers,
+  User,
+  History,
+  FileSpreadsheet,
+  Grid,
+  List,
+  BarChart3,
+  Sparkles,
+  ExternalLink,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
@@ -73,9 +82,16 @@ export const Attendance = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
 
-  // Modal State
+  // Edit / Log Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<Partial<AttendanceItem> | null>(null);
+
+  // Employee Detail History View State (Opens when clicking any employee)
+  const [selectedEmployeeCode, setSelectedEmployeeCode] = useState<string | null>(null);
+  const [historyMonthFilter, setHistoryMonthFilter] = useState<string>('ALL');
+  const [historyYearFilter, setHistoryYearFilter] = useState<string>('ALL');
+  const [historyViewMode, setHistoryViewMode] = useState<'table' | 'calendar'>('table');
+  const [historySearch, setHistorySearch] = useState('');
 
   const canMarkAttendance = isSuperAdmin || isHR;
   const isFullAdmin = isSuperAdmin || isHR;
@@ -289,7 +305,7 @@ export const Attendance = () => {
       : [{ id: currentUser.empId || currentUser.id || 'EMP-USER', name: currentUser.name || 'Employee' }];
   }, [allEmployees, currentUser, isFullAdmin, isTeamLead]);
 
-  // Combined records for the selected date / search query
+  // Main table displayed records (by selectedDate / searchQuery)
   const displayedRecords = useMemo(() => {
     let list = records;
 
@@ -339,7 +355,7 @@ export const Attendance = () => {
     return list;
   }, [records, isAllDates, selectedDate, isFullAdmin, currentUser, visibleEmployees, statusFilter, punchFilter, searchQuery]);
 
-  // Statistics calculation for KPI cards
+  // Statistics calculation for Top KPI cards
   const stats = useMemo(() => {
     const scopeRecords = isAllDates ? records : records.filter(r => r.date === selectedDate);
     const totalStaff = scopeRecords.length || visibleEmployees.length || 0;
@@ -363,6 +379,100 @@ export const Attendance = () => {
       avgWorkingHours: formatAttendanceDuration(avgMinutes)
     };
   }, [records, isAllDates, selectedDate, visibleEmployees]);
+
+  // ==========================================
+  // EMPLOYEE INDIVIDUAL HISTORY DATA & STATS
+  // ==========================================
+  const activeEmployeeDetails = useMemo(() => {
+    if (!selectedEmployeeCode) return null;
+    const empCode = selectedEmployeeCode.toLowerCase().trim();
+    const matched = employeeMap.get(empCode);
+    const sampleRecord = records.find(r => r.empId.toLowerCase() === empCode);
+
+    return {
+      empCode: selectedEmployeeCode,
+      empName: matched?.name || sampleRecord?.empName || `Employee ${selectedEmployeeCode}`,
+      department: matched?.department || matched?.formData?.department || sampleRecord?.department || 'General',
+      designation: matched?.designation || matched?.formData?.designation || 'Staff',
+      email: matched?.email || matched?.formData?.email || sampleRecord?.email || '',
+      avatarChar: (matched?.name || sampleRecord?.empName || selectedEmployeeCode).charAt(0).toUpperCase()
+    };
+  }, [selectedEmployeeCode, employeeMap, records]);
+
+  // All attendance records for the selected employee across all dates
+  const employeeAllRecords = useMemo(() => {
+    if (!selectedEmployeeCode) return [];
+    const empCode = selectedEmployeeCode.toLowerCase().trim();
+    return records
+      .filter(r => r.empId.toLowerCase() === empCode)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [records, selectedEmployeeCode]);
+
+  // Available Months & Years for the selected employee
+  const employeeAvailableMonthsYears = useMemo(() => {
+    const months = new Set<string>();
+    const years = new Set<string>();
+    employeeAllRecords.forEach(r => {
+      if (r.date && /^\d{4}-\d{2}-\d{2}$/.test(r.date)) {
+        const [yyyy, mm] = r.date.split('-');
+        years.add(yyyy);
+        months.add(`${yyyy}-${mm}`);
+      }
+    });
+    return {
+      months: Array.from(months).sort().reverse(),
+      years: Array.from(years).sort().reverse()
+    };
+  }, [employeeAllRecords]);
+
+  // Filtered records for the employee history drawer
+  const employeeFilteredRecords = useMemo(() => {
+    let list = employeeAllRecords;
+
+    if (historyYearFilter !== 'ALL') {
+      list = list.filter(r => r.date.startsWith(historyYearFilter));
+    }
+    if (historyMonthFilter !== 'ALL') {
+      list = list.filter(r => r.date.startsWith(historyMonthFilter));
+    }
+    if (historySearch.trim()) {
+      const q = historySearch.toLowerCase().trim();
+      list = list.filter(
+        r =>
+          r.date.includes(q) ||
+          r.status.toLowerCase().includes(q) ||
+          r.punchStatus.toLowerCase().includes(q) ||
+          (r.punches && r.punches.includes(q))
+      );
+    }
+    return list;
+  }, [employeeAllRecords, historyYearFilter, historyMonthFilter, historySearch]);
+
+  // Summary stats for the selected employee
+  const employeeStats = useMemo(() => {
+    const totalDays = employeeFilteredRecords.length;
+    const presentDays = employeeFilteredRecords.filter(r => r.status === 'Present' || r.status === 'Late' || r.status === 'On Duty').length;
+    const lateDays = employeeFilteredRecords.filter(r => r.status === 'Late' || r.lateMinutes > 0).length;
+    const totalLateMinutes = employeeFilteredRecords.reduce((sum, r) => sum + (r.lateMinutes || 0), 0);
+    const earlyOutDays = employeeFilteredRecords.filter(r => r.earlyOutMinutes > 0).length;
+    const totalWorkingMinutes = employeeFilteredRecords.reduce((sum, r) => sum + (r.totalMinutes || 0), 0);
+    const avgMinutes = presentDays > 0 ? Math.round(totalWorkingMinutes / presentDays) : 0;
+    const singlePunchDays = employeeFilteredRecords.filter(r => r.punchStatus === 'Single Punch' || (r.firstIn && !r.lastOut)).length;
+    const absentDays = employeeFilteredRecords.filter(r => r.status === 'Absent').length;
+
+    return {
+      totalDays,
+      presentDays,
+      presentPct: totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0,
+      lateDays,
+      totalLateMinutes,
+      earlyOutDays,
+      singlePunchDays,
+      absentDays,
+      totalHoursFormatted: formatAttendanceDuration(totalWorkingMinutes),
+      avgHoursFormatted: formatAttendanceDuration(avgMinutes)
+    };
+  }, [employeeFilteredRecords]);
 
   // Handle Quick Status Change
   const handleQuickStatusChange = async (item: AttendanceItem, newStatus: AttendanceItem['status']) => {
@@ -425,13 +535,17 @@ export const Attendance = () => {
   };
 
   // Open Edit / Log Modal
-  const handleOpenEditModal = (item?: AttendanceItem) => {
+  const handleOpenEditModal = (item?: AttendanceItem, prefillEmpCode?: string) => {
     if (item) {
       setEditingRecord({ ...item });
     } else {
+      const targetEmpCode = prefillEmpCode || selectedEmployeeCode || visibleEmployees[0]?.id || '255';
+      const targetEmp = employeeMap.get(targetEmpCode.toLowerCase());
+      const targetEmpName = targetEmp?.name || `Employee ${targetEmpCode}`;
+
       setEditingRecord({
-        empId: visibleEmployees[0]?.id || '255',
-        empName: visibleEmployees[0]?.name || 'Employee 255',
+        empId: targetEmpCode,
+        empName: targetEmpName,
         date: selectedDate,
         status: 'Present',
         punchStatus: 'Complete',
@@ -544,8 +658,8 @@ export const Attendance = () => {
   };
 
   // Export to CSV
-  const handleExportCSV = () => {
-    if (displayedRecords.length === 0) {
+  const handleExportCSV = (recordsToExport: AttendanceItem[], filename: string) => {
+    if (recordsToExport.length === 0) {
       alert('No attendance records to export.');
       return;
     }
@@ -567,7 +681,7 @@ export const Attendance = () => {
       'Zoho Record ID'
     ];
 
-    const rows = displayedRecords.map(r => [
+    const rows = recordsToExport.map(r => [
       `"${r.name}"`,
       `"${r.date}"`,
       `"${r.empId}"`,
@@ -588,7 +702,7 @@ export const Attendance = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Daily_Attendance_${isAllDates ? 'All_Dates' : selectedDate}.csv`);
+    link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -624,6 +738,16 @@ export const Attendance = () => {
         return 'bg-rose-50 text-rose-700 border-rose-200';
       default:
         return 'bg-gray-50 text-gray-600 border-gray-200';
+    }
+  };
+
+  const formatMonthName = (yyyyMm: string) => {
+    try {
+      const [y, m] = yyyyMm.split('-');
+      const d = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+      return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    } catch {
+      return yyyyMm;
     }
   };
 
@@ -681,7 +805,7 @@ export const Attendance = () => {
           </div>
           <p className="text-gray-500 text-sm mt-1">
             {isFullAdmin
-              ? 'Real-time synchronization with Zoho CRM Daily_Attendance module, punch timestamps & working hours.'
+              ? 'Click on any employee to view their full month/year historical attendance records and analytics.'
               : isTeamLead
               ? `Daily punch logs and check-in timeline for team reporting to ${currentUser.name}.`
               : `Daily punch logs, timestamps, and total working minutes for ${currentUser.name}.`}
@@ -733,7 +857,7 @@ export const Attendance = () => {
 
           {/* Export CSV Button */}
           <button
-            onClick={handleExportCSV}
+            onClick={() => handleExportCSV(displayedRecords, `Daily_Attendance_${isAllDates ? 'All_Dates' : selectedDate}.csv`)}
             className="px-3.5 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold flex items-center shadow-sm transition-all"
             title="Export filtered records to CSV"
           >
@@ -919,7 +1043,7 @@ export const Attendance = () => {
           <table className="w-full text-left text-xs whitespace-nowrap">
             <thead className="bg-gray-50/80 text-gray-500 font-bold uppercase tracking-wider text-[11px] border-b border-gray-100">
               <tr>
-                <th className="px-5 py-3.5">Employee</th>
+                <th className="px-5 py-3.5">Employee (Click for History)</th>
                 <th className="px-5 py-3.5">Date & Key</th>
                 <th className="px-5 py-3.5">Mark Status</th>
                 <th className="px-5 py-3.5">Punch Status</th>
@@ -937,19 +1061,32 @@ export const Attendance = () => {
                 return (
                   <tr
                     key={record.id}
-                    className="hover:bg-orange-50/30 transition-colors duration-150 group"
+                    className="hover:bg-orange-50/40 transition-colors duration-150 group cursor-pointer"
+                    onClick={() => setSelectedEmployeeCode(record.empId)}
                   >
-                    {/* Employee Col */}
+                    {/* Employee Col with interactive hover card */}
                     <td className="px-5 py-4 font-bold text-gray-900">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-400 to-amber-500 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-400 to-amber-500 text-white flex items-center justify-center font-black text-xs shadow-sm group-hover:scale-105 transition-transform">
                           {record.empName.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-gray-900">{record.empName}</p>
-                          <span className="inline-block text-[11px] font-mono text-gray-500 font-semibold bg-gray-100 px-1.5 py-0.5 rounded">
-                            {record.empId}
-                          </span>
+                          <div className="flex items-center space-x-1.5">
+                            <p className="font-bold text-gray-900 group-hover:text-be-orange transition-colors">
+                              {record.empName}
+                            </p>
+                            <ExternalLink size={12} className="text-gray-300 group-hover:text-be-orange opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                          <div className="flex items-center space-x-1.5 mt-0.5">
+                            <span className="inline-block text-[10px] font-mono text-gray-600 font-bold bg-gray-100 px-1.5 py-0.2 rounded border border-gray-200">
+                              EMP {record.empId}
+                            </span>
+                            {record.department && (
+                              <span className="text-[10px] text-gray-400 font-normal">
+                                {record.department}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -963,14 +1100,14 @@ export const Attendance = () => {
                     </td>
 
                     {/* Mark Attendance Status Badge */}
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border shadow-xs ${getStatusBadge(record.status)}`}>
                         {record.status}
                       </span>
                     </td>
 
                     {/* Punch Status Badge */}
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${getPunchStatusBadge(record.punchStatus)}`}>
                         {record.punchStatus}
                       </span>
@@ -1039,7 +1176,7 @@ export const Attendance = () => {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-5 py-4 text-right">
+                    <td className="px-5 py-4 text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center justify-end space-x-1">
                         {canMarkAttendance && (
                           <>
@@ -1151,10 +1288,299 @@ export const Attendance = () => {
         </div>
       </div>
 
-      {/* Edit / Log Attendance Modal */}
+      {/* ============================================================== */}
+      {/* EMPLOYEE FULL MONTH & YEAR ATTENDANCE HISTORY MODAL / DRAWER */}
+      {/* ============================================================== */}
+      <AnimatePresence>
+        {selectedEmployeeCode && activeEmployeeDetails && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/70 backdrop-blur-md overflow-hidden">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 15 }}
+              className="bg-white rounded-3xl border border-gray-100 shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]"
+            >
+              {/* Drawer Top Header */}
+              <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex items-center space-x-4">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center font-black text-2xl shadow-lg border-2 border-white/20">
+                    {activeEmployeeDetails.avatarChar}
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-xl font-black tracking-tight text-white">
+                        {activeEmployeeDetails.empName}
+                      </h2>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-be-orange text-white">
+                        EMP {activeEmployeeDetails.empCode}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-gray-300 mt-1 font-medium">
+                      <span>Dept: <strong className="text-white">{activeEmployeeDetails.department}</strong></span>
+                      {activeEmployeeDetails.email && (
+                        <span>• Email: <strong className="text-white">{activeEmployeeDetails.email}</strong></span>
+                      )}
+                      <span>• Total History: <strong className="text-emerald-400">{employeeAllRecords.length} Days</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                  {canMarkAttendance && (
+                    <button
+                      onClick={() => handleOpenEditModal(undefined, activeEmployeeDetails.empCode)}
+                      className="px-3.5 py-2 bg-be-orange hover:bg-orange-600 text-white rounded-xl text-xs font-bold flex items-center shadow-sm transition-all"
+                    >
+                      <Plus size={14} className="mr-1.5" /> Log New Entry
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleExportCSV(employeeFilteredRecords, `Attendance_History_EMP_${activeEmployeeDetails.empCode}.csv`)}
+                    className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold flex items-center transition-all border border-white/10"
+                    title="Export employee history to CSV"
+                  >
+                    <Download size={14} className="mr-1.5 text-gray-300" /> Export CSV
+                  </button>
+                  <button
+                    onClick={() => setSelectedEmployeeCode(null)}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Employee Summary Stats */}
+              <div className="p-6 bg-slate-50 border-b border-gray-100 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-xs">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Days</span>
+                  <p className="text-xl font-black text-gray-900 mt-1">{employeeStats.totalDays}</p>
+                  <span className="text-[10px] text-gray-400">Filtered period</span>
+                </div>
+
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-xs">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Present</span>
+                  <div className="flex items-baseline space-x-1.5 mt-1">
+                    <p className="text-xl font-black text-emerald-600">{employeeStats.presentDays}</p>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded">
+                      {employeeStats.presentPct}%
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-gray-400">Attendance rate</span>
+                </div>
+
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-xs">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Total Hours</span>
+                  <p className="text-xl font-black text-indigo-600 mt-1">{employeeStats.totalHoursFormatted}</p>
+                  <span className="text-[10px] text-gray-400">Working duration</span>
+                </div>
+
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-xs">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Avg Daily</span>
+                  <p className="text-xl font-black text-slate-800 mt-1">{employeeStats.avgHoursFormatted}</p>
+                  <span className="text-[10px] text-gray-400">Per present day</span>
+                </div>
+
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-xs">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Late Days</span>
+                  <p className="text-xl font-black text-amber-600 mt-1">{employeeStats.lateDays}</p>
+                  <span className="text-[10px] text-amber-700 font-bold">({employeeStats.totalLateMinutes}m total)</span>
+                </div>
+
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200/80 shadow-xs">
+                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Single Punch</span>
+                  <p className="text-xl font-black text-rose-600 mt-1">{employeeStats.singlePunchDays}</p>
+                  <span className="text-[10px] text-gray-400">Missed punch-out</span>
+                </div>
+              </div>
+
+              {/* Month / Year Filter & View Controls */}
+              <div className="px-6 py-3.5 bg-white border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-gray-600 flex items-center">
+                    <CalendarDays size={14} className="mr-1.5 text-be-orange" /> Period:
+                  </span>
+                  
+                  {/* Month Filter Dropdown */}
+                  <select
+                    value={historyMonthFilter}
+                    onChange={e => setHistoryMonthFilter(e.target.value)}
+                    className="px-3 py-1.5 text-xs font-bold border border-gray-200 rounded-xl bg-gray-50 text-gray-800 focus:outline-none focus:border-be-orange"
+                  >
+                    <option value="ALL">All Months ({employeeAllRecords.length} records)</option>
+                    {employeeAvailableMonthsYears.months.map(m => (
+                      <option key={m} value={m}>
+                        {formatMonthName(m)}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Year Filter Dropdown */}
+                  {employeeAvailableMonthsYears.years.length > 1 && (
+                    <select
+                      value={historyYearFilter}
+                      onChange={e => setHistoryYearFilter(e.target.value)}
+                      className="px-3 py-1.5 text-xs font-bold border border-gray-200 rounded-xl bg-gray-50 text-gray-800 focus:outline-none focus:border-be-orange"
+                    >
+                      <option value="ALL">All Years</option>
+                      {employeeAvailableMonthsYears.years.map(y => (
+                        <option key={y} value={y}>Year {y}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Search within employee logs */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-3.5 h-3.5" />
+                  <input
+                    type="text"
+                    placeholder="Search dates, times, status..."
+                    value={historySearch}
+                    onChange={e => setHistorySearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 text-xs font-medium border border-gray-200 rounded-xl focus:outline-none focus:border-be-orange bg-gray-50"
+                  />
+                  {historySearch && (
+                    <button
+                      onClick={() => setHistorySearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Employee History Table Content */}
+              <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs">
+                  <table className="w-full text-left text-xs whitespace-nowrap">
+                    <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider text-[11px] border-b border-gray-200">
+                      <tr>
+                        <th className="px-5 py-3">Date</th>
+                        <th className="px-5 py-3">Attendance Key</th>
+                        <th className="px-5 py-3">Status</th>
+                        <th className="px-5 py-3">Punch Type</th>
+                        <th className="px-5 py-3">Punch In</th>
+                        <th className="px-5 py-3">Punch Out</th>
+                        <th className="px-5 py-3">Duration</th>
+                        <th className="px-5 py-3">Punches Chain</th>
+                        <th className="px-5 py-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700">
+                      {employeeFilteredRecords.map(rec => {
+                        const punchesArr = parsePunchesTimeline(rec.punches);
+
+                        return (
+                          <tr key={rec.id} className="hover:bg-orange-50/30 transition-colors">
+                            <td className="px-5 py-3.5 font-bold text-gray-900">
+                              {rec.date}
+                            </td>
+                            <td className="px-5 py-3.5 font-mono text-gray-500 text-[11px]">
+                              {rec.name}
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(rec.status)}`}>
+                                {rec.status}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getPunchStatusBadge(rec.punchStatus)}`}>
+                                {rec.punchStatus}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className="font-semibold text-gray-800">
+                                {formatAttendanceTime(rec.firstIn)}
+                              </span>
+                              {rec.lateMinutes > 0 && (
+                                <span className="ml-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
+                                  +{rec.lateMinutes}m Late
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className="font-semibold text-gray-800">
+                                {formatAttendanceTime(rec.lastOut)}
+                              </span>
+                              {rec.earlyOutMinutes > 0 && (
+                                <span className="ml-1.5 text-[10px] font-bold text-orange-700 bg-orange-50 px-1 py-0.2 rounded border border-orange-200">
+                                  -{rec.earlyOutMinutes}m Early
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 font-bold text-gray-900">
+                              {rec.totalMinutes > 0 ? (
+                                <span>
+                                  {formatAttendanceDuration(rec.totalMinutes)}
+                                  <span className="text-[10px] text-gray-400 block font-normal font-mono">({rec.totalMinutes}m)</span>
+                                </span>
+                              ) : (
+                                '--'
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5">
+                              {punchesArr.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 max-w-[180px]">
+                                  {punchesArr.map((p, idx) => (
+                                    <span key={idx} className="text-[10px] font-mono bg-gray-100 text-gray-700 px-1.5 py-0.2 rounded border border-gray-200">
+                                      {p}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 italic">No chain</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3.5 text-right">
+                              <button
+                                onClick={() => handleOpenEditModal(rec)}
+                                className="p-1.5 text-gray-400 hover:text-be-orange hover:bg-orange-50 rounded-lg transition-colors"
+                                title="Edit this record"
+                              >
+                                <Edit3 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {employeeFilteredRecords.length === 0 && (
+                        <tr>
+                          <td colSpan={9} className="px-6 py-12 text-center text-gray-400">
+                            No attendance records match the selected month / search criteria for this employee.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Drawer Footer */}
+              <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                <span>
+                  Showing <strong>{employeeFilteredRecords.length}</strong> of <strong>{employeeAllRecords.length}</strong> total records for Employee {activeEmployeeDetails.empCode}
+                </span>
+                <button
+                  onClick={() => setSelectedEmployeeCode(null)}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-colors"
+                >
+                  Close History
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================== */}
+      {/* EDIT / LOG ATTENDANCE MODAL                                     */}
+      {/* ============================================================== */}
       <AnimatePresence>
         {isModalOpen && editingRecord && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1190,7 +1616,7 @@ export const Attendance = () => {
                   {/* Employee Selection */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                      Employee <span className="text-red-500">*</span>
+                      Employee Code / ID <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -1207,6 +1633,20 @@ export const Attendance = () => {
                       }}
                       className="w-full px-3.5 py-2.5 text-xs font-semibold border border-gray-200 rounded-xl focus:outline-none focus:border-be-orange bg-gray-50/40"
                       required
+                    />
+                  </div>
+
+                  {/* Employee Name */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                      Employee Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Priyansh"
+                      value={editingRecord.empName || ''}
+                      onChange={e => setEditingRecord(prev => ({ ...prev, empName: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 text-xs font-semibold border border-gray-200 rounded-xl focus:outline-none focus:border-be-orange bg-gray-50/40"
                     />
                   </div>
 
