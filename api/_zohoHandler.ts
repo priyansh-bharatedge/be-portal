@@ -1142,6 +1142,144 @@ export async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // 5.1. Update Employee Password by finding via Email in Zoho CRM
+    if (action === 'update-employee-password' && (method === 'POST' || method === 'PUT')) {
+      const body = await getRequestBody(req);
+      const email = (body.email || '').trim();
+      const password = (body.password || body.newPassword || '').trim();
+      let zohoId = body.zohoId ? String(body.zohoId).trim() : '';
+
+      if (!password) {
+        return sendJson(res, 400, { success: false, message: 'Password is required' });
+      }
+
+      let accessToken = await getAccessToken();
+      const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
+
+      // 1. If zohoId is not provided, search by email in Employee module
+      if (!zohoId && email) {
+        try {
+          const criteria = `((Personal_Email_Address:equals:${email})or(Email:equals:${email}))`;
+          const searchUrl = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteria)}`;
+          
+          let searchRes = await fetch(searchUrl, {
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+          });
+          
+          if (searchRes.status === 401) {
+            cachedToken = null;
+            accessToken = await getAccessToken();
+            searchRes = await fetch(searchUrl, {
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+            });
+          }
+
+          if (searchRes.status === 200) {
+            const searchData: any = await searchRes.json();
+            if (searchData?.data?.[0]?.id) {
+              zohoId = String(searchData.data[0].id);
+            }
+          }
+
+          // Fallback: search?email=...
+          if (!zohoId) {
+            const emailSearchUrl = `${apiBase}/crm/v8/${moduleName}/search?email=${encodeURIComponent(email)}`;
+            let emailRes = await fetch(emailSearchUrl, {
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+            });
+            if (emailRes.status === 200) {
+              const emailData: any = await emailRes.json();
+              if (emailData?.data?.[0]?.id) {
+                zohoId = String(emailData.data[0].id);
+              }
+            }
+          }
+
+          // Fallback 2: list scan if search did not catch
+          if (!zohoId) {
+            const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=id,Personal_Email_Address,Email&per_page=200`;
+            let listRes = await fetch(listUrl, {
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+            });
+            if (listRes.status === 200) {
+              const listData: any = await listRes.json();
+              const matched = listData?.data?.find((x: any) => 
+                (x.Personal_Email_Address && x.Personal_Email_Address.toLowerCase() === email.toLowerCase()) ||
+                (x.Email && x.Email.toLowerCase() === email.toLowerCase())
+              );
+              if (matched?.id) {
+                zohoId = String(matched.id);
+              }
+            }
+          }
+        } catch (searchErr) {
+          console.warn('[Zoho API Handler] Error searching employee by email:', searchErr);
+        }
+      }
+
+      if (!zohoId) {
+        return sendJson(res, 404, {
+          success: false,
+          message: `Employee record with email "${email}" not found in Zoho CRM Employee module.`,
+        });
+      }
+
+      // 2. Perform partial PUT update in Zoho CRM Employee module (only updating Password field)
+      const updatePayload = {
+        id: zohoId,
+        Password: password,
+      };
+
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
+      let crmRes = await fetch(crmEndpoint, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: [updatePayload],
+          trigger: ['approval', 'workflow', 'blueprint'],
+        }),
+      });
+
+      let crmData: any = await crmRes.json();
+      if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+        cachedToken = null;
+        accessToken = await getAccessToken();
+        crmRes = await fetch(crmEndpoint, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            data: [updatePayload],
+            trigger: ['approval', 'workflow', 'blueprint'],
+          }),
+        });
+        crmData = await crmRes.json();
+      }
+
+      logZohoApiCall('update-employee-password', 'PUT', crmEndpoint, updatePayload, crmRes.status, crmData);
+
+      if (crmData.data?.[0]?.code === 'SUCCESS') {
+        return sendJson(res, 200, {
+          success: true,
+          zohoId,
+          message: `Password updated successfully in Zoho CRM for employee (${email})`,
+          data: crmData.data[0],
+        });
+      } else {
+        const errMsg = crmData.data?.[0]?.message || crmData.message || 'Failed to update employee password in Zoho CRM';
+        return sendJson(res, 400, {
+          success: false,
+          message: errMsg,
+          errorDetails: crmData,
+        });
+      }
+    }
+
     // 6. Get Employees
     if (action === 'get-employees' && method === 'GET') {
       let accessToken = await getAccessToken();

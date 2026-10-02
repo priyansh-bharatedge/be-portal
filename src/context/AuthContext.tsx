@@ -3,7 +3,7 @@ import { ROLE_DEFINITIONS } from '../types/roles';
 import type { AuthUser, SystemRole } from '../types/roles';
 import { DEMO_USERS, INITIAL_EMPLOYEES, INITIAL_DSR_REPORTS } from '../utils/initialData';
 import { sendOtpEmail } from '../services/emailService';
-import { saveOrUpdateZohoEmployee } from '../services/zohoService';
+import { saveOrUpdateZohoEmployee, updateZohoEmployeePassword } from '../services/zohoService';
 
 interface AuthContextType {
   currentUser: AuthUser;
@@ -315,7 +315,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       teamLeaderName: updatedEmp.teamLeaderName
     };
 
-    // Sync updated employee record (including Password) to Zoho CRM
+    // 1. Direct targeted password update in Zoho CRM Employee module by finding the record via email
+    const userEmail = updatedEmp.formData?.email || updatedEmp.email || updatedEmp.formData?.workEmail || (emailOrId.includes('@') ? emailOrId : '');
+    if (userEmail) {
+      updateZohoEmployeePassword(userEmail, cleanPassword, updatedEmp.zohoId).then((res) => {
+        if (res.success && res.zohoId) {
+          console.log(`[Zoho CRM] Password field updated in Zoho CRM for employee ${userEmail} (Zoho ID: ${res.zohoId})`);
+          const saved = localStorage.getItem('be_employees');
+          if (saved) {
+            const arr = JSON.parse(saved);
+            const idx = arr.findIndex((x: any) => x.id === updatedEmp.id);
+            if (idx !== -1 && !arr[idx].zohoId) {
+              arr[idx].zohoId = res.zohoId;
+              arr[idx].zohoStatus = 'synced';
+              localStorage.setItem('be_employees', JSON.stringify(arr));
+              window.dispatchEvent(new Event('be_employees_updated'));
+            }
+          }
+        }
+      }).catch((err) => console.warn('[Zoho CRM] Direct password update to Zoho CRM failed:', err));
+    }
+
+    // 2. Sync updated employee record to Zoho CRM
     saveOrUpdateZohoEmployee(updatedEmp).then((res) => {
       if (res.success && res.zohoId && !updatedEmp.zohoId) {
         const saved = localStorage.getItem('be_employees');

@@ -1312,6 +1312,163 @@ function zohoApiPlugin(): Plugin {
           return;
         }
 
+        // Update employee password endpoint (Module API Name: Employee)
+        if (pathname === '/api/zoho/update-employee-password' && (req.method === 'POST' || req.method === 'PUT')) {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const parsed = JSON.parse(body);
+              const email = (parsed.email || '').trim();
+              const password = (parsed.password || parsed.newPassword || '').trim();
+              let zohoId = parsed.zohoId ? String(parsed.zohoId).trim() : '';
+
+              if (!password) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ success: false, message: 'Password is required' }));
+              }
+
+              let accessToken = await getAccessToken(env);
+              const moduleName = env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
+              const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+
+              // 1. If zohoId is not provided, search by email in Employee module
+              if (!zohoId && email) {
+                try {
+                  const criteria = `((Personal_Email_Address:equals:${email})or(Email:equals:${email}))`;
+                  const searchUrl = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteria)}`;
+                  
+                  let searchRes = await fetch(searchUrl, {
+                    headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                  });
+                  
+                  if (searchRes.status === 401) {
+                    cachedToken = null;
+                    accessToken = await getAccessToken(env);
+                    searchRes = await fetch(searchUrl, {
+                      headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                    });
+                  }
+
+                  if (searchRes.status === 200) {
+                    const searchData: any = await searchRes.json();
+                    if (searchData?.data?.[0]?.id) {
+                      zohoId = String(searchData.data[0].id);
+                    }
+                  }
+
+                  // Fallback: search?email=...
+                  if (!zohoId) {
+                    const emailSearchUrl = `${apiBase}/crm/v8/${moduleName}/search?email=${encodeURIComponent(email)}`;
+                    let emailRes = await fetch(emailSearchUrl, {
+                      headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                    });
+                    if (emailRes.status === 200) {
+                      const emailData: any = await emailRes.json();
+                      if (emailData?.data?.[0]?.id) {
+                        zohoId = String(emailData.data[0].id);
+                      }
+                    }
+                  }
+
+                  // Fallback 2: list scan if search did not catch
+                  if (!zohoId) {
+                    const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=id,Personal_Email_Address,Email&per_page=200`;
+                    let listRes = await fetch(listUrl, {
+                      headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                    });
+                    if (listRes.status === 200) {
+                      const listData: any = await listRes.json();
+                      const matched = listData?.data?.find((x: any) => 
+                        (x.Personal_Email_Address && x.Personal_Email_Address.toLowerCase() === email.toLowerCase()) ||
+                        (x.Email && x.Email.toLowerCase() === email.toLowerCase())
+                      );
+                      if (matched?.id) {
+                        zohoId = String(matched.id);
+                      }
+                    }
+                  }
+                } catch (searchErr) {
+                  console.warn('[Vite Zoho Plugin] Error searching employee by email:', searchErr);
+                }
+              }
+
+              if (!zohoId) {
+                res.statusCode = 404;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({
+                  success: false,
+                  message: `Employee record with email "${email}" not found in Zoho CRM Employee module.`,
+                }));
+              }
+
+              // 2. Perform partial PUT update in Zoho CRM Employee module (only updating Password field)
+              const updatePayload = {
+                id: zohoId,
+                Password: password,
+              };
+
+              const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
+              let crmRes = await fetch(crmEndpoint, {
+                method: 'PUT',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  data: [updatePayload],
+                  trigger: ['approval', 'workflow', 'blueprint'],
+                }),
+              });
+
+              let crmData: any = await crmRes.json();
+              if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+                cachedToken = null;
+                accessToken = await getAccessToken(env);
+                crmRes = await fetch(crmEndpoint, {
+                  method: 'PUT',
+                  headers: {
+                    'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    data: [updatePayload],
+                    trigger: ['approval', 'workflow', 'blueprint'],
+                  }),
+                });
+                crmData = await crmRes.json();
+              }
+
+              logZohoApiCall('update-employee-password', 'PUT', crmEndpoint, updatePayload, crmRes.status, crmData);
+
+              res.setHeader('Content-Type', 'application/json');
+              if (crmData.data?.[0]?.code === 'SUCCESS') {
+                return res.end(JSON.stringify({
+                  success: true,
+                  zohoId,
+                  message: `Password updated successfully in Zoho CRM for employee (${email})`,
+                  data: crmData.data[0],
+                }));
+              } else {
+                res.statusCode = 400;
+                const errMsg = crmData.data?.[0]?.message || crmData.message || 'Failed to update employee password in Zoho CRM';
+                return res.end(JSON.stringify({
+                  success: false,
+                  message: errMsg,
+                  errorDetails: crmData,
+                }));
+              }
+            } catch (err: any) {
+              console.error('[Vite Zoho Plugin] Server error updating password:', err);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+          });
+          return;
+        }
+
         // Fetch / Get Employees endpoint (Module API Name: Employee)
         if (pathname === '/api/zoho/get-employees' && req.method === 'GET') {
           try {

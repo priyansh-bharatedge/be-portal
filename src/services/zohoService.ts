@@ -470,6 +470,44 @@ export async function updateZohoEmployee(employee: any): Promise<ZohoApiResponse
 }
 
 /**
+ * Updates specifically the Password field in the Zoho CRM Employee module by finding the record via email.
+ */
+export async function updateZohoEmployeePassword(email: string, password: string, zohoId?: string): Promise<ZohoApiResponse> {
+  try {
+    const response = await fetch('/api/zoho/update-employee-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password, zohoId }),
+    });
+
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        zohoId: data.zohoId || zohoId,
+        message: data.message || 'Password updated successfully in Zoho CRM',
+        data: data.data,
+      };
+    } else {
+      return {
+        success: false,
+        message: data.message || 'Failed to update employee password in Zoho CRM',
+        errorDetails: data.errorDetails || data,
+      };
+    }
+  } catch (error: any) {
+    console.error('[Zoho CRM] Client exception while updating employee password:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with Zoho CRM password update endpoint',
+      errorDetails: error,
+    };
+  }
+}
+
+/**
  * Automatically inserts or updates an employee record in Zoho CRM depending on whether employee.zohoId exists.
  */
 export async function saveOrUpdateZohoEmployee(employee: any): Promise<ZohoApiResponse> {
