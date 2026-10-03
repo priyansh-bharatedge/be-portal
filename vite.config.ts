@@ -1200,8 +1200,9 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+            const dealFields = 'id,Deal_Name,Client_Name,Clients,Contact_Name,Company,Company_name,Company_name_bp,Company_name_cs,Company_name_st,Company_Name,Account_Name,Amount,Amount_Without_GST,GST_Amount,Total_deal_amount_inclusive_of_gst,Total_Received_Amount,Total_Pending_Amount,Received_amount,Pending_amount,Deal_Amount,Deal_Amount_Without_GST,Deal_GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Amount_After_disbursement,amount_if_you_have_kindly_put_0,Stage,Pipeline,Choose_Wisely,Service_Name,Service_Count,Owner,Created_By,Closing_Date,Booking_Date,Date,Created_Time,Modified_Time,Client_contact_detail,Mobile,Phone,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,Company_address,City,State,Branches,Bank_details,Has_Partner_BDM,has_partner_bdm,Partner_BDM,Partner_BDM_Name,Partner_BDM_name,Partner_BDM_Names,Partner_BDM_Amount,Partner_BDM_amount,Partner_BDM_ID,partner_bdm_id,BDM_names,BDM_name,Quotation,Subform_1';
             const paginationQuery = buildZohoPaginationQuery(urlObj);
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}${paginationQuery ? `?${paginationQuery}` : ''}`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${paginationQuery}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Deals from Zoho CRM (${moduleName})`);
 
@@ -1212,9 +1213,9 @@ function zohoApiPlugin(): Plugin {
               },
             });
 
-            let crmData: any = await crmRes.json();
+            let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
 
-            if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+            if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
               cachedToken = null;
               accessToken = await getAccessToken(env);
               crmRes = await fetch(crmEndpoint, {
@@ -1223,17 +1224,17 @@ function zohoApiPlugin(): Plugin {
                   'Authorization': `Zoho-oauthtoken ${accessToken}`,
                 },
               });
-              crmData = await crmRes.json();
+              crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
             }
 
             res.setHeader('Content-Type', 'application/json');
-            if (crmData.data) {
+            if (crmData?.data) {
               return res.end(JSON.stringify({
                 success: true,
                 data: crmData.data,
                 info: crmData.info,
               }));
-            } else if (crmData.code === 'NO_CONTENT') {
+            } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
               return res.end(JSON.stringify({
                 success: true,
                 data: [],
@@ -1242,7 +1243,7 @@ function zohoApiPlugin(): Plugin {
               res.statusCode = 400;
               return res.end(JSON.stringify({
                 success: false,
-                message: crmData.message || 'Failed to fetch deals from Zoho CRM',
+                message: crmData?.message || 'Failed to fetch deals from Zoho CRM',
                 errorDetails: crmData,
               }));
             }
