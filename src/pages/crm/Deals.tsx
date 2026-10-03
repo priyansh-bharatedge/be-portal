@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink, Users, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { saveDocument, saveAllDealsToIndexedDB, getAllDealsFromIndexedDB, bulkUpsertDealsToIndexedDB } from '../../lib/db';
+import { saveDocument, saveAllDealsToIndexedDB, saveDealToIndexedDB, getAllDealsFromIndexedDB, bulkUpsertDealsToIndexedDB } from '../../lib/db';
 import {
   saveOrUpdateZohoDeal,
   deleteZohoDeal,
   fetchZohoDeals,
+  fetchZohoDealById,
+  enrichDealFromZohoRecord,
   fetchAllZohoRecordsInBatches,
   uploadZohoAttachment,
   saveOrUpdateZohoCompany,
@@ -714,6 +716,127 @@ export const Deals = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, searchQuery]);
+
+  // Set of deals currently being enriched or already enriched in this session
+  const enrichingDealsRef = useRef<Set<string>>(new Set());
+
+  // 1. Auto-enrich visible deals on the active page that have ₹0 amounts
+  useEffect(() => {
+    // Filter deals based on activeTab and searchQuery to get active page slice
+    const filtered = deals.filter(deal => {
+      if (activeTab === 'Manual Deals' && deal.source === 'Zoho CRM') return false;
+      if (activeTab === 'From Quotations' && deal.source !== 'Quotation' && !deal.quotationId) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchClient = deal.client && (deal.client ?? '').toLowerCase().includes(q);
+        const matchCompany = deal.company && (deal.company ?? '').toLowerCase().includes(q);
+        const matchService = deal.service && (deal.service ?? '').toLowerCase().includes(q);
+        const matchId = deal.id && (deal.id ?? '').toLowerCase().includes(q);
+        if (!matchClient && !matchCompany && !matchService && !matchId) return false;
+      }
+      return true;
+    });
+
+    const pageSlice = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const dealsToEnrich = pageSlice.filter(
+      (d: any) => (getDealAmount(d) === 0 || !d.servicesData || d.servicesData.length === 0) &&
+                  (d.zohoId || (d.id && String(d.id).length > 8)) &&
+                  !enrichingDealsRef.current.has(String(d.zohoId || d.id))
+    );
+
+    if (dealsToEnrich.length === 0) return;
+
+    let isCancelled = false;
+
+    dealsToEnrich.forEach((d: any) => {
+      const targetId = String(d.zohoId || d.id);
+      enrichingDealsRef.current.add(targetId);
+
+      fetchZohoDealById(targetId).then(res => {
+        if (isCancelled) return;
+        if (res.success && res.data) {
+          const enriched = enrichDealFromZohoRecord(res.data, d);
+          if (enriched) {
+            setDeals(prevDeals => {
+              const idx = prevDeals.findIndex(p => p.id === d.id || p.zohoId === d.zohoId || p.id === d.zohoId || p.zohoId === d.id);
+              if (idx >= 0) {
+                const copy = [...prevDeals];
+                copy[idx] = { ...copy[idx], ...enriched };
+                return copy;
+              }
+              return prevDeals;
+            });
+            saveDealToIndexedDB(enriched).catch(() => {});
+          }
+        }
+      }).catch(() => {});
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [deals, currentPage, itemsPerPage, activeTab, searchQuery]);
+
+  // 2. Progressive background repair worker for historical deals in IndexedDB
+  useEffect(() => {
+    let isCancelled = false;
+    const runBackgroundRepair = async () => {
+      // Delay to let main UI finish initial rendering
+      await new Promise(r => setTimeout(r, 2500));
+      if (isCancelled) return;
+
+      try {
+        const allDeals = await getAllDealsFromIndexedDB();
+        const unEnriched = allDeals.filter(
+          (d: any) => (getDealAmount(d) === 0 || !d.servicesData || d.servicesData.length === 0) &&
+                      (d.zohoId || (d.id && String(d.id).length > 8)) &&
+                      !enrichingDealsRef.current.has(String(d.zohoId || d.id))
+        );
+
+        if (unEnriched.length === 0) return;
+
+        console.log(`[Deal Repair Worker] Starting background repair for ${unEnriched.length} deals`);
+
+        // Process in chunks of 10 concurrent requests
+        const chunkSize = 10;
+        for (let i = 0; i < unEnriched.length; i += chunkSize) {
+          if (isCancelled) break;
+          const chunk = unEnriched.slice(i, i + chunkSize);
+          
+          await Promise.allSettled(chunk.map(async (d: any) => {
+            const targetId = String(d.zohoId || d.id);
+            enrichingDealsRef.current.add(targetId);
+            try {
+              const res = await fetchZohoDealById(targetId);
+              if (res.success && res.data) {
+                const enriched = enrichDealFromZohoRecord(res.data, d);
+                if (enriched) {
+                  await saveDealToIndexedDB(enriched);
+                  setDeals(prevDeals => {
+                    const idx = prevDeals.findIndex(p => p.id === d.id || p.zohoId === d.zohoId || p.id === d.zohoId || p.zohoId === d.id);
+                    if (idx >= 0) {
+                      const copy = [...prevDeals];
+                      copy[idx] = { ...copy[idx], ...enriched };
+                      return copy;
+                    }
+                    return prevDeals;
+                  });
+                }
+              }
+            } catch (err) {}
+          }));
+
+          // Responsive breathing pause between batches
+          await new Promise(r => setTimeout(r, 400));
+        }
+      } catch (err) {
+        console.warn('Background repair error:', err);
+      }
+    };
+
+    runBackgroundRepair();
+    return () => { isCancelled = true; };
+  }, []);
 
 
   const getStatusColor = (status: string) => {

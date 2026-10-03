@@ -1327,6 +1327,310 @@ export async function fetchZohoDealById(dealId: string): Promise<ZohoApiResponse
 }
 
 /**
+ * Transforms a raw Zoho CRM Deal object into a fully calculated and aggregated Deal entity,
+ * parsing all Subform_1 service line items, financial totals, GST, Received, and Pending amounts.
+ */
+export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any {
+  if (!rawZoho) return existingDeal || null;
+
+  const parseZohoNum = (val: any): number => {
+    if (val === null || val === undefined || val === '') return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const cleaned = String(val).replace(/,/g, '').replace(/[^0-9.-]/g, '').trim();
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const formatRupee = (val: number): string => {
+    if (!val || isNaN(val) || val <= 0) return '₹0';
+    return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  };
+
+  const findFirstPositive = (...vals: any[]): number => {
+    for (const v of vals) {
+      if (v === null || v === undefined) continue;
+      const num = parseZohoNum(v);
+      if (num > 0) return num;
+    }
+    return 0;
+  };
+
+  // 1. Resolve Client & Company Names
+  let resolvedClient = '';
+  if (rawZoho.Client_Name && typeof rawZoho.Client_Name === 'string' && !/^\(\d+\)$/.test(rawZoho.Client_Name.trim())) {
+    resolvedClient = rawZoho.Client_Name.trim();
+  } else if (rawZoho.Clients && typeof rawZoho.Clients === 'object' && rawZoho.Clients.name && !/^\(\d+\)$/.test(rawZoho.Clients.name.trim())) {
+    resolvedClient = rawZoho.Clients.name.trim();
+  } else if (rawZoho.Contact_Name && typeof rawZoho.Contact_Name === 'object' && rawZoho.Contact_Name.name) {
+    resolvedClient = rawZoho.Contact_Name.name.trim();
+  } else if (rawZoho.Company_name && !/^\(\d+\)$/.test(rawZoho.Company_name.trim())) {
+    resolvedClient = rawZoho.Company_name.trim();
+  } else if (rawZoho.Company_name_bp && !/^\(\d+\)$/.test(rawZoho.Company_name_bp.trim())) {
+    resolvedClient = rawZoho.Company_name_bp.trim();
+  } else if (rawZoho.Company_name_cs && !/^\(\d+\)$/.test(rawZoho.Company_name_cs.trim())) {
+    resolvedClient = rawZoho.Company_name_cs.trim();
+  } else if (rawZoho.Deal_Name) {
+    const parts = rawZoho.Deal_Name.split(' - ');
+    const candidate = parts[0]?.replace(/^\(|\)$/g, '').trim();
+    resolvedClient = candidate && !/^\d+$/.test(candidate) ? candidate : (existingDeal?.client || 'Client');
+  } else {
+    resolvedClient = existingDeal?.client || 'Client';
+  }
+
+  const resolvedCompany = 
+    (rawZoho.Company_name && !/^\(\d+\)$/.test(rawZoho.Company_name.trim()) ? rawZoho.Company_name.trim() : '') ||
+    (rawZoho.Company_name_bp && !/^\(\d+\)$/.test(rawZoho.Company_name_bp.trim()) ? rawZoho.Company_name_bp.trim() : '') ||
+    (rawZoho.Company_name_cs && !/^\(\d+\)$/.test(rawZoho.Company_name_cs.trim()) ? rawZoho.Company_name_cs.trim() : '') ||
+    (rawZoho.Company_name_st && !/^\(\d+\)$/.test(rawZoho.Company_name_st.trim()) ? rawZoho.Company_name_st.trim() : '') ||
+    (rawZoho.Company && typeof rawZoho.Company === 'object' && rawZoho.Company.name && !/^\(\d+\)$/.test(rawZoho.Company.name.trim()) ? rawZoho.Company.name.trim() : '') ||
+    (rawZoho.Account_Name && typeof rawZoho.Account_Name === 'object' && rawZoho.Account_Name.name && !/^\(\d+\)$/.test(rawZoho.Account_Name.name.trim()) ? rawZoho.Account_Name.name.trim() : '') ||
+    (rawZoho.Company_Name && !/^\(\d+\)$/.test(rawZoho.Company_Name.trim()) ? rawZoho.Company_Name.trim() : '') ||
+    (resolvedClient && resolvedClient !== 'Client' ? resolvedClient : (existingDeal?.company || 'Company'));
+
+  // 2. Extract & Aggregate Services from Subform_1
+  let servicesSubform: any[] = [];
+  let subformTotal = 0;
+  let subformWithoutGst = 0;
+  let subformReceived = 0;
+  let subformPending = 0;
+
+  if (Array.isArray(rawZoho.Subform_1) && rawZoho.Subform_1.length > 0) {
+    servicesSubform = rawZoho.Subform_1.map((sf: any, i: number) => {
+      const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount || 0);
+      const wGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0));
+      const tAmt = agreementAmount || (wGst > 0 ? Number((wGst / 0.82).toFixed(2)) : 0);
+      const recAmt = parseZohoNum(sf.Received_amount || sf.Received || 0);
+      const pendAmt = parseZohoNum(sf.Pending_amount || sf.Pending || (tAmt > recAmt ? tAmt - recAmt : 0));
+
+      subformTotal += tAmt;
+      subformWithoutGst += wGst;
+      subformReceived += recAmt;
+      subformPending += pendAmt;
+
+      return {
+        id: String(sf.id || i + 1),
+        name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service',
+        totalAmount: String(tAmt || ''),
+        baseAmount: String(wGst || 0),
+        receivedAmount: sf.Received_amount || sf.Received || (recAmt > 0 ? String(recAmt) : ''),
+        pendingAmount: sf.Pending_amount || sf.Pending || (pendAmt > 0 ? String(pendAmt) : ''),
+        paymentStages: sf.Payment_stages || '',
+        paymentType: sf.Payment_type || '',
+        paymentDate: sf.Payment_received_date || '',
+        qualityProvided: sf.Quality_provided || '',
+        successFees: sf.Success_fees || '',
+      };
+    });
+  } else if (Array.isArray(existingDeal?.servicesData) && existingDeal.servicesData.length > 0) {
+    servicesSubform = existingDeal.servicesData;
+    servicesSubform.forEach((sf: any) => {
+      const a = parseZohoNum(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount);
+      const bg = parseZohoNum(sf.baseAmount || sf.Without_GST || sf.Base);
+      const r = parseZohoNum(sf.receivedAmount || sf.Received_amount || sf.Received);
+      const p = parseZohoNum(sf.pendingAmount || sf.Pending_amount || sf.Pending);
+      subformTotal += a || (bg > 0 ? Number((bg / 0.82).toFixed(2)) : 0);
+      subformWithoutGst += bg || (a > 0 ? Number((a * 0.82).toFixed(2)) : 0);
+      subformReceived += r;
+      subformPending += p;
+    });
+  }
+
+  // 3. Financial Calculation
+  const totalNum = findFirstPositive(
+    rawZoho.Total_deal_amount_inclusive_of_gst,
+    rawZoho.Amount,
+    rawZoho.Deal_Amount,
+    rawZoho.Grand_Total,
+    rawZoho.Grand_total,
+    rawZoho.GrandTotal,
+    rawZoho.Total_amount,
+    rawZoho.Total_Amount,
+    rawZoho.total_amount,
+    rawZoho.Agreement_amount,
+    rawZoho.Agreement_Amount,
+    rawZoho.Amount_Without_GST ? parseZohoNum(rawZoho.Amount_Without_GST) / 0.82 : 0,
+    rawZoho.Deal_Amount_Without_GST ? parseZohoNum(rawZoho.Deal_Amount_Without_GST) / 0.82 : 0,
+    rawZoho.Subtotal ? parseZohoNum(rawZoho.Subtotal) * 1.18 : 0,
+    rawZoho.Amount_After_disbursement,
+    subformTotal,
+    rawZoho.Total_Received_Amount,
+    rawZoho.Deal_Received_Amount,
+    rawZoho.Received_amount,
+    rawZoho.Received,
+    rawZoho.amount_if_you_have_kindly_put_0,
+    existingDeal?.rawAmount,
+    existingDeal?.totals?.grandTotal,
+    existingDeal?.amount ? parseZohoNum(existingDeal.amount) : 0
+  );
+
+  const withoutGst = findFirstPositive(
+    rawZoho.Amount_Without_GST,
+    rawZoho.Deal_Amount_Without_GST,
+    subformWithoutGst,
+    existingDeal?.totals?.baseAmount,
+    totalNum > 0 ? Number((totalNum * 0.82).toFixed(2)) : 0
+  );
+
+  const gstNum = findFirstPositive(
+    rawZoho.GST_Amount,
+    rawZoho.Deal_GST_Amount,
+    existingDeal?.totals?.totalGst,
+    totalNum > withoutGst ? Number((totalNum - withoutGst).toFixed(2)) : Number((withoutGst * 0.18).toFixed(2))
+  );
+
+  const recNum = findFirstPositive(
+    rawZoho.Total_Received_Amount,
+    rawZoho.Deal_Received_Amount,
+    rawZoho.Received_amount,
+    rawZoho.Received_Amount,
+    rawZoho.Received,
+    rawZoho.Amount_After_disbursement,
+    subformReceived,
+    existingDeal?.rawReceived,
+    existingDeal?.totals?.receivedAmount,
+    existingDeal?.received ? parseZohoNum(existingDeal.received) : 0
+  );
+
+  const pendNum = findFirstPositive(
+    rawZoho.Total_Pending_Amount,
+    rawZoho.Deal_Pending_Amount,
+    rawZoho.Pending_amount,
+    rawZoho.Pending_Amount,
+    rawZoho.Pending,
+    subformPending,
+    totalNum > recNum ? Number((totalNum - recNum).toFixed(2)) : 0,
+    existingDeal?.rawPending,
+    existingDeal?.totals?.pendingAmount,
+    existingDeal?.pending ? parseZohoNum(existingDeal.pending) : 0
+  );
+
+  const phone = rawZoho.Client_contact_detail || rawZoho.Client_contact_detail_cs || rawZoho.Client_contact_detail_bp || rawZoho.Client_contact_detail_fnf || rawZoho.client_contact_detail_st || rawZoho.Client_s_alternate_contact_detail || rawZoho.Client_s_alternate_contact_detail_bp || rawZoho.Mobile || rawZoho.Phone || existingDeal?.formData?.mobile || '';
+  const email = rawZoho.Client_Email_address || rawZoho.Client_Email_address_cs || rawZoho.Client_Email_address_fnf || rawZoho.Client_Email_address_bp || rawZoho.client_email_address_st || rawZoho.Email || existingDeal?.formData?.email || '';
+  const gst = rawZoho.Gst_number || rawZoho.GST_Number || rawZoho.GSTIN || existingDeal?.formData?.gstNumber || '';
+  const panVal = rawZoho.Pan_number || rawZoho.PAN_Number || rawZoho.PAN_Card || rawZoho.PAN || existingDeal?.formData?.panCard || '';
+  const aadhVal = rawZoho.Aadhaar_Card || rawZoho.Aadhaar_number || rawZoho.Aadhaar_Number || rawZoho.Aadhar_Card || rawZoho.Aadhaar || existingDeal?.formData?.aadhaarCard || '';
+  
+  const hasPartnerBdm = Boolean(
+    rawZoho.Has_Partner_BDM || 
+    rawZoho.has_partner_bdm || 
+    rawZoho.Partner_BDM || 
+    rawZoho.Partner_BDM_Name || 
+    rawZoho.Partner_BDM_name || 
+    rawZoho.Partner_BDM_Names || 
+    rawZoho.Partner_BDM_amount ||
+    existingDeal?.hasPartnerBdm ||
+    existingDeal?.formData?.hasPartnerBdm
+  );
+
+  const partnerBdmName = 
+    rawZoho.Partner_BDM_Name || 
+    rawZoho.Partner_BDM_name || 
+    rawZoho.Partner_BDM_Names || 
+    rawZoho.Partner_BDM_Names_bp || 
+    rawZoho.Partner_BDM_Names_st || 
+    rawZoho.partner_bdm_name ||
+    existingDeal?.partnerBdmName ||
+    existingDeal?.formData?.partnerBdmName ||
+    '';
+
+  const partnerBdmId = 
+    rawZoho.Partner_BDM_ID || 
+    rawZoho.partner_bdm_id || 
+    existingDeal?.partnerBdmId ||
+    existingDeal?.formData?.partnerBdmId ||
+    '';
+
+  let partnerBdmAmount = Number(rawZoho.Partner_BDM_Amount || rawZoho.Partner_BDM_amount || rawZoho.partner_bdm_amount || existingDeal?.partnerBdmAmount || existingDeal?.formData?.partnerBdmAmount || 0);
+  if (hasPartnerBdm && (!partnerBdmAmount || partnerBdmAmount === 0) && recNum > 0) {
+    partnerBdmAmount = Number(((recNum / 1.18) / 2).toFixed(2));
+  }
+
+  const stage = rawZoho.Stage || rawZoho.Status || existingDeal?.stage || 'Operations';
+  let status = 'New';
+  if (stage === 'Closed Won' || stage === 'Won' || stage.includes('Won') || stage === 'Operations executors') {
+    status = 'Won';
+  } else if (stage === 'Closed Lost' || stage === 'Lost' || stage.includes('Lost')) {
+    status = 'Lost';
+  } else if (stage.includes('Negotiat')) {
+    status = 'Negotiation';
+  } else if (stage.includes('Propos')) {
+    status = 'Proposal';
+  } else if (stage.includes('Qualif')) {
+    status = 'Qualified';
+  } else {
+    status = stage;
+  }
+
+  const serviceTitle = servicesSubform.length > 0 
+    ? (servicesSubform.length === 1 ? servicesSubform[0].name : `${servicesSubform.length} Services`) 
+    : (rawZoho.Choose_Wisely || rawZoho.Service_Name || (rawZoho.Deal_Name && rawZoho.Deal_Name.includes(' - ') ? rawZoho.Deal_Name.split(' - ').slice(1).join(' - ').trim() : (existingDeal?.service || 'Services')));
+
+  const resolvedId = existingDeal?.id || (rawZoho.id ? (String(rawZoho.id).startsWith('DL-') ? String(rawZoho.id) : `DL-${String(rawZoho.id).slice(-4)}`) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
+
+  return {
+    ...existingDeal,
+    id: resolvedId,
+    zohoId: rawZoho.id || existingDeal?.zohoId,
+    client: resolvedClient,
+    company: resolvedCompany,
+    service: serviceTitle,
+    amount: formatRupee(totalNum),
+    received: formatRupee(recNum),
+    pending: formatRupee(pendNum),
+    rawAmount: totalNum,
+    rawReceived: recNum,
+    rawPending: pendNum,
+    status,
+    stage,
+    owner: rawZoho.Owner?.name || rawZoho.Owner || rawZoho.BDM_names?.name || rawZoho.BDM_name || existingDeal?.owner || 'Admin',
+    date: rawZoho.Closing_Date ? new Date(rawZoho.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (rawZoho.Booking_Date ? new Date(rawZoho.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))),
+    source: existingDeal?.source || 'Zoho CRM',
+    hasPartnerBdm,
+    has_partner_bdm: hasPartnerBdm,
+    partnerBdmId,
+    partner_bdm_id: partnerBdmId,
+    partnerBdmName,
+    partner_bdm_name: partnerBdmName,
+    partnerBdmAmount,
+    partner_bdm_amount: partnerBdmAmount,
+    zohoStatus: 'synced',
+    zohoSyncedAt: new Date().toISOString(),
+    formData: {
+      clientName: resolvedClient,
+      companyName: resolvedCompany,
+      email: email,
+      mobile: phone,
+      gstNumber: gst,
+      panCard: panVal,
+      aadhaarCard: aadhVal,
+      billingAddress: rawZoho.Billing_address || rawZoho.Company_address || existingDeal?.formData?.billingAddress || '',
+      city: rawZoho.City || existingDeal?.formData?.city || '',
+      state: rawZoho.State || existingDeal?.formData?.state || '',
+      businessType: rawZoho.Company_Type || rawZoho.Choose_Wisely || rawZoho.Compliance_type || existingDeal?.formData?.businessType || 'Private Limited',
+      hasPartnerBdm,
+      has_partner_bdm: hasPartnerBdm,
+      partnerBdmId,
+      partner_bdm_id: partnerBdmId,
+      partnerBdmName,
+      partner_bdm_name: partnerBdmName,
+      partnerBdmAmount,
+      partner_bdm_amount: partnerBdmAmount,
+      ...(existingDeal?.formData || {})
+    },
+    servicesData: servicesSubform,
+    totals: {
+      grandTotal: totalNum,
+      baseAmount: withoutGst,
+      totalGst: gstNum,
+      receivedAmount: recNum,
+      pendingAmount: pendNum,
+      partnerBdmAmount,
+    },
+    rawZohoDeal: rawZoho
+  };
+}
+
+/**
  * Inserts a new record into the Zoho CRM Company_Policies module using REST API v8.
  * Module API Name: Company_Policies
  */

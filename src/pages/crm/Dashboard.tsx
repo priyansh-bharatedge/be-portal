@@ -14,12 +14,15 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import {
   fetchZohoDeals,
+  fetchZohoDealById,
+  enrichDealFromZohoRecord,
   fetchZohoClients,
   fetchZohoQueries,
   fetchZohoQuotations
 } from '../../services/zohoService';
 import {
   getAllDealsFromIndexedDB,
+  saveDealToIndexedDB,
   bulkUpsertDealsToIndexedDB
 } from '../../lib/db';
 
@@ -509,6 +512,37 @@ export const CrmDashboard = () => {
       window.removeEventListener('storage', handleEmpUpdate);
     };
   }, []);
+
+  // Auto-enrich deals on the Dashboard that have ₹0 amounts
+  useEffect(() => {
+    const dealsToEnrich = deals.slice(0, 20).filter(
+      (d: any) => (getDealAmount(d) === 0 || !d.servicesData || d.servicesData.length === 0) &&
+                  (d.zohoId || (d.id && String(d.id).length > 8))
+    );
+
+    if (dealsToEnrich.length === 0) return;
+
+    dealsToEnrich.forEach((d: any) => {
+      const targetId = String(d.zohoId || d.id);
+      fetchZohoDealById(targetId).then(res => {
+        if (res.success && res.data) {
+          const enriched = enrichDealFromZohoRecord(res.data, d);
+          if (enriched) {
+            setDeals(prevDeals => {
+              const idx = prevDeals.findIndex(p => p.id === d.id || p.zohoId === d.zohoId || p.id === d.zohoId || p.zohoId === d.id);
+              if (idx >= 0) {
+                const copy = [...prevDeals];
+                copy[idx] = { ...copy[idx], ...enriched };
+                return copy;
+              }
+              return prevDeals;
+            });
+            saveDealToIndexedDB(enriched).catch(() => {});
+          }
+        }
+      }).catch(() => {});
+    });
+  }, [deals]);
 
   // Dates & Helpers
   const now = new Date();
