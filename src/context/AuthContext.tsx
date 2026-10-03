@@ -1,14 +1,27 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ROLE_DEFINITIONS } from '../types/roles';
-import type { AuthUser, SystemRole } from '../types/roles';
+import type { AuthUser, SystemRole, RbacCriteriaResult } from '../types/roles';
 import { DEMO_USERS, INITIAL_EMPLOYEES, INITIAL_DSR_REPORTS } from '../utils/initialData';
 import { sendOtpEmail } from '../services/emailService';
 import { saveOrUpdateZohoEmployee, updateZohoEmployeePassword, fetchZohoEmployees } from '../services/zohoService';
+import type { ZohoApiResponse, ZohoFetchOptions, ZohoFetchResult } from '../services/zohoService';
+import {
+  injectEmployeeLookup,
+  buildZohoRbacCriteria,
+  filterRecordsByRbac,
+  mutateZohoWithRbac,
+  fetchZohoWithRbac,
+  resolveAccessibleEmployeeIds,
+  getAllEmployeesList
+} from '../services/zohoRbacService';
 
 interface AuthContextType {
   currentUser: AuthUser;
   currentRole: SystemRole;
   roleInfo: typeof ROLE_DEFINITIONS[SystemRole];
+  employeeId: string;
+  departmentName: string;
+  teamId?: string;
   switchRole: (role: SystemRole) => void;
   switchUser: (user: AuthUser) => void;
   availableUsers: AuthUser[];
@@ -23,6 +36,16 @@ interface AuthContextType {
   verifyOtp: (emailOrId: string, otp: string) => { success: boolean; error?: string };
   setPasswordAndActivate: (emailOrId: string, otp: string, newPassword: string) => Promise<{ success: boolean; error?: string; user?: AuthUser }>;
   logout: () => void;
+  
+  // RBAC & Relationship Mapping Deliverables
+  getTeamMemberIds: (includeSelf?: boolean) => string[];
+  getDepartmentMemberIds: () => string[];
+  injectLookup: (moduleName: string, payload: any) => any;
+  mutateZoho: <T = any>(moduleName: string, payload: any, isUpdate?: boolean) => Promise<ZohoApiResponse>;
+  fetchZoho: <T = any>(moduleName: string, options?: ZohoFetchOptions) => Promise<ZohoFetchResult<T>>;
+  filterRecords: <T = any>(records: T[], moduleName: string) => T[];
+  hasAccessToRecord: (record: any, moduleName?: string) => boolean;
+  getRbacCriteria: (moduleName: string) => RbacCriteriaResult;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -382,7 +405,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // 2. Sync updated employee record to Zoho CRM in background
-    saveOrUpdateZohoEmployee(updatedEmp).catch((err) => console.warn('[Zoho CRM] Background sync of updated employee password failed:', err));
+    saveOrUpdateZohoEmployee(updatedEmp).catch((err: any) => console.warn('[Zoho CRM] Background sync of updated employee password failed:', err));
 
     switchUser(authUser);
     return { success: true, user: authUser };
@@ -447,7 +470,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isValid) {
       const hasPasswordSet = Boolean(userCustomPassword);
       return { 
-        success: false, 
+        success: false,
         error: hasPasswordSet 
           ? 'Incorrect password. Please try again or use "Forgot / Set Password" with OTP.'
           : 'Incorrect password. (First time login? Click "First-Time Login" to verify via OTP and set password)' 
@@ -503,12 +526,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const employeeId = currentUser.zohoId || currentUser.empId || currentUser.id;
+  const departmentName = currentUser.department || 'General';
+  const teamId = currentUser.teamId || currentUser.teamLeaderId || '';
+
+  const getTeamMemberIds = (includeSelf = true): string[] => {
+    const { employeeIds, zohoIds, isAll } = resolveAccessibleEmployeeIds(currentUser, availableUsers);
+    if (isAll) return [];
+    const combined = Array.from(new Set([...zohoIds, ...employeeIds]));
+    if (!includeSelf && employeeId) {
+      return combined.filter(id => id.toLowerCase() !== employeeId.toLowerCase());
+    }
+    return combined;
+  };
+
+  const getDepartmentMemberIds = (): string[] => {
+    const userDept = (currentUser.department || '').trim().toLowerCase();
+    const deptEmployees = availableUsers.filter((e: AuthUser) => {
+      const eDept = (e.department || '').trim().toLowerCase();
+      return eDept === userDept;
+    });
+    const ids = new Set<string>();
+    deptEmployees.forEach((e: AuthUser) => {
+      if (e.zohoId) ids.add(String(e.zohoId));
+      if (e.empId) ids.add(String(e.empId));
+      if (e.id) ids.add(String(e.id));
+    });
+    return Array.from(ids);
+  };
+
+  const injectLookup = (moduleName: string, payload: any) => {
+    return injectEmployeeLookup(moduleName, payload, currentUser);
+  };
+
+  const mutateZoho = async <T = any>(moduleName: string, payload: any, isUpdate = false): Promise<ZohoApiResponse> => {
+    return mutateZohoWithRbac<T>(moduleName, payload, { isUpdate, user: currentUser });
+  };
+
+  const fetchZoho = async <T = any>(moduleName: string, options?: ZohoFetchOptions): Promise<ZohoFetchResult<T>> => {
+    return fetchZohoWithRbac<T>(moduleName, options, currentUser, availableUsers);
+  };
+
+  const filterRecords = <T = any>(records: T[], moduleName: string): T[] => {
+    return filterRecordsByRbac<T>(records, moduleName, currentUser, availableUsers);
+  };
+
+  const hasAccessToRecord = (record: any, moduleName = 'Deals'): boolean => {
+    const filtered = filterRecordsByRbac([record], moduleName, currentUser, availableUsers);
+    return filtered.length > 0;
+  };
+
+  const getRbacCriteria = (moduleName: string): RbacCriteriaResult => {
+    return buildZohoRbacCriteria(moduleName, currentUser, availableUsers);
+  };
+
   return (
     <AuthContext.Provider
       value={{
         currentUser: { ...currentUser, role: activeRole },
         currentRole: activeRole,
         roleInfo,
+        employeeId,
+        departmentName,
+        teamId,
         switchRole,
         switchUser,
         availableUsers,
@@ -522,7 +602,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         requestOtp,
         verifyOtp,
         setPasswordAndActivate,
-        logout
+        logout,
+        getTeamMemberIds,
+        getDepartmentMemberIds,
+        injectLookup,
+        mutateZoho,
+        fetchZoho,
+        filterRecords,
+        hasAccessToRecord,
+        getRbacCriteria
       }}
     >
       {children}

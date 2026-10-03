@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ROLE_DEFINITIONS } from '../types/roles';
-import type { SystemRole } from '../types/roles';
+import type { SystemRole, AuthUser } from '../types/roles';
 import { X, Check, Shield, Users, Crown, Briefcase, User, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -110,9 +110,9 @@ export const RoleSwitcherModal: React.FC<RoleSwitcherModalProps> = ({ isOpen, on
                   2. Or Switch to a Specific Employee in Organization
                 </label>
                 <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                  {availableUsers.map((user) => {
+                  {availableUsers.map((user: AuthUser) => {
                     const isCurrent = currentUser.id === user.id;
-                    const rInfo = ROLE_DEFINITIONS[user.role] || ROLE_DEFINITIONS['TM'];
+                    const rInfo = (user.role && ROLE_DEFINITIONS[user.role as SystemRole]) || ROLE_DEFINITIONS['TM'];
                     return (
                       <div
                         key={user.id}
@@ -128,7 +128,7 @@ export const RoleSwitcherModal: React.FC<RoleSwitcherModalProps> = ({ isOpen, on
                       >
                         <div className="flex items-center space-x-3">
                           <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-100 to-orange-50 text-be-orange flex items-center justify-center font-bold text-xs border border-orange-200">
-                            {user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                            {user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
                           </div>
                           <div>
                             <div className="text-sm font-bold text-gray-900 flex items-center space-x-2">

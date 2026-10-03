@@ -319,7 +319,7 @@ export const AppLayout = () => {
             {/* Profile Dropdown */}
             <div className="flex items-center group relative cursor-pointer">
               <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-orange-100 to-orange-50 text-be-orange flex items-center justify-center border border-orange-200 shrink-0 font-bold text-xs shadow-sm">
-                {currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                {(currentUser.name || '').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
               </div>
               <div className="hidden md:block text-left mr-2 ml-2">
                 <div className="text-xs font-bold text-gray-900 leading-tight flex items-center">

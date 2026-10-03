@@ -59,6 +59,7 @@ function zohoApiPlugin(): Plugin {
     const page = urlObj.searchParams.get('page') || '';
     const perPage = urlObj.searchParams.get('per_page') || '200';
     const pageToken = urlObj.searchParams.get('page_token') || '';
+    const criteria = urlObj.searchParams.get('criteria') || '';
 
     if (pageToken) {
       queryParts.push(`page_token=${encodeURIComponent(pageToken)}`);
@@ -71,6 +72,10 @@ function zohoApiPlugin(): Plugin {
       queryParts.push(`per_page=${parsedPerPage}`);
     } else {
       queryParts.push(`per_page=200`);
+    }
+
+    if (criteria) {
+      queryParts.push(`criteria=${encodeURIComponent(criteria)}`);
     }
 
     return queryParts.join('&');

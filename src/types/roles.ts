@@ -89,7 +89,56 @@ export interface AuthUser {
   reportingManagerName?: string;
   teamLeaderId?: string;
   teamLeaderName?: string;
+  teamId?: string;
   zohoId?: string;
   monthlyTarget?: string | number;
   target?: string | number;
+}
+
+export type ZohoModuleSection = 'CRM' | 'HRMS' | 'Quality';
+
+export interface ZohoModuleConfig {
+  section: ZohoModuleSection;
+  moduleName: string;
+  lookupField: string;
+  isLookupExempt?: boolean;
+  secondaryLookupFields?: string[];
+}
+
+/**
+ * Registry of all enterprise Zoho CRM modules and their Employee lookup configuration.
+ * Exempt modules: Company Calendar, Company Policies (no lookup required).
+ */
+export const ZOHO_MODULE_LOOKUP_MAP: Record<string, ZohoModuleConfig> = {
+  // 1. CRM Section
+  Quotations: { section: 'CRM', moduleName: 'Quotations', lookupField: 'Employee', secondaryLookupFields: ['Created_By_Employee', 'Sales_Representative'] },
+  Deals: { section: 'CRM', moduleName: 'Deals', lookupField: 'Employee', secondaryLookupFields: ['BDM_names', 'Owner', 'Partner_BDM_ID'] },
+  Clients: { section: 'CRM', moduleName: 'Clients', lookupField: 'Employee', secondaryLookupFields: ['Owner', 'Created_By'] },
+  Companies: { section: 'CRM', moduleName: 'Companies', lookupField: 'Employee', secondaryLookupFields: ['Owner', 'Created_By'] },
+
+  // 2. HRMS Section
+  Employee: { section: 'HRMS', moduleName: 'Employee', lookupField: 'id' },
+  Attendance: { section: 'HRMS', moduleName: 'Attendance', lookupField: 'Employee', secondaryLookupFields: ['Employee_Name', 'emp_code'] },
+  Leaves: { section: 'HRMS', moduleName: 'Leaves', lookupField: 'Employee', secondaryLookupFields: ['Employee_Name', 'Employee_ID'] },
+  Leave_Management: { section: 'HRMS', moduleName: 'Leave_Management', lookupField: 'Employee', secondaryLookupFields: ['Employee_Name', 'Employee_ID'] },
+  DSR: { section: 'HRMS', moduleName: 'DSR', lookupField: 'Employee', secondaryLookupFields: ['Employee_Name', 'Created_By'] },
+  Salary: { section: 'HRMS', moduleName: 'Salary', lookupField: 'Employee', secondaryLookupFields: ['Employee_Name', 'Salary_Entity'] },
+  Salaries: { section: 'HRMS', moduleName: 'Salaries', lookupField: 'Employee', secondaryLookupFields: ['Employee_Name', 'Salary_Entity'] },
+  Company_Calendar: { section: 'HRMS', moduleName: 'Company_Calendar', lookupField: '', isLookupExempt: true },
+  Calendar: { section: 'HRMS', moduleName: 'Calendar', lookupField: '', isLookupExempt: true },
+  Company_Policies: { section: 'HRMS', moduleName: 'Company_Policies', lookupField: '', isLookupExempt: true },
+  Policies: { section: 'HRMS', moduleName: 'Policies', lookupField: '', isLookupExempt: true },
+
+  // 3. Quality Section
+  Raised_Queries: { section: 'Quality', moduleName: 'Raised_Queries', lookupField: 'Employee', secondaryLookupFields: ['salesEmployee', 'Employee_Name'] },
+  Quality_Queries: { section: 'Quality', moduleName: 'Quality_Queries', lookupField: 'Employee', secondaryLookupFields: ['salesEmployee', 'Employee_Name'] },
+  Queries: { section: 'Quality', moduleName: 'Queries', lookupField: 'Employee', secondaryLookupFields: ['salesEmployee', 'Employee_Name'] },
+};
+
+export interface RbacCriteriaResult {
+  criteria: string;
+  coqlWhereClause: string;
+  accessibleEmployeeIds: string[];
+  isUnfiltered: boolean;
+  role: SystemRole;
 }

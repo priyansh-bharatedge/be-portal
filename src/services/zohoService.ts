@@ -9,11 +9,14 @@
  */
 
 
+export * from './zohoRbacService';
+
 export interface ZohoFetchOptions {
   page?: number;
   per_page?: number;
   page_token?: string;
   fetch_all?: boolean;
+  criteria?: string;
 }
 
 export interface ZohoFetchResult<T = any> {

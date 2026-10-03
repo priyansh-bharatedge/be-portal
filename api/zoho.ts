@@ -836,6 +836,7 @@ function buildZohoPaginationQuery(req: ApiRequest, urlObj: URL): string {
   const page = urlObj.searchParams.get('page') || (typeof req.query?.page === 'string' ? req.query.page : '') || (Array.isArray(req.query?.page) ? req.query.page[0] : '');
   const perPage = urlObj.searchParams.get('per_page') || (typeof req.query?.per_page === 'string' ? req.query.per_page : '') || (Array.isArray(req.query?.per_page) ? req.query.per_page[0] : '');
   const pageToken = urlObj.searchParams.get('page_token') || (typeof req.query?.page_token === 'string' ? req.query.page_token : '') || (Array.isArray(req.query?.page_token) ? req.query.page_token[0] : '');
+  const criteria = urlObj.searchParams.get('criteria') || (typeof req.query?.criteria === 'string' ? req.query.criteria : '') || (Array.isArray(req.query?.criteria) ? req.query.criteria[0] : '');
 
   if (pageToken) {
     queryParts.push(`page_token=${encodeURIComponent(pageToken)}`);
@@ -848,6 +849,10 @@ function buildZohoPaginationQuery(req: ApiRequest, urlObj: URL): string {
     queryParts.push(`per_page=${parsedPerPage}`);
   } else {
     queryParts.push(`per_page=200`);
+  }
+
+  if (criteria) {
+    queryParts.push(`criteria=${encodeURIComponent(criteria)}`);
   }
 
   return queryParts.join('&');

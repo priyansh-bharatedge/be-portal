@@ -116,7 +116,7 @@ export const ModuleSelection = () => {
               <div className="text-[11px] text-be-orange font-semibold">{roleInfo.label}</div>
             </div>
             <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-orange-500 to-rose-500 flex items-center justify-center text-white font-bold text-xs shadow-lg shadow-orange-500/20">
-              {(currentUser.name ?? '').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+              {(currentUser.name ?? '').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
             </div>
           </div>
         </div>
