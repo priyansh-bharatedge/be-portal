@@ -25,6 +25,8 @@ export interface EmployeeData {
   zohoStatus?: 'synced' | 'pending' | 'failed';
   zohoSyncedAt?: string;
   zohoError?: string;
+  monthlyTarget?: string | number;
+  target?: string | number;
 }
 
 export const INITIAL_EMPLOYEES: EmployeeData[] = [

@@ -97,7 +97,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             reportingManagerId: e.reportingManagerId || e.formData?.reportingManagerId,
             reportingManagerName: e.reportingManagerName || e.formData?.reportingManagerName,
             teamLeaderId: e.teamLeaderId || e.formData?.teamLeaderId,
-            teamLeaderName: e.teamLeaderName || e.formData?.teamLeaderName
+            teamLeaderName: e.teamLeaderName || e.formData?.teamLeaderName,
+            monthlyTarget: e.monthlyTarget || e.formData?.monthlyTarget || e.target || e.formData?.target || '',
+            target: e.target || e.formData?.target || e.monthlyTarget || e.formData?.monthlyTarget || ''
           };
         });
         if (mapped.length > 0) return mapped;

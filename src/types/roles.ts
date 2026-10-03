@@ -90,4 +90,6 @@ export interface AuthUser {
   teamLeaderId?: string;
   teamLeaderName?: string;
   zohoId?: string;
+  monthlyTarget?: string | number;
+  target?: string | number;
 }

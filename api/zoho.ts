@@ -467,6 +467,14 @@ function buildEmployeeZohoPayload(employee: any): Record<string, any> {
     payload.Company_Entity = String(salEntity);
   }
 
+  const monthlyTarget = fd.monthlyTarget || fd.target || employee.monthlyTarget || employee.target;
+  if (monthlyTarget !== undefined && monthlyTarget !== null && monthlyTarget !== '') {
+    const cleanNum = typeof monthlyTarget === 'string' ? monthlyTarget.replace(/[^0-9.]/g, '') : monthlyTarget;
+    payload.Monthly_Target = cleanNum;
+    payload.Target = cleanNum;
+    payload.Sales_Target = cleanNum;
+  }
+
   // Password (API Name: Password, Single Line)
   const empPassword = employee.password || fd.password || employee.newPassword;
   if (empPassword) {

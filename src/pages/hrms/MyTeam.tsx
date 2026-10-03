@@ -5,11 +5,13 @@ import {
   ArrowRight, ArrowLeft, Eye, Check, X, Search, Phone, 
   Mail, Clock, AlertCircle, Sparkles, ChevronRight, 
   ShieldCheck, User, Building2, Layers, Crown, Shield,
-  ArrowUpRight, ChevronDown, CheckCircle2, Award, UserPlus
+  ArrowUpRight, ChevronDown, CheckCircle2, Award, UserPlus,
+  Target, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import type { EmployeeData } from '../../utils/initialData';
+import { saveOrUpdateZohoEmployee } from '../../services/zohoService';
 
 export const MyTeam = () => {
   const navigate = useNavigate();
@@ -24,7 +26,59 @@ export const MyTeam = () => {
   const [selectedTL, setSelectedTL] = useState<EmployeeData | null>(null);
   const [viewTab, setViewTab] = useState<'hierarchy' | 'all-tls' | 'all-members'>('hierarchy');
 
+  // Quick Target Assign Modal State for HOD & Super Admin
+  const [targetModalEmployee, setTargetModalEmployee] = useState<EmployeeData | null>(null);
+  const [targetInputVal, setTargetInputVal] = useState<string>('');
+  const [isSavingTarget, setIsSavingTarget] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
+
   const isExecutiveAdmin = isSuperAdmin || (currentUser.role as string) === 'Super Admin' || isHR;
+
+  const openTargetModal = (employee: EmployeeData) => {
+    setTargetModalEmployee(employee);
+    setTargetInputVal(String(employee.monthlyTarget || employee.formData?.monthlyTarget || employee.target || employee.formData?.target || '').replace(/[^0-9]/g, ''));
+  };
+
+  const closeTargetModal = () => {
+    setTargetModalEmployee(null);
+    setTargetInputVal('');
+  };
+
+  const handleSaveTarget = async () => {
+    if (!targetModalEmployee) return;
+    setIsSavingTarget(true);
+
+    const cleanTarget = targetInputVal.trim();
+    const updatedEmp: EmployeeData = {
+      ...targetModalEmployee,
+      monthlyTarget: cleanTarget,
+      target: cleanTarget,
+      formData: {
+        ...(targetModalEmployee.formData || {}),
+        monthlyTarget: cleanTarget,
+        target: cleanTarget
+      }
+    };
+
+    const updatedList = employees.map(e => e.id === targetModalEmployee.id ? updatedEmp : e);
+    setEmployees(updatedList);
+    localStorage.setItem('be_employees', JSON.stringify(updatedList));
+    window.dispatchEvent(new Event('be_employees_updated'));
+
+    // Sync in background to Zoho Employee module
+    if (updatedEmp.zohoId) {
+      saveOrUpdateZohoEmployee(updatedEmp).catch(err => console.warn('[Zoho CRM] Target sync error:', err));
+    }
+
+    setToast({
+      type: 'success',
+      message: `Monthly Target Updated for ${targetModalEmployee.name}`,
+      submessage: cleanTarget ? `New Target: ₹${Number(cleanTarget).toLocaleString('en-IN')}` : 'Target cleared'
+    });
+
+    setIsSavingTarget(false);
+    closeTargetModal();
+  };
 
   useEffect(() => {
     const loadData = () => {
@@ -976,6 +1030,17 @@ export const MyTeam = () => {
                             <span className="text-gray-400 font-medium">Supervising HOD</span>
                             <span className="font-bold text-blue-700">{selectedHOD ? selectedHOD.name : (tl.reportingManagerName || 'Admin HOD')}</span>
                           </div>
+                          <div className="flex items-center justify-between pt-1 border-t border-gray-200/60">
+                            <span className="text-gray-400 font-medium">Monthly Target</span>
+                            {tl.monthlyTarget || tl.target ? (
+                              <span className="font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200 text-xs flex items-center">
+                                <Target size={11} className="mr-1 text-amber-600" />
+                                ₹{Number(String(tl.monthlyTarget || tl.target).replace(/[^0-9.]/g, '')).toLocaleString('en-IN')}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs italic">Not Set</span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-3 gap-2 mb-4">
@@ -994,12 +1059,27 @@ export const MyTeam = () => {
                         </div>
                       </div>
 
-                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
                         <span className="text-xs font-bold text-gray-500 group-hover:text-be-orange transition-colors">
                           Click to view {tlMembers.length} employees
                         </span>
-                        <div className="w-8 h-8 rounded-xl bg-orange-50 text-be-orange group-hover:bg-be-orange group-hover:text-white flex items-center justify-center transition-all shadow-sm">
-                          <ArrowRight size={15} />
+                        <div className="flex items-center gap-1.5">
+                          {(isSuperAdmin || isHOD) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openTargetModal(tl);
+                              }}
+                              className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold transition-colors flex items-center"
+                              title="Assign / Update Target"
+                            >
+                              <Target size={12} className="mr-1 text-amber-600" />
+                              Target
+                            </button>
+                          )}
+                          <div className="w-8 h-8 rounded-xl bg-orange-50 text-be-orange group-hover:bg-be-orange group-hover:text-white flex items-center justify-center transition-all shadow-sm">
+                            <ArrowRight size={15} />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1067,6 +1147,17 @@ export const MyTeam = () => {
                             <span className="text-gray-400 font-medium">Direct HOD</span>
                             <span className="font-extrabold text-blue-700">{selectedHOD.name}</span>
                           </div>
+                          <div className="flex items-center justify-between pt-1 border-t border-gray-200/60">
+                            <span className="text-gray-400 font-medium">Monthly Target</span>
+                            {member.monthlyTarget || member.target ? (
+                              <span className="font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200 text-xs flex items-center">
+                                <Target size={11} className="mr-1 text-amber-600" />
+                                ₹{Number(String(member.monthlyTarget || member.target).replace(/[^0-9.]/g, '')).toLocaleString('en-IN')}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs italic">Not Set</span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Pending Leave Requests */}
@@ -1108,11 +1199,21 @@ export const MyTeam = () => {
                       <div className="pt-2 border-t border-gray-100 flex gap-2">
                         <button
                           onClick={() => navigate(`/hrms/employees/${member.id}`)}
-                          className="w-full py-2.5 bg-gray-50 hover:bg-blue-50 hover:text-blue-700 text-gray-700 rounded-xl font-bold text-xs flex items-center justify-center transition-colors border border-gray-200"
+                          className="flex-1 py-2.5 bg-gray-50 hover:bg-blue-50 hover:text-blue-700 text-gray-700 rounded-xl font-bold text-xs flex items-center justify-center transition-colors border border-gray-200"
                         >
                           <Eye size={14} className="mr-1.5" />
                           View Profile & Records
                         </button>
+                        {(isSuperAdmin || isHOD) && (
+                          <button
+                            onClick={() => openTargetModal(member)}
+                            className="px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-xl font-bold text-xs flex items-center justify-center transition-colors border border-amber-200 shrink-0"
+                            title="Assign / Update Target"
+                          >
+                            <Target size={14} className="mr-1 text-amber-600" />
+                            Target
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1224,6 +1325,17 @@ export const MyTeam = () => {
                         <span className="text-gray-400 font-medium">Contact</span>
                         <span className="font-medium text-gray-700">{member.mobile || '-'}</span>
                       </div>
+                      <div className="flex items-center justify-between pt-1 border-t border-gray-200/60">
+                        <span className="text-gray-400 font-medium">Monthly Target</span>
+                        {member.monthlyTarget || member.target ? (
+                          <span className="font-extrabold text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300 flex items-center">
+                            <Target size={11} className="mr-1 text-amber-600" />
+                            ₹{Number(String(member.monthlyTarget || member.target).replace(/[^0-9.]/g, '')).toLocaleString('en-IN')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 italic">Not Assigned</span>
+                        )}
+                      </div>
                       {selectedTL && (
                         <div className="flex items-center justify-between pt-1 border-t border-gray-200/60">
                           <span className="text-gray-400 font-medium">Assigned TL</span>
@@ -1271,11 +1383,21 @@ export const MyTeam = () => {
                   <div className="pt-2 border-t border-gray-100 flex gap-2">
                     <button
                       onClick={() => navigate(`/hrms/employees/${member.id}`)}
-                      className="w-full py-2.5 bg-gray-50 hover:bg-orange-50 hover:text-be-orange text-gray-700 rounded-xl font-bold text-xs flex items-center justify-center transition-colors border border-gray-200"
+                      className="flex-1 py-2.5 bg-gray-50 hover:bg-orange-50 hover:text-be-orange text-gray-700 rounded-xl font-bold text-xs flex items-center justify-center transition-colors border border-gray-200"
                     >
                       <Eye size={14} className="mr-1.5" />
-                      View Profile & Records
+                      View Profile
                     </button>
+                    {(isSuperAdmin || isHOD) && (
+                      <button
+                        onClick={() => openTargetModal(member)}
+                        className="px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-xl font-bold text-xs flex items-center justify-center transition-colors border border-amber-200"
+                        title="Assign / Update Target"
+                      >
+                        <Target size={14} className="mr-1 text-amber-600" />
+                        Target
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -1303,6 +1425,184 @@ export const MyTeam = () => {
           </div>
         </div>
       )}
+
+      {/* QUICK TARGET ASSIGN MODAL (FOR SUPER ADMIN & HOD IN MY TEAM) */}
+      <AnimatePresence>
+        {targetModalEmployee && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-amber-200"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-amber-100 bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold border border-amber-200 shadow-sm">
+                    <Target size={20} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-extrabold text-gray-900">Assign Monthly Target</h3>
+                    <p className="text-xs text-gray-500 font-medium">Configure sales target for {targetModalEmployee.name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeTargetModal}
+                  className="text-gray-400 hover:text-gray-700 p-2 hover:bg-white rounded-full transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {/* Employee Quick Info Badge */}
+                <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-100 to-orange-50 text-be-orange flex items-center justify-center font-bold text-xs border border-orange-200">
+                      {(targetModalEmployee.name || 'EMP').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-gray-900">{targetModalEmployee.name}</div>
+                      <div className="text-xs text-gray-500">{targetModalEmployee.id} • {targetModalEmployee.dept} ({targetModalEmployee.role})</div>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold border bg-amber-50 text-amber-800 border-amber-200">
+                    {targetModalEmployee.systemRole || 'TM'}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                    Monthly Target Amount (₹)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-extrabold text-base">₹</span>
+                    <input
+                      type="text"
+                      value={targetInputVal}
+                      onChange={(e) => setTargetInputVal(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="e.g. 500000"
+                      className="w-full pl-9 pr-4 py-3 bg-white border border-gray-300 rounded-2xl text-base font-extrabold text-gray-900 outline-none focus:ring-2 focus:ring-be-orange focus:border-be-orange shadow-sm font-mono"
+                      autoFocus
+                    />
+                  </div>
+                  {targetInputVal && !isNaN(Number(targetInputVal)) && Number(targetInputVal) > 0 && (
+                    <p className="text-xs text-emerald-600 font-bold mt-2 flex items-center">
+                      <CheckCircle2 size={13} className="mr-1" />
+                      Target: ₹{Number(targetInputVal).toLocaleString('en-IN')} per month
+                    </p>
+                  )}
+                </div>
+
+                {/* Quick Presets */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    Quick Presets
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: '₹1 Lakh', val: '100000' },
+                      { label: '₹2.5 Lakh', val: '250000' },
+                      { label: '₹5 Lakh', val: '500000' },
+                      { label: '₹10 Lakh', val: '1000000' },
+                      { label: '₹20 Lakh', val: '2000000' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.val}
+                        type="button"
+                        onClick={() => setTargetInputVal(preset.val)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all ${
+                          targetInputVal === preset.val
+                            ? 'bg-be-orange text-white border-be-orange shadow-sm'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-amber-400 hover:bg-amber-50'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                    {targetInputVal && (
+                      <button
+                        type="button"
+                        onClick={() => setTargetInputVal('')}
+                        className="px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                      >
+                        Clear Target
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 font-medium">
+                  <strong>Authority Note:</strong> Only Super Admin and Department HODs can assign and modify employee targets.
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={closeTargetModal}
+                  className="px-5 py-2.5 border border-gray-300 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-100 transition-colors bg-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingTarget}
+                  onClick={handleSaveTarget}
+                  className="px-6 py-2.5 bg-gradient-to-r from-be-orange to-amber-600 text-white rounded-xl text-sm font-bold hover:from-orange-600 hover:to-amber-700 transition-all shadow-md shadow-orange-500/30 flex items-center disabled:opacity-60"
+                >
+                  {isSavingTarget ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin mr-2" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} className="mr-1.5" />
+                      <span>Save Target</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={`fixed top-6 right-6 z-[999] max-w-md p-4 rounded-xl shadow-2xl border flex items-start space-x-3 backdrop-blur-md ${toast.type === 'success'
+              ? 'bg-emerald-950/90 text-white border-emerald-500/30'
+              : toast.type === 'error'
+                ? 'bg-rose-950/90 text-white border-rose-500/30'
+                : 'bg-slate-900/90 text-white border-slate-700'
+              }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-rose-400 mt-0.5 shrink-0" />
+            )}
+            <div className="flex-1 text-sm">
+              <p className="font-semibold text-white">{toast.message}</p>
+              {toast.submessage && (
+                <p className="text-xs text-gray-300 mt-1 font-mono break-all">{toast.submessage}</p>
+              )}
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              className="text-gray-400 hover:text-white p-1 rounded transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

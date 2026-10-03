@@ -3,23 +3,30 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, User, Phone, Briefcase, GraduationCap, Users, FileText, Building, 
   Crown, Shield, ArrowRight, UserCheck, Calendar, Clock, Check, X, Download, Eye, 
-  AlertCircle, CheckCircle2, XCircle
+  AlertCircle, CheckCircle2, XCircle, Target, Loader2
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_DEFINITIONS } from '../../types/roles';
 import type { SystemRole } from '../../types/roles';
 import { getDocument } from '../../lib/db';
+import { saveOrUpdateZohoEmployee } from '../../services/zohoService';
 
 export const EmployeeDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentUser, isTM, isSuperAdmin, isHR, isTL } = useAuth();
+  const { currentUser, isTM, isSuperAdmin, isHR, isTL, isHOD } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'leaves' | 'attendance' | 'documents'>('profile');
   const [employees, setEmployees] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+
+  // Target Edit Modal state for Super Admin & HOD
+  const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
+  const [targetInputVal, setTargetInputVal] = useState('');
+  const [isSavingTarget, setIsSavingTarget] = useState(false);
 
   useEffect(() => {
     const savedEmps = localStorage.getItem('be_employees');
@@ -37,7 +44,7 @@ export const EmployeeDetails = () => {
 
   const employee = employees.find((e: any) => e.id === id);
 
-  const isEmployeeSelfOnly = isTM || currentUser.role === 'TM' || (!isSuperAdmin && !isHR && !isTL);
+  const isEmployeeSelfOnly = isTM || currentUser.role === 'TM' || (!isSuperAdmin && !isHR && !isTL && !isHOD && currentUser.role !== 'HOD');
   const isSelf = employee && (
     employee.id === currentUser.id ||
     employee.id === currentUser.empId ||
@@ -124,6 +131,40 @@ export const EmployeeDetails = () => {
     const updated = leaves.map(l => l.id === leaveId ? { ...l, status: newStatus } : l);
     setLeaves(updated);
     localStorage.setItem('be_leaves', JSON.stringify(updated));
+  };
+
+  const handleOpenTargetModal = () => {
+    setTargetInputVal(String(employee.monthlyTarget || employee.formData?.monthlyTarget || employee.target || employee.formData?.target || '').replace(/[^0-9]/g, ''));
+    setIsTargetModalOpen(true);
+  };
+
+  const handleSaveTarget = async () => {
+    if (!employee) return;
+    setIsSavingTarget(true);
+
+    const cleanTarget = targetInputVal.trim();
+    const updatedEmp: any = {
+      ...employee,
+      monthlyTarget: cleanTarget,
+      target: cleanTarget,
+      formData: {
+        ...(employee.formData || {}),
+        monthlyTarget: cleanTarget,
+        target: cleanTarget
+      }
+    };
+
+    const updatedList = employees.map((e: any) => e.id === employee.id ? updatedEmp : e);
+    setEmployees(updatedList);
+    localStorage.setItem('be_employees', JSON.stringify(updatedList));
+    window.dispatchEvent(new Event('be_employees_updated'));
+
+    if (updatedEmp.zohoId) {
+      saveOrUpdateZohoEmployee(updatedEmp).catch(err => console.warn('[Zoho CRM] Target sync error:', err));
+    }
+
+    setIsSavingTarget(false);
+    setIsTargetModalOpen(false);
   };
 
   const handleDownloadDoc = async (fileId: string, fileName: string) => {
@@ -364,7 +405,7 @@ export const EmployeeDetails = () => {
             </div>
 
             {/* Hierarchy Detail Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">System Role</div>
                 <div className="text-base font-bold text-gray-900 mb-1">{roleInfo.label}</div>
@@ -381,6 +422,32 @@ export const EmployeeDetails = () => {
                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Reporting Manager</div>
                 <div className="text-base font-bold text-purple-800">{employee.reportingManagerName || 'Managing Director (Super Admin)'}</div>
                 <div className="text-xs text-gray-400 mt-1">Higher approval & organizational authority</div>
+              </div>
+
+              <div className="p-4 bg-white rounded-xl border border-amber-200 shadow-sm bg-gradient-to-br from-white to-amber-50/40 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Monthly Target</span>
+                    <Target size={15} className="text-be-orange" />
+                  </div>
+                  <div className="text-lg font-black text-gray-900">
+                    {employee.monthlyTarget || employee.target ? (
+                      `₹${Number(String(employee.monthlyTarget || employee.target).replace(/[^0-9.]/g, '')).toLocaleString('en-IN')}`
+                    ) : (
+                      <span className="text-xs text-gray-400 font-medium italic">Not Assigned</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">Assigned monthly sales target</p>
+                </div>
+                {(isSuperAdmin || isHOD) && (
+                  <button
+                    onClick={handleOpenTargetModal}
+                    className="mt-3 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-be-orange hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-orange-500/20 flex items-center w-max"
+                  >
+                    <Target size={13} className="mr-1.5" />
+                    {employee.monthlyTarget || employee.target ? 'Update Target' : '+ Assign Target'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -735,6 +802,133 @@ export const EmployeeDetails = () => {
           </div>
         </div>
       )}
+
+      {/* TARGET EDIT MODAL (FOR SUPER ADMIN & HOD) */}
+      <AnimatePresence>
+        {isTargetModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-amber-200"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-amber-100 bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold border border-amber-200 shadow-sm">
+                    <Target size={20} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-extrabold text-gray-900">Assign Monthly Target</h3>
+                    <p className="text-xs text-gray-500 font-medium">Update sales target for {employee.name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsTargetModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-700 p-2 hover:bg-white rounded-full transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                    Monthly Target Amount (₹)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-extrabold text-base">₹</span>
+                    <input
+                      type="text"
+                      value={targetInputVal}
+                      onChange={(e) => setTargetInputVal(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="e.g. 500000"
+                      className="w-full pl-9 pr-4 py-3 bg-white border border-gray-300 rounded-2xl text-base font-extrabold text-gray-900 outline-none focus:ring-2 focus:ring-be-orange focus:border-be-orange shadow-sm font-mono"
+                      autoFocus
+                    />
+                  </div>
+                  {targetInputVal && !isNaN(Number(targetInputVal)) && Number(targetInputVal) > 0 && (
+                    <p className="text-xs text-emerald-600 font-bold mt-2 flex items-center">
+                      <CheckCircle2 size={13} className="mr-1" />
+                      Target: ₹{Number(targetInputVal).toLocaleString('en-IN')} per month
+                    </p>
+                  )}
+                </div>
+
+                {/* Quick Presets */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    Quick Presets
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: '₹1 Lakh', val: '100000' },
+                      { label: '₹2.5 Lakh', val: '250000' },
+                      { label: '₹5 Lakh', val: '500000' },
+                      { label: '₹10 Lakh', val: '1000000' },
+                      { label: '₹20 Lakh', val: '2000000' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.val}
+                        type="button"
+                        onClick={() => setTargetInputVal(preset.val)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all ${
+                          targetInputVal === preset.val
+                            ? 'bg-be-orange text-white border-be-orange shadow-sm'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-amber-400 hover:bg-amber-50'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                    {targetInputVal && (
+                      <button
+                        type="button"
+                        onClick={() => setTargetInputVal('')}
+                        className="px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                      >
+                        Clear Target
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 font-medium">
+                  <strong>Authority Note:</strong> Only Super Admin and Department HODs can assign and modify employee targets.
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => setIsTargetModalOpen(false)}
+                  className="px-5 py-2.5 border border-gray-300 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-100 transition-colors bg-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingTarget}
+                  onClick={handleSaveTarget}
+                  className="px-6 py-2.5 bg-gradient-to-r from-be-orange to-amber-600 text-white rounded-xl text-sm font-bold hover:from-orange-600 hover:to-amber-700 transition-all shadow-md shadow-orange-500/30 flex items-center disabled:opacity-60"
+                >
+                  {isSavingTarget ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin mr-2" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} className="mr-1.5" />
+                      <span>Save Target</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

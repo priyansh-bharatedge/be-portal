@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Search, Filter, X, UserPlus, Edit, Trash2, ChevronRight, Check, UploadCloud, Eye, Shield, Users, Crown, Briefcase, User, Info, ArrowRight, UserCheck, CheckCircle2, AlertCircle, Loader2, Cloud, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, X, UserPlus, Edit, Trash2, ChevronRight, Check, UploadCloud, Eye, Shield, Users, Crown, Briefcase, User, Info, ArrowRight, UserCheck, CheckCircle2, AlertCircle, Loader2, Cloud, FileText, Target } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { saveDocument } from '../../lib/db';
@@ -83,6 +83,11 @@ export const Employees = () => {
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
 
+  // Quick Target Assign Modal State for HOD & Super Admin
+  const [targetModalEmployee, setTargetModalEmployee] = useState<EmployeeData | null>(null);
+  const [targetInputVal, setTargetInputVal] = useState<string>('');
+  const [isSavingTarget, setIsSavingTarget] = useState(false);
+
   const initialFormData = {
     empId: '', firstName: '', middleName: '', lastName: '', dob: '', gender: 'Male', nationality: 'Indian',
     maritalStatus: 'Single', mobile: '', email: '', permanentAddress: '', currentAddress: '', bloodGroup: 'O+',
@@ -96,6 +101,8 @@ export const Employees = () => {
     teamLeaderName: '',
     reportingManagerId: '',
     reportingManagerName: '',
+    monthlyTarget: '',
+    target: '',
     bankAccount: '', bankName: '', ifsc: '', panNumber: '', aadhaarNumber: '',
     passportNumber: '', drivingLicense: '', pfNumber: '', esicNumber: '', uanNumber: '', medicalInsurance: ''
   };
@@ -162,7 +169,11 @@ export const Employees = () => {
       esicNumber: z.ESIC_Number || '',
       uanNumber: z.UAN_Number || '',
       medicalInsurance: z.Medical_Insurance_Number || '',
+      monthlyTarget: z.Monthly_Target || z.Target || z.Sales_Target || '',
+      target: z.Monthly_Target || z.Target || z.Sales_Target || '',
     };
+
+    const monthlyTarget = z.Monthly_Target || z.Target || z.Sales_Target || '';
 
     return {
       id: empId,
@@ -178,6 +189,8 @@ export const Employees = () => {
       joined: z.Date_of_Joining || z.Created_Time?.split('T')[0] || new Date().toISOString().split('T')[0],
       status: 'Active',
       formData: fd,
+      monthlyTarget,
+      target: monthlyTarget,
       zohoId: String(z.id),
       zohoStatus: 'synced',
       zohoSyncedAt: z.Modified_Time || z.Created_Time || new Date().toISOString(),
@@ -603,12 +616,16 @@ export const Employees = () => {
       reportingManagerName: finalReportingManagerName,
       joined: formData.doj,
       status: editingEmployee ? editingEmployee.status : 'Active',
+      monthlyTarget: formData.monthlyTarget || formData.target || '',
+      target: formData.target || formData.monthlyTarget || '',
       formData: {
         ...formData,
         salaryEntity: formData.salaryEntity || 'BSPL',
         empId: finalEmpId,
         reportingManagerId: finalReportingManagerId,
         reportingManagerName: finalReportingManagerName,
+        monthlyTarget: formData.monthlyTarget || formData.target || '',
+        target: formData.target || formData.monthlyTarget || '',
       },
       salaryDocumentName: salaryDocumentName || (editingEmployee ? editingEmployee.salaryDocumentName : ''),
       zohoId: editingEmployee?.zohoId,
@@ -746,6 +763,8 @@ export const Employees = () => {
       teamLeaderName: employee.teamLeaderName || (employee.formData?.teamLeaderName) || '',
       reportingManagerId: employee.reportingManagerId || (employee.formData?.reportingManagerId) || defaultRmId,
       reportingManagerName: employee.reportingManagerName || (employee.formData?.reportingManagerName) || defaultRmName,
+      monthlyTarget: employee.monthlyTarget || employee.formData?.monthlyTarget || employee.target || employee.formData?.target || '',
+      target: employee.target || employee.formData?.target || employee.monthlyTarget || employee.formData?.monthlyTarget || '',
       doj: employee.joined || employee.formData?.doj || new Date().toISOString().split('T')[0],
     });
     setSalaryDocumentName(employee.salaryDocumentName || '');
@@ -753,6 +772,50 @@ export const Employees = () => {
     setAdditionalDocs({});
     setCurrentStep(1);
     setIsModalOpen(true);
+  };
+
+  const openTargetModal = (employee: EmployeeData) => {
+    setTargetModalEmployee(employee);
+    setTargetInputVal(String(employee.monthlyTarget || employee.formData?.monthlyTarget || employee.target || employee.formData?.target || '').replace(/[^0-9]/g, ''));
+  };
+
+  const closeTargetModal = () => {
+    setTargetModalEmployee(null);
+    setTargetInputVal('');
+  };
+
+  const handleSaveTarget = async () => {
+    if (!targetModalEmployee) return;
+    setIsSavingTarget(true);
+
+    const cleanTarget = targetInputVal.trim();
+    const updatedEmp: EmployeeData = {
+      ...targetModalEmployee,
+      monthlyTarget: cleanTarget,
+      target: cleanTarget,
+      formData: {
+        ...(targetModalEmployee.formData || {}),
+        monthlyTarget: cleanTarget,
+        target: cleanTarget
+      }
+    };
+
+    const updatedList = employees.map(e => e.id === targetModalEmployee.id ? updatedEmp : e);
+    saveToStorage(updatedList);
+
+    // Sync in background to Zoho Employee module
+    if (updatedEmp.zohoId) {
+      saveOrUpdateZohoEmployee(updatedEmp).catch(err => console.warn('[Zoho CRM] Target sync error:', err));
+    }
+
+    setToast({
+      type: 'success',
+      message: `Monthly Target Updated for ${targetModalEmployee.name}`,
+      submessage: cleanTarget ? `New Target: ₹${Number(cleanTarget).toLocaleString('en-IN')}` : 'Target cleared'
+    });
+
+    setIsSavingTarget(false);
+    closeTargetModal();
   };
 
   const closeModal = () => {
@@ -812,9 +875,10 @@ export const Employees = () => {
   };
 
   const isFullAdmin = isSuperAdmin || isHR;
-  const isTeamLead = !isFullAdmin && (isTL || currentUser.role === 'TL');
+  const isHodUser = isHOD || (currentUser.role as string) === 'HOD';
+  const isTeamLead = !isFullAdmin && !isHodUser && (isTL || currentUser.role === 'TL');
 
-  const matchedEmployees = isFullAdmin
+  const matchedEmployees = (isFullAdmin || isHodUser)
     ? employees
     : employees.filter(e =>
       e.id === currentUser.id ||
@@ -827,7 +891,7 @@ export const Employees = () => {
       (e.name && currentUser.name && (e.name ?? '').trim().toLowerCase() === (currentUser.name ?? '').trim().toLowerCase())
     );
 
-  const visibleEmployees: EmployeeData[] = (!isFullAdmin && matchedEmployees.length === 0)
+  const visibleEmployees: EmployeeData[] = (!isFullAdmin && !isHodUser && matchedEmployees.length === 0)
     ? [{
       id: currentUser.empId || currentUser.id || (isTeamLead ? 'EMP-TL' : 'EMP-TM'),
       name: currentUser.name || (isTeamLead ? 'Team Leader' : 'Team Member'),
@@ -930,7 +994,11 @@ export const Employees = () => {
         <div>
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-bold text-gray-900">
-              {isFullAdmin ? 'Employee Directory & Hierarchy' : 'My Employment Profile & Details'}
+              {isFullAdmin
+                ? 'Employee Directory & Hierarchy'
+                : isHodUser
+                  ? 'Employee Target Management & Directory'
+                  : 'My Employment Profile & Details'}
             </h1>
             <span className="px-2.5 py-1 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
               {visibleEmployees.length} {visibleEmployees.length === 1 ? 'Record' : 'Total'}
@@ -938,8 +1006,10 @@ export const Employees = () => {
           </div>
           <p className="text-gray-500 text-sm mt-1">
             {isFullAdmin
-              ? 'Manage organization members.'
-              : `Personal employment profile and reporting hierarchy for ${currentUser.name}.`}
+              ? 'Manage organization members, system roles, and employee records.'
+              : isHodUser
+                ? 'Review department team members and assign monthly performance & sales targets.'
+                : `Personal employment profile and reporting hierarchy for ${currentUser.name}.`}
           </p>
         </div>
 
@@ -973,6 +1043,18 @@ export const Employees = () => {
               <UserPlus size={18} className="mr-2" />
               Add Employee
             </button>
+          ) : isHodUser ? (
+            <div className="flex items-center gap-2">
+              <span className="px-3.5 py-2 bg-blue-50 text-blue-800 rounded-xl font-bold text-xs border border-blue-200 flex items-center shadow-sm">
+                <Shield size={14} className="mr-1.5 text-blue-600" /> HOD: Target Assignment Authority
+              </span>
+              <button
+                onClick={() => navigate('/hrms/my-team')}
+                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl font-bold text-xs border border-amber-200 transition-colors flex items-center shadow-sm"
+              >
+                <Users size={14} className="mr-1.5 text-amber-600" /> My Team Hub
+              </button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               {isTeamLead && (
@@ -992,8 +1074,33 @@ export const Employees = () => {
         </div>
       </div>
 
-      {/* Role Stats Filter Cards (ONLY shown for Super Admin / HR Admin) */}
-      {isFullAdmin && (
+      {/* HOD Target Assignment Quick Banner */}
+      {isHodUser && (
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-amber-50/60 p-4 rounded-2xl border border-blue-100/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-600/20">
+              <Target size={20} />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-gray-900 flex items-center">
+                HOD Target Assignment & Performance Hub
+                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-extrabold rounded-full">
+                  Target Authority
+                </span>
+              </h4>
+              <p className="text-xs text-gray-600 mt-0.5">
+                You have exclusive authority to assign and adjust monthly sales & performance targets for your team. Employee creation & payroll remain managed by HR.
+              </p>
+            </div>
+          </div>
+          <div className="text-xs font-bold text-blue-900 bg-white/90 px-3.5 py-1.5 rounded-xl border border-blue-200/60 shrink-0 self-start sm:self-center shadow-sm">
+            {employees.filter(e => e.monthlyTarget || e.target).length} / {employees.length} Targets Configured
+          </div>
+        </div>
+      )}
+
+      {/* Role Stats Filter Cards (Shown for Super Admin / HR Admin / HOD) */}
+      {(isFullAdmin || isHodUser) && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
             { role: 'All', label: 'All Roles', count: employees.length, color: 'border-gray-200 bg-white text-gray-800' },
@@ -1063,6 +1170,7 @@ export const Employees = () => {
                 <th className="px-6 py-3">System Role</th>
                 <th className="px-6 py-3">Hierarchy / Reporting To</th>
                 <th className="px-6 py-3">Department & Designation</th>
+                <th className="px-6 py-3">Monthly Target</th>
                 <th className="px-6 py-3">Contact Info</th>
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3 text-right">Actions</th>
@@ -1071,7 +1179,7 @@ export const Employees = () => {
             <tbody className="text-gray-700">
               {filteredEmployees.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
                     <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                     <p className="font-semibold text-gray-700">No employees found</p>
                     <p className="text-xs text-gray-400 mt-1">Try changing your search or role filter criteria.</p>
@@ -1186,6 +1294,40 @@ export const Employees = () => {
                       <div className="text-gray-500 text-xs font-medium">{emp.role}</div>
                     </td>
 
+                    {/* Monthly Target */}
+                    <td className="px-6 py-4 border-t border-b border-gray-100 group-hover:border-orange-100">
+                      {emp.monthlyTarget || emp.target ? (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-extrabold shadow-sm">
+                            <Target size={12} className="mr-1.5 text-amber-600 shrink-0" />
+                            ₹{Number(String(emp.monthlyTarget || emp.target).replace(/[^0-9.]/g, '')).toLocaleString('en-IN')}
+                          </span>
+                          {(isSuperAdmin || isHOD) && (
+                            <button
+                              onClick={() => openTargetModal(emp)}
+                              className="text-[11px] font-bold text-be-orange hover:text-orange-700 block transition-colors"
+                            >
+                              Edit Target
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <span className="text-xs text-gray-400 font-medium italic">
+                            Not Set
+                          </span>
+                          {(isSuperAdmin || isHOD) && (
+                            <button
+                              onClick={() => openTargetModal(emp)}
+                              className="text-[11px] font-bold text-be-orange hover:text-orange-700 block transition-colors"
+                            >
+                              + Assign Target
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
                     {/* Contact Info */}
                     <td className="px-6 py-4 border-t border-b border-gray-100 group-hover:border-orange-100">
                       <div className="text-gray-700 font-medium text-xs">{emp.email}</div>
@@ -1202,6 +1344,15 @@ export const Employees = () => {
                     {/* Actions */}
                     <td className="px-6 py-4 text-right rounded-r-2xl border-t border-b border-r border-gray-100 group-hover:border-orange-100">
                       <div className="flex items-center justify-end space-x-1.5">
+                        {(isSuperAdmin || isHOD) && (
+                          <button
+                            onClick={() => openTargetModal(emp)}
+                            className="p-2 text-amber-600 hover:bg-amber-50 rounded-xl transition-colors"
+                            title="Assign / Edit Monthly Target"
+                          >
+                            <Target size={16} />
+                          </button>
+                        )}
                         <button
                           onClick={() => navigate(`/hrms/employees/${emp.id}`)}
                           className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
@@ -1854,6 +2005,74 @@ export const Employees = () => {
                       )}
 
                     </div>
+
+                    {/* OPTIONAL MONTHLY TARGET CONFIGURATION (Can be assigned by HOD & Super Admin) */}
+                    <div className="p-5 bg-gradient-to-r from-amber-50/80 via-orange-50/60 to-amber-50/40 rounded-2xl border-2 border-amber-200/80 shadow-sm space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <label className="text-xs font-extrabold text-gray-900 uppercase tracking-wider flex items-center">
+                          <Target size={16} className="mr-2 text-be-orange" />
+                          Monthly Target (₹)
+                        </label>
+                        <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300 w-max">
+                          Optional • Assigned by HOD / Super Admin
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 font-medium">
+                        Set the monthly sales or revenue target for this employee in ₹. This field is non-mandatory. Super Admin and HOD can assign or adjust targets anytime.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center pt-1">
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-extrabold text-sm">₹</span>
+                          <input
+                            type="text"
+                            value={formData.monthlyTarget}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9]/g, '');
+                              setFormData({ ...formData, monthlyTarget: val, target: val });
+                            }}
+                            placeholder="e.g. 500000 (5 Lakhs)"
+                            className="w-full pl-8 pr-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-be-orange focus:border-be-orange shadow-sm font-mono"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { label: '₹1 L', val: '100000' },
+                            { label: '₹2.5 L', val: '250000' },
+                            { label: '₹5 L', val: '500000' },
+                            { label: '₹10 L', val: '1000000' },
+                            { label: '₹20 L', val: '2000000' },
+                          ].map((preset) => (
+                            <button
+                              key={preset.val}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, monthlyTarget: preset.val, target: preset.val })}
+                              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
+                                formData.monthlyTarget === preset.val
+                                  ? 'bg-be-orange text-white border-be-orange shadow-sm scale-105'
+                                  : 'bg-white text-gray-700 border-gray-200 hover:border-amber-400 hover:bg-amber-50'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                          {formData.monthlyTarget && (
+                            <button
+                              type="button"
+                              onClick={() => setFormData({ ...formData, monthlyTarget: '', target: '' })}
+                              className="px-2 py-1 text-xs text-red-600 hover:text-red-800 font-bold underline"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {formData.monthlyTarget && !isNaN(Number(formData.monthlyTarget)) && Number(formData.monthlyTarget) > 0 && (
+                        <div className="text-xs text-amber-900 font-bold bg-amber-100/60 p-2 rounded-lg border border-amber-200/60 flex items-center">
+                          <CheckCircle2 size={13} className="text-amber-600 mr-1.5 shrink-0" />
+                          <span>Target configured: ₹{Number(formData.monthlyTarget).toLocaleString('en-IN')} / month</span>
+                        </div>
+                      )}
+                    </div>
                   </motion.div>
                 )}
 
@@ -2141,6 +2360,149 @@ export const Employees = () => {
                     </button>
                   )}
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* QUICK TARGET ASSIGN MODAL (FOR SUPER ADMIN & HOD) */}
+      <AnimatePresence>
+        {targetModalEmployee && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-amber-200"
+            >
+              <div className="flex items-center justify-between p-6 border-b border-amber-100 bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold border border-amber-200 shadow-sm">
+                    <Target size={20} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-extrabold text-gray-900">Assign Monthly Target</h3>
+                    <p className="text-xs text-gray-500 font-medium">Configure sales target for {targetModalEmployee.name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeTargetModal}
+                  className="text-gray-400 hover:text-gray-700 p-2 hover:bg-white rounded-full transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {/* Employee Quick Info Badge */}
+                <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-100 to-orange-50 text-be-orange flex items-center justify-center font-bold text-xs border border-orange-200">
+                      {(targetModalEmployee.name || 'EMP').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-gray-900">{targetModalEmployee.name}</div>
+                      <div className="text-xs text-gray-500">{targetModalEmployee.id} • {targetModalEmployee.dept} ({targetModalEmployee.role})</div>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold border bg-amber-50 text-amber-800 border-amber-200">
+                    {targetModalEmployee.systemRole || 'TM'}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                    Monthly Target Amount (₹)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-extrabold text-base">₹</span>
+                    <input
+                      type="text"
+                      value={targetInputVal}
+                      onChange={(e) => setTargetInputVal(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="e.g. 500000"
+                      className="w-full pl-9 pr-4 py-3 bg-white border border-gray-300 rounded-2xl text-base font-extrabold text-gray-900 outline-none focus:ring-2 focus:ring-be-orange focus:border-be-orange shadow-sm font-mono"
+                      autoFocus
+                    />
+                  </div>
+                  {targetInputVal && !isNaN(Number(targetInputVal)) && Number(targetInputVal) > 0 && (
+                    <p className="text-xs text-emerald-600 font-bold mt-2 flex items-center">
+                      <CheckCircle2 size={13} className="mr-1" />
+                      Target: ₹{Number(targetInputVal).toLocaleString('en-IN')} per month
+                    </p>
+                  )}
+                </div>
+
+                {/* Quick Presets */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    Quick Presets
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: '₹1 Lakh', val: '100000' },
+                      { label: '₹2.5 Lakh', val: '250000' },
+                      { label: '₹5 Lakh', val: '500000' },
+                      { label: '₹10 Lakh', val: '1000000' },
+                      { label: '₹20 Lakh', val: '2000000' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.val}
+                        type="button"
+                        onClick={() => setTargetInputVal(preset.val)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all ${
+                          targetInputVal === preset.val
+                            ? 'bg-be-orange text-white border-be-orange shadow-sm'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-amber-400 hover:bg-amber-50'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                    {targetInputVal && (
+                      <button
+                        type="button"
+                        onClick={() => setTargetInputVal('')}
+                        className="px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                      >
+                        Clear Target
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 font-medium">
+                  <strong>Authority Note:</strong> Only Super Admin and Department HODs can assign and modify employee targets. This target will reflect in CRM sales tracking and HRMS dashboards.
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={closeTargetModal}
+                  className="px-5 py-2.5 border border-gray-300 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-100 transition-colors bg-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingTarget}
+                  onClick={handleSaveTarget}
+                  className="px-6 py-2.5 bg-gradient-to-r from-be-orange to-amber-600 text-white rounded-xl text-sm font-bold hover:from-orange-600 hover:to-amber-700 transition-all shadow-md shadow-orange-500/30 flex items-center disabled:opacity-60"
+                >
+                  {isSavingTarget ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin mr-2" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} className="mr-1.5" />
+                      <span>Save Target</span>
+                    </>
+                  )}
+                </button>
               </div>
             </motion.div>
           </div>
