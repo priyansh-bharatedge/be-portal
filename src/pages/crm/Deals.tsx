@@ -674,9 +674,9 @@ export const Deals = () => {
         console.warn('IndexedDB initial load error:', err);
       }
       if (isMounted) {
-        if (count < 10470 || hasZeroAmounts) {
-          // If fresh, incomplete (< 10,470), or cached with ₹0, automatically stream fresh records with real amounts
-          handleFetchAllBatchesFromZoho(false, hasZeroAmounts);
+        if (count < 10480 || hasZeroAmounts) {
+          // If fresh, incomplete (< 10,480), or cached with ₹0, automatically stream fresh records with real amounts
+          handleFetchAllBatchesFromZoho(false, count < 10480 || hasZeroAmounts);
         } else {
           // Otherwise fetch latest updates for page 1
           handleFetchFromZoho(false);
@@ -1319,18 +1319,12 @@ export const Deals = () => {
     // Fast O(1) lookup index maps
     const dealIndexByZohoId = new Map<string, number>();
     const dealIndexById = new Map<string, number>();
-    const dealIndexByShortId = new Map<string, number>();
     updatedDeals.forEach((d, idx) => {
       if (d.zohoId) {
         dealIndexByZohoId.set(String(d.zohoId), idx);
-        dealIndexByShortId.set(String(d.zohoId).slice(-4), idx);
       }
       if (d.id) {
         dealIndexById.set(String(d.id), idx);
-        const digits = String(d.id).replace(/\D/g, '');
-        if (digits) {
-          dealIndexByShortId.set(digits.slice(-4), idx);
-        }
       }
     });
 
@@ -1353,21 +1347,11 @@ export const Deals = () => {
 
     rawDeals.forEach((zDeal: any) => {
       const zIdStr = String(zDeal.id || '');
-      const shortId = zIdStr ? zIdStr.slice(-4) : '';
       let existingIdx = -1;
       if (zIdStr && dealIndexByZohoId.has(zIdStr)) {
         existingIdx = dealIndexByZohoId.get(zIdStr)!;
       } else if (zIdStr && dealIndexById.has(zIdStr)) {
         existingIdx = dealIndexById.get(zIdStr)!;
-      } else if (shortId && dealIndexByShortId.has(shortId)) {
-        existingIdx = dealIndexByShortId.get(shortId)!;
-      } else if (zDeal.Deal_Name) {
-        for (const [idKey, idx] of dealIndexById.entries()) {
-          if (zDeal.Deal_Name.includes(idKey)) {
-            existingIdx = idx;
-            break;
-          }
-        }
       }
 
       // 1. Clean Client Name & Company Name
@@ -1796,7 +1780,7 @@ export const Deals = () => {
     let pageNumber = 1;
     let hasMore = true;
     let batchCount = 0;
-    const totalExpected = 10470;
+    const totalExpected = 10483;
 
     setBatchProgress({
       loaded: currentDeals.length,
@@ -2050,14 +2034,14 @@ export const Deals = () => {
                     Syncing All Deals from Zoho CRM
                   </h4>
                   <span className="px-2.5 py-0.5 bg-be-orange text-white text-xs font-bold rounded-full shadow-xs">
-                    {(batchProgress?.loaded || deals.length).toLocaleString()} / 10,470 Loaded ({batchProgress?.percent || Math.min(100, Math.round(((batchProgress?.loaded || deals.length) / 10470) * 100))}%)
+                    {(batchProgress?.loaded || deals.length).toLocaleString()} / 10,483 Loaded ({batchProgress?.percent || Math.min(100, Math.round(((batchProgress?.loaded || deals.length) / 10483) * 100))}%)
                   </span>
                   <span className="text-xs text-gray-500 font-medium">
                     Batch #{batchProgress?.batch || 1} of 53
                   </span>
                 </div>
                 <p className="text-xs text-gray-600 mt-0.5">
-                  Downloading all 10,470 live records into local IndexedDB storage. You can search, filter, and view deals while sync is in progress.
+                  Downloading all 10,483 live records into local IndexedDB storage. You can search, filter, and view deals while sync is in progress.
                 </p>
               </div>
             </div>
@@ -2073,7 +2057,7 @@ export const Deals = () => {
           <div className="w-full bg-orange-200/60 rounded-full h-2 overflow-hidden">
             <div 
               className="bg-gradient-to-r from-be-orange to-amber-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${batchProgress?.percent || Math.min(100, Math.max(3, (((batchProgress?.loaded || deals.length) || 0) / 10470) * 100))}%` }}
+              style={{ width: `${batchProgress?.percent || Math.min(100, Math.max(3, (((batchProgress?.loaded || deals.length) || 0) / 10483) * 100))}%` }}
             />
           </div>
         </motion.div>

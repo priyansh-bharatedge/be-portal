@@ -1565,7 +1565,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     ? (servicesSubform.length === 1 ? servicesSubform[0].name : `${servicesSubform.length} Services`) 
     : (rawZoho.Choose_Wisely || rawZoho.Service_Name || (rawZoho.Deal_Name && rawZoho.Deal_Name.includes(' - ') ? rawZoho.Deal_Name.split(' - ').slice(1).join(' - ').trim() : (existingDeal?.service || 'Services')));
 
-  const resolvedId = existingDeal?.id || (rawZoho.id ? (String(rawZoho.id).startsWith('DL-') ? String(rawZoho.id) : `DL-${String(rawZoho.id).slice(-4)}`) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
+  const resolvedId = existingDeal?.id || (rawZoho.id ? String(rawZoho.id) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
 
   return {
     ...existingDeal,
