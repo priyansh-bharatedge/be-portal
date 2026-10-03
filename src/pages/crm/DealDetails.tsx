@@ -118,52 +118,42 @@ export const DealDetails = () => {
           return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
         };
 
-        const totalNum = parseZohoNum(
-          rawZoho.Total_deal_amount_inclusive_of_gst !== undefined && rawZoho.Total_deal_amount_inclusive_of_gst !== null ? rawZoho.Total_deal_amount_inclusive_of_gst :
-          (rawZoho.Amount !== undefined && rawZoho.Amount !== null ? rawZoho.Amount :
-          (rawZoho.Deal_Amount !== undefined && rawZoho.Deal_Amount !== null ? rawZoho.Deal_Amount :
-          (rawZoho.Amount_Without_GST !== undefined && rawZoho.Amount_Without_GST !== null ? Number(rawZoho.Amount_Without_GST) / 0.82 :
-          (rawZoho.amount_if_you_have_kindly_put_0 || rawZoho.Amount_After_disbursement || 0))))
-        );
+        const findFirstPositive = (...vals: any[]): number => {
+          for (const v of vals) {
+            if (v === null || v === undefined) continue;
+            const num = parseZohoNum(v);
+            if (num > 0) return num;
+          }
+          return 0;
+        };
 
-        const withoutGst = parseZohoNum(
-          rawZoho.Amount_Without_GST !== undefined && rawZoho.Amount_Without_GST !== null ? rawZoho.Amount_Without_GST :
-          (rawZoho.Deal_Amount_Without_GST !== undefined && rawZoho.Deal_Amount_Without_GST !== null ? rawZoho.Deal_Amount_Without_GST :
-          (totalNum > 0 ? Number((totalNum * 0.82).toFixed(2)) : 0))
-        );
-
-        const gstNum = parseZohoNum(
-          rawZoho.GST_Amount !== undefined && rawZoho.GST_Amount !== null ? rawZoho.GST_Amount :
-          (rawZoho.Deal_GST_Amount !== undefined && rawZoho.Deal_GST_Amount !== null ? rawZoho.Deal_GST_Amount :
-          (totalNum > withoutGst ? Number((totalNum - withoutGst).toFixed(2)) : 0))
-        );
-
-        const recNum = parseZohoNum(
-          rawZoho.Total_Received_Amount !== undefined && rawZoho.Total_Received_Amount !== null ? rawZoho.Total_Received_Amount :
-          (rawZoho.Deal_Received_Amount !== undefined && rawZoho.Deal_Received_Amount !== null ? rawZoho.Deal_Received_Amount :
-          (rawZoho.Received_amount || 0))
-        );
-
-        const pendNum = parseZohoNum(
-          rawZoho.Total_Pending_Amount !== undefined && rawZoho.Total_Pending_Amount !== null ? rawZoho.Total_Pending_Amount :
-          (rawZoho.Deal_Pending_Amount !== undefined && rawZoho.Deal_Pending_Amount !== null ? rawZoho.Deal_Pending_Amount :
-          (rawZoho.Pending_amount !== undefined && rawZoho.Pending_amount !== null ? rawZoho.Pending_amount :
-          (totalNum > recNum ? totalNum - recNum : 0)))
-        );
-
+        // Extract Services from Subform_1 first so we can aggregate
         let servicesSubform: any[] = [];
+        let subformTotal = 0;
+        let subformWithoutGst = 0;
+        let subformReceived = 0;
+        let subformPending = 0;
+
         if (Array.isArray(rawZoho.Subform_1) && rawZoho.Subform_1.length > 0) {
           servicesSubform = rawZoho.Subform_1.map((sf: any, i: number) => {
-            const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || 0);
-            const wGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? (agreementAmount * 0.82).toFixed(2) : 0));
+            const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount || 0);
+            const wGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0));
             const tAmt = agreementAmount || (wGst > 0 ? Number((wGst / 0.82).toFixed(2)) : 0);
+            const recAmt = parseZohoNum(sf.Received_amount || sf.Received || 0);
+            const pendAmt = parseZohoNum(sf.Pending_amount || sf.Pending || (tAmt > recAmt ? tAmt - recAmt : 0));
+
+            subformTotal += tAmt;
+            subformWithoutGst += wGst;
+            subformReceived += recAmt;
+            subformPending += pendAmt;
+
             return {
               id: String(sf.id || i + 1),
               name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service',
               totalAmount: String(tAmt || ''),
               baseAmount: String(wGst || 0),
-              receivedAmount: sf.Received_amount || sf.Received || '',
-              pendingAmount: sf.Pending_amount || sf.Pending || '',
+              receivedAmount: sf.Received_amount || sf.Received || (recAmt > 0 ? String(recAmt) : ''),
+              pendingAmount: sf.Pending_amount || sf.Pending || (pendAmt > 0 ? String(pendAmt) : ''),
               paymentStages: sf.Payment_stages || '',
               paymentType: sf.Payment_type || '',
               paymentDate: sf.Payment_received_date || '',
@@ -172,6 +162,71 @@ export const DealDetails = () => {
             };
           });
         }
+
+        const totalNum = findFirstPositive(
+          rawZoho.Total_deal_amount_inclusive_of_gst,
+          rawZoho.Amount,
+          rawZoho.Deal_Amount,
+          rawZoho.Grand_Total,
+          rawZoho.Grand_total,
+          rawZoho.GrandTotal,
+          rawZoho.Total_amount,
+          rawZoho.Total_Amount,
+          rawZoho.total_amount,
+          rawZoho.Agreement_amount,
+          rawZoho.Agreement_Amount,
+          rawZoho.Amount_Without_GST ? parseZohoNum(rawZoho.Amount_Without_GST) / 0.82 : 0,
+          rawZoho.Deal_Amount_Without_GST ? parseZohoNum(rawZoho.Deal_Amount_Without_GST) / 0.82 : 0,
+          rawZoho.Subtotal ? parseZohoNum(rawZoho.Subtotal) * 1.18 : 0,
+          rawZoho.Amount_After_disbursement,
+          subformTotal,
+          rawZoho.Total_Received_Amount,
+          rawZoho.Deal_Received_Amount,
+          rawZoho.Received_amount,
+          rawZoho.Received,
+          rawZoho.amount_if_you_have_kindly_put_0,
+          deal?.totals?.grandTotal,
+          deal?.amount ? parseZohoNum(deal.amount) : 0
+        );
+
+        const withoutGst = findFirstPositive(
+          rawZoho.Amount_Without_GST,
+          rawZoho.Deal_Amount_Without_GST,
+          subformWithoutGst,
+          deal?.totals?.baseAmount,
+          totalNum > 0 ? Number((totalNum * 0.82).toFixed(2)) : 0
+        );
+
+        const gstNum = findFirstPositive(
+          rawZoho.GST_Amount,
+          rawZoho.Deal_GST_Amount,
+          deal?.totals?.totalGst,
+          totalNum > withoutGst ? Number((totalNum - withoutGst).toFixed(2)) : Number((withoutGst * 0.18).toFixed(2))
+        );
+
+        const recNum = findFirstPositive(
+          rawZoho.Total_Received_Amount,
+          rawZoho.Deal_Received_Amount,
+          rawZoho.Received_amount,
+          rawZoho.Received_Amount,
+          rawZoho.Received,
+          rawZoho.Amount_After_disbursement,
+          subformReceived,
+          deal?.totals?.receivedAmount,
+          deal?.received ? parseZohoNum(deal.received) : 0
+        );
+
+        const pendNum = findFirstPositive(
+          rawZoho.Total_Pending_Amount,
+          rawZoho.Deal_Pending_Amount,
+          rawZoho.Pending_amount,
+          rawZoho.Pending_Amount,
+          rawZoho.Pending,
+          subformPending,
+          totalNum > recNum ? Number((totalNum - recNum).toFixed(2)) : 0,
+          deal?.totals?.pendingAmount,
+          deal?.pending ? parseZohoNum(deal.pending) : 0
+        );
 
         const phone = rawZoho.Client_contact_detail || rawZoho.Client_contact_detail_cs || rawZoho.Client_contact_detail_bp || rawZoho.Client_contact_detail_fnf || rawZoho.client_contact_detail_st || rawZoho.Client_s_alternate_contact_detail || rawZoho.Client_s_alternate_contact_detail_bp || rawZoho.Mobile || rawZoho.Phone || '';
         const email = rawZoho.Client_Email_address || rawZoho.Client_Email_address_cs || rawZoho.Client_Email_address_fnf || rawZoho.Client_Email_address_bp || rawZoho.client_email_address_st || rawZoho.Email || '';
@@ -481,46 +536,149 @@ export const DealDetails = () => {
     fd.businessType ||
     'Business';
 
-  // Extract Financials
-  const totalAmountNum = Number(
-    raw.Total_deal_amount_inclusive_of_gst ||
-    raw.Amount ||
-    raw.Deal_Amount ||
-    raw.Amount_After_disbursement ||
-    raw.amount_if_you_have_kindly_put_0 ||
-    deal.totals?.grandTotal ||
-    (deal.amount ? Number(String(deal.amount).replace(/[^0-9.]/g, '')) : 0)
+  // Helper for numbers in render
+  const parseNum = (val: any): number => {
+    if (val === null || val === undefined || val === '') return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const cleaned = String(val).replace(/,/g, '').replace(/[^0-9.-]/g, '').trim();
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const findFirstPos = (...vals: any[]): number => {
+    for (const v of vals) {
+      if (v === null || v === undefined) continue;
+      const num = parseNum(v);
+      if (num > 0) return num;
+    }
+    return 0;
+  };
+
+  // 1. Extract Services first so we can aggregate subform amounts
+  let services = deal.servicesData || [];
+  let servicesSumTotal = 0;
+  let servicesSumBase = 0;
+  let servicesSumReceived = 0;
+  let servicesSumPending = 0;
+
+  if (Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0) {
+    services = raw.Subform_1.map((sf: any, i: number) => {
+      const agreementAmount = parseNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount || 0);
+      const withoutGst = parseNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0));
+      const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
+      const recAmt = parseNum(sf.Received_amount || sf.Received || 0);
+      const pendAmt = parseNum(sf.Pending_amount || sf.Pending || (totalAmt > recAmt ? totalAmt - recAmt : 0));
+
+      servicesSumTotal += totalAmt;
+      servicesSumBase += withoutGst;
+      servicesSumReceived += recAmt;
+      servicesSumPending += pendAmt;
+
+      return {
+        id: String(sf.id || i + 1),
+        name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service',
+        totalAmount: String(totalAmt || ''),
+        baseAmount: String(withoutGst || 0),
+        receivedAmount: sf.Received_amount || sf.Received || (recAmt > 0 ? String(recAmt) : ''),
+        pendingAmount: sf.Pending_amount || sf.Pending || (pendAmt > 0 ? String(pendAmt) : ''),
+        paymentStages: sf.Payment_stages || '',
+        paymentType: sf.Payment_type || '',
+        paymentDate: sf.Payment_received_date || '',
+        qualityProvided: sf.Quality_provided || '',
+        successFees: sf.Success_fees || '',
+      };
+    });
+  } else if (services.length > 0) {
+    services.forEach((s: any) => {
+      const t = parseNum(s.totalAmount);
+      const b = parseNum(s.baseAmount || (t > 0 ? t * 0.82 : 0));
+      const r = parseNum(s.receivedAmount);
+      const p = parseNum(s.pendingAmount || (t > r ? t - r : 0));
+      servicesSumTotal += t;
+      servicesSumBase += b;
+      servicesSumReceived += r;
+      servicesSumPending += p;
+    });
+  }
+
+  // 2. Extract Financials with fallback to subform sums
+  const totalAmountNum = findFirstPos(
+    raw.Total_deal_amount_inclusive_of_gst,
+    raw.Amount,
+    raw.Deal_Amount,
+    raw.Grand_Total,
+    raw.Grand_total,
+    raw.GrandTotal,
+    raw.Total_amount,
+    raw.Total_Amount,
+    raw.total_amount,
+    raw.Agreement_amount,
+    raw.Agreement_Amount,
+    raw.Amount_Without_GST ? parseNum(raw.Amount_Without_GST) / 0.82 : 0,
+    raw.Deal_Amount_Without_GST ? parseNum(raw.Deal_Amount_Without_GST) / 0.82 : 0,
+    raw.Subtotal ? parseNum(raw.Subtotal) * 1.18 : 0,
+    raw.Amount_After_disbursement,
+    servicesSumTotal,
+    raw.Total_Received_Amount,
+    raw.Deal_Received_Amount,
+    raw.Received_amount,
+    raw.Received,
+    raw.amount_if_you_have_kindly_put_0,
+    deal.totals?.grandTotal,
+    deal.amount ? parseNum(deal.amount) : 0
   );
 
-  const baseAmountNum = Number(
-    raw.Amount_Without_GST ||
-    raw.Deal_Amount_Without_GST ||
-    deal.totals?.baseAmount ||
-    (totalAmountNum > 0 ? Number((totalAmountNum * 0.82).toFixed(2)) : 0)
+  const baseAmountNum = findFirstPos(
+    raw.Amount_Without_GST,
+    raw.Deal_Amount_Without_GST,
+    servicesSumBase,
+    deal.totals?.baseAmount,
+    totalAmountNum > 0 ? Number((totalAmountNum * 0.82).toFixed(2)) : 0
   );
 
-  const gstAmountNum = Number(
-    raw.GST_Amount ||
-    raw.Deal_GST_Amount ||
-    deal.totals?.totalGst ||
-    (totalAmountNum > baseAmountNum ? Number((totalAmountNum - baseAmountNum).toFixed(2)) : 0)
+  const gstAmountNum = findFirstPos(
+    raw.GST_Amount,
+    raw.Deal_GST_Amount,
+    deal.totals?.totalGst,
+    totalAmountNum > baseAmountNum ? Number((totalAmountNum - baseAmountNum).toFixed(2)) : Number((baseAmountNum * 0.18).toFixed(2))
   );
 
-  const receivedAmountNum = Number(
-    raw.Total_Received_Amount !== undefined && raw.Total_Received_Amount !== null ? raw.Total_Received_Amount :
-    raw.Deal_Received_Amount !== undefined && raw.Deal_Received_Amount !== null ? raw.Deal_Received_Amount :
-    raw.Received_amount !== undefined && raw.Received_amount !== null ? raw.Received_amount :
-    deal.totals?.receivedAmount ||
-    (deal.received ? Number(String(deal.received).replace(/[^0-9.]/g, '')) : 0)
+  const receivedAmountNum = findFirstPos(
+    raw.Total_Received_Amount,
+    raw.Deal_Received_Amount,
+    raw.Received_amount,
+    raw.Received_Amount,
+    raw.Received,
+    raw.Amount_After_disbursement,
+    servicesSumReceived,
+    deal.totals?.receivedAmount,
+    deal.received ? parseNum(deal.received) : 0
   );
 
-  const pendingAmountNum = Number(
-    raw.Total_Pending_Amount !== undefined && raw.Total_Pending_Amount !== null ? raw.Total_Pending_Amount :
-    raw.Deal_Pending_Amount !== undefined && raw.Deal_Pending_Amount !== null ? raw.Deal_Pending_Amount :
-    raw.Pending_amount !== undefined && raw.Pending_amount !== null ? raw.Pending_amount :
-    deal.totals?.pendingAmount ||
-    (deal.pending ? Number(String(deal.pending).replace(/[^0-9.]/g, '')) : (totalAmountNum > receivedAmountNum ? totalAmountNum - receivedAmountNum : 0))
+  const pendingAmountNum = findFirstPos(
+    raw.Total_Pending_Amount,
+    raw.Deal_Pending_Amount,
+    raw.Pending_amount,
+    raw.Pending_Amount,
+    raw.Pending,
+    servicesSumPending,
+    totalAmountNum > receivedAmountNum ? Number((totalAmountNum - receivedAmountNum).toFixed(2)) : 0,
+    deal.totals?.pendingAmount,
+    deal.pending ? parseNum(deal.pending) : 0
   );
+
+  // If services array was still empty, create default single row with the resolved totals
+  if (services.length === 0 || (services.length === 1 && services[0].name === 'General Services' && totalAmountNum > 0)) {
+    const serviceTitle = raw.Choose_Wisely || raw.Service_Name || raw.Business_plan_selected || (raw.Deal_Name && raw.Deal_Name.includes(' - ') ? raw.Deal_Name.split(' - ').slice(1).join(' - ').trim() : '') || deal.service || 'General Services';
+    services = [{
+      id: '1',
+      name: serviceTitle,
+      totalAmount: String(totalAmountNum || ''),
+      baseAmount: String(baseAmountNum || ''),
+      receivedAmount: String(receivedAmountNum || ''),
+      pendingAmount: String(pendingAmountNum || ''),
+    }];
+  }
 
   const initials = clientName && clientName !== 'Client' ? clientName.substring(0, 2).toUpperCase() : (companyName !== 'N/A' ? companyName.substring(0, 2).toUpperCase() : 'DL');
 
@@ -573,39 +731,6 @@ export const DealDetails = () => {
     raw.partner_bdm_amount !== undefined && raw.partner_bdm_amount !== null && Number(raw.partner_bdm_amount) > 0 ? raw.partner_bdm_amount :
     (hasPartnerBdm && receivedAmountNum > 0 ? Number(((receivedAmountNum / 1.18) / 2).toFixed(2)) : 0)
   );
-
-  // Extract Services (Subform_1)
-  let services = deal.servicesData || [];
-  if (services.length === 0 && Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0) {
-    services = raw.Subform_1.map((sf: any, i: number) => {
-      const agreementAmount = Number(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || 0);
-      const withoutGst = Number(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? (agreementAmount * 0.82).toFixed(2) : 0));
-      const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
-      return {
-        id: String(sf.id || i + 1),
-        name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service',
-        totalAmount: String(totalAmt || ''),
-        baseAmount: String(withoutGst || 0),
-        receivedAmount: sf.Received_amount || sf.Received || '',
-        pendingAmount: sf.Pending_amount || sf.Pending || '',
-        paymentStages: sf.Payment_stages || '',
-        paymentType: sf.Payment_type || '',
-        paymentDate: sf.Payment_received_date || '',
-        qualityProvided: sf.Quality_provided || '',
-        successFees: sf.Success_fees || '',
-      };
-    });
-  } else if (services.length === 0 || (services.length === 1 && services[0].name === 'General Services' && (totalAmountNum > 0 || raw.Choose_Wisely || raw.Service_Name))) {
-    const serviceTitle = raw.Choose_Wisely || raw.Service_Name || raw.Business_plan_selected || (raw.Deal_Name && raw.Deal_Name.includes(' - ') ? raw.Deal_Name.split(' - ').slice(1).join(' - ').trim() : '') || deal.service || 'General Services';
-    services = [{
-      id: '1',
-      name: serviceTitle,
-      totalAmount: String(totalAmountNum || ''),
-      baseAmount: String(baseAmountNum || ''),
-      receivedAmount: String(receivedAmountNum || ''),
-      pendingAmount: String(pendingAmountNum || ''),
-    }];
-  }
 
   // Extract Legal Subform
   const legalSubform = deal.legalData || (Array.isArray(raw.Legal) && raw.Legal.length > 0
