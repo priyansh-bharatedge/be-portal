@@ -1502,6 +1502,131 @@ function zohoApiPlugin(): Plugin {
           return;
         }
 
+        // Search employee by email endpoint (Module API Name: Employee)
+        if ((pathname === '/api/zoho/search-employee' || pathname === '/api/zoho/check-employee') && (req.method === 'GET' || req.method === 'POST')) {
+          let email = urlObj.searchParams.get('email') || '';
+          
+          const processSearch = async (emailToSearch: string) => {
+            try {
+              const cleanEmail = emailToSearch.trim();
+              if (!cleanEmail) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ success: false, message: 'Email parameter is required' }));
+              }
+
+              let accessToken = await getAccessToken(env);
+              const moduleName = env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
+              const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+
+              const criteria = `(((Personal_Email_Address:equals:${cleanEmail})or(Email:equals:${cleanEmail}))or(Employment_ID:equals:${cleanEmail}))`;
+              const searchUrl = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteria)}`;
+
+              let searchRes = await fetch(searchUrl, {
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+              });
+
+              if (searchRes.status === 401) {
+                cachedToken = null;
+                accessToken = await getAccessToken(env);
+                searchRes = await fetch(searchUrl, {
+                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                });
+              }
+
+              let matchedRecord: any = null;
+              if (searchRes.status === 200) {
+                const searchData: any = await searchRes.json();
+                if (searchData?.data?.length > 0) {
+                  matchedRecord = searchData.data[0];
+                }
+              }
+
+              if (!matchedRecord && cleanEmail.includes('@')) {
+                const emailSearchUrl = `${apiBase}/crm/v8/${moduleName}/search?email=${encodeURIComponent(cleanEmail)}`;
+                let emailRes = await fetch(emailSearchUrl, {
+                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                });
+                if (emailRes.status === 200) {
+                  const emailData: any = await emailRes.json();
+                  if (emailData?.data?.length > 0) {
+                    matchedRecord = emailData.data[0];
+                  }
+                }
+              }
+
+              if (!matchedRecord) {
+                const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Personal_Email_Address,Email,Password,System_Role,Department,Designation_Job_Title';
+                const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&per_page=200`;
+                let listRes = await fetch(listUrl, {
+                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                });
+                if (listRes.status === 200) {
+                  const listData: any = await listRes.json();
+                  if (listData?.data) {
+                    matchedRecord = listData.data.find((x: any) =>
+                      (x.Personal_Email_Address && x.Personal_Email_Address.toLowerCase() === cleanEmail.toLowerCase()) ||
+                      (x.Email && x.Email.toLowerCase() === cleanEmail.toLowerCase()) ||
+                      (x.Employment_ID && String(x.Employment_ID).toLowerCase() === cleanEmail.toLowerCase())
+                    );
+                  }
+                }
+              }
+
+              res.setHeader('Content-Type', 'application/json');
+              if (matchedRecord) {
+                const rawPassword = matchedRecord.Password;
+                const hasPassword = Boolean(rawPassword && String(rawPassword).trim().length > 0);
+                return res.end(JSON.stringify({
+                  success: true,
+                  exists: true,
+                  hasPassword,
+                  employee: {
+                    id: matchedRecord.Employment_ID || matchedRecord.id,
+                    zohoId: String(matchedRecord.id),
+                    name: [matchedRecord.Name, matchedRecord.Middle_Name, matchedRecord.Last_Name].filter(Boolean).join(' ') || matchedRecord.Name,
+                    email: matchedRecord.Email || matchedRecord.Personal_Email_Address || cleanEmail,
+                    personalEmail: matchedRecord.Personal_Email_Address,
+                    workEmail: matchedRecord.Email,
+                    password: rawPassword || '',
+                    hasPassword,
+                    role: matchedRecord.System_Role || 'TM',
+                    department: matchedRecord.Department || 'General',
+                    designation: matchedRecord.Designation_Job_Title || 'Employee',
+                  }
+                }));
+              } else {
+                return res.end(JSON.stringify({
+                  success: true,
+                  exists: false,
+                  message: 'Email Does Not Exist'
+                }));
+              }
+            } catch (err: any) {
+              console.error('[Vite Zoho Plugin] Error searching employee by email:', err);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+          };
+
+          if (req.method === 'GET') {
+            processSearch(email);
+          } else {
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                processSearch(parsed.email || email);
+              } catch {
+                processSearch(email);
+              }
+            });
+          }
+          return;
+        }
+
         // Fetch / Get Employees endpoint (Module API Name: Employee)
         if (pathname === '/api/zoho/get-employees' && req.method === 'GET') {
           try {

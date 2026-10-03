@@ -1330,6 +1330,114 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // 5.2. Search Employee by Email in Zoho CRM
+    if ((action === 'search-employee' || action === 'check-employee') && (method === 'GET' || method === 'POST')) {
+      let email = '';
+      if (method === 'GET') {
+        email = (urlObj.searchParams.get('email') || '').trim();
+      } else {
+        const body = await getRequestBody(req);
+        email = (body.email || '').trim();
+      }
+
+      if (!email) {
+        return sendJson(res, 400, { success: false, message: 'Email parameter is required' });
+      }
+
+      let accessToken = await getAccessToken();
+      const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
+
+      try {
+        const criteria = `(((Personal_Email_Address:equals:${email})or(Email:equals:${email}))or(Employment_ID:equals:${email}))`;
+        const searchUrl = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteria)}`;
+
+        let searchRes = await fetch(searchUrl, {
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+        });
+
+        if (searchRes.status === 401) {
+          cachedToken = null;
+          accessToken = await getAccessToken();
+          searchRes = await fetch(searchUrl, {
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+          });
+        }
+
+        let matchedRecord: any = null;
+        if (searchRes.status === 200) {
+          const searchData: any = await searchRes.json();
+          if (searchData?.data?.length > 0) {
+            matchedRecord = searchData.data[0];
+          }
+        }
+
+        // Fallback 1: search?email=...
+        if (!matchedRecord && email.includes('@')) {
+          const emailSearchUrl = `${apiBase}/crm/v8/${moduleName}/search?email=${encodeURIComponent(email)}`;
+          let emailRes = await fetch(emailSearchUrl, {
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+          });
+          if (emailRes.status === 200) {
+            const emailData: any = await emailRes.json();
+            if (emailData?.data?.length > 0) {
+              matchedRecord = emailData.data[0];
+            }
+          }
+        }
+
+        // Fallback 2: list scan if search did not catch
+        if (!matchedRecord) {
+          const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Personal_Email_Address,Email,Password,System_Role,Department,Designation_Job_Title';
+          const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&per_page=200`;
+          let listRes = await fetch(listUrl, {
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+          });
+          if (listRes.status === 200) {
+            const listData: any = await listRes.json();
+            if (listData?.data) {
+              matchedRecord = listData.data.find((x: any) =>
+                (x.Personal_Email_Address && x.Personal_Email_Address.toLowerCase() === email.toLowerCase()) ||
+                (x.Email && x.Email.toLowerCase() === email.toLowerCase()) ||
+                (x.Employment_ID && String(x.Employment_ID).toLowerCase() === email.toLowerCase())
+              );
+            }
+          }
+        }
+
+        if (matchedRecord) {
+          const rawPassword = matchedRecord.Password;
+          const hasPassword = Boolean(rawPassword && String(rawPassword).trim().length > 0);
+          return sendJson(res, 200, {
+            success: true,
+            exists: true,
+            hasPassword,
+            employee: {
+              id: matchedRecord.Employment_ID || matchedRecord.id,
+              zohoId: String(matchedRecord.id),
+              name: [matchedRecord.Name, matchedRecord.Middle_Name, matchedRecord.Last_Name].filter(Boolean).join(' ') || matchedRecord.Name,
+              email: matchedRecord.Email || matchedRecord.Personal_Email_Address || email,
+              personalEmail: matchedRecord.Personal_Email_Address,
+              workEmail: matchedRecord.Email,
+              password: rawPassword || '',
+              hasPassword,
+              role: matchedRecord.System_Role || 'TM',
+              department: matchedRecord.Department || 'General',
+              designation: matchedRecord.Designation_Job_Title || 'Employee',
+            }
+          });
+        } else {
+          return sendJson(res, 200, {
+            success: true,
+            exists: false,
+            message: 'Email Does Not Exist'
+          });
+        }
+      } catch (err: any) {
+        console.error('[Zoho API Handler] Error searching employee:', err);
+        return sendJson(res, 500, { success: false, message: err.message });
+      }
+    }
+
     // 6. Get Employees
     if (action === 'get-employees' && method === 'GET') {
       let accessToken = await getAccessToken();

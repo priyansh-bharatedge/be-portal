@@ -3,7 +3,7 @@ import { ROLE_DEFINITIONS } from '../types/roles';
 import type { AuthUser, SystemRole, RbacCriteriaResult } from '../types/roles';
 import { DEMO_USERS, INITIAL_EMPLOYEES, INITIAL_DSR_REPORTS } from '../utils/initialData';
 import { sendOtpEmail } from '../services/emailService';
-import { saveOrUpdateZohoEmployee, updateZohoEmployeePassword, fetchZohoEmployees } from '../services/zohoService';
+import { saveOrUpdateZohoEmployee, updateZohoEmployeePassword, fetchZohoEmployees, searchZohoEmployeeByEmail } from '../services/zohoService';
 import type { ZohoApiResponse, ZohoFetchOptions, ZohoFetchResult } from '../services/zohoService';
 import {
   injectEmployeeLookup,
@@ -31,6 +31,7 @@ interface AuthContextType {
   isTL: boolean;
   isTM: boolean;
   can: (permission: string) => boolean;
+  searchEmployeeInZoho: (email: string) => Promise<{ success: boolean; exists: boolean; hasPassword?: boolean; employee?: any; error?: string }>;
   login: (email: string, password?: string, role?: SystemRole) => { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser };
   requestOtp: (emailOrId: string) => Promise<{ success: boolean; error?: string; maskedEmail?: string; otp?: string; empName?: string; targetEmail?: string }>;
   verifyOtp: (emailOrId: string, otp: string) => { success: boolean; error?: string };
@@ -161,6 +162,105 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       empId: `EMP-${role.replace(/\s+/g, '')}`
     };
     switchUser(userForRole);
+  };
+
+  const searchEmployeeInZoho = async (email: string): Promise<{ success: boolean; exists: boolean; hasPassword?: boolean; employee?: any; error?: string }> => {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return { success: false, exists: false, error: 'Email address is required.' };
+    }
+
+    try {
+      // 1. Query live Zoho CRM "Employee" module
+      const zohoRes = await searchZohoEmployeeByEmail(cleanEmail);
+      if (zohoRes.success && zohoRes.exists && zohoRes.employee) {
+        return {
+          success: true,
+          exists: true,
+          hasPassword: zohoRes.hasPassword,
+          employee: zohoRes.employee
+        };
+      } else if (zohoRes.success && zohoRes.exists === false) {
+        // Fallback check in local employee cache / DEMO_USERS (for offline / dev demo testing)
+        const savedEmps = localStorage.getItem('be_employees');
+        const emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
+        const localMatch = emps.find((e: any) => 
+          e.email?.trim().toLowerCase() === cleanEmail ||
+          e.formData?.email?.trim().toLowerCase() === cleanEmail ||
+          e.formData?.workEmail?.trim().toLowerCase() === cleanEmail ||
+          e.id?.toString().trim().toLowerCase() === cleanEmail
+        );
+        const demoMatch = DEMO_USERS.find((u: any) => u.email?.trim().toLowerCase() === cleanEmail);
+
+        const matchedUser = localMatch || demoMatch;
+        if (matchedUser) {
+          const rawPass = matchedUser.password || matchedUser.formData?.password;
+          const hasPassword = Boolean(rawPass && String(rawPass).trim().length > 0);
+          return {
+            success: true,
+            exists: true,
+            hasPassword,
+            employee: {
+              id: matchedUser.id || matchedUser.empId,
+              zohoId: matchedUser.zohoId || '',
+              name: matchedUser.name,
+              email: matchedUser.email || matchedUser.workEmail,
+              password: rawPass || '',
+              hasPassword,
+              role: matchedUser.role || matchedUser.systemRole || 'TM',
+              department: matchedUser.department || matchedUser.dept || 'General',
+              designation: matchedUser.designation || matchedUser.role || 'Employee'
+            }
+          };
+        }
+
+        return {
+          success: true,
+          exists: false,
+          error: 'Email Does Not Exist'
+        };
+      }
+    } catch (err: any) {
+      console.warn('[AuthContext] Exception querying Zoho employee:', err);
+    }
+
+    // Secondary Fallback: Check local storage / demo users
+    const savedEmps = localStorage.getItem('be_employees');
+    const emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
+    const localMatch = emps.find((e: any) => 
+      e.email?.trim().toLowerCase() === cleanEmail ||
+      e.formData?.email?.trim().toLowerCase() === cleanEmail ||
+      e.formData?.workEmail?.trim().toLowerCase() === cleanEmail
+    );
+    const demoMatch = DEMO_USERS.find((u: any) => u.email?.trim().toLowerCase() === cleanEmail);
+    const matchedUser = localMatch || demoMatch;
+
+    if (matchedUser) {
+      const rawPass = matchedUser.password || matchedUser.formData?.password;
+      const hasPassword = Boolean(rawPass && String(rawPass).trim().length > 0);
+      return {
+        success: true,
+        exists: true,
+        hasPassword,
+        employee: {
+          id: matchedUser.id || matchedUser.empId,
+          zohoId: matchedUser.zohoId || '',
+          name: matchedUser.name,
+          email: matchedUser.email,
+          password: rawPass || '',
+          hasPassword,
+          role: matchedUser.role || 'TM',
+          department: matchedUser.department || 'General',
+          designation: matchedUser.designation || 'Employee'
+        }
+      };
+    }
+
+    return {
+      success: true,
+      exists: false,
+      error: 'Email Does Not Exist'
+    };
   };
 
   const requestOtp = async (emailOrId: string): Promise<{ success: boolean; error?: string; maskedEmail?: string; otp?: string; empName?: string; targetEmail?: string }> => {
@@ -592,6 +692,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isTL,
         isTM,
         can,
+        searchEmployeeInZoho,
         login,
         requestOtp,
         verifyOtp,

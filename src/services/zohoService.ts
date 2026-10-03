@@ -510,6 +510,39 @@ export async function updateZohoEmployeePassword(email: string, password: string
   }
 }
 
+export interface ZohoEmployeeSearchResult {
+  success: boolean;
+  exists: boolean;
+  hasPassword?: boolean;
+  employee?: any;
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Searches Zoho CRM "Employee" module by email and returns record existence and password state.
+ */
+export async function searchZohoEmployeeByEmail(email: string): Promise<ZohoEmployeeSearchResult> {
+  try {
+    const response = await fetch(`/api/zoho/search-employee?email=${encodeURIComponent(email)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await safeParseResponse(response);
+    return data;
+  } catch (error: any) {
+    console.error('[Zoho CRM] Client exception searching employee by email:', error);
+    return {
+      success: false,
+      exists: false,
+      error: error?.message || 'Network error communicating with Zoho CRM search endpoint',
+    };
+  }
+}
+
 /**
  * Automatically inserts or updates an employee record in Zoho CRM depending on whether employee.zohoId exists.
  */
