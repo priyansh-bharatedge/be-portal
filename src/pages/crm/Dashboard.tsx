@@ -4,7 +4,8 @@ import {
   Users, Briefcase, IndianRupee, TrendingUp, AlertCircle,
   MoreHorizontal, FolderKanban, RefreshCw, CheckCircle2,
   FileText, Send, Sparkles, ArrowUpRight, Crown, Shield,
-  Clock, Calendar, Target, Award, ArrowRight, Layers, Flame
+  Clock, Calendar, Target, Award, ArrowRight, Layers, Flame,
+  Trophy, Star, UserCheck, Medal
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -411,7 +412,242 @@ export const CrmDashboard = () => {
     }));
   }, [deals, totalDealValue]);
 
-  // 5. PIPELINE & CHART DATA
+  // 5. TOP 5 PERFORMER EMPLOYEES
+  const top5PerformerEmployees = useMemo(() => {
+    const perfMap = new Map<string, {
+      id: string;
+      name: string;
+      role: string;
+      dept: string;
+      dealsCount: number;
+      wonCount: number;
+      totalRevenue: number;
+      receivedRevenue: number;
+      monthlyTarget: number;
+      avatarInitials: string;
+    }>();
+
+    // 1. Pre-populate from employee directory for rich metadata & targets
+    employees.forEach(emp => {
+      const targetVal = parseMoney(emp.monthlyTarget || emp.formData?.monthlyTarget || emp.target || emp.formData?.target);
+      const nameKey = (emp.name || '').trim().toLowerCase();
+      if (nameKey) {
+        perfMap.set(nameKey, {
+          id: emp.id || `EMP-${Math.floor(100 + Math.random() * 900)}`,
+          name: emp.name || 'Sales Staff',
+          role: emp.role || emp.designation || 'Sales Representative',
+          dept: emp.dept || 'Sales',
+          dealsCount: 0,
+          wonCount: 0,
+          totalRevenue: 0,
+          receivedRevenue: 0,
+          monthlyTarget: targetVal,
+          avatarInitials: (emp.name ?? 'TM').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
+        });
+      }
+    });
+
+    // 2. Aggregate deals data by primary owner and Partner BDM
+    deals.forEach(deal => {
+      const amt = parseMoney(deal.amount || deal.rawAmount);
+      const rec = parseMoney(deal.received || deal.rawReceived);
+      const isWon = deal.status === 'Won' || deal.stage?.includes('Won') || deal.stage === 'Operations executors';
+
+      const rawOwnerName = (deal.owner || deal.Deal_Owner || deal.bdm || deal.createdBy || 'Managing Director').trim();
+      const ownerKey = rawOwnerName.toLowerCase();
+
+      let ownerEntry = perfMap.get(ownerKey);
+      if (!ownerEntry) {
+        ownerEntry = {
+          id: `EMP-${Math.floor(100 + Math.random() * 900)}`,
+          name: rawOwnerName,
+          role: 'Sales Representative',
+          dept: 'Sales',
+          dealsCount: 0,
+          wonCount: 0,
+          totalRevenue: 0,
+          receivedRevenue: 0,
+          monthlyTarget: 0,
+          avatarInitials: (rawOwnerName || 'SR').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
+        };
+        perfMap.set(ownerKey, ownerEntry);
+      }
+
+      ownerEntry.dealsCount += 1;
+      if (isWon) ownerEntry.wonCount += 1;
+      ownerEntry.totalRevenue += amt;
+      ownerEntry.receivedRevenue += rec;
+
+      // Also track Partner BDM contribution if split
+      if (deal.hasPartnerBdm && deal.partnerBdmName) {
+        const pKey = deal.partnerBdmName.trim().toLowerCase();
+        let pEntry = perfMap.get(pKey);
+        if (!pEntry) {
+          pEntry = {
+            id: deal.partnerBdmId || `EMP-${Math.floor(100 + Math.random() * 900)}`,
+            name: deal.partnerBdmName,
+            role: 'Partner BDM',
+            dept: 'Sales',
+            dealsCount: 0,
+            wonCount: 0,
+            totalRevenue: 0,
+            receivedRevenue: 0,
+            monthlyTarget: 0,
+            avatarInitials: (deal.partnerBdmName || 'PB').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
+          };
+          perfMap.set(pKey, pEntry);
+        }
+        pEntry.dealsCount += 1;
+        if (isWon) pEntry.wonCount += 1;
+        const pAmt = Number(deal.partnerBdmAmount) || Math.round(amt / 2);
+        pEntry.totalRevenue += pAmt;
+      }
+    });
+
+    let list = Array.from(perfMap.values());
+
+    // Sort descending by total closed / pipeline deal value
+    const sorted = list
+      .filter(e => e.totalRevenue > 0 || e.dealsCount > 0)
+      .sort((a, b) => b.totalRevenue - a.totalRevenue || b.dealsCount - a.dealsCount)
+      .slice(0, 5);
+
+    // Fallback if low deals in initial setup: show registered sales employees
+    if (sorted.length === 0) {
+      const fallback = employees.slice(0, 5).map((emp) => ({
+        id: emp.id,
+        name: emp.name,
+        role: emp.role || 'Sales Representative',
+        dept: emp.dept || 'Sales',
+        dealsCount: 0,
+        wonCount: 0,
+        totalRevenue: 0,
+        receivedRevenue: 0,
+        monthlyTarget: parseMoney(emp.monthlyTarget || emp.target),
+        avatarInitials: (emp.name ?? 'TM').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+        targetAchievementPercent: 0,
+        relativePercent: 0
+      }));
+      return fallback.map((item, idx) => ({ ...item, rank: idx + 1 }));
+    }
+
+    const maxRev = sorted[0]?.totalRevenue || 1;
+
+    return sorted.map((item, idx) => {
+      const achievement = item.monthlyTarget > 0 ? Math.min(100, Math.round((item.totalRevenue / item.monthlyTarget) * 100)) : null;
+      return {
+        ...item,
+        rank: idx + 1,
+        targetAchievementPercent: achievement,
+        relativePercent: Math.round((item.totalRevenue / maxRev) * 100)
+      };
+    });
+  }, [deals, employees]);
+
+  // 6. TOP 5 PERFORMER TEAMS & SQUADS
+  const top5PerformerTeams = useMemo(() => {
+    const teamMap = new Map<string, {
+      name: string;
+      leadName: string;
+      dept: string;
+      membersCount: number;
+      dealsCount: number;
+      wonCount: number;
+      totalRevenue: number;
+      receivedRevenue: number;
+      memberNames: string[];
+    }>();
+
+    // 1. Initialize from Team Leaders in HRMS
+    employees.forEach(emp => {
+      const tlName = (emp.teamLeaderName || emp.formData?.teamLeaderName || '').trim();
+      const deptName = emp.dept || emp.formData?.dept || 'Sales';
+      
+      const teamKey = tlName ? `Team ${tlName}` : `${deptName} Department`;
+      const current = teamMap.get(teamKey) || {
+        name: teamKey,
+        leadName: tlName || emp.reportingManagerName || (emp.systemRole === 'HOD' ? emp.name : 'Team Leader'),
+        dept: deptName,
+        membersCount: 0,
+        dealsCount: 0,
+        wonCount: 0,
+        totalRevenue: 0,
+        receivedRevenue: 0,
+        memberNames: [] as string[]
+      };
+
+      if (emp.name && !current.memberNames.includes(String(emp.name))) {
+        current.memberNames.push(String(emp.name));
+        current.membersCount += 1;
+      }
+      teamMap.set(teamKey, current);
+    });
+
+    // 2. Link deals to team
+    deals.forEach(deal => {
+      const amt = parseMoney(deal.amount || deal.rawAmount);
+      const rec = parseMoney(deal.received || deal.rawReceived);
+      const isWon = deal.status === 'Won' || deal.stage?.includes('Won');
+
+      const ownerName = (deal.owner || deal.Deal_Owner || deal.bdm || '').trim().toLowerCase();
+      const matchedEmp = employees.find(e => (e.name || '').trim().toLowerCase() === ownerName || (e.id || '').toLowerCase() === ownerName);
+      
+      let teamKey = '';
+      if (matchedEmp) {
+        const tl = matchedEmp.teamLeaderName || matchedEmp.formData?.teamLeaderName;
+        teamKey = tl ? `Team ${tl}` : `${matchedEmp.dept || 'Sales'} Department`;
+      } else {
+        teamKey = deal.team || deal.department ? `${deal.team || deal.department} Team` : 'Direct Sales Team';
+      }
+
+      let current = teamMap.get(teamKey);
+      if (!current) {
+        current = {
+          name: teamKey,
+          leadName: 'Team Lead',
+          dept: 'Sales',
+          membersCount: 1,
+          dealsCount: 0,
+          wonCount: 0,
+          totalRevenue: 0,
+          receivedRevenue: 0,
+          memberNames: [] as string[]
+        };
+        teamMap.set(teamKey, current);
+      }
+
+      current.dealsCount += 1;
+      if (isWon) current.wonCount += 1;
+      current.totalRevenue += amt;
+      current.receivedRevenue += rec;
+    });
+
+    const list = Array.from(teamMap.values())
+      .filter(t => t.totalRevenue > 0 || t.dealsCount > 0)
+      .sort((a, b) => b.totalRevenue - a.totalRevenue || b.dealsCount - a.dealsCount)
+      .slice(0, 5);
+
+    // Fallback if no active teams with deals yet
+    if (list.length === 0) {
+      const fallbackTeams = [
+        { name: 'Sales & Growth Team', leadName: 'Mishal Bhatia (HOD)', dept: 'Sales', membersCount: 3, dealsCount: 0, wonCount: 0, totalRevenue: 0, receivedRevenue: 0, memberNames: [] as string[] },
+        { name: 'Corporate Legal & Compliance', leadName: 'Super Admin', dept: 'Legal', membersCount: 2, dealsCount: 0, wonCount: 0, totalRevenue: 0, receivedRevenue: 0, memberNames: [] as string[] },
+        { name: 'Business Consulting Squad', leadName: 'Team Leader', dept: 'Consulting', membersCount: 2, dealsCount: 0, wonCount: 0, totalRevenue: 0, receivedRevenue: 0, memberNames: [] as string[] }
+      ];
+      return fallbackTeams.map((item, idx) => ({ ...item, rank: idx + 1, sharePercent: 0, relativePercent: 0 }));
+    }
+
+    const maxRev = list[0]?.totalRevenue || 1;
+
+    return list.map((item, idx) => ({
+      ...item,
+      rank: idx + 1,
+      sharePercent: totalDealValue > 0 ? Math.round((item.totalRevenue / totalDealValue) * 100) : 0,
+      relativePercent: Math.round((item.totalRevenue / maxRev) * 100)
+    }));
+  }, [deals, employees, totalDealValue]);
+
+  // 7. PIPELINE & CHART DATA
   const pipelineCategories = [
     { label: 'Sales', matcher: (s: string) => s.toLowerCase().includes('sale') || s === 'new' },
     { label: 'Ops Allocator', matcher: (s: string) => s.toLowerCase().includes('allocat') },
@@ -824,7 +1060,211 @@ export const CrmDashboard = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* SECTION 4: REVENUE ANALYTICS & DEAL PIPELINE CHARTS */}
+      {/* SECTION 4: TOP 5 PERFORMER EMPLOYEES & TOP 5 PERFORMER TEAMS */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Card A: Top 5 Performer Employees */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20">
+                  <Trophy size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center">
+                    Top 5 Performer Employees
+                  </h2>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">
+                    Highest revenue generated by sales staff & BDMs
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/hrms/employees')}
+                className="text-xs font-bold text-be-orange hover:text-orange-700 flex items-center shrink-0"
+              >
+                Targets & Staff <ArrowRight size={13} className="ml-1" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {top5PerformerEmployees.map((emp) => {
+                const rankBadges = [
+                  'bg-gradient-to-r from-amber-500 to-yellow-600 text-white shadow-amber-500/30', // #1
+                  'bg-gradient-to-r from-slate-400 to-gray-600 text-white shadow-gray-400/30',   // #2
+                  'bg-gradient-to-r from-amber-700 to-orange-700 text-white shadow-orange-700/30', // #3
+                  'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-purple-500/30', // #4
+                  'bg-gradient-to-r from-blue-500 to-cyan-600 text-white shadow-blue-500/30'      // #5
+                ];
+                const badgeClass = rankBadges[emp.rank - 1] || rankBadges[0];
+
+                return (
+                  <div
+                    key={emp.id + emp.name}
+                    className="p-4 rounded-2xl border border-gray-100 hover:border-orange-200 bg-gray-50/50 hover:bg-orange-50/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                  >
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shadow-md shrink-0 ${badgeClass}`}>
+                        #{emp.rank}
+                      </div>
+
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-be-orange to-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-sm shrink-0">
+                        {emp.avatarInitials}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center space-x-2">
+                          <h4 className="font-extrabold text-sm text-gray-900 truncate group-hover:text-be-orange transition-colors">
+                            {emp.name}
+                          </h4>
+                          {emp.rank === 1 && (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black rounded-full uppercase shrink-0">
+                              ★ Top Performer
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-gray-500 truncate font-medium">
+                          {emp.role} • <span className="text-gray-400">{emp.dept}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex sm:flex-col items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100 shrink-0">
+                      <div className="text-right">
+                        <div className="text-sm font-black text-gray-900">
+                          {formatCurrencyShort(emp.totalRevenue)}
+                        </div>
+                        <div className="text-[11px] text-gray-500 font-semibold">
+                          {emp.dealsCount} Deals {emp.wonCount > 0 && `(${emp.wonCount} won)`}
+                        </div>
+                      </div>
+
+                      {emp.monthlyTarget > 0 && (
+                        <div className="mt-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          {emp.targetAchievementPercent}% of ₹{Number(emp.monthlyTarget).toLocaleString('en-IN')} target
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {top5PerformerEmployees.length === 0 && (
+                <div className="text-center py-8 text-gray-400">
+                  <Users size={32} className="mx-auto mb-1 text-gray-300" />
+                  <p className="text-xs font-bold text-gray-500">No sales staff deal records yet</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Card B: Top 5 Performer Teams */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-5">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                  <Shield size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center">
+                    Top 5 Performer Teams
+                  </h2>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">
+                    Highest closing team leader squads & departments
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/hrms/my-team')}
+                className="text-xs font-bold text-be-orange hover:text-orange-700 flex items-center shrink-0"
+              >
+                My Team Hub <ArrowRight size={13} className="ml-1" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {top5PerformerTeams.map((team) => {
+                const rankBadges = [
+                  'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-500/30',   // #1
+                  'bg-gradient-to-r from-slate-400 to-gray-600 text-white shadow-gray-400/30',   // #2
+                  'bg-gradient-to-r from-amber-700 to-orange-700 text-white shadow-orange-700/30', // #3
+                  'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-purple-500/30', // #4
+                  'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-500/30'  // #5
+                ];
+                const badgeClass = rankBadges[team.rank - 1] || rankBadges[0];
+
+                return (
+                  <div
+                    key={team.name}
+                    className="p-4 rounded-2xl border border-gray-100 hover:border-blue-200 bg-gray-50/50 hover:bg-blue-50/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                  >
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shadow-md shrink-0 ${badgeClass}`}>
+                        #{team.rank}
+                      </div>
+
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm shrink-0">
+                        <Users size={18} />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center space-x-2">
+                          <h4 className="font-extrabold text-sm text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+                            {team.name}
+                          </h4>
+                          {team.rank === 1 && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-900 text-[10px] font-black rounded-full uppercase shrink-0">
+                              🏆 Leading Squad
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-gray-500 truncate font-medium">
+                          Lead: <span className="font-bold text-gray-700">{team.leadName}</span> • {team.membersCount} {team.membersCount === 1 ? 'member' : 'members'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex sm:flex-col items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100 shrink-0">
+                      <div className="text-right">
+                        <div className="text-sm font-black text-gray-900">
+                          {formatCurrencyShort(team.totalRevenue)}
+                        </div>
+                        <div className="text-[11px] text-gray-500 font-semibold">
+                          {team.dealsCount} Total Deals {team.wonCount > 0 && `(${team.wonCount} won)`}
+                        </div>
+                      </div>
+
+                      <div className="mt-1 w-24">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-gray-500 mb-0.5">
+                          <span>Share</span>
+                          <span className="text-blue-600">{team.sharePercent}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full"
+                            style={{ width: `${Math.max(10, team.relativePercent)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {top5PerformerTeams.length === 0 && (
+                <div className="text-center py-8 text-gray-400">
+                  <Shield size={32} className="mx-auto mb-1 text-gray-300" />
+                  <p className="text-xs font-bold text-gray-500">No active team deals yet</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SECTION 5: REVENUE ANALYTICS & DEAL PIPELINE CHARTS */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Revenue Area Chart */}
