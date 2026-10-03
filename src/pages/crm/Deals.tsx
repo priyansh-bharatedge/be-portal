@@ -48,6 +48,15 @@ export const Deals = () => {
     } catch (e) { }
     return [];
   });
+
+  const parseZohoNum = (val: any): number => {
+    if (val === null || val === undefined || val === '') return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const cleaned = String(val).replace(/,/g, '').replace(/[^0-9.-]/g, '').trim();
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
@@ -1817,21 +1826,30 @@ export const Deals = () => {
                   </tr>
                 </thead>
                 <tbody className="text-gray-700">
-                  {paginatedDeals.map((deal: any) => (
-                    <tr 
-                      key={deal.id} 
-                      onClick={() => navigate(`/crm/deals/${deal.id}`)}
-                      className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm cursor-pointer"
-                    >
-                      <td className="px-6 py-5 font-bold text-gray-900 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">{deal.id}</td>
-                      <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">{deal.client}</td>
-                      <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
-                        <span className="bg-gray-50 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200 group-hover:bg-white transition-colors">{deal.company}</span>
-                      </td>
-                      <td className="px-6 py-5 font-medium text-gray-800 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.service}</td>
-                      <td className="px-6 py-5 font-bold text-gray-900 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.amount}</td>
-                      <td className="px-6 py-5 font-bold text-emerald-600 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.received}</td>
-                      <td className="px-6 py-5 font-bold text-orange-600 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.pending}</td>
+                  {paginatedDeals.map((deal: any) => {
+                    const parsedAmt = parseZohoNum(deal.rawAmount || deal.amount || deal.totals?.grandTotal || (deal.servicesData?.length ? deal.servicesData.reduce((s: number, sf: any) => s + parseZohoNum(sf.totalAmount || sf.Agreement_amount || sf.Total || sf.Amount), 0) : 0) || deal.rawZohoDeal?.Total_deal_amount_inclusive_of_gst || deal.rawZohoDeal?.Amount || deal.rawZohoDeal?.Deal_Amount);
+                    const parsedRec = parseZohoNum(deal.rawReceived || deal.received || deal.totals?.receivedAmount || (deal.servicesData?.length ? deal.servicesData.reduce((s: number, sf: any) => s + parseZohoNum(sf.receivedAmount || sf.Received_amount || sf.Received), 0) : 0) || deal.rawZohoDeal?.Total_Received_Amount || deal.rawZohoDeal?.Deal_Received_Amount || deal.rawZohoDeal?.Received_amount);
+                    const parsedPend = parseZohoNum(deal.rawPending || deal.pending || deal.totals?.pendingAmount || (parsedAmt > parsedRec ? parsedAmt - parsedRec : 0) || (deal.servicesData?.length ? deal.servicesData.reduce((s: number, sf: any) => s + parseZohoNum(sf.pendingAmount || sf.Pending_amount || sf.Pending), 0) : 0) || deal.rawZohoDeal?.Total_Pending_Amount || deal.rawZohoDeal?.Deal_Pending_Amount || deal.rawZohoDeal?.Pending_amount);
+
+                    const displayAmount = deal.amount && deal.amount !== '₹0' ? deal.amount : (parsedAmt > 0 ? `₹${parsedAmt.toLocaleString('en-IN')}` : '₹0');
+                    const displayReceived = deal.received && deal.received !== '₹0' ? deal.received : (parsedRec > 0 ? `₹${parsedRec.toLocaleString('en-IN')}` : '₹0');
+                    const displayPending = deal.pending && deal.pending !== '₹0' ? deal.pending : (parsedPend > 0 ? `₹${parsedPend.toLocaleString('en-IN')}` : '₹0');
+
+                    return (
+                      <tr 
+                        key={deal.id} 
+                        onClick={() => navigate(`/crm/deals/${deal.id}`)}
+                        className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm cursor-pointer"
+                      >
+                        <td className="px-6 py-5 font-bold text-gray-900 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100">{deal.id}</td>
+                        <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">{deal.client}</td>
+                        <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
+                          <span className="bg-gray-50 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200 group-hover:bg-white transition-colors">{deal.company}</span>
+                        </td>
+                        <td className="px-6 py-5 font-medium text-gray-800 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.service}</td>
+                        <td className="px-6 py-5 font-bold text-gray-900 border-t border-b border-gray-100 group-hover:border-orange-100">{displayAmount}</td>
+                        <td className="px-6 py-5 font-bold text-emerald-600 border-t border-b border-gray-100 group-hover:border-orange-100">{displayReceived}</td>
+                        <td className="px-6 py-5 font-bold text-orange-600 border-t border-b border-gray-100 group-hover:border-orange-100">{displayPending}</td>
                       <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(deal.status)}`}>
                           {deal.status}
@@ -1910,7 +1928,8 @@ export const Deals = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {paginatedDeals.length === 0 && (
                     <tr>
                       <td colSpan={11} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">

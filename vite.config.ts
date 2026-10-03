@@ -1200,8 +1200,8 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const dealFields = 'id,Deal_Name,Client_Name,Clients,Contact_Name,Company,Company_name,Company_name_bp,Company_name_cs,Company_name_st,Company_Name,Account_Name,Amount,Amount_Without_GST,GST_Amount,Total_deal_amount_inclusive_of_gst,Total_Received_Amount,Total_Pending_Amount,Received_amount,Pending_amount,Deal_Amount,Deal_Amount_Without_GST,Deal_GST_Amount,Deal_Received_Amount,Deal_Pending_Amount,Stage,Status,Choose_Wisely,Service_Name,Owner,Created_By,Closing_Date,Booking_Date,Date,Created_Time,Modified_Time,Client_contact_detail,Mobile,Phone,Client_Email_address,Email,Gst_number,Pan_number,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,has_partner_bdm,Partner_BDM,Partner_BDM_Name,Partner_BDM_name,Partner_BDM_Names,Partner_BDM_Amount,Partner_BDM_amount,Partner_BDM_ID,partner_bdm_id,BDM_names,BDM_name';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${buildZohoPaginationQuery(urlObj)}`;
+            const paginationQuery = buildZohoPaginationQuery(urlObj);
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}${paginationQuery ? `?${paginationQuery}` : ''}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Deals from Zoho CRM (${moduleName})`);
 

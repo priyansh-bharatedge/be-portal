@@ -44,6 +44,75 @@ export const CrmDashboard = () => {
     return isNaN(parsed) ? 0 : parsed;
   };
 
+  const getDealAmount = (d: any): number => {
+    if (!d) return 0;
+    const direct = parseMoney(d.rawAmount || d.amount || d.totals?.grandTotal);
+    if (direct > 0) return direct;
+    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
+      const sum = d.servicesData.reduce((s: number, sf: any) => s + parseMoney(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount), 0);
+      if (sum > 0) return sum;
+    }
+    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+      const sum = d.rawZohoDeal.Subform_1.reduce((s: number, sf: any) => s + parseMoney(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount), 0);
+      if (sum > 0) return sum;
+    }
+    return parseMoney(
+      d.rawZohoDeal?.Total_deal_amount_inclusive_of_gst ||
+      d.rawZohoDeal?.Amount ||
+      d.rawZohoDeal?.Deal_Amount ||
+      d.rawZohoDeal?.Grand_Total ||
+      d.rawZohoDeal?.Agreement_amount ||
+      d.rawZohoDeal?.Amount_After_disbursement ||
+      d.rawZohoDeal?.amount_if_you_have_kindly_put_0
+    );
+  };
+
+  const getDealReceived = (d: any): number => {
+    if (!d) return 0;
+    const direct = parseMoney(d.rawReceived || d.received || d.totals?.receivedAmount);
+    if (direct > 0) return direct;
+    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
+      const sum = d.servicesData.reduce((s: number, sf: any) => s + parseMoney(sf.receivedAmount || sf.Received_amount || sf.Received), 0);
+      if (sum > 0) return sum;
+    }
+    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+      const sum = d.rawZohoDeal.Subform_1.reduce((s: number, sf: any) => s + parseMoney(sf.Received_amount || sf.Received), 0);
+      if (sum > 0) return sum;
+    }
+    return parseMoney(
+      d.rawZohoDeal?.Total_Received_Amount ||
+      d.rawZohoDeal?.Deal_Received_Amount ||
+      d.rawZohoDeal?.Received_amount ||
+      d.rawZohoDeal?.Received_Amount ||
+      d.rawZohoDeal?.Received ||
+      d.rawZohoDeal?.Amount_After_disbursement
+    );
+  };
+
+  const getDealPending = (d: any): number => {
+    if (!d) return 0;
+    const amt = getDealAmount(d);
+    const rec = getDealReceived(d);
+    const direct = parseMoney(d.rawPending || d.pending || d.totals?.pendingAmount);
+    if (direct > 0) return direct;
+    if (amt > rec && rec > 0) return Number((amt - rec).toFixed(2));
+    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
+      const sum = d.servicesData.reduce((s: number, sf: any) => s + parseMoney(sf.pendingAmount || sf.Pending_amount || sf.Pending), 0);
+      if (sum > 0) return sum;
+    }
+    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+      const sum = d.rawZohoDeal.Subform_1.reduce((s: number, sf: any) => s + parseMoney(sf.Pending_amount || sf.Pending), 0);
+      if (sum > 0) return sum;
+    }
+    return parseMoney(
+      d.rawZohoDeal?.Total_Pending_Amount ||
+      d.rawZohoDeal?.Deal_Pending_Amount ||
+      d.rawZohoDeal?.Pending_amount ||
+      d.rawZohoDeal?.Pending_Amount ||
+      d.rawZohoDeal?.Pending
+    );
+  };
+
   const formatCurrencyShort = (amount: number) => {
     if (isNaN(amount) || amount === 0) return '₹0';
     if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(2)} Cr`;
@@ -415,16 +484,16 @@ export const CrmDashboard = () => {
 
   // 2. REVENUE CALCULATIONS (TODAY, MONTH, ALL-TIME)
   const todayDealsList = useMemo(() => deals.filter(isDealToday), [deals]);
-  const todayRevenueReceived = useMemo(() => todayDealsList.reduce((sum, d) => sum + parseMoney(d.received || d.rawReceived), 0), [todayDealsList]);
-  const todayRevenueBooked = useMemo(() => todayDealsList.reduce((sum, d) => sum + parseMoney(d.amount || d.rawAmount), 0), [todayDealsList]);
+  const todayRevenueReceived = useMemo(() => todayDealsList.reduce((sum, d) => sum + getDealReceived(d), 0), [todayDealsList]);
+  const todayRevenueBooked = useMemo(() => todayDealsList.reduce((sum, d) => sum + getDealAmount(d), 0), [todayDealsList]);
 
   const monthDealsList = useMemo(() => deals.filter(isDealThisMonth), [deals]);
-  const monthRevenueReceived = useMemo(() => monthDealsList.reduce((sum, d) => sum + parseMoney(d.received || d.rawReceived), 0), [monthDealsList]);
-  const monthRevenueBooked = useMemo(() => monthDealsList.reduce((sum, d) => sum + parseMoney(d.amount || d.rawAmount), 0), [monthDealsList]);
+  const monthRevenueReceived = useMemo(() => monthDealsList.reduce((sum, d) => sum + getDealReceived(d), 0), [monthDealsList]);
+  const monthRevenueBooked = useMemo(() => monthDealsList.reduce((sum, d) => sum + getDealAmount(d), 0), [monthDealsList]);
 
-  const totalDealValue = useMemo(() => deals.reduce((sum, d) => sum + parseMoney(d.amount || d.rawAmount), 0), [deals]);
-  const totalReceivedValue = useMemo(() => deals.reduce((sum, d) => sum + parseMoney(d.received || d.rawReceived), 0), [deals]);
-  const totalPendingValue = useMemo(() => deals.reduce((sum, d) => sum + parseMoney(d.pending || d.rawPending || (parseMoney(d.amount) - parseMoney(d.received))), 0), [deals]);
+  const totalDealValue = useMemo(() => deals.reduce((sum, d) => sum + getDealAmount(d), 0), [deals]);
+  const totalReceivedValue = useMemo(() => deals.reduce((sum, d) => sum + getDealReceived(d), 0), [deals]);
+  const totalPendingValue = useMemo(() => deals.reduce((sum, d) => sum + getDealPending(d), 0), [deals]);
 
   // 3. TARGET VS ACHIEVEMENT FOR HOD & SUPER ADMIN
   const targetScopeEmployees = useMemo(() => {
@@ -464,8 +533,8 @@ export const CrmDashboard = () => {
         latestDate: d.date || ''
       };
 
-      const amt = parseMoney(d.amount || d.rawAmount);
-      const rec = parseMoney(d.received || d.rawReceived);
+      const amt = getDealAmount(d);
+      const rec = getDealReceived(d);
 
       servicesMap.set(sName, {
         service: sName,
@@ -527,8 +596,8 @@ export const CrmDashboard = () => {
 
     // 2. Aggregate deals data by primary owner and Partner BDM
     deals.forEach(deal => {
-      const amt = parseMoney(deal.amount || deal.rawAmount);
-      const rec = parseMoney(deal.received || deal.rawReceived);
+      const amt = getDealAmount(deal);
+      const rec = getDealReceived(deal);
       const isWon = deal.status === 'Won' || deal.stage?.includes('Won') || deal.stage === 'Operations executors';
 
       const rawOwnerName = (deal.owner || deal.Deal_Owner || deal.bdm || deal.createdBy || 'Managing Director').trim();
@@ -663,8 +732,8 @@ export const CrmDashboard = () => {
 
     // 2. Link deals to team
     deals.forEach(deal => {
-      const amt = parseMoney(deal.amount || deal.rawAmount);
-      const rec = parseMoney(deal.received || deal.rawReceived);
+      const amt = getDealAmount(deal);
+      const rec = getDealReceived(deal);
       const isWon = deal.status === 'Won' || deal.stage?.includes('Won');
 
       const ownerName = (deal.owner || deal.Deal_Owner || deal.bdm || '').trim().toLowerCase();
@@ -761,9 +830,9 @@ export const CrmDashboard = () => {
     if (!monthLabel) monthLabel = currentMonthName;
 
     const current = monthlyRevenueMap.get(monthLabel) || { received: 0, pending: 0, total: 0 };
-    const rec = parseMoney(d.received || d.rawReceived);
-    const tot = parseMoney(d.amount || d.rawAmount);
-    const pend = parseMoney(d.pending || d.rawPending || (tot - rec));
+    const rec = getDealReceived(d);
+    const tot = getDealAmount(d);
+    const pend = getDealPending(d);
     monthlyRevenueMap.set(monthLabel, {
       received: current.received + rec,
       pending: current.pending + pend,
@@ -1489,26 +1558,33 @@ export const CrmDashboard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
-                  {recentDeals.map((deal) => (
-                    <tr key={deal.id} className="hover:bg-orange-50/30 transition-colors">
-                      <td className="px-6 py-4 font-bold text-gray-900 font-mono text-xs">{deal.id}</td>
-                      <td className="px-6 py-4">{deal.client || deal.company || 'Client'}</td>
-                      <td className="px-6 py-4 text-gray-800">{deal.service || 'Service'}</td>
-                      <td className="px-6 py-4 font-bold text-gray-900">{deal.amount}</td>
-                      <td className="px-6 py-4 font-bold text-emerald-600">{deal.received}</td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(deal.status)}`}>
-                          {deal.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500 text-xs">{deal.date}</td>
-                      <td className="px-6 py-4 text-right">
-                        <button onClick={() => navigate(`/crm/deals/${deal.id}`)} className="p-1.5 text-gray-400 hover:text-be-orange rounded-lg hover:bg-orange-50 transition-colors">
-                          <MoreHorizontal size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {recentDeals.map((deal) => {
+                    const amtNum = getDealAmount(deal);
+                    const recNum = getDealReceived(deal);
+                    const dispAmt = deal.amount && deal.amount !== '₹0' ? deal.amount : (amtNum > 0 ? `₹${amtNum.toLocaleString('en-IN')}` : '₹0');
+                    const dispRec = deal.received && deal.received !== '₹0' ? deal.received : (recNum > 0 ? `₹${recNum.toLocaleString('en-IN')}` : '₹0');
+
+                    return (
+                      <tr key={deal.id} className="hover:bg-orange-50/30 transition-colors">
+                        <td className="px-6 py-4 font-bold text-gray-900 font-mono text-xs">{deal.id}</td>
+                        <td className="px-6 py-4">{deal.client || deal.company || 'Client'}</td>
+                        <td className="px-6 py-4 text-gray-800">{deal.service || 'Service'}</td>
+                        <td className="px-6 py-4 font-bold text-gray-900">{dispAmt}</td>
+                        <td className="px-6 py-4 font-bold text-emerald-600">{dispRec}</td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(deal.status)}`}>
+                            {deal.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-gray-500 text-xs">{deal.date}</td>
+                        <td className="px-6 py-4 text-right">
+                          <button onClick={() => navigate(`/crm/deals/${deal.id}`)} className="p-1.5 text-gray-400 hover:text-be-orange rounded-lg hover:bg-orange-50 transition-colors">
+                            <MoreHorizontal size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
