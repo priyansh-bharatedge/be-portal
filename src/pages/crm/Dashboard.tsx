@@ -44,33 +44,14 @@ export const CrmDashboard = () => {
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  const getDealAmount = (d: any): number => {
-    if (!d) return 0;
-    const direct = parseMoney(d.rawAmount || d.amount || d.totals?.grandTotal);
-    if (direct > 0) return direct;
-    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
-      const sum = d.servicesData.reduce((s: number, sf: any) => s + parseMoney(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount), 0);
-      if (sum > 0) return sum;
-    }
-    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
-      const sum = d.rawZohoDeal.Subform_1.reduce((s: number, sf: any) => s + parseMoney(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount), 0);
-      if (sum > 0) return sum;
-    }
-    return parseMoney(
-      d.rawZohoDeal?.Total_deal_amount_inclusive_of_gst ||
-      d.rawZohoDeal?.Amount ||
-      d.rawZohoDeal?.Deal_Amount ||
-      d.rawZohoDeal?.Grand_Total ||
-      d.rawZohoDeal?.Agreement_amount ||
-      d.rawZohoDeal?.Amount_After_disbursement ||
-      d.rawZohoDeal?.amount_if_you_have_kindly_put_0
-    );
-  };
-
   const getDealReceived = (d: any): number => {
     if (!d) return 0;
-    const direct = parseMoney(d.rawReceived || d.received || d.totals?.receivedAmount);
-    if (direct > 0) return direct;
+    if (d.rawReceived && d.rawReceived > 0) return d.rawReceived;
+    if (d.totals?.receivedAmount && Number(d.totals.receivedAmount) > 0) return Number(d.totals.receivedAmount);
+    if (d.received && d.received !== '₹0') {
+      const parsed = parseMoney(d.received);
+      if (parsed > 0) return parsed;
+    }
     if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
       const sum = d.servicesData.reduce((s: number, sf: any) => s + parseMoney(sf.receivedAmount || sf.Received_amount || sf.Received), 0);
       if (sum > 0) return sum;
@@ -91,11 +72,12 @@ export const CrmDashboard = () => {
 
   const getDealPending = (d: any): number => {
     if (!d) return 0;
-    const amt = getDealAmount(d);
-    const rec = getDealReceived(d);
-    const direct = parseMoney(d.rawPending || d.pending || d.totals?.pendingAmount);
-    if (direct > 0) return direct;
-    if (amt > rec && rec > 0) return Number((amt - rec).toFixed(2));
+    if (d.rawPending && d.rawPending > 0) return d.rawPending;
+    if (d.totals?.pendingAmount && Number(d.totals.pendingAmount) > 0) return Number(d.totals.pendingAmount);
+    if (d.pending && d.pending !== '₹0') {
+      const parsed = parseMoney(d.pending);
+      if (parsed > 0) return parsed;
+    }
     if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
       const sum = d.servicesData.reduce((s: number, sf: any) => s + parseMoney(sf.pendingAmount || sf.Pending_amount || sf.Pending), 0);
       if (sum > 0) return sum;
@@ -104,13 +86,74 @@ export const CrmDashboard = () => {
       const sum = d.rawZohoDeal.Subform_1.reduce((s: number, sf: any) => s + parseMoney(sf.Pending_amount || sf.Pending), 0);
       if (sum > 0) return sum;
     }
-    return parseMoney(
+    const directZoho = parseMoney(
       d.rawZohoDeal?.Total_Pending_Amount ||
       d.rawZohoDeal?.Deal_Pending_Amount ||
       d.rawZohoDeal?.Pending_amount ||
       d.rawZohoDeal?.Pending_Amount ||
       d.rawZohoDeal?.Pending
     );
+    if (directZoho > 0) return directZoho;
+    const amt = getDealAmount(d);
+    const rec = getDealReceived(d);
+    if (amt > rec && rec > 0) return Number((amt - rec).toFixed(2));
+    return 0;
+  };
+
+  const getDealAmount = (d: any): number => {
+    if (!d) return 0;
+    if (d.rawAmount && d.rawAmount > 0) return d.rawAmount;
+    if (d.totals?.grandTotal && Number(d.totals.grandTotal) > 0) return Number(d.totals.grandTotal);
+    if (d.amount && d.amount !== '₹0') {
+      const parsed = parseMoney(d.amount);
+      if (parsed > 0) return parsed;
+    }
+    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
+      const sum = d.servicesData.reduce((s: number, sf: any) => {
+        const a = parseMoney(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount);
+        const b = parseMoney(sf.baseAmount || sf.Without_GST || sf.Base);
+        const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
+        return s + itemTotal;
+      }, 0);
+      if (sum > 0) return sum;
+    }
+    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+      const sum = d.rawZohoDeal.Subform_1.reduce((s: number, sf: any) => {
+        const a = parseMoney(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
+        const b = parseMoney(sf.Without_GST || sf.baseAmount || sf.Base);
+        const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
+        return s + itemTotal;
+      }, 0);
+      if (sum > 0) return sum;
+    }
+    if (d.rawZohoDeal) {
+      const directZoho = parseMoney(
+        d.rawZohoDeal.Total_deal_amount_inclusive_of_gst ||
+        d.rawZohoDeal.Amount ||
+        d.rawZohoDeal.Deal_Amount ||
+        d.rawZohoDeal.Grand_Total ||
+        d.rawZohoDeal.Grand_total ||
+        d.rawZohoDeal.GrandTotal ||
+        d.rawZohoDeal.Total_amount ||
+        d.rawZohoDeal.Total_Amount ||
+        d.rawZohoDeal.total_amount ||
+        d.rawZohoDeal.Agreement_amount ||
+        d.rawZohoDeal.Agreement_Amount ||
+        (d.rawZohoDeal.Amount_Without_GST ? parseMoney(d.rawZohoDeal.Amount_Without_GST) / 0.82 : 0) ||
+        (d.rawZohoDeal.Deal_Amount_Without_GST ? parseMoney(d.rawZohoDeal.Deal_Amount_Without_GST) / 0.82 : 0) ||
+        (d.rawZohoDeal.Subtotal ? parseMoney(d.rawZohoDeal.Subtotal) * 1.18 : 0) ||
+        d.rawZohoDeal.Amount_After_disbursement ||
+        d.rawZohoDeal.amount_if_you_have_kindly_put_0
+      );
+      if (directZoho > 0) return directZoho;
+    }
+    if (d.totals?.baseAmount && Number(d.totals.baseAmount) > 0) {
+      return Number((Number(d.totals.baseAmount) / 0.82).toFixed(2));
+    }
+    const rec = getDealReceived(d);
+    const pend = getDealPending(d);
+    if (rec + pend > 0) return rec + pend;
+    return 0;
   };
 
   const formatCurrencyShort = (amount: number) => {
@@ -288,7 +331,8 @@ export const CrmDashboard = () => {
         rawDate: zDeal.Booking_Date || zDeal.Created_Time || new Date().toISOString(),
         zohoId: zDeal.id,
         quotationId: zDeal.Quotation?.id || zDeal.quotationId,
-        source: zDeal.source || (zDeal.Quotation ? 'Quotation' : 'Direct')
+        source: zDeal.source || (zDeal.Quotation ? 'Quotation' : 'Direct'),
+        rawZohoDeal: zDeal
       };
     });
   };
@@ -301,15 +345,43 @@ export const CrmDashboard = () => {
     try {
       const idbDeals = await getAllDealsFromIndexedDB();
       if (Array.isArray(idbDeals) && idbDeals.length > 0) {
-        currentDealsList = idbDeals;
-        setDeals(idbDeals);
+        const hydrated = idbDeals.map((d: any) => {
+          const a = getDealAmount(d);
+          const r = getDealReceived(d);
+          const p = getDealPending(d);
+          return {
+            ...d,
+            amount: a > 0 ? `₹${a.toLocaleString('en-IN')}` : (d.amount || '₹0'),
+            received: r > 0 ? `₹${r.toLocaleString('en-IN')}` : (d.received || '₹0'),
+            pending: p > 0 ? `₹${p.toLocaleString('en-IN')}` : (d.pending || '₹0'),
+            rawAmount: a,
+            rawReceived: r,
+            rawPending: p,
+          };
+        });
+        currentDealsList = hydrated;
+        setDeals(hydrated);
       } else {
         const savedDeals = localStorage.getItem('be_deals');
         if (savedDeals) {
           const parsed = JSON.parse(savedDeals);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            currentDealsList = parsed;
-            setDeals(parsed);
+            const hydrated = parsed.map((d: any) => {
+              const a = getDealAmount(d);
+              const r = getDealReceived(d);
+              const p = getDealPending(d);
+              return {
+                ...d,
+                amount: a > 0 ? `₹${a.toLocaleString('en-IN')}` : (d.amount || '₹0'),
+                received: r > 0 ? `₹${r.toLocaleString('en-IN')}` : (d.received || '₹0'),
+                pending: p > 0 ? `₹${p.toLocaleString('en-IN')}` : (d.pending || '₹0'),
+                rawAmount: a,
+                rawReceived: r,
+                rawPending: p,
+              };
+            });
+            currentDealsList = hydrated;
+            setDeals(hydrated);
           }
         }
       }
@@ -394,6 +466,32 @@ export const CrmDashboard = () => {
 
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Listen for real-time live deal updates from DealDetails view
+  useEffect(() => {
+    const handleDealUpdate = (e: any) => {
+      const updated = e.detail;
+      if (!updated) return;
+      setDeals(prevDeals => {
+        const idx = prevDeals.findIndex(d => 
+          d.id === updated.id || 
+          d.zohoId === updated.zohoId || 
+          d.id === updated.zohoId || 
+          d.zohoId === updated.id ||
+          (d.id && updated.id && String(d.id).includes(String(updated.id))) ||
+          (d.id && updated.zohoId && String(d.id).includes(String(updated.zohoId)))
+        );
+        if (idx >= 0) {
+          const copy = [...prevDeals];
+          copy[idx] = { ...copy[idx], ...updated };
+          return copy;
+        }
+        return [updated, ...prevDeals];
+      });
+    };
+    window.addEventListener('be_deals_updated', handleDealUpdate);
+    return () => window.removeEventListener('be_deals_updated', handleDealUpdate);
   }, []);
 
   // Listen to employee changes (e.g. target updates)

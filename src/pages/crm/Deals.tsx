@@ -57,6 +57,130 @@ export const Deals = () => {
     return isNaN(parsed) ? 0 : parsed;
   };
 
+  const findFirstPositive = (...vals: any[]): number => {
+    for (const v of vals) {
+      if (v === null || v === undefined) continue;
+      const num = parseZohoNum(v);
+      if (num > 0) return num;
+    }
+    return 0;
+  };
+
+  const getDealReceived = (d: any): number => {
+    if (!d) return 0;
+    if (d.rawReceived && d.rawReceived > 0) return d.rawReceived;
+    if (d.totals?.receivedAmount && Number(d.totals.receivedAmount) > 0) return Number(d.totals.receivedAmount);
+    if (d.received && d.received !== '₹0') {
+      const parsed = parseZohoNum(d.received);
+      if (parsed > 0) return parsed;
+    }
+    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
+      const sRec = d.servicesData.reduce((sum: number, sf: any) => sum + parseZohoNum(sf.receivedAmount || sf.Received_amount || sf.Received), 0);
+      if (sRec > 0) return sRec;
+    }
+    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+      const sRec = d.rawZohoDeal.Subform_1.reduce((sum: number, sf: any) => sum + parseZohoNum(sf.Received_amount || sf.Received), 0);
+      if (sRec > 0) return sRec;
+    }
+    if (d.rawZohoDeal) {
+      const zRec = findFirstPositive(
+        d.rawZohoDeal.Total_Received_Amount,
+        d.rawZohoDeal.Deal_Received_Amount,
+        d.rawZohoDeal.Received_amount,
+        d.rawZohoDeal.Received_Amount,
+        d.rawZohoDeal.Received,
+        d.rawZohoDeal.Amount_After_disbursement
+      );
+      if (zRec > 0) return zRec;
+    }
+    return 0;
+  };
+
+  const getDealPending = (d: any): number => {
+    if (!d) return 0;
+    if (d.rawPending && d.rawPending > 0) return d.rawPending;
+    if (d.totals?.pendingAmount && Number(d.totals.pendingAmount) > 0) return Number(d.totals.pendingAmount);
+    if (d.pending && d.pending !== '₹0') {
+      const parsed = parseZohoNum(d.pending);
+      if (parsed > 0) return parsed;
+    }
+    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
+      const sPend = d.servicesData.reduce((sum: number, sf: any) => sum + parseZohoNum(sf.pendingAmount || sf.Pending_amount || sf.Pending), 0);
+      if (sPend > 0) return sPend;
+    }
+    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+      const sPend = d.rawZohoDeal.Subform_1.reduce((sum: number, sf: any) => sum + parseZohoNum(sf.Pending_amount || sf.Pending), 0);
+      if (sPend > 0) return sPend;
+    }
+    if (d.rawZohoDeal) {
+      const zPend = findFirstPositive(
+        d.rawZohoDeal.Total_Pending_Amount,
+        d.rawZohoDeal.Deal_Pending_Amount,
+        d.rawZohoDeal.Pending_amount,
+        d.rawZohoDeal.Pending_Amount,
+        d.rawZohoDeal.Pending
+      );
+      if (zPend > 0) return zPend;
+    }
+    return 0;
+  };
+
+  const getDealAmount = (d: any): number => {
+    if (!d) return 0;
+    if (d.rawAmount && d.rawAmount > 0) return d.rawAmount;
+    if (d.totals?.grandTotal && Number(d.totals.grandTotal) > 0) return Number(d.totals.grandTotal);
+    if (d.amount && d.amount !== '₹0') {
+      const parsed = parseZohoNum(d.amount);
+      if (parsed > 0) return parsed;
+    }
+    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
+      const sTotal = d.servicesData.reduce((sum: number, sf: any) => {
+        const a = parseZohoNum(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount);
+        const b = parseZohoNum(sf.baseAmount || sf.Without_GST || sf.Base);
+        const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
+        return sum + itemTotal;
+      }, 0);
+      if (sTotal > 0) return sTotal;
+    }
+    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+      const sTotal = d.rawZohoDeal.Subform_1.reduce((sum: number, sf: any) => {
+        const a = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
+        const b = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base);
+        const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
+        return sum + itemTotal;
+      }, 0);
+      if (sTotal > 0) return sTotal;
+    }
+    if (d.rawZohoDeal) {
+      const zAmt = findFirstPositive(
+        d.rawZohoDeal.Total_deal_amount_inclusive_of_gst,
+        d.rawZohoDeal.Amount,
+        d.rawZohoDeal.Deal_Amount,
+        d.rawZohoDeal.Grand_Total,
+        d.rawZohoDeal.Grand_total,
+        d.rawZohoDeal.GrandTotal,
+        d.rawZohoDeal.Total_amount,
+        d.rawZohoDeal.Total_Amount,
+        d.rawZohoDeal.total_amount,
+        d.rawZohoDeal.Agreement_amount,
+        d.rawZohoDeal.Agreement_Amount,
+        d.rawZohoDeal.Amount_Without_GST ? parseZohoNum(d.rawZohoDeal.Amount_Without_GST) / 0.82 : 0,
+        d.rawZohoDeal.Deal_Amount_Without_GST ? parseZohoNum(d.rawZohoDeal.Deal_Amount_Without_GST) / 0.82 : 0,
+        d.rawZohoDeal.Subtotal ? parseZohoNum(d.rawZohoDeal.Subtotal) * 1.18 : 0,
+        d.rawZohoDeal.Amount_After_disbursement,
+        d.rawZohoDeal.amount_if_you_have_kindly_put_0
+      );
+      if (zAmt > 0) return zAmt;
+    }
+    if (d.totals?.baseAmount && Number(d.totals.baseAmount) > 0) {
+      return Number((Number(d.totals.baseAmount) / 0.82).toFixed(2));
+    }
+    const rec = getDealReceived(d);
+    const pend = getDealPending(d);
+    if (rec + pend > 0) return rec + pend;
+    return 0;
+  };
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
@@ -524,11 +648,25 @@ export const Deals = () => {
       try {
         const idbDeals = await getAllDealsFromIndexedDB();
         if (isMounted && Array.isArray(idbDeals) && idbDeals.length > 0) {
-          setDeals(idbDeals);
-          count = idbDeals.length;
+          const hydrated = idbDeals.map((d: any) => {
+            const a = getDealAmount(d);
+            const r = getDealReceived(d);
+            const p = getDealPending(d);
+            return {
+              ...d,
+              amount: a > 0 ? `₹${a.toLocaleString('en-IN')}` : (d.amount || '₹0'),
+              received: r > 0 ? `₹${r.toLocaleString('en-IN')}` : (d.received || '₹0'),
+              pending: p > 0 ? `₹${p.toLocaleString('en-IN')}` : (d.pending || '₹0'),
+              rawAmount: a,
+              rawReceived: r,
+              rawPending: p,
+            };
+          });
+          setDeals(hydrated);
+          count = hydrated.length;
           // Check if cached deals have old ₹0 amounts
-          const sample = idbDeals.slice(0, 30);
-          hasZeroAmounts = sample.length > 0 && sample.every((d: any) => d.amount === '₹0' || !d.amount || d.amount === 0);
+          const sample = hydrated.slice(0, 30);
+          hasZeroAmounts = sample.length > 0 && sample.some((d: any) => d.amount === '₹0' || !d.amount || d.amount === 0);
         }
       } catch (err) {
         console.warn('IndexedDB initial load error:', err);
@@ -545,6 +683,32 @@ export const Deals = () => {
     };
     loadDeals();
     return () => { isMounted = false; };
+  }, []);
+
+  // Listen for real-time live deal updates from DealDetails view
+  useEffect(() => {
+    const handleDealUpdate = (e: any) => {
+      const updated = e.detail;
+      if (!updated) return;
+      setDeals(prevDeals => {
+        const idx = prevDeals.findIndex(d => 
+          d.id === updated.id || 
+          d.zohoId === updated.zohoId || 
+          d.id === updated.zohoId || 
+          d.zohoId === updated.id ||
+          (d.id && updated.id && String(d.id).includes(String(updated.id))) ||
+          (d.id && updated.zohoId && String(d.id).includes(String(updated.zohoId)))
+        );
+        if (idx >= 0) {
+          const copy = [...prevDeals];
+          copy[idx] = { ...copy[idx], ...updated };
+          return copy;
+        }
+        return [updated, ...prevDeals];
+      });
+    };
+    window.addEventListener('be_deals_updated', handleDealUpdate);
+    return () => window.removeEventListener('be_deals_updated', handleDealUpdate);
   }, []);
 
   useEffect(() => {
@@ -1401,6 +1565,10 @@ export const Deals = () => {
           pendingAmount: pendingAmountNum,
           partnerBdmAmount: partnerBdmAmount,
         },
+        rawAmount: totalAmountNum,
+        rawReceived: receivedAmountNum,
+        rawPending: pendingAmountNum,
+        rawZohoDeal: zDeal,
       };
 
       if (existingIdx >= 0) {
@@ -1827,13 +1995,13 @@ export const Deals = () => {
                 </thead>
                 <tbody className="text-gray-700">
                   {paginatedDeals.map((deal: any) => {
-                    const parsedAmt = parseZohoNum(deal.rawAmount || deal.amount || deal.totals?.grandTotal || (deal.servicesData?.length ? deal.servicesData.reduce((s: number, sf: any) => s + parseZohoNum(sf.totalAmount || sf.Agreement_amount || sf.Total || sf.Amount), 0) : 0) || deal.rawZohoDeal?.Total_deal_amount_inclusive_of_gst || deal.rawZohoDeal?.Amount || deal.rawZohoDeal?.Deal_Amount);
-                    const parsedRec = parseZohoNum(deal.rawReceived || deal.received || deal.totals?.receivedAmount || (deal.servicesData?.length ? deal.servicesData.reduce((s: number, sf: any) => s + parseZohoNum(sf.receivedAmount || sf.Received_amount || sf.Received), 0) : 0) || deal.rawZohoDeal?.Total_Received_Amount || deal.rawZohoDeal?.Deal_Received_Amount || deal.rawZohoDeal?.Received_amount);
-                    const parsedPend = parseZohoNum(deal.rawPending || deal.pending || deal.totals?.pendingAmount || (parsedAmt > parsedRec ? parsedAmt - parsedRec : 0) || (deal.servicesData?.length ? deal.servicesData.reduce((s: number, sf: any) => s + parseZohoNum(sf.pendingAmount || sf.Pending_amount || sf.Pending), 0) : 0) || deal.rawZohoDeal?.Total_Pending_Amount || deal.rawZohoDeal?.Deal_Pending_Amount || deal.rawZohoDeal?.Pending_amount);
+                    const parsedAmt = getDealAmount(deal);
+                    const parsedRec = getDealReceived(deal);
+                    const parsedPend = getDealPending(deal);
 
-                    const displayAmount = deal.amount && deal.amount !== '₹0' ? deal.amount : (parsedAmt > 0 ? `₹${parsedAmt.toLocaleString('en-IN')}` : '₹0');
-                    const displayReceived = deal.received && deal.received !== '₹0' ? deal.received : (parsedRec > 0 ? `₹${parsedRec.toLocaleString('en-IN')}` : '₹0');
-                    const displayPending = deal.pending && deal.pending !== '₹0' ? deal.pending : (parsedPend > 0 ? `₹${parsedPend.toLocaleString('en-IN')}` : '₹0');
+                    const displayAmount = parsedAmt > 0 ? `₹${parsedAmt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : (deal.amount && deal.amount !== '₹0' ? deal.amount : '₹0');
+                    const displayReceived = parsedRec > 0 ? `₹${parsedRec.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : (deal.received && deal.received !== '₹0' ? deal.received : '₹0');
+                    const displayPending = parsedPend > 0 ? `₹${parsedPend.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : (deal.pending && deal.pending !== '₹0' ? deal.pending : '₹0');
 
                     return (
                       <tr 

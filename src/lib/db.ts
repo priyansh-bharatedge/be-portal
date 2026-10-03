@@ -174,10 +174,13 @@ export const saveDealToIndexedDB = async (deal: any): Promise<void> => {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_DEALS, 'readwrite');
     const store = transaction.objectStore(STORE_DEALS);
-    const request = store.put(deal);
+    store.put(deal);
+    if (deal.zohoId && String(deal.zohoId) !== String(deal.id)) {
+      store.put({ ...deal, id: String(deal.zohoId) });
+    }
     
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
   });
 };
 

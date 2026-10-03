@@ -322,11 +322,19 @@ export const DealDetails = () => {
             pendingAmount: pendNum,
             partnerBdmAmount,
           },
+          rawAmount: totalNum,
+          rawReceived: recNum,
+          rawPending: pendNum,
           rawZohoDeal: rawZoho
         };
 
         setDeal(updatedObj);
         saveDealToIndexedDB(updatedObj).catch(() => {});
+
+        // Dispatch window event so Deals list & Dashboard update in real-time
+        try {
+          window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedObj }));
+        } catch (e) {}
 
         // Load Zoho CRM Attachments for this deal
         if (updatedObj.zohoId) {
