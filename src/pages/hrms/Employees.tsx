@@ -436,114 +436,21 @@ export const Employees = () => {
     }
   };
 
-  const validateStep = (step: number) => {
-    const errors: Record<string, string> = {};
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const mobileRegex = /^[0-9]{10}$/;
-
-    if (step === 1) {
-      if (!formData.firstName) errors.firstName = 'Required';
-      if (!formData.lastName) errors.lastName = 'Required';
-      if (!formData.dob) errors.dob = 'Required';
-      if (!formData.gender) errors.gender = 'Required';
-      if (!formData.maritalStatus) errors.maritalStatus = 'Required';
-      if (!formData.mobile) {
-        errors.mobile = 'Required';
-      } else if (!mobileRegex.test(formData.mobile.replace(/[^0-9]/g, ''))) {
-        errors.mobile = 'Invalid 10-digit number';
-      }
-      if (!formData.email) {
-        errors.email = 'Required';
-      } else if (!emailRegex.test(formData.email)) {
-        errors.email = 'Invalid email address';
-      }
-      if (!formData.permanentAddress) errors.permanentAddress = 'Required';
-      if (!formData.currentAddress) errors.currentAddress = 'Required';
-    } else if (step === 2) {
-      if (!formData.education) errors.education = 'Required';
-      if (formData.languages.length === 0) errors.languages = 'Required';
-    } else if (step === 3) {
-      if (!formData.emergencyFirstName) errors.emergencyFirstName = 'Required';
-      if (!formData.emergencyLastName) errors.emergencyLastName = 'Required';
-      if (!formData.emergencyMobile) {
-        errors.emergencyMobile = 'Required';
-      } else if (!mobileRegex.test(formData.emergencyMobile.replace(/[^0-9]/g, ''))) {
-        errors.emergencyMobile = 'Invalid 10-digit number';
-      }
-      if (!formData.emergencyRelation) errors.emergencyRelation = 'Required';
-    } else if (step === 4) {
-      if (!formData.empId) errors.empId = 'Required';
-      if (!formData.doj) errors.doj = 'Required';
-      if (!formData.dept) errors.dept = 'Required';
-      if (!formData.role) errors.role = 'Required';
-      if (!formData.workEmail) {
-        errors.workEmail = 'Required';
-      } else if (!emailRegex.test(formData.workEmail)) {
-        errors.workEmail = 'Invalid email address';
-      }
-      if (!formData.previousEmployer) errors.previousEmployer = 'Required';
-      if (!formData.experience) errors.experience = 'Required';
-
-      // Role & Hierarchy Validations
-      if (formData.systemRole === 'TM' && !formData.teamLeaderId && availableTeamLeaders.length > 0) {
-        errors.teamLeaderId = 'Please assign a Team Leader (TL)';
-      }
-      if (formData.systemRole === 'TL' && !formData.reportingManagerId && availableManagersAndHODs.length > 0) {
-        errors.reportingManagerId = 'Please select a Reporting Manager / HOD';
-      }
-    } else if (step === 5) {
-      if (!formData.bankAccount) {
-        errors.bankAccount = 'Required';
-      } else if (!/^[0-9]{9,18}$/.test(formData.bankAccount)) {
-        errors.bankAccount = 'Invalid account number';
-      }
-      if (!formData.bankName) errors.bankName = 'Required';
-      if (!formData.ifsc) {
-        errors.ifsc = 'Required';
-      } else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifsc)) {
-        errors.ifsc = 'Invalid IFSC format';
-      }
-      if (!formData.panNumber) {
-        errors.panNumber = 'Required';
-      } else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.panNumber)) {
-        errors.panNumber = 'Invalid PAN format';
-      }
-      if (!formData.aadhaarNumber) {
-        errors.aadhaarNumber = 'Required';
-      } else if (!/^[0-9]{12}$/.test(formData.aadhaarNumber.replace(/[^0-9]/g, ''))) {
-        errors.aadhaarNumber = 'Invalid Aadhaar (12 digits)';
-      }
-      if (!formData.passportNumber) errors.passportNumber = 'Required';
-      if (!formData.drivingLicense) errors.drivingLicense = 'Required';
-      if (formData.hasPf && !formData.pfNumber) errors.pfNumber = 'Required';
-      if (!formData.esicNumber) errors.esicNumber = 'Required';
-      if (!formData.uanNumber) {
-        errors.uanNumber = 'Required';
-      } else if (!/^[0-9]{12}$/.test(formData.uanNumber)) {
-        errors.uanNumber = 'Invalid UAN (12 digits)';
-      }
-      if (!formData.medicalInsurance) errors.medicalInsurance = 'Required';
-      if (!salaryDocumentName && !salaryDocumentFile && !editingEmployee) {
-        errors.salaryDocument = 'Required';
-      }
-    }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+  const validateStep = (_step: number) => {
+    // No mandatory fields required
+    setFormErrors({});
+    return true;
   };
 
   const handleNextStep = () => {
-    if (validateStep(currentStep)) {
-      setCurrentStep(prev => prev + 1);
-    }
+    setCurrentStep(prev => Math.min(prev + 1, 5));
   };
 
   const handleSaveEmployee = async () => {
-    if (!validateStep(5)) return;
-
     const targetOriginalId = editingEmployee ? editingEmployee.id : null;
     const targetOriginalZohoId = editingEmployee?.zohoId || null;
     const finalEmpId = formData.empId || targetOriginalId || `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
-    const fullName = `${formData.firstName} ${formData.middleName} ${formData.lastName}`.trim();
+    const fullName = `${formData.firstName || ''} ${formData.middleName || ''} ${formData.lastName || ''}`.trim() || editingEmployee?.name || 'Employee';
     const newDocsToAdd: any[] = [];
 
     // Save each optional/additional document to local IndexedDB & prepare metadata
@@ -1455,24 +1362,24 @@ export const Employees = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">First Name *</label>
-                        <input type="text" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.firstName ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange'}`} placeholder="e.g. Rahul" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">First Name</label>
+                        <input type="text" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange" placeholder="e.g. Rahul" />
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Middle Name</label>
-                        <input type="text" value={formData.middleName} onChange={e => setFormData({ ...formData, middleName: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange`} placeholder="Optional" />
+                        <input type="text" value={formData.middleName} onChange={e => setFormData({ ...formData, middleName: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange" placeholder="Optional" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Last Name *</label>
-                        <input type="text" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.lastName ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange'}`} placeholder="e.g. Verma" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Last Name</label>
+                        <input type="text" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange" placeholder="e.g. Verma" />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Date of Birth *</label>
-                        <input type="date" value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.dob ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange'}`} />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Date of Birth</label>
+                        <input type="date" value={formData.dob} onChange={e => setFormData({ ...formData, dob: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Gender *</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Gender</label>
                         <select value={formData.gender} onChange={e => setFormData({ ...formData, gender: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:ring-1 focus:ring-be-orange">
                           <option>Male</option><option>Female</option><option>Other</option>
                         </select>
@@ -1483,32 +1390,32 @@ export const Employees = () => {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Marital Status *</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Marital Status</label>
                         <select value={formData.maritalStatus} onChange={e => setFormData({ ...formData, maritalStatus: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:ring-1 focus:ring-be-orange">
                           <option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Contact Number *</label>
-                        <input type="text" value={formData.mobile} onChange={e => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '') })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.mobile ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange'}`} placeholder="10-digit mobile" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Contact Number</label>
+                        <input type="text" value={formData.mobile} onChange={e => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '') })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange" placeholder="10-digit mobile" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Personal Email Address *</label>
-                        <input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.email ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange'}`} placeholder="email@example.com" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Personal Email Address</label>
+                        <input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange" placeholder="email@example.com" />
                       </div>
 
                       <div className="md:col-span-3">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Permanent Address *</label>
-                        <textarea value={formData.permanentAddress} onChange={e => setFormData({ ...formData, permanentAddress: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.permanentAddress ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange'}`} rows={2} placeholder="Full permanent address"></textarea>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Permanent Address</label>
+                        <textarea value={formData.permanentAddress} onChange={e => setFormData({ ...formData, permanentAddress: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange" rows={2} placeholder="Full permanent address"></textarea>
                       </div>
                       <div className="md:col-span-3">
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Current Address *</label>
-                        <textarea value={formData.currentAddress} onChange={e => setFormData({ ...formData, currentAddress: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.currentAddress ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange'}`} rows={2} placeholder="Current residential address"></textarea>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Current Address</label>
+                        <textarea value={formData.currentAddress} onChange={e => setFormData({ ...formData, currentAddress: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange" rows={2} placeholder="Current residential address"></textarea>
                       </div>
 
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Blood Group</label>
-                        <input type="text" value={formData.bloodGroup} onChange={e => setFormData({ ...formData, bloodGroup: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange`} placeholder="e.g. O+, B+" />
+                        <input type="text" value={formData.bloodGroup} onChange={e => setFormData({ ...formData, bloodGroup: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange focus:border-be-orange" placeholder="e.g. O+, B+" />
                       </div>
                     </div>
                   </motion.div>
@@ -1520,19 +1427,19 @@ export const Employees = () => {
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Educational Info</h3>
                     <div className="grid grid-cols-1 gap-5">
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Education Qualification *</label>
-                        <input type="text" value={formData.education} onChange={e => setFormData({ ...formData, education: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.education ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} placeholder="e.g. B.Tech / MBA / BBA" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Education Qualification</label>
+                        <input type="text" value={formData.education} onChange={e => setFormData({ ...formData, education: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" placeholder="e.g. B.Tech / MBA / BBA" />
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Professional Certifications</label>
-                        <input type="text" value={formData.certifications} onChange={e => setFormData({ ...formData, certifications: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange`} placeholder="e.g. PMP, AWS, HubSpot Certified" />
+                        <input type="text" value={formData.certifications} onChange={e => setFormData({ ...formData, certifications: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" placeholder="e.g. PMP, AWS, HubSpot Certified" />
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Key Skills</label>
                         <input type="text" value={formData.skills} onChange={e => setFormData({ ...formData, skills: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:ring-1 focus:ring-be-orange" placeholder="e.g. Sales, Negotiations, React, TypeScript" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Languages Known *</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">Languages Known</label>
                         <div className="flex gap-4">
                           {['Hindi', 'English', 'Gujarati'].map(lang => (
                             <label key={lang} className="flex items-center space-x-2 cursor-pointer">
@@ -1541,7 +1448,6 @@ export const Employees = () => {
                             </label>
                           ))}
                         </div>
-                        {formErrors.languages && <p className="text-red-500 text-xs mt-1">{formErrors.languages}</p>}
                       </div>
                     </div>
                   </motion.div>
@@ -1553,26 +1459,26 @@ export const Employees = () => {
                     <h3 className="text-lg font-bold text-gray-900 mb-4">Emergency & Family Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Emergency Contact First Name *</label>
-                        <input type="text" value={formData.emergencyFirstName} onChange={e => setFormData({ ...formData, emergencyFirstName: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.emergencyFirstName ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Emergency Contact First Name</label>
+                        <input type="text" value={formData.emergencyFirstName} onChange={e => setFormData({ ...formData, emergencyFirstName: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Emergency Contact Last Name *</label>
-                        <input type="text" value={formData.emergencyLastName} onChange={e => setFormData({ ...formData, emergencyLastName: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.emergencyLastName ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Emergency Contact Last Name</label>
+                        <input type="text" value={formData.emergencyLastName} onChange={e => setFormData({ ...formData, emergencyLastName: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Emergency Contact Number *</label>
-                        <input type="text" value={formData.emergencyMobile} onChange={e => setFormData({ ...formData, emergencyMobile: e.target.value.replace(/\D/g, '') })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.emergencyMobile ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Emergency Contact Number</label>
+                        <input type="text" value={formData.emergencyMobile} onChange={e => setFormData({ ...formData, emergencyMobile: e.target.value.replace(/\D/g, '') })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Relationship with Contact *</label>
-                        <input type="text" value={formData.emergencyRelation} onChange={e => setFormData({ ...formData, emergencyRelation: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.emergencyRelation ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} placeholder="e.g. Father, Mother, Spouse" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Relationship with Contact</label>
+                        <input type="text" value={formData.emergencyRelation} onChange={e => setFormData({ ...formData, emergencyRelation: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" placeholder="e.g. Father, Mother, Spouse" />
                       </div>
                     </div>
                   </motion.div>
                 )}
 
-                {/* Step 4: Department & Role Hierarchy (MAIN FEATURE REQUEST) */}
+                {/* Step 4: Department & Role Hierarchy */}
                 {currentStep === 4 && (
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
                     <div className="border-b border-gray-100 pb-4">
@@ -1587,25 +1493,25 @@ export const Employees = () => {
                     {/* Basic Dept Fields */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Employee ID *</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Employee ID</label>
                         <input
                           type="text"
                           value={formData.empId}
                           onChange={e => setFormData({ ...formData, empId: e.target.value })}
-                          className={`w-full px-3 py-2 border rounded-xl outline-none font-mono font-bold ${formErrors.empId ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`}
+                          className="w-full px-3 py-2 border rounded-xl outline-none font-mono font-bold border-gray-300 focus:ring-1 focus:ring-be-orange"
                           placeholder="e.g. EMP-1010"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Date of Joining *</label>
-                        <input type="date" value={formData.doj} onChange={e => setFormData({ ...formData, doj: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.doj ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Date of Joining</label>
+                        <input type="date" value={formData.doj} onChange={e => setFormData({ ...formData, doj: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Department *</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Department</label>
                         <select
                           value={formData.dept}
                           onChange={e => setFormData({ ...formData, dept: e.target.value })}
-                          className={`w-full px-3 py-2 border rounded-xl outline-none bg-white font-medium ${formErrors.dept ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`}
+                          className="w-full px-3 py-2 border rounded-xl outline-none bg-white font-medium border-gray-300 focus:ring-1 focus:ring-be-orange"
                         >
                           <option value="Sales">Sales</option>
                           <option value="IT">IT</option>
@@ -1618,21 +1524,21 @@ export const Employees = () => {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Designation / Job Title *</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Designation / Job Title</label>
                         <input
                           type="text"
                           value={formData.role}
                           onChange={e => setFormData({ ...formData, role: e.target.value })}
-                          className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.role ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`}
+                          className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange"
                           placeholder="e.g. Senior Sales Executive, Lead Developer"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Work Email *</label>
-                        <input type="email" value={formData.workEmail} onChange={e => setFormData({ ...formData, workEmail: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.workEmail ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} placeholder="name@bharatedge.com" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Work Email</label>
+                        <input type="email" value={formData.workEmail} onChange={e => setFormData({ ...formData, workEmail: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" placeholder="name@bharatedge.com" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Employment Type *</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Employment Type</label>
                         <select value={formData.employmentType} onChange={e => setFormData({ ...formData, employmentType: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange">
                           <option value="Full Time">Full Time</option>
                           <option value="Part Time">Part Time</option>
@@ -1641,12 +1547,12 @@ export const Employees = () => {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Previous Employer *</label>
-                        <input type="text" value={formData.previousEmployer} onChange={e => setFormData({ ...formData, previousEmployer: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.previousEmployer ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} placeholder="e.g. TCS / Infosys / Fresh" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Previous Employer</label>
+                        <input type="text" value={formData.previousEmployer} onChange={e => setFormData({ ...formData, previousEmployer: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" placeholder="e.g. TCS / Infosys / Fresh" />
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Total Experience *</label>
-                        <input type="text" value={formData.experience} onChange={e => setFormData({ ...formData, experience: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none ${formErrors.experience ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} placeholder="e.g. 3 Years" />
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Total Experience</label>
+                        <input type="text" value={formData.experience} onChange={e => setFormData({ ...formData, experience: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" placeholder="e.g. 3 Years" />
                       </div>
                     </div>
 
@@ -1656,7 +1562,7 @@ export const Employees = () => {
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center">
                             <Crown className="w-4 h-4 mr-2 text-be-orange" />
-                            System Role (Role-Based Access Control) *
+                            System Role (Role-Based Access Control)
                           </label>
                           <span className="text-xs font-semibold text-gray-500">
                             Super Admin ➔ HR ➔ Admin (HOD) ➔ TL ➔ TM
@@ -1700,7 +1606,7 @@ export const Employees = () => {
                         </div>
                       </div>
 
-                      {/* DYNAMIC HIERARCHY FIELDS ACCORDING TO USER'S PROMPT */}
+                      {/* DYNAMIC HIERARCHY FIELDS */}
                       {/* Case 1: Team Member (TM) selected -> choose Team Leader (TL) */}
                       {formData.systemRole === 'TM' && (
                         <motion.div
@@ -1716,13 +1622,12 @@ export const Employees = () => {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                                Who is the Team Leader (TL)? *
+                                Who is the Team Leader (TL)?
                               </label>
                               <select
                                 value={formData.teamLeaderId}
                                 onChange={(e) => handleTLChange(e.target.value)}
-                                className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-be-orange ${formErrors.teamLeaderId ? 'border-red-500' : 'border-gray-300'
-                                  }`}
+                                className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-be-orange"
                               >
                                 <option value="">-- Select Team Leader (TL) --</option>
                                 {availableTeamLeaders.length > 0 ? (
@@ -1741,9 +1646,6 @@ export const Employees = () => {
                                   </optgroup>
                                 )}
                               </select>
-                              {formErrors.teamLeaderId && (
-                                <p className="text-red-500 text-xs mt-1 font-medium">{formErrors.teamLeaderId}</p>
-                              )}
                             </div>
 
                             {/* Shows who the TL reports to */}
@@ -1805,13 +1707,12 @@ export const Employees = () => {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                                Who is the Reporting Manager? *
+                                Who is the Reporting Manager?
                               </label>
                               <select
                                 value={formData.reportingManagerId}
                                 onChange={(e) => handleManagerChange(e.target.value)}
-                                className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.reportingManagerId ? 'border-red-500' : 'border-gray-300'
-                                  }`}
+                                className="w-full px-3.5 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
                               >
                                 <option value="">-- Select Reporting Manager --</option>
                                 <optgroup label="Super Admin">
@@ -1829,9 +1730,6 @@ export const Employees = () => {
                                   ))}
                                 </optgroup>
                               </select>
-                              {formErrors.reportingManagerId && (
-                                <p className="text-red-500 text-xs mt-1 font-medium">{formErrors.reportingManagerId}</p>
-                              )}
                             </div>
 
                             <div>
@@ -2084,7 +1982,7 @@ export const Employees = () => {
                       <p className="text-xs text-gray-500">Provide bank and statutory details along with supporting employee verification documents.</p>
                     </div>
 
-                    {/* Section 1: Bank & Statutory Information (Mandatory) */}
+                    {/* Section 1: Bank & Statutory Information */}
                     <div className="bg-gray-50/70 p-5 rounded-2xl border border-gray-200/80 space-y-4">
                       <h4 className="text-xs font-extrabold uppercase tracking-wider text-gray-700 flex items-center">
                         <Briefcase size={14} className="mr-1.5 text-be-orange" />
@@ -2092,39 +1990,32 @@ export const Employees = () => {
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Bank Account Number *</label>
-                          <input type="text" value={formData.bankAccount} onChange={e => setFormData({ ...formData, bankAccount: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white ${formErrors.bankAccount ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.bankAccount && <p className="text-red-500 text-xs mt-1">{formErrors.bankAccount}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Bank Account Number</label>
+                          <input type="text" value={formData.bankAccount} onChange={e => setFormData({ ...formData, bankAccount: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Bank Name *</label>
-                          <input type="text" value={formData.bankName} onChange={e => setFormData({ ...formData, bankName: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white ${formErrors.bankName ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.bankName && <p className="text-red-500 text-xs mt-1">{formErrors.bankName}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Bank Name</label>
+                          <input type="text" value={formData.bankName} onChange={e => setFormData({ ...formData, bankName: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">IFSC Code *</label>
-                          <input type="text" value={formData.ifsc} onChange={e => setFormData({ ...formData, ifsc: e.target.value.toUpperCase() })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white uppercase ${formErrors.ifsc ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.ifsc && <p className="text-red-500 text-xs mt-1">{formErrors.ifsc}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">IFSC Code</label>
+                          <input type="text" value={formData.ifsc} onChange={e => setFormData({ ...formData, ifsc: e.target.value.toUpperCase() })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white uppercase border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Pan Number *</label>
-                          <input type="text" value={formData.panNumber} onChange={e => setFormData({ ...formData, panNumber: e.target.value.toUpperCase() })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white uppercase ${formErrors.panNumber ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.panNumber && <p className="text-red-500 text-xs mt-1">{formErrors.panNumber}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Pan Number</label>
+                          <input type="text" value={formData.panNumber} onChange={e => setFormData({ ...formData, panNumber: e.target.value.toUpperCase() })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white uppercase border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Aadhaar Number *</label>
-                          <input type="text" value={formData.aadhaarNumber} onChange={e => setFormData({ ...formData, aadhaarNumber: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white ${formErrors.aadhaarNumber ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.aadhaarNumber && <p className="text-red-500 text-xs mt-1">{formErrors.aadhaarNumber}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Aadhaar Number</label>
+                          <input type="text" value={formData.aadhaarNumber} onChange={e => setFormData({ ...formData, aadhaarNumber: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Passport Number *</label>
-                          <input type="text" value={formData.passportNumber} onChange={e => setFormData({ ...formData, passportNumber: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white ${formErrors.passportNumber ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.passportNumber && <p className="text-red-500 text-xs mt-1">{formErrors.passportNumber}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Passport Number</label>
+                          <input type="text" value={formData.passportNumber} onChange={e => setFormData({ ...formData, passportNumber: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Driving License Number *</label>
-                          <input type="text" value={formData.drivingLicense} onChange={e => setFormData({ ...formData, drivingLicense: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white ${formErrors.drivingLicense ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.drivingLicense && <p className="text-red-500 text-xs mt-1">{formErrors.drivingLicense}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Driving License Number</label>
+                          <input type="text" value={formData.drivingLicense} onChange={e => setFormData({ ...formData, drivingLicense: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-gray-700 mb-1">Salary Entity</label>
@@ -2158,30 +2049,26 @@ export const Employees = () => {
                         </div>
                         {formData.hasPf && (
                           <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">PF Number *</label>
-                            <input type="text" value={formData.pfNumber} onChange={e => setFormData({ ...formData, pfNumber: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white ${formErrors.pfNumber ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                            {formErrors.pfNumber && <p className="text-red-500 text-xs mt-1">{formErrors.pfNumber}</p>}
+                            <label className="block text-sm font-bold text-gray-700 mb-1">PF Number</label>
+                            <input type="text" value={formData.pfNumber} onChange={e => setFormData({ ...formData, pfNumber: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white border-gray-300 focus:ring-1 focus:ring-be-orange" />
                           </div>
                         )}
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">ESIC Number *</label>
-                          <input type="text" value={formData.esicNumber} onChange={e => setFormData({ ...formData, esicNumber: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white ${formErrors.esicNumber ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.esicNumber && <p className="text-red-500 text-xs mt-1">{formErrors.esicNumber}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">ESIC Number</label>
+                          <input type="text" value={formData.esicNumber} onChange={e => setFormData({ ...formData, esicNumber: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">UAN Number *</label>
-                          <input type="text" value={formData.uanNumber} onChange={e => setFormData({ ...formData, uanNumber: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white ${formErrors.uanNumber ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.uanNumber && <p className="text-red-500 text-xs mt-1">{formErrors.uanNumber}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">UAN Number</label>
+                          <input type="text" value={formData.uanNumber} onChange={e => setFormData({ ...formData, uanNumber: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
                         <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Medical Insurance Number *</label>
-                          <input type="text" value={formData.medicalInsurance} onChange={e => setFormData({ ...formData, medicalInsurance: e.target.value })} className={`w-full px-3 py-2 border rounded-xl outline-none bg-white ${formErrors.medicalInsurance ? 'border-red-500' : 'border-gray-300 focus:ring-1 focus:ring-be-orange'}`} />
-                          {formErrors.medicalInsurance && <p className="text-red-500 text-xs mt-1">{formErrors.medicalInsurance}</p>}
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Medical Insurance Number</label>
+                          <input type="text" value={formData.medicalInsurance} onChange={e => setFormData({ ...formData, medicalInsurance: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none bg-white border-gray-300 focus:ring-1 focus:ring-be-orange" />
                         </div>
 
                         {/* Passbook / Cancelled Cheque upload */}
                         <div className="md:col-span-2 pt-2 border-t border-gray-200">
-                          <label className="block text-sm font-bold text-gray-700 mb-1">Screenshot of Passbook / Cancelled Cheque *</label>
+                          <label className="block text-sm font-bold text-gray-700 mb-1">Screenshot of Passbook / Cancelled Cheque</label>
                           <div className="flex items-center gap-4 flex-wrap">
                             <input
                               type="file"
@@ -2194,7 +2081,7 @@ export const Employees = () => {
                                 }
                               }}
                             />
-                            <label htmlFor="salaryDoc" className={`cursor-pointer inline-flex items-center px-4 py-2 border rounded-xl text-sm font-bold transition-all shadow-sm ${formErrors.salaryDocument ? 'border-red-500 bg-red-50 text-red-600' : 'border-gray-300 bg-white hover:bg-orange-50 hover:border-be-orange text-gray-700'}`}>
+                            <label htmlFor="salaryDoc" className="cursor-pointer inline-flex items-center px-4 py-2 border rounded-xl text-sm font-bold transition-all shadow-sm border-gray-300 bg-white hover:bg-orange-50 hover:border-be-orange text-gray-700">
                               <UploadCloud size={16} className="mr-2 text-be-orange" />
                               {salaryDocumentName ? 'Change File' : 'Choose File'}
                             </label>
@@ -2211,11 +2098,10 @@ export const Employees = () => {
                                   <X size={14} />
                                 </button>
                               </div>
-                            ) : !formErrors.salaryDocument && (
+                            ) : (
                               <span className="text-sm text-gray-400 font-medium">No file chosen</span>
                             )}
                           </div>
-                          {formErrors.salaryDocument && <p className="text-red-500 text-xs mt-1">{formErrors.salaryDocument}</p>}
                         </div>
                       </div>
                     </div>
