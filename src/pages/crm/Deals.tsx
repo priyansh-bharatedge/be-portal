@@ -1196,9 +1196,19 @@ export const Deals = () => {
     // Fast O(1) lookup index maps
     const dealIndexByZohoId = new Map<string, number>();
     const dealIndexById = new Map<string, number>();
+    const dealIndexByShortId = new Map<string, number>();
     updatedDeals.forEach((d, idx) => {
-      if (d.zohoId) dealIndexByZohoId.set(String(d.zohoId), idx);
-      if (d.id) dealIndexById.set(String(d.id), idx);
+      if (d.zohoId) {
+        dealIndexByZohoId.set(String(d.zohoId), idx);
+        dealIndexByShortId.set(String(d.zohoId).slice(-4), idx);
+      }
+      if (d.id) {
+        dealIndexById.set(String(d.id), idx);
+        const digits = String(d.id).replace(/\D/g, '');
+        if (digits) {
+          dealIndexByShortId.set(digits.slice(-4), idx);
+        }
+      }
     });
 
     // Batch cache for companies and clients
@@ -1220,8 +1230,15 @@ export const Deals = () => {
 
     rawDeals.forEach((zDeal: any) => {
       const zIdStr = String(zDeal.id || '');
-      let existingIdx = zIdStr && dealIndexByZohoId.has(zIdStr) ? dealIndexByZohoId.get(zIdStr)! : -1;
-      if (existingIdx === -1 && zDeal.Deal_Name) {
+      const shortId = zIdStr ? zIdStr.slice(-4) : '';
+      let existingIdx = -1;
+      if (zIdStr && dealIndexByZohoId.has(zIdStr)) {
+        existingIdx = dealIndexByZohoId.get(zIdStr)!;
+      } else if (zIdStr && dealIndexById.has(zIdStr)) {
+        existingIdx = dealIndexById.get(zIdStr)!;
+      } else if (shortId && dealIndexByShortId.has(shortId)) {
+        existingIdx = dealIndexByShortId.get(shortId)!;
+      } else if (zDeal.Deal_Name) {
         for (const [idKey, idx] of dealIndexById.entries()) {
           if (zDeal.Deal_Name.includes(idKey)) {
             existingIdx = idx;
