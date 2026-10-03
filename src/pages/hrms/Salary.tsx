@@ -35,102 +35,8 @@ import {
 } from '../../utils/salarySlipTemplate';
 import { SalarySlipDocument } from '../../components/hrms/SalarySlipDocument';
 
-// Reference initial records matching the user's payslip format exactly
-const SAMPLE_INITIAL_SALARIES: SalaryRecord[] = [
-  {
-    id: 'SAL-BSAPL-222-AUG26',
-    empId: 'BSAPL-222',
-    empName: 'Drashti Bhuva',
-    designation: 'Business Development Manager',
-    department: 'Sales',
-    dateOfJoining: '2026-02-03',
-    month: '2026-08',
-    payPeriodDisplay: 'Aug-26',
-    presentDays: 31,
-    paidLeaveDays: 0,
-    unpaidLeaveDays: 0,
-    totalPaidDays: 31,
-    basic: 35000,
-    incentivePay: 0,
-    hra: 0,
-    allowances: 0,
-    pf: 0,
-    professionalTax: 200,
-    unpaidLeavesDeduction: 0,
-    talkTimeDeduction: 0,
-    holdDeduction: 0,
-    tds: 0,
-    totalGross: 35000,
-    totalDeductions: 200,
-    netSalary: 34800,
-    netSalaryInWords: 'Thirty-Four Thousand Eight Hundred Only',
-    status: 'Paid',
-    salaryEntity: 'BSAPL',
-    createdAt: '2026-08-31T18:30:00.000Z'
-  },
-  {
-    id: 'SAL-EMP-001-AUG26',
-    empId: 'EMP-001',
-    empName: 'Managing Director',
-    designation: 'Managing Director & Super Admin',
-    department: 'Management',
-    dateOfJoining: '2024-01-01',
-    month: '2026-08',
-    payPeriodDisplay: 'Aug-26',
-    presentDays: 31,
-    paidLeaveDays: 0,
-    unpaidLeaveDays: 0,
-    totalPaidDays: 31,
-    basic: 75000,
-    incentivePay: 15000,
-    hra: 25000,
-    allowances: 10000,
-    pf: 1800,
-    professionalTax: 200,
-    unpaidLeavesDeduction: 0,
-    talkTimeDeduction: 0,
-    holdDeduction: 0,
-    tds: 5000,
-    totalGross: 125000,
-    totalDeductions: 7000,
-    netSalary: 118000,
-    netSalaryInWords: 'One Lakh Eighteen Thousand Rupees Only',
-    status: 'Paid',
-    salaryEntity: 'BSPL',
-    createdAt: '2026-08-31T18:30:00.000Z'
-  },
-  {
-    id: 'SAL-BSAPL-104-SEP26',
-    empId: 'BSAPL-104',
-    empName: 'Sneha Patel',
-    designation: 'Sr. Business Development Executive',
-    department: 'Sales',
-    dateOfJoining: '2025-05-15',
-    month: '2026-09',
-    payPeriodDisplay: 'Sep-26',
-    presentDays: 30,
-    paidLeaveDays: 0,
-    unpaidLeaveDays: 0,
-    totalPaidDays: 30,
-    basic: 28000,
-    incentivePay: 4500,
-    hra: 0,
-    allowances: 0,
-    pf: 0,
-    professionalTax: 200,
-    unpaidLeavesDeduction: 0,
-    talkTimeDeduction: 0,
-    holdDeduction: 0,
-    tds: 0,
-    totalGross: 32500,
-    totalDeductions: 200,
-    netSalary: 32300,
-    netSalaryInWords: 'Thirty-Two Thousand Three Hundred Only',
-    status: 'Paid',
-    salaryEntity: 'BSAPL',
-    createdAt: '2026-09-30T18:30:00.000Z'
-  }
-];
+// Reference initial records
+const SAMPLE_INITIAL_SALARIES: SalaryRecord[] = [];
 
 export const Salary = () => {
   const { currentUser, isTM, isSuperAdmin, isHR, can } = useAuth();
@@ -198,18 +104,17 @@ export const Salary = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setSalaries(parsed);
         } else {
-          setSalaries(SAMPLE_INITIAL_SALARIES);
-          localStorage.setItem('be_salaries', JSON.stringify(SAMPLE_INITIAL_SALARIES));
+          setSalaries([]);
         }
       } catch (e) {
-        setSalaries(SAMPLE_INITIAL_SALARIES);
+        setSalaries([]);
       }
     } else {
-      setSalaries(SAMPLE_INITIAL_SALARIES);
-      localStorage.setItem('be_salaries', JSON.stringify(SAMPLE_INITIAL_SALARIES));
+      setSalaries([]);
+      localStorage.setItem('be_salaries', JSON.stringify([]));
     }
 
     // Load employees

@@ -53,7 +53,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Initialize storage and clean up dummy data
   useEffect(() => {
-    const CLEARED_KEY = 'be_dummy_cleared_clean_v1';
+    const CLEARED_KEY = 'be_dummy_cleared_clean_v3';
     const isCleaned = localStorage.getItem(CLEARED_KEY);
 
     if (!isCleaned) {
@@ -68,16 +68,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('be_leaves', JSON.stringify([]));
       localStorage.setItem('be_attendance', JSON.stringify([]));
       localStorage.setItem('be_emp_docs', JSON.stringify([]));
-      localStorage.setItem('be_employees', JSON.stringify(INITIAL_EMPLOYEES));
+      localStorage.setItem('be_employees', JSON.stringify([]));
       localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
       localStorage.setItem(CLEARED_KEY, 'true');
       setCurrentUser(DEMO_USERS[0]);
-    } else {
-      // Ensure be_employees exists
-      const existing = localStorage.getItem('be_employees');
-      if (!existing) {
-        localStorage.setItem('be_employees', JSON.stringify(INITIAL_EMPLOYEES));
-      }
     }
   }, []);
 

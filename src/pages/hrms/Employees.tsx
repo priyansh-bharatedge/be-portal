@@ -204,10 +204,6 @@ export const Employees = () => {
       if (res.success && Array.isArray(res.data)) {
         const zohoEmployees = res.data.map(mapZohoRecordToEmployee);
         
-        // Ensure default Super Admin (EMP-001) always exists if not in Zoho
-        const superAdminExists = zohoEmployees.some(e => e.systemRole === 'Super Admin' || e.id === 'EMP-001');
-        const defaultAdmin = INITIAL_EMPLOYEES.find(e => e.id === 'EMP-001') || INITIAL_EMPLOYEES[0];
-
         // Merge with existing local employees to keep any local documents / un-synced items
         const saved = localStorage.getItem('be_employees');
         const localList: EmployeeData[] = saved ? JSON.parse(saved) : [];
@@ -215,12 +211,6 @@ export const Employees = () => {
         const seenZohoIds = new Set<string>();
         const seenIds = new Set<string>();
         const mergedList: EmployeeData[] = [];
-
-        // Add default admin first if needed
-        if (!superAdminExists && defaultAdmin) {
-          mergedList.push(defaultAdmin);
-          seenIds.add(defaultAdmin.id.toLowerCase());
-        }
 
         // Add Zoho employees
         for (const zEmp of zohoEmployees) {
@@ -277,17 +267,17 @@ export const Employees = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setEmployees(parsed);
         } else {
-          setEmployees(INITIAL_EMPLOYEES);
+          setEmployees([]);
         }
       } catch (e) {
-        setEmployees(INITIAL_EMPLOYEES);
+        setEmployees([]);
       }
     } else {
-      setEmployees(INITIAL_EMPLOYEES);
-      localStorage.setItem('be_employees', JSON.stringify(INITIAL_EMPLOYEES));
+      setEmployees([]);
+      localStorage.setItem('be_employees', JSON.stringify([]));
     }
 
     // Automatically sync live records from Zoho CRM on mount

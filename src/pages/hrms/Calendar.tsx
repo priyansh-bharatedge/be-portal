@@ -44,15 +44,7 @@ const DEFAULT_HOLIDAYS_AND_EVENTS: Event[] = [
   { id: 'hol-16', title: 'Govardhan Puja', date: '2026-11-09', type: 'Holiday', description: 'Restricted Holiday' },
   { id: 'hol-17', title: 'Bhai Dooj', date: '2026-11-10', type: 'Holiday', description: 'Restricted Holiday' },
   { id: 'hol-18', title: 'Guru Nanak Jayanti', date: '2026-11-24', type: 'Holiday', description: 'Gazetted Holiday' },
-  { id: 'hol-19', title: 'Christmas Day', date: '2026-12-25', type: 'Holiday', description: 'Public Holiday' },
-  
-  // Recurring Company Events
-  { id: 'evt-1', title: 'Q1 Strategy & Goal Review', date: '2026-01-15', type: 'Event', description: 'Company-wide quarterly meeting' },
-  { id: 'evt-2', title: 'Quarterly All-Hands Sync', date: '2026-04-10', type: 'Event', description: 'Department performance review' },
-  { id: 'evt-3', title: 'Mid-Year Appraisals Kickoff', date: '2026-07-01', type: 'Event', description: 'HR Performance Appraisal' },
-  { id: 'evt-4', title: 'Annual Tech Summit', date: '2026-09-18', type: 'Event', description: 'BharatEdge engineering showcase' },
-  { id: 'evt-5', title: 'Q3 Financial Closure & Review', date: '2026-09-30', type: 'Deadline', description: 'Financial quarter deadline' },
-  { id: 'evt-6', title: 'Annual Gala & Awards Night', date: '2026-12-18', type: 'Event', description: 'Celebration & Excellence awards' },
+  { id: 'hol-19', title: 'Christmas Day', date: '2026-12-25', type: 'Holiday', description: 'Public Holiday' }
 ];
 
 export const Calendar = () => {
