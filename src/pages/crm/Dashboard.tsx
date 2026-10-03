@@ -87,25 +87,73 @@ export const CrmDashboard = () => {
         return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
       };
 
-      const totalAmt = parseMoney(
-        zDeal.Total_deal_amount_inclusive_of_gst !== undefined && zDeal.Total_deal_amount_inclusive_of_gst !== null ? zDeal.Total_deal_amount_inclusive_of_gst :
-          (zDeal.Amount !== undefined && zDeal.Amount !== null ? zDeal.Amount :
-            (zDeal.Deal_Amount !== undefined && zDeal.Deal_Amount !== null ? zDeal.Deal_Amount :
-              (zDeal.Amount_Without_GST !== undefined && zDeal.Amount_Without_GST !== null ? Number(zDeal.Amount_Without_GST) / 0.82 :
-                (zDeal.amount_if_you_have_kindly_put_0 || zDeal.Amount_After_disbursement || 0))))
+      const findFirstPositive = (...vals: any[]): number => {
+        for (const v of vals) {
+          if (v === null || v === undefined) continue;
+          const num = parseMoney(v);
+          if (num > 0) return num;
+        }
+        return 0;
+      };
+
+      // Sum subform services if available
+      let subformTotal = 0;
+      let subformReceived = 0;
+      let subformPending = 0;
+      if (Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0) {
+        zDeal.Subform_1.forEach((sf: any) => {
+          const a = parseMoney(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
+          const bg = parseMoney(sf.Without_GST || sf.baseAmount || sf.Base);
+          const r = parseMoney(sf.Received_amount || sf.Received);
+          const p = parseMoney(sf.Pending_amount || sf.Pending);
+          subformTotal += a || (bg > 0 ? Number((bg / 0.82).toFixed(2)) : 0);
+          subformReceived += r;
+          subformPending += p;
+        });
+      }
+
+      const totalAmt = findFirstPositive(
+        zDeal.Total_deal_amount_inclusive_of_gst,
+        zDeal.Amount,
+        zDeal.Deal_Amount,
+        zDeal.Grand_Total,
+        zDeal.Grand_total,
+        zDeal.GrandTotal,
+        zDeal.Total_amount,
+        zDeal.Total_Amount,
+        zDeal.total_amount,
+        zDeal.Agreement_amount,
+        zDeal.Agreement_Amount,
+        zDeal.Amount_Without_GST ? parseMoney(zDeal.Amount_Without_GST) / 0.82 : 0,
+        zDeal.Deal_Amount_Without_GST ? parseMoney(zDeal.Deal_Amount_Without_GST) / 0.82 : 0,
+        zDeal.Subtotal ? parseMoney(zDeal.Subtotal) * 1.18 : 0,
+        zDeal.Amount_After_disbursement,
+        subformTotal,
+        zDeal.Total_Received_Amount,
+        zDeal.Deal_Received_Amount,
+        zDeal.Received_amount,
+        zDeal.Received,
+        zDeal.amount_if_you_have_kindly_put_0
       );
 
-      const recAmt = parseMoney(
-        zDeal.Total_Received_Amount !== undefined && zDeal.Total_Received_Amount !== null ? zDeal.Total_Received_Amount :
-          (zDeal.Deal_Received_Amount !== undefined && zDeal.Deal_Received_Amount !== null ? zDeal.Deal_Received_Amount :
-            (zDeal.Received_amount || 0))
+      const recAmt = findFirstPositive(
+        zDeal.Total_Received_Amount,
+        zDeal.Deal_Received_Amount,
+        zDeal.Received_amount,
+        zDeal.Received_Amount,
+        zDeal.Received,
+        zDeal.Amount_After_disbursement,
+        subformReceived
       );
 
-      const pendAmt = parseMoney(
-        zDeal.Total_Pending_Amount !== undefined && zDeal.Total_Pending_Amount !== null ? zDeal.Total_Pending_Amount :
-          (zDeal.Deal_Pending_Amount !== undefined && zDeal.Deal_Pending_Amount !== null ? zDeal.Deal_Pending_Amount :
-            (zDeal.Pending_amount !== undefined && zDeal.Pending_amount !== null ? zDeal.Pending_amount :
-              (totalAmt > recAmt ? totalAmt - recAmt : 0)))
+      const pendAmt = findFirstPositive(
+        zDeal.Total_Pending_Amount,
+        zDeal.Deal_Pending_Amount,
+        zDeal.Pending_amount,
+        zDeal.Pending_Amount,
+        zDeal.Pending,
+        subformPending,
+        totalAmt > recAmt ? Number((totalAmt - recAmt).toFixed(2)) : 0
       );
 
       const stage = zDeal.Stage || 'Sales';
@@ -124,6 +172,32 @@ export const CrmDashboard = () => {
         status = stage;
       }
 
+      const hasPartnerBdm = Boolean(
+        zDeal.Has_Partner_BDM || 
+        zDeal.has_partner_bdm || 
+        zDeal.Partner_BDM || 
+        zDeal.Partner_BDM_Name || 
+        zDeal.partner_bdm_name
+      );
+
+      const partnerBdmName = 
+        zDeal.Partner_BDM_Name || 
+        zDeal.Partner_BDM_name || 
+        zDeal.Partner_BDM_Names || 
+        zDeal.partner_bdm_name || 
+        '';
+
+      const partnerBdmAmount = parseMoney(zDeal.Partner_BDM_Amount || zDeal.partner_bdm_amount || (hasPartnerBdm && recAmt > 0 ? (recAmt / 1.18) / 2 : 0));
+
+      const dealOwnerName = (
+        (zDeal.Owner && typeof zDeal.Owner === 'object' ? zDeal.Owner.name : zDeal.Owner) ||
+        zDeal.Deal_Owner ||
+        zDeal.Owner_Name ||
+        zDeal.Created_By?.name ||
+        zDeal.Created_By ||
+        'Managing Director'
+      );
+
       return {
         id: String(zDeal.id || `DL-${Math.floor(1000 + Math.random() * 9000)}`),
         client: clientName,
@@ -137,6 +211,10 @@ export const CrmDashboard = () => {
         rawPending: pendAmt,
         status,
         stage,
+        owner: dealOwnerName,
+        hasPartnerBdm,
+        partnerBdmName,
+        partnerBdmAmount,
         date: zDeal.Booking_Date ? new Date(zDeal.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         rawDate: zDeal.Booking_Date || zDeal.Created_Time || new Date().toISOString(),
         zohoId: zDeal.id,

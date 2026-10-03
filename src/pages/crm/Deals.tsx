@@ -1105,37 +1105,91 @@ export const Deals = () => {
         return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
       };
 
-      const totalAmountNum = parseZohoNum(
-        zDeal.Total_deal_amount_inclusive_of_gst !== undefined && zDeal.Total_deal_amount_inclusive_of_gst !== null ? zDeal.Total_deal_amount_inclusive_of_gst :
-        (zDeal.Amount !== undefined && zDeal.Amount !== null ? zDeal.Amount :
-        (zDeal.Deal_Amount !== undefined && zDeal.Deal_Amount !== null ? zDeal.Deal_Amount :
-        (zDeal.Amount_Without_GST !== undefined && zDeal.Amount_Without_GST !== null ? Number(zDeal.Amount_Without_GST) / 0.82 :
-        (zDeal.amount_if_you_have_kindly_put_0 || zDeal.Amount_After_disbursement || 0))))
+      const findFirstPositive = (...vals: any[]): number => {
+        for (const v of vals) {
+          if (v === null || v === undefined) continue;
+          const num = parseZohoNum(v);
+          if (num > 0) return num;
+        }
+        return 0;
+      };
+
+      // Sum Subform_1 service line items if available
+      let subformTotal = 0;
+      let subformWithoutGst = 0;
+      let subformReceived = 0;
+      let subformPending = 0;
+      if (Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0) {
+        zDeal.Subform_1.forEach((sf: any) => {
+          const a = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
+          const bg = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base);
+          const r = parseZohoNum(sf.Received_amount || sf.Received);
+          const p = parseZohoNum(sf.Pending_amount || sf.Pending);
+          subformTotal += a || (bg > 0 ? Number((bg / 0.82).toFixed(2)) : 0);
+          subformWithoutGst += bg || (a > 0 ? Number((a * 0.82).toFixed(2)) : 0);
+          subformReceived += r;
+          subformPending += p;
+        });
+      }
+
+      const totalAmountNum = findFirstPositive(
+        zDeal.Total_deal_amount_inclusive_of_gst,
+        zDeal.Amount,
+        zDeal.Deal_Amount,
+        zDeal.Grand_Total,
+        zDeal.Grand_total,
+        zDeal.GrandTotal,
+        zDeal.Total_amount,
+        zDeal.Total_Amount,
+        zDeal.total_amount,
+        zDeal.Agreement_amount,
+        zDeal.Agreement_Amount,
+        zDeal.Amount_Without_GST ? parseZohoNum(zDeal.Amount_Without_GST) / 0.82 : 0,
+        zDeal.Deal_Amount_Without_GST ? parseZohoNum(zDeal.Deal_Amount_Without_GST) / 0.82 : 0,
+        zDeal.Subtotal ? parseZohoNum(zDeal.Subtotal) * 1.18 : 0,
+        zDeal.Amount_After_disbursement,
+        subformTotal,
+        zDeal.Total_Received_Amount,
+        zDeal.Deal_Received_Amount,
+        zDeal.Received_amount,
+        zDeal.Received,
+        zDeal.amount_if_you_have_kindly_put_0,
+        existingIdx >= 0 ? parseZohoNum(updatedDeals[existingIdx]?.rawAmount || updatedDeals[existingIdx]?.amount || updatedDeals[existingIdx]?.totals?.grandTotal) : 0
       );
 
-      const withoutGstNum = parseZohoNum(
-        zDeal.Amount_Without_GST !== undefined && zDeal.Amount_Without_GST !== null ? zDeal.Amount_Without_GST :
-        (zDeal.Deal_Amount_Without_GST !== undefined && zDeal.Deal_Amount_Without_GST !== null ? zDeal.Deal_Amount_Without_GST :
-        (totalAmountNum > 0 ? Number((totalAmountNum * 0.82).toFixed(2)) : 0))
+      const withoutGstNum = findFirstPositive(
+        zDeal.Amount_Without_GST,
+        zDeal.Deal_Amount_Without_GST,
+        subformWithoutGst,
+        totalAmountNum > 0 ? Number((totalAmountNum * 0.82).toFixed(2)) : 0
       );
 
-      const gstAmountNum = parseZohoNum(
-        zDeal.GST_Amount !== undefined && zDeal.GST_Amount !== null ? zDeal.GST_Amount :
-        (zDeal.Deal_GST_Amount !== undefined && zDeal.Deal_GST_Amount !== null ? zDeal.Deal_GST_Amount :
-        (totalAmountNum > withoutGstNum ? Number((totalAmountNum - withoutGstNum).toFixed(2)) : 0))
+      const gstAmountNum = findFirstPositive(
+        zDeal.GST_Amount,
+        zDeal.Deal_GST_Amount,
+        totalAmountNum > withoutGstNum ? Number((totalAmountNum - withoutGstNum).toFixed(2)) : 0
       );
 
-      const receivedAmountNum = parseZohoNum(
-        zDeal.Total_Received_Amount !== undefined && zDeal.Total_Received_Amount !== null ? zDeal.Total_Received_Amount :
-        (zDeal.Deal_Received_Amount !== undefined && zDeal.Deal_Received_Amount !== null ? zDeal.Deal_Received_Amount :
-        (zDeal.Received_amount || 0))
+      const receivedAmountNum = findFirstPositive(
+        zDeal.Total_Received_Amount,
+        zDeal.Deal_Received_Amount,
+        zDeal.Received_amount,
+        zDeal.Received_Amount,
+        zDeal.Received,
+        zDeal.Amount_After_disbursement,
+        subformReceived,
+        existingIdx >= 0 ? parseZohoNum(updatedDeals[existingIdx]?.rawReceived || updatedDeals[existingIdx]?.received || updatedDeals[existingIdx]?.totals?.receivedAmount) : 0
       );
 
-      const pendingAmountNum = parseZohoNum(
-        zDeal.Total_Pending_Amount !== undefined && zDeal.Total_Pending_Amount !== null ? zDeal.Total_Pending_Amount :
-        (zDeal.Deal_Pending_Amount !== undefined && zDeal.Deal_Pending_Amount !== null ? zDeal.Deal_Pending_Amount :
-        (zDeal.Pending_amount !== undefined && zDeal.Pending_amount !== null ? zDeal.Pending_amount :
-        (totalAmountNum > receivedAmountNum ? totalAmountNum - receivedAmountNum : 0)))
+      const pendingAmountNum = findFirstPositive(
+        zDeal.Total_Pending_Amount,
+        zDeal.Deal_Pending_Amount,
+        zDeal.Pending_amount,
+        zDeal.Pending_Amount,
+        zDeal.Pending,
+        subformPending,
+        totalAmountNum > receivedAmountNum ? Number((totalAmountNum - receivedAmountNum).toFixed(2)) : 0,
+        existingIdx >= 0 ? parseZohoNum(updatedDeals[existingIdx]?.rawPending || updatedDeals[existingIdx]?.pending || updatedDeals[existingIdx]?.totals?.pendingAmount) : 0
       );
 
       // 3. Contact & Tax info
