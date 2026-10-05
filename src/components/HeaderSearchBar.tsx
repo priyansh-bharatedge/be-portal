@@ -367,7 +367,7 @@ export const HeaderSearchBar: React.FC = () => {
   };
 
   return (
-    <div ref={containerRef} className="relative max-w-xs w-full">
+    <div ref={containerRef} className="relative max-w-xs w-full z-[9999]">
       {/* Search Input Bar */}
       <div className="relative flex items-center">
         <Search className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
@@ -385,6 +385,10 @@ export const HeaderSearchBar: React.FC = () => {
           }}
           onKeyDown={handleKeyDown}
           placeholder="Search portal..."
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           className="w-48 sm:w-64 pl-9 pr-7 py-1.5 bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 focus:border-be-orange focus:ring-2 focus:ring-be-orange/20 rounded-full text-xs font-medium text-gray-800 placeholder:text-gray-400 outline-none transition-all shadow-2xs"
         />
         {searchQuery && (
@@ -403,7 +407,7 @@ export const HeaderSearchBar: React.FC = () => {
 
       {/* Floating Live Search Dropdown */}
       {isOpen && searchQuery.trim() && (
-        <div className="absolute left-0 sm:right-0 sm:left-auto top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.25)] border border-gray-200 overflow-hidden z-[9999] animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="p-2 max-h-80 overflow-y-auto space-y-1">
             {results.length === 0 ? (
               <div className="py-6 px-4 text-center">

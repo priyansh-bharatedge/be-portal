@@ -289,7 +289,7 @@ export const AppLayout = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="bg-white h-16 border-b border-gray-100 flex items-center justify-between px-4 sm:px-6 lg:px-8 z-10 shadow-sm">
+        <header className="bg-white h-16 border-b border-gray-100 flex items-center justify-between px-4 sm:px-6 lg:px-8 z-40 shadow-sm relative">
           <div className="flex items-center">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
