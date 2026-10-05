@@ -242,6 +242,15 @@ export const DealDetails = () => {
     (deal.company && deal.company !== 'N/A' ? deal.company : '') ||
     (clientName !== 'Client' ? clientName : 'N/A');
 
+  const employeeName = 
+    (raw.Employee && typeof raw.Employee === 'object' ? raw.Employee.name : (typeof raw.Employee === 'string' && !/^\d+$/.test(raw.Employee) ? raw.Employee : '')) ||
+    deal.employeeName ||
+    raw.employeeName ||
+    raw.salesEmployee ||
+    deal.salesEmployee ||
+    fd.employeeName ||
+    '';
+
   const mobilePhone = 
     raw.Client_contact_detail ||
     raw.Client_contact_detail_cs ||
@@ -718,6 +727,9 @@ export const DealDetails = () => {
             </div>
             <p className="text-xs text-gray-500 mt-1 font-medium">
               Created on {deal.date || 'Recent'} • Managed by <span className="text-gray-700 font-semibold">{deal.owner || 'Admin'}</span>
+              {employeeName && (
+                <> • Employee: <span className="text-be-orange font-bold">{employeeName}</span></>
+              )}
             </p>
           </div>
         </div>
@@ -1793,6 +1805,12 @@ export const DealDetails = () => {
                 <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-400">Category:</span>
                   <span className="font-semibold text-be-orange">{raw.Choose_Wisely}</span>
+                </div>
+              )}
+              {employeeName && (
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-400">Employee (Lookup):</span>
+                  <span className="font-bold text-be-orange bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{employeeName}</span>
                 </div>
               )}
               <div className="flex justify-between py-2 border-b border-gray-100">

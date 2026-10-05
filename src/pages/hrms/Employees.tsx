@@ -351,30 +351,41 @@ export const Employees = () => {
     let autoTeamLeaderId = '';
     let autoTeamLeaderName = '';
 
+    const superAdmin = availableSuperAdmins[0] || employees.find(e => e.systemRole === 'Super Admin') || {
+      id: 'EMP-001',
+      name: 'Managing Director',
+      systemRole: 'Super Admin'
+    };
+    const defaultSuperAdminId = superAdmin.id || 'EMP-001';
+    const defaultSuperAdminName = superAdmin.name ? `${superAdmin.name} (Super Admin)` : 'Managing Director (Super Admin)';
+
     if (role === 'TM') {
       // Find a default TL in same department if available
       const sameDeptTL = availableTeamLeaders.find(tl => tl.dept === formData.dept) || availableTeamLeaders[0];
       if (sameDeptTL) {
         autoTeamLeaderId = sameDeptTL.id;
-        autoTeamLeaderName = `${sameDeptTL.name} (TL)`;
-        autoReportingManagerId = sameDeptTL.reportingManagerId || '';
-        autoReportingManagerName = sameDeptTL.reportingManagerName || '';
+        autoTeamLeaderName = `${sameDeptTL.name} (${sameDeptTL.systemRole || 'TL'})`;
+        // Team Member's Reporting Manager and TL MUST be the EXACT SAME person!
+        autoReportingManagerId = sameDeptTL.id;
+        autoReportingManagerName = `${sameDeptTL.name} (${sameDeptTL.systemRole || 'TL'})`;
       }
     } else if (role === 'TL') {
-      // Find a default HOD in same department if available
-      const sameDeptHOD = availableManagersAndHODs.find(m => m.dept === formData.dept && m.systemRole === 'HOD') || availableManagersAndHODs[0];
-      if (sameDeptHOD) {
-        autoReportingManagerId = sameDeptHOD.id;
-        autoReportingManagerName = `${sameDeptHOD.name} (${sameDeptHOD.systemRole})`;
-      }
+      // By default, TL's reporting manager should be Super Admin / MD
+      autoReportingManagerId = defaultSuperAdminId;
+      autoReportingManagerName = defaultSuperAdminName;
+      autoTeamLeaderId = '';
+      autoTeamLeaderName = '';
     } else if (role === 'HOD' || role === 'HR') {
-      const superAdmin = availableSuperAdmins[0] || employees.find(e => e.systemRole === 'Super Admin') || {
-        id: 'EMP-001',
-        name: 'Managing Director',
-        systemRole: 'Super Admin'
-      };
-      autoReportingManagerId = superAdmin.id || 'EMP-001';
-      autoReportingManagerName = superAdmin.name ? `${superAdmin.name} (Super Admin)` : 'Managing Director (Super Admin)';
+      // By default, HOD/HR's reporting manager should be Super Admin / MD
+      autoReportingManagerId = defaultSuperAdminId;
+      autoReportingManagerName = defaultSuperAdminName;
+      autoTeamLeaderId = '';
+      autoTeamLeaderName = '';
+    } else if (role === 'Super Admin') {
+      autoReportingManagerId = '';
+      autoReportingManagerName = '';
+      autoTeamLeaderId = '';
+      autoTeamLeaderName = '';
     }
 
     setFormData({
@@ -390,13 +401,14 @@ export const Employees = () => {
   const handleTLChange = (tlId: string) => {
     const selectedTL = employees.find(e => e.id === tlId);
     if (selectedTL) {
-      const isTL = selectedTL.systemRole === 'TL';
+      const tlFormattedName = `${selectedTL.name} (${selectedTL.systemRole || 'TL'})`;
       setFormData({
         ...formData,
         teamLeaderId: selectedTL.id,
-        teamLeaderName: `${selectedTL.name} (${selectedTL.systemRole || 'TL'})`,
-        reportingManagerId: selectedTL.reportingManagerId || (selectedTL.systemRole === 'HOD' ? selectedTL.id : 'EMP-001'),
-        reportingManagerName: selectedTL.reportingManagerName || (selectedTL.systemRole === 'HOD' ? `${selectedTL.name} (HOD)` : 'Managing Director (Super Admin)')
+        teamLeaderName: tlFormattedName,
+        // Team Member's Reporting Manager and TL MUST be the EXACT SAME person!
+        reportingManagerId: selectedTL.id,
+        reportingManagerName: tlFormattedName
       });
     } else {
       setFormData({
@@ -418,10 +430,11 @@ export const Employees = () => {
         reportingManagerName: `${selectedMgr.name} (${selectedMgr.systemRole || 'Manager'})`
       });
     } else {
+      const superAdmin = availableSuperAdmins[0] || { id: 'EMP-001', name: 'Managing Director' };
       setFormData({
         ...formData,
-        reportingManagerId: '',
-        reportingManagerName: ''
+        reportingManagerId: superAdmin.id || 'EMP-001',
+        reportingManagerName: superAdmin.name ? `${superAdmin.name} (Super Admin)` : 'Managing Director (Super Admin)'
       });
     }
   };
@@ -491,12 +504,48 @@ export const Employees = () => {
       }
     }
 
-    const finalReportingManagerId = (formData.systemRole === 'HOD' || formData.systemRole === 'HR')
-      ? (formData.reportingManagerId || availableSuperAdmins[0]?.id || 'EMP-001')
-      : formData.reportingManagerId;
-    const finalReportingManagerName = (formData.systemRole === 'HOD' || formData.systemRole === 'HR')
-      ? (formData.reportingManagerName || (availableSuperAdmins[0]?.name ? `${availableSuperAdmins[0].name} (Super Admin)` : 'Managing Director (Super Admin)'))
-      : formData.reportingManagerName;
+    const superAdmin = availableSuperAdmins[0] || employees.find(e => e.systemRole === 'Super Admin') || {
+      id: 'EMP-001',
+      name: 'Managing Director',
+      systemRole: 'Super Admin'
+    };
+    const defaultSuperAdminId = superAdmin.id || 'EMP-001';
+    const defaultSuperAdminName = superAdmin.name ? `${superAdmin.name} (Super Admin)` : 'Managing Director (Super Admin)';
+
+    let finalReportingManagerId = formData.reportingManagerId;
+    let finalReportingManagerName = formData.reportingManagerName;
+    let finalTeamLeaderId = formData.teamLeaderId;
+    let finalTeamLeaderName = formData.teamLeaderName;
+
+    if (formData.systemRole === 'TM') {
+      // For TM: Reporting Manager and TL MUST be the EXACT SAME person!
+      if (finalTeamLeaderId) {
+        finalReportingManagerId = finalTeamLeaderId;
+        finalReportingManagerName = finalTeamLeaderName;
+      } else if (finalReportingManagerId) {
+        finalTeamLeaderId = finalReportingManagerId;
+        finalTeamLeaderName = finalReportingManagerName;
+      }
+    } else if (formData.systemRole === 'TL') {
+      // For TL: By default reports to Super Admin / MD if not explicitly assigned
+      if (!finalReportingManagerId) {
+        finalReportingManagerId = defaultSuperAdminId;
+        finalReportingManagerName = defaultSuperAdminName;
+      }
+      finalTeamLeaderId = '';
+      finalTeamLeaderName = '';
+    } else if (formData.systemRole === 'HOD' || formData.systemRole === 'HR') {
+      // For HOD & HR: By default reports to Super Admin / MD
+      finalReportingManagerId = finalReportingManagerId || defaultSuperAdminId;
+      finalReportingManagerName = finalReportingManagerName || defaultSuperAdminName;
+      finalTeamLeaderId = '';
+      finalTeamLeaderName = '';
+    } else if (formData.systemRole === 'Super Admin') {
+      finalReportingManagerId = '';
+      finalReportingManagerName = '';
+      finalTeamLeaderId = '';
+      finalTeamLeaderName = '';
+    }
 
     const newEmp: EmployeeData = {
       id: finalEmpId,
@@ -507,8 +556,8 @@ export const Employees = () => {
       role: formData.role,
       systemRole: formData.systemRole,
       salaryEntity: formData.salaryEntity || 'BSPL',
-      teamLeaderId: formData.teamLeaderId,
-      teamLeaderName: formData.teamLeaderName,
+      teamLeaderId: finalTeamLeaderId,
+      teamLeaderName: finalTeamLeaderName,
       reportingManagerId: finalReportingManagerId,
       reportingManagerName: finalReportingManagerName,
       joined: formData.doj,
@@ -519,6 +568,8 @@ export const Employees = () => {
         ...formData,
         salaryEntity: formData.salaryEntity || 'BSPL',
         empId: finalEmpId,
+        teamLeaderId: finalTeamLeaderId,
+        teamLeaderName: finalTeamLeaderName,
         reportingManagerId: finalReportingManagerId,
         reportingManagerName: finalReportingManagerName,
         monthlyTarget: formData.monthlyTarget || formData.target || '',
@@ -634,8 +685,37 @@ export const Employees = () => {
   const openEditModal = (employee: EmployeeData) => {
     const sRole = employee.systemRole || (employee.formData?.systemRole) || 'TM';
     const isHodOrHr = sRole === 'HOD' || sRole === 'HR';
-    const defaultRmId = isHodOrHr ? (availableSuperAdmins[0]?.id || 'EMP-001') : '';
-    const defaultRmName = isHodOrHr ? (availableSuperAdmins[0]?.name ? `${availableSuperAdmins[0].name} (Super Admin)` : 'Managing Director (Super Admin)') : '';
+    const isTL = sRole === 'TL';
+    const defaultSuperAdminId = availableSuperAdmins[0]?.id || 'EMP-001';
+    const defaultSuperAdminName = availableSuperAdmins[0]?.name ? `${availableSuperAdmins[0].name} (Super Admin)` : 'Managing Director (Super Admin)';
+
+    let resolvedTlId = employee.teamLeaderId || (employee.formData?.teamLeaderId) || '';
+    let resolvedTlName = employee.teamLeaderName || (employee.formData?.teamLeaderName) || '';
+    let resolvedRmId = employee.reportingManagerId || (employee.formData?.reportingManagerId) || '';
+    let resolvedRmName = employee.reportingManagerName || (employee.formData?.reportingManagerName) || '';
+
+    if (sRole === 'TM') {
+      // For TM: TL and RM must be the exact same person
+      if (resolvedTlId) {
+        resolvedRmId = resolvedTlId;
+        resolvedRmName = resolvedTlName;
+      } else if (resolvedRmId) {
+        resolvedTlId = resolvedRmId;
+        resolvedTlName = resolvedRmName;
+      }
+    } else if (isTL || isHodOrHr) {
+      if (!resolvedRmId) {
+        resolvedRmId = defaultSuperAdminId;
+        resolvedRmName = defaultSuperAdminName;
+      }
+      resolvedTlId = '';
+      resolvedTlName = '';
+    } else if (sRole === 'Super Admin') {
+      resolvedTlId = '';
+      resolvedTlName = '';
+      resolvedRmId = '';
+      resolvedRmName = '';
+    }
 
     const nameParts = (employee.name || '').trim().split(/\s+/);
     const fallbackFirst = nameParts[0] || '';
@@ -656,10 +736,10 @@ export const Employees = () => {
       role: employee.role || employee.formData?.role || '',
       systemRole: sRole,
       salaryEntity: (employee.salaryEntity || employee.formData?.salaryEntity || 'BSPL') as string,
-      teamLeaderId: employee.teamLeaderId || (employee.formData?.teamLeaderId) || '',
-      teamLeaderName: employee.teamLeaderName || (employee.formData?.teamLeaderName) || '',
-      reportingManagerId: employee.reportingManagerId || (employee.formData?.reportingManagerId) || defaultRmId,
-      reportingManagerName: employee.reportingManagerName || (employee.formData?.reportingManagerName) || defaultRmName,
+      teamLeaderId: resolvedTlId,
+      teamLeaderName: resolvedTlName,
+      reportingManagerId: resolvedRmId,
+      reportingManagerName: resolvedRmName,
       monthlyTarget: employee.monthlyTarget || employee.formData?.monthlyTarget || employee.target || employee.formData?.target || '',
       target: employee.target || employee.formData?.target || employee.monthlyTarget || employee.formData?.monthlyTarget || '',
       doj: employee.joined || employee.formData?.doj || new Date().toISOString().split('T')[0],
@@ -928,7 +1008,17 @@ export const Employees = () => {
           {can('create_employee') ? (
             <button
               onClick={() => {
-                setFormData(initialFormData);
+                const sameDeptTL = availableTeamLeaders.find(tl => tl.dept === 'Sales') || availableTeamLeaders[0];
+                const initialTlId = sameDeptTL ? sameDeptTL.id : '';
+                const initialTlName = sameDeptTL ? `${sameDeptTL.name} (${sameDeptTL.systemRole || 'TL'})` : '';
+                setFormData({
+                  ...initialFormData,
+                  systemRole: 'TM',
+                  teamLeaderId: initialTlId,
+                  teamLeaderName: initialTlName,
+                  reportingManagerId: initialTlId,
+                  reportingManagerName: initialTlName
+                });
                 setSalaryDocumentName('');
                 setSalaryDocumentFile(null);
                 setCurrentStep(1);
@@ -1111,11 +1201,10 @@ export const Employees = () => {
                     <td className="px-6 py-4 border-t border-b border-gray-100 group-hover:border-orange-100">
                       {sRole === 'TM' && (
                         <div>
-                          {emp.teamLeaderName ? (
+                          {emp.teamLeaderName || emp.reportingManagerName ? (
                             <span className="text-xs font-semibold text-amber-700 flex items-center">
                               <ArrowRight size={12} className="mr-1 text-amber-500" />
-                              {emp.teamLeaderName.includes('(HOD)') || emp.teamLeaderName.includes('HOD') ? 'Admin (HOD): ' : 'TL: '}
-                              {emp.teamLeaderName}
+                              TL & RM: {emp.teamLeaderName || emp.reportingManagerName}
                             </span>
                           ) : (
                             <span className="text-xs font-semibold text-gray-400 flex items-center">
@@ -1123,37 +1212,20 @@ export const Employees = () => {
                               TL: Not Assigned
                             </span>
                           )}
-                          {emp.reportingManagerName && !emp.teamLeaderName?.includes(emp.reportingManagerName) && (
-                            <span className="text-[11px] text-gray-400 block ml-4">
-                              {emp.reportingManagerName.includes('Super Admin') ? 'Super Admin: ' : 'Admin (HOD): '}
-                              {emp.reportingManagerName}
-                            </span>
-                          )}
+                          <span className="text-[11px] text-gray-400 block ml-4">
+                            Reports to: Super Admin / MD
+                          </span>
                         </div>
                       )}
                       {sRole === 'TL' && (
                         <div>
-                          {emp.reportingManagerName && emp.reportingManagerName.includes('Super Admin') ? (
-                            <div>
-                              <span className="text-xs font-semibold text-purple-700 flex items-center">
-                                <ArrowRight size={12} className="mr-1 text-purple-500" />
-                                Super Admin: {emp.reportingManagerName}
-                              </span>
-                              <span className="text-[11px] text-gray-400 block ml-4">
-                                Direct report to Super Admin
-                              </span>
-                            </div>
-                          ) : (
-                            <div>
-                              <span className="text-xs font-semibold text-blue-700 flex items-center">
-                                <ArrowRight size={12} className="mr-1 text-blue-500" />
-                                Admin (HOD): {emp.reportingManagerName || 'Mishal (HOD)'}
-                              </span>
-                              <span className="text-[11px] text-gray-400 block ml-4">
-                                Reports to: Super Admin
-                              </span>
-                            </div>
-                          )}
+                          <span className="text-xs font-semibold text-purple-700 flex items-center">
+                            <ArrowRight size={12} className="mr-1 text-purple-500" />
+                            Super Admin: {emp.reportingManagerName || 'Managing Director (Super Admin)'}
+                          </span>
+                          <span className="text-[11px] text-gray-400 block ml-4">
+                            Direct report to Super Admin
+                          </span>
                         </div>
                       )}
                       {sRole === 'HOD' && (
@@ -1638,15 +1710,15 @@ export const Employees = () => {
                               </select>
                             </div>
 
-                            {/* Shows who the TL reports to */}
+                            {/* Shows who the TL / RM is (Same person for TM) */}
                             <div>
                               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                                {formData.reportingManagerName?.includes('Super Admin') ? 'Reporting Manager (Super Admin)' : 'Reporting Manager / HOD'} (Auto-linked via TL)
+                                Reporting Manager (Same as Team Leader)
                               </label>
                               <input
                                 type="text"
                                 readOnly
-                                value={formData.reportingManagerName || 'Auto-resolved from Team Leader'}
+                                value={formData.teamLeaderName || formData.reportingManagerName || 'Auto-assigned to Selected Team Leader'}
                                 className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 outline-none cursor-not-allowed"
                               />
                             </div>
@@ -1660,24 +1732,12 @@ export const Employees = () => {
                             </span>
                             <span className="text-gray-400">➔</span>
                             <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold">
-                              TL: {formData.teamLeaderName || 'Selected TL'}
+                              TL & RM: {formData.teamLeaderName || 'Selected TL'}
                             </span>
                             <span className="text-gray-400">➔</span>
-                            {formData.reportingManagerName?.includes('Super Admin') ? (
-                              <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-bold">
-                                Super Admin: {formData.reportingManagerName}
-                              </span>
-                            ) : (
-                              <>
-                                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold">
-                                  Admin (HOD): {formData.reportingManagerName || 'HOD'}
-                                </span>
-                                <span className="text-gray-400">➔</span>
-                                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-bold">
-                                  Super Admin
-                                </span>
-                              </>
-                            )}
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-bold">
+                              Super Admin / MD
+                            </span>
                           </div>
                         </motion.div>
                       )}

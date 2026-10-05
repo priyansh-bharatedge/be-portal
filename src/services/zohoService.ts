@@ -1462,6 +1462,21 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     ? (servicesSubform.length === 1 ? servicesSubform[0].name : `${servicesSubform.length} Services`) 
     : (rawZoho.Choose_Wisely || rawZoho.Service_Name || (rawZoho.Deal_Name && rawZoho.Deal_Name.includes(' - ') ? rawZoho.Deal_Name.split(' - ').slice(1).join(' - ').trim() : (existingDeal?.service || 'Services')));
 
+  const employeeName = 
+    (rawZoho.Employee && typeof rawZoho.Employee === 'object' ? rawZoho.Employee.name : (typeof rawZoho.Employee === 'string' && !/^\d+$/.test(rawZoho.Employee) ? rawZoho.Employee : '')) ||
+    rawZoho.employeeName ||
+    rawZoho.salesEmployee ||
+    rawZoho.Created_By_Employee ||
+    existingDeal?.employeeName ||
+    existingDeal?.salesEmployee ||
+    '';
+
+  const employeeZohoId = 
+    (rawZoho.Employee && typeof rawZoho.Employee === 'object' ? rawZoho.Employee.id : (typeof rawZoho.Employee === 'string' && /^\d+$/.test(rawZoho.Employee) ? rawZoho.Employee : null)) ||
+    rawZoho.employeeZohoId ||
+    existingDeal?.employeeZohoId ||
+    '';
+
   const resolvedId = existingDeal?.id || (rawZoho.id ? String(rawZoho.id) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
 
   return {
@@ -1471,6 +1486,10 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     client: resolvedClient,
     company: resolvedCompany,
     service: serviceTitle,
+    employeeName,
+    employeeZohoId,
+    salesEmployee: employeeName || existingDeal?.salesEmployee || '',
+    Employee: rawZoho.Employee || (employeeZohoId ? { id: employeeZohoId, name: employeeName } : undefined),
     amount: formatRupee(totalNum),
     received: formatRupee(recNum),
     pending: formatRupee(pendNum),
@@ -1500,6 +1519,9 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       gstNumber: gst,
       panCard: panVal,
       aadhaarCard: aadhVal,
+      employeeName,
+      employeeZohoId,
+      salesEmployee: employeeName || existingDeal?.salesEmployee || '',
       billingAddress: rawZoho.Billing_address || rawZoho.Company_address || existingDeal?.formData?.billingAddress || '',
       city: rawZoho.City || existingDeal?.formData?.city || '',
       state: rawZoho.State || existingDeal?.formData?.state || '',

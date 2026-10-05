@@ -1026,6 +1026,11 @@ export const Deals = () => {
         status: existingDeal?.status || 'New',
         stage: existingDeal?.stage || 'Sales',
         owner: existingDeal?.owner || currentUser?.name || 'Admin',
+        employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
+        employeeName: existingDeal?.employeeName || currentUser?.name,
+        employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
+        empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
+        salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
         date: existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         source: existingDeal?.source || 'Manual',
         // Partner BDM split details
@@ -1042,6 +1047,11 @@ export const Deals = () => {
           ...formData,
           companyZohoId,
           clientZohoId,
+          employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
+          employeeName: existingDeal?.employeeName || currentUser?.name,
+          employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
+          empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
+          salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
           hasPartnerBdm,
           has_partner_bdm: hasPartnerBdm,
           partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
@@ -1290,6 +1300,11 @@ export const Deals = () => {
         ...deal,
         companyZohoId: companyZohoId || deal.companyZohoId,
         clientZohoId: clientZohoId || deal.clientZohoId,
+        employeeZohoId: deal.employeeZohoId || deal.formData?.employeeZohoId || currentUser?.zohoId,
+        employeeName: deal.employeeName || deal.formData?.employeeName || deal.salesEmployee || deal.owner || currentUser?.name,
+        employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
+        empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
+        salesEmployee: deal.salesEmployee || deal.employeeName || currentUser?.name,
       };
 
       const zohoRes = await saveOrUpdateZohoDeal(dealWithLookups);

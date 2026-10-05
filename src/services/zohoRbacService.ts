@@ -270,6 +270,24 @@ export function injectEmployeeLookup(
     }
   }
 
+  if (user) {
+    if (!updatedPayload.employeeEmail) {
+      updatedPayload.employeeEmail = user.email || user.workEmail || user.personalEmail || '';
+    }
+    if (!updatedPayload.userEmail) {
+      updatedPayload.userEmail = user.email || user.workEmail || '';
+    }
+    if (!updatedPayload.employeeName) {
+      updatedPayload.employeeName = employeeName || user.name;
+    }
+    if (!updatedPayload.empName) {
+      updatedPayload.empName = employeeName || user.name;
+    }
+    if (!updatedPayload.salesEmployee) {
+      updatedPayload.salesEmployee = employeeName || user.name;
+    }
+  }
+
   // 3. Populate secondary lookup / owner fields for complete cross-module layout compatibility
   if (config?.secondaryLookupFields && user) {
     config.secondaryLookupFields.forEach(field => {

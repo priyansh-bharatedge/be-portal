@@ -384,16 +384,8 @@ export const EmployeeDetails = () => {
                 {sRole === 'TM' && (
                   <>
                     <ArrowRight size={16} className="text-gray-400 shrink-0" />
-                    {!employee.reportingManagerName?.includes('Super Admin') && employee.reportingManagerName && (
-                      <>
-                        <div className="px-3.5 py-2 rounded-xl flex items-center border bg-blue-50 text-blue-800 border-blue-200">
-                          🏢 Admin (HOD): {employee.reportingManagerName}
-                        </div>
-                        <ArrowRight size={16} className="text-gray-400 shrink-0" />
-                      </>
-                    )}
                     <div className="px-3.5 py-2 rounded-xl flex items-center border bg-amber-50 text-amber-800 border-amber-200">
-                      👔 TL: {employee.teamLeaderName || 'Team Leader'}
+                      👔 TL & RM: {employee.teamLeaderName || employee.reportingManagerName || 'Team Leader'}
                     </div>
                     <ArrowRight size={16} className="text-gray-400 shrink-0" />
                     <div className="px-3.5 py-2 rounded-xl flex items-center border bg-emerald-600 text-white ring-2 ring-emerald-300 shadow-md">
@@ -414,14 +406,24 @@ export const EmployeeDetails = () => {
 
               <div className="p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Assigned Team Leader (TL)</div>
-                <div className="text-base font-bold text-amber-800">{employee.teamLeaderName || (sRole === 'TL' ? 'Self (Team Leader)' : 'Not Assigned')}</div>
-                <div className="text-xs text-gray-400 mt-1">Direct supervisor for daily assignments & leaves</div>
+                <div className="text-base font-bold text-amber-800">
+                  {sRole === 'TL' ? 'Self (Team Leader)' : (employee.teamLeaderName || employee.reportingManagerName || 'Not Assigned')}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {sRole === 'TM' ? 'Direct supervisor and Reporting Manager' : 'Team Leadership Authority'}
+                </div>
               </div>
 
               <div className="p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Reporting Manager</div>
-                <div className="text-base font-bold text-purple-800">{employee.reportingManagerName || 'Managing Director (Super Admin)'}</div>
-                <div className="text-xs text-gray-400 mt-1">Higher approval & organizational authority</div>
+                <div className="text-base font-bold text-purple-800">
+                  {sRole === 'TM'
+                    ? (employee.teamLeaderName || employee.reportingManagerName || 'Assigned Team Leader')
+                    : (employee.reportingManagerName || 'Managing Director (Super Admin)')}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {sRole === 'TM' ? 'Same as assigned Team Leader' : 'Direct report to Super Admin / MD'}
+                </div>
               </div>
 
               <div className="p-4 bg-white rounded-xl border border-amber-200 shadow-sm bg-gradient-to-br from-white to-amber-50/40 flex flex-col justify-between">

@@ -244,7 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      // 1. Query live Zoho CRM "Employee" module
+      // 1. Query live Zoho CRM "Employee" module & Zoho Users
       const zohoRes = await searchZohoEmployeeByEmail(cleanEmail);
       if (zohoRes.success && zohoRes.exists && zohoRes.employee) {
         return {
@@ -253,60 +253,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           hasPassword: zohoRes.hasPassword,
           employee: zohoRes.employee
         };
-      } else if (zohoRes.success && zohoRes.exists === false) {
-        // Fallback check in local employee cache / DEMO_USERS (for offline / dev demo testing)
-        const savedEmps = localStorage.getItem('be_employees');
-        const emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
-        const localMatch = emps.find((e: any) => 
-          e.email?.trim().toLowerCase() === cleanEmail ||
-          e.formData?.email?.trim().toLowerCase() === cleanEmail ||
-          e.formData?.workEmail?.trim().toLowerCase() === cleanEmail ||
-          e.id?.toString().trim().toLowerCase() === cleanEmail
-        );
-        const demoMatch = DEMO_USERS.find((u: any) => 
-          u.email?.trim().toLowerCase() === cleanEmail ||
-          (cleanEmail === 'superadmin' && u.role === 'Super Admin')
-        );
+      }
 
-        const matchedUser = localMatch || demoMatch;
-        if (matchedUser) {
-          const rawPass = matchedUser.password || matchedUser.formData?.password || (matchedUser.role === 'Super Admin' ? 'beportaladmin2026' : '');
-          const hasPassword = Boolean(rawPass && String(rawPass).trim().length > 0);
-          return {
-            success: true,
-            exists: true,
-            hasPassword,
-            employee: {
-              id: matchedUser.id || matchedUser.empId,
-              zohoId: matchedUser.zohoId || '',
-              name: matchedUser.name,
-              email: matchedUser.email || matchedUser.workEmail,
-              password: rawPass || '',
-              hasPassword,
-              role: matchedUser.role || matchedUser.systemRole || 'TM',
-              department: matchedUser.department || matchedUser.dept || 'General',
-              designation: matchedUser.designation || matchedUser.role || 'Employee'
-            }
-          };
+      // 2. Secondary live fallback: query all live Zoho CRM employees
+      try {
+        const liveRes = await fetchZohoEmployees();
+        if (liveRes.success && Array.isArray(liveRes.data) && liveRes.data.length > 0) {
+          const matched = liveRes.data.find((z: any) => {
+            const zId = (z.Employment_ID || String(z.id || '')).trim().toLowerCase();
+            const zEmail = (z.Email || '').trim().toLowerCase();
+            const zPersonalEmail = (z.Personal_Email_Address || '').trim().toLowerCase();
+            const zName = (z.Name || '').trim().toLowerCase();
+            return zId === cleanEmail || zEmail === cleanEmail || zPersonalEmail === cleanEmail || zName === cleanEmail || (cleanEmail.includes('@') && zEmail && zEmail.split('@')[0] === cleanEmail.split('@')[0]);
+          });
+          if (matched) {
+            const rawPass = matched.Password || '';
+            const hasPass = Boolean(rawPass && String(rawPass).trim().length > 0);
+            return {
+              success: true,
+              exists: true,
+              hasPassword: hasPass,
+              employee: {
+                id: matched.Employment_ID || matched.id,
+                zohoId: String(matched.id || ''),
+                name: [matched.Name, matched.Middle_Name, matched.Last_Name].filter(Boolean).join(' ') || matched.Name,
+                email: matched.Email || matched.Personal_Email_Address || cleanEmail,
+                personalEmail: matched.Personal_Email_Address || matched.Email,
+                workEmail: matched.Email || matched.Personal_Email_Address,
+                mobile: matched.Contact_Number || matched.mobile || '',
+                password: rawPass,
+                hasPassword: hasPass,
+                role: matched.System_Role || 'TM',
+                department: matched.Department || 'Operations',
+                designation: matched.Designation_Job_Title || 'Employee',
+                teamLeaderName: matched.Who_is_the_Team_Leader_TL || '',
+                reportingManagerName: matched.Reporting_Manager || '',
+              }
+            };
+          }
         }
-
-        return {
-          success: true,
-          exists: false,
-          error: 'Email Does Not Exist'
-        };
+      } catch (liveErr) {
+        console.warn('[AuthContext] Live fetch employees fallback error:', liveErr);
       }
     } catch (err: any) {
       console.warn('[AuthContext] Exception querying Zoho employee:', err);
     }
 
-    // Secondary Fallback: Check local storage / demo users
+    // Tertiary Fallback: Check local storage / demo users
     const savedEmps = localStorage.getItem('be_employees');
     const emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
     const localMatch = emps.find((e: any) => 
       e.email?.trim().toLowerCase() === cleanEmail ||
       e.formData?.email?.trim().toLowerCase() === cleanEmail ||
-      e.formData?.workEmail?.trim().toLowerCase() === cleanEmail
+      e.formData?.workEmail?.trim().toLowerCase() === cleanEmail ||
+      e.id?.toString().trim().toLowerCase() === cleanEmail
     );
     const demoMatch = DEMO_USERS.find((u: any) => 
       u.email?.trim().toLowerCase() === cleanEmail ||
@@ -325,12 +325,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: matchedUser.id || matchedUser.empId,
           zohoId: matchedUser.zohoId || '',
           name: matchedUser.name,
-          email: matchedUser.email,
+          email: matchedUser.email || matchedUser.workEmail,
+          personalEmail: matchedUser.formData?.email || matchedUser.email,
+          workEmail: matchedUser.formData?.workEmail || matchedUser.email,
           password: rawPass || '',
           hasPassword,
-          role: matchedUser.role || 'TM',
-          department: matchedUser.department || 'General',
-          designation: matchedUser.designation || 'Employee'
+          role: matchedUser.role || matchedUser.systemRole || 'TM',
+          department: matchedUser.department || matchedUser.dept || 'General',
+          designation: matchedUser.designation || matchedUser.role || 'Employee',
+          teamLeaderName: matchedUser.teamLeaderName || '',
+          reportingManagerName: matchedUser.reportingManagerName || '',
         }
       };
     }
