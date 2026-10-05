@@ -30,7 +30,7 @@ interface DealService {
 
 export const Deals = () => {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, filterRecords } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
@@ -50,6 +50,10 @@ export const Deals = () => {
     } catch (e) { }
     return [];
   });
+
+  const rbacDeals = useMemo(() => {
+    return filterRecords ? filterRecords(deals, 'Deals') : deals;
+  }, [deals, filterRecords, currentUser]);
 
   const parseZohoNum = (val: any): number => {
     if (val === null || val === undefined || val === '') return 0;
@@ -850,168 +854,182 @@ export const Deals = () => {
     return 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
+  const safeSaveDealsToStorage = (dealsList: any[]) => {
+    // 1. Save complete 10,000+ dataset to IndexedDB
+    saveAllDealsToIndexedDB(dealsList).catch(err => console.warn('IndexedDB save warning:', err));
+
+    // 2. Save 2,000 deals to localStorage as sync cache fallback
+    try {
+      const trimmed = dealsList.slice(0, 2000);
+      localStorage.setItem('be_deals', JSON.stringify(trimmed));
+    } catch (err) {
+      try {
+        const trimmed = dealsList.slice(0, 500);
+        localStorage.setItem('be_deals', JSON.stringify(trimmed));
+      } catch (e) {
+        console.warn('LocalStorage unavailable for caching deals:', e);
+      }
+    }
+  };
+
   const handleCreateDeal = async () => {
     setIsSubmitting(true);
-    const dealId = editingDealId || `DL-${Math.floor(1000 + Math.random() * 9000)}`;
-    const isEditing = Boolean(editingDealId);
-    const existingDeal = deals.find((d: any) => d.id === editingDealId);
+    try {
+      const dealId = editingDealId || `DL-${Math.floor(1000 + Math.random() * 9000)}`;
+      const isEditing = Boolean(editingDealId);
+      const existingDeal = deals.find((d: any) => d.id === editingDealId);
 
-    // 1. Save actual files to IndexedDB
-    const docsToSave: any[] = existingDeal?.documentsData ? [...existingDeal.documentsData] : [];
+      // 1. Save actual files to IndexedDB
+      const docsToSave: any[] = existingDeal?.documentsData ? [...existingDeal.documentsData] : [];
 
-    if (paymentScreenshotFile) {
-      const docId = `${dealId || 'ID'}_payment_${paymentScreenshotFile.name}`;
-      try {
-        await saveDocument(docId, paymentScreenshotFile);
-      } catch (e) {
-        console.error('Failed to save payment screenshot', e);
-      }
-    }
-    for (const d of documents) {
-      const docId = `${dealId}_${d.name}`;
-      try {
-        await saveDocument(docId, d);
-        docsToSave.push({ id: docId, name: d.name, size: d.size, type: d.type });
-      } catch (e) {
-        console.error('Failed to save document to IndexedDB', e);
-        docsToSave.push({ id: docId, name: d.name, size: d.size, type: d.type });
-      }
-    }
-
-    // 2. Automatically Create/Sync Company in local CRM and Zoho CRM
-    let companyZohoId: string | undefined = existingDeal?.companyZohoId;
-    let companySavedLocally: any = null;
-
-    if (formData.companyName && formData.companyName.trim()) {
-      try {
-        const rawCompanies = localStorage.getItem('be_companies');
-        const existingCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
-        const existingComp = existingCompanies.find((c: any) => c.name?.toLowerCase() === formData.companyName.trim().toLowerCase());
-
-        companySavedLocally = {
-          id: existingComp?.id || `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: formData.companyName.trim(),
-          type: formData.businessType || existingComp?.type || 'Private Limited',
-          gstNumber: formData.gstNumber ? formData.gstNumber.toUpperCase() : (existingComp?.gstNumber || ''),
-          doi: formData.doi || existingComp?.doi || '',
-          email: formData.email || existingComp?.email || '',
-          status: 'Active',
-          source: existingComp?.source || 'From Deals',
-          addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          zohoId: existingComp?.zohoId,
-          zohoStatus: existingComp?.zohoStatus || 'pending'
-        };
-
-        // Sync to Zoho CRM if not synced yet
-        if (!companySavedLocally.zohoId) {
-          try {
-            const compZohoRes = await saveOrUpdateZohoCompany(companySavedLocally);
-            if (compZohoRes.success && compZohoRes.zohoId) {
-              companySavedLocally.zohoId = compZohoRes.zohoId;
-              companySavedLocally.zohoStatus = 'synced';
-              companySavedLocally.zohoSyncedAt = new Date().toISOString();
-            }
-          } catch (cErr) {
-            console.warn('[Zoho CRM] Company sync during deal creation failed:', cErr);
-          }
+      if (paymentScreenshotFile) {
+        const docId = `${dealId || 'ID'}_payment_${paymentScreenshotFile.name}`;
+        try {
+          await saveDocument(docId, paymentScreenshotFile);
+        } catch (e) {
+          console.error('Failed to save payment screenshot', e);
         }
-
-        companyZohoId = companySavedLocally.zohoId;
-
-        // Save to be_companies in localStorage
-        const updatedCompaniesList = existingComp 
-          ? existingCompanies.map((c: any) => c.id === existingComp.id ? { ...c, ...companySavedLocally } : c)
-          : [companySavedLocally, ...existingCompanies];
-        localStorage.setItem('be_companies', JSON.stringify(updatedCompaniesList));
-      } catch (compErr) {
-        console.warn('Auto-saving company failed:', compErr);
       }
-    }
-
-    // 3. Automatically Create/Sync Client in local CRM and Zoho CRM
-    let clientZohoId: string | undefined = existingDeal?.clientZohoId;
-    let clientSavedLocally: any = null;
-
-    if (formData.clientName && formData.clientName.trim()) {
-      try {
-        const rawClients = localStorage.getItem('be_clients');
-        const existingClients = rawClients ? JSON.parse(rawClients) : [];
-        const existingClient = existingClients.find((cl: any) => 
-          (cl.email && formData.email && (cl.email ?? '').toLowerCase() === (formData.email ?? '').trim().toLowerCase()) ||
-          (cl.phone && formData.mobile && cl.phone === formData.mobile.replace(/[^0-9]/g, '')) ||
-          (cl.name?.toLowerCase() === formData.clientName.trim().toLowerCase())
-        );
-
-        clientSavedLocally = {
-          id: existingClient?.id || `CL-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: formData.clientName.trim(),
-          company: formData.companyName ? formData.companyName.trim() : (existingClient?.company || 'Individual'),
-          email: formData.email ? (formData.email ?? '').trim() : (existingClient?.email || ''),
-          phone: formData.mobile ? formData.mobile.replace(/[^0-9]/g, '') : (existingClient?.phone || ''),
-          status: 'Active',
-          source: existingClient?.source || 'From Deals',
-          addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          zohoId: existingClient?.zohoId,
-          zohoStatus: existingClient?.zohoStatus || 'pending'
-        };
-
-        // Sync to Zoho CRM if not synced yet
-        if (!clientSavedLocally.zohoId) {
-          try {
-            const clientZohoRes = await saveOrUpdateZohoClient(clientSavedLocally);
-            if (clientZohoRes.success && clientZohoRes.zohoId) {
-              clientSavedLocally.zohoId = clientZohoRes.zohoId;
-              clientSavedLocally.zohoStatus = 'synced';
-              clientSavedLocally.zohoSyncedAt = new Date().toISOString();
-            }
-          } catch (clErr) {
-            console.warn('[Zoho CRM] Client sync during deal creation failed:', clErr);
-          }
+      for (const d of documents) {
+        const docId = `${dealId}_${d.name}`;
+        try {
+          await saveDocument(docId, d);
+          docsToSave.push({ id: docId, name: d.name, size: d.size, type: d.type });
+        } catch (e) {
+          console.error('Failed to save document to IndexedDB', e);
+          docsToSave.push({ id: docId, name: d.name, size: d.size, type: d.type });
         }
-
-        clientZohoId = clientSavedLocally.zohoId;
-
-        // Save to be_clients in localStorage
-        const updatedClientsList = existingClient
-          ? existingClients.map((cl: any) => cl.id === existingClient.id ? { ...cl, ...clientSavedLocally } : cl)
-          : [clientSavedLocally, ...existingClients];
-        localStorage.setItem('be_clients', JSON.stringify(updatedClientsList));
-      } catch (clErr) {
-        console.warn('Auto-saving client failed:', clErr);
       }
-    }
 
-    // 4. Build Deal Object with Linked Company, Client, and Partner BDM details
-    const dealData: any = {
-      id: dealId,
-      client: formData.clientName,
-      company: formData.companyName,
-      companyZohoId: companyZohoId,
-      clientZohoId: clientZohoId,
-      service: dealServices.length === 1 ? dealServices[0].name : dealServices.length > 1 ? `${dealServices.length} Services` : 'Custom Services',
-      amount: `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
-      received: `₹${(Number(amountReceived) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
-      pending: `₹${pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
-      status: existingDeal?.status || 'New',
-      stage: existingDeal?.stage || 'Sales',
-      owner: existingDeal?.owner || currentUser?.name || 'Admin',
-      date: existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      source: existingDeal?.source || 'Manual',
-      // Partner BDM split details
-      hasPartnerBdm: hasPartnerBdm,
-      has_partner_bdm: hasPartnerBdm,
-      partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
-      partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
-      partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
-      partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
-      partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
-      partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
-      // Full details
-      formData: {
-        ...formData,
-        companyZohoId,
-        clientZohoId,
-        hasPartnerBdm,
+      // 2. Automatically Create/Sync Company in local CRM and Zoho CRM
+      let companyZohoId: string | undefined = existingDeal?.companyZohoId;
+      let companySavedLocally: any = null;
+
+      if (formData.companyName && formData.companyName.trim()) {
+        try {
+          const rawCompanies = localStorage.getItem('be_companies');
+          const existingCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
+          const existingComp = existingCompanies.find((c: any) => c.name?.toLowerCase() === formData.companyName.trim().toLowerCase());
+
+          companySavedLocally = {
+            id: existingComp?.id || `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
+            name: formData.companyName.trim(),
+            type: formData.businessType || existingComp?.type || 'Private Limited',
+            gstNumber: formData.gstNumber ? formData.gstNumber.toUpperCase() : (existingComp?.gstNumber || ''),
+            doi: formData.doi || existingComp?.doi || '',
+            email: formData.email || existingComp?.email || '',
+            status: 'Active',
+            source: existingComp?.source || 'From Deals',
+            addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+            zohoId: existingComp?.zohoId,
+            zohoStatus: existingComp?.zohoStatus || 'pending'
+          };
+
+          // Sync to Zoho CRM if not synced yet
+          if (!companySavedLocally.zohoId) {
+            try {
+              const compZohoRes = await saveOrUpdateZohoCompany(companySavedLocally);
+              if (compZohoRes.success && compZohoRes.zohoId) {
+                companySavedLocally.zohoId = compZohoRes.zohoId;
+                companySavedLocally.zohoStatus = 'synced';
+                companySavedLocally.zohoSyncedAt = new Date().toISOString();
+              }
+            } catch (cErr) {
+              console.warn('[Zoho CRM] Company sync during deal creation failed:', cErr);
+            }
+          }
+
+          companyZohoId = companySavedLocally.zohoId;
+
+          // Save to be_companies in localStorage safely
+          const updatedCompaniesList = existingComp 
+            ? existingCompanies.map((c: any) => c.id === existingComp.id ? { ...c, ...companySavedLocally } : c)
+            : [companySavedLocally, ...existingCompanies];
+          try {
+            localStorage.setItem('be_companies', JSON.stringify(updatedCompaniesList));
+          } catch (e) {
+            console.warn('LocalStorage save error for companies:', e);
+          }
+        } catch (compErr) {
+          console.warn('Auto-saving company failed:', compErr);
+        }
+      }
+
+      // 3. Automatically Create/Sync Client in local CRM and Zoho CRM
+      let clientZohoId: string | undefined = existingDeal?.clientZohoId;
+      let clientSavedLocally: any = null;
+
+      if (formData.clientName && formData.clientName.trim()) {
+        try {
+          const rawClients = localStorage.getItem('be_clients');
+          const existingClients = rawClients ? JSON.parse(rawClients) : [];
+          const existingClient = existingClients.find((cl: any) => 
+            (cl.email && formData.email && (cl.email ?? '').toLowerCase() === (formData.email ?? '').trim().toLowerCase()) ||
+            (cl.phone && formData.mobile && cl.phone === formData.mobile.replace(/[^0-9]/g, '')) ||
+            (cl.name?.toLowerCase() === formData.clientName.trim().toLowerCase())
+          );
+
+          clientSavedLocally = {
+            id: existingClient?.id || `CL-${Math.floor(1000 + Math.random() * 9000)}`,
+            name: formData.clientName.trim(),
+            company: formData.companyName ? formData.companyName.trim() : (existingClient?.company || 'Individual'),
+            email: formData.email ? (formData.email ?? '').trim() : (existingClient?.email || ''),
+            phone: formData.mobile ? formData.mobile.replace(/[^0-9]/g, '') : (existingClient?.phone || ''),
+            status: 'Active',
+            source: existingClient?.source || 'From Deals',
+            addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+            zohoId: existingClient?.zohoId,
+            zohoStatus: existingClient?.zohoStatus || 'pending'
+          };
+
+          // Sync to Zoho CRM if not synced yet
+          if (!clientSavedLocally.zohoId) {
+            try {
+              const clientZohoRes = await saveOrUpdateZohoClient(clientSavedLocally);
+              if (clientZohoRes.success && clientZohoRes.zohoId) {
+                clientSavedLocally.zohoId = clientZohoRes.zohoId;
+                clientSavedLocally.zohoStatus = 'synced';
+                clientSavedLocally.zohoSyncedAt = new Date().toISOString();
+              }
+            } catch (clErr) {
+              console.warn('[Zoho CRM] Client sync during deal creation failed:', clErr);
+            }
+          }
+
+          clientZohoId = clientSavedLocally.zohoId;
+
+          // Save to be_clients in localStorage safely
+          const updatedClientsList = existingClient
+            ? existingClients.map((cl: any) => cl.id === existingClient.id ? { ...cl, ...clientSavedLocally } : cl)
+            : [clientSavedLocally, ...existingClients];
+          try {
+            localStorage.setItem('be_clients', JSON.stringify(updatedClientsList));
+          } catch (e) {
+            console.warn('LocalStorage save error for clients:', e);
+          }
+        } catch (clErr) {
+          console.warn('Auto-saving client failed:', clErr);
+        }
+      }
+
+      // 4. Build Deal Object with Linked Company, Client, and Partner BDM details
+      const dealData: any = {
+        id: dealId,
+        client: formData.clientName,
+        company: formData.companyName,
+        companyZohoId: companyZohoId,
+        clientZohoId: clientZohoId,
+        service: dealServices.length === 1 ? dealServices[0].name : dealServices.length > 1 ? `${dealServices.length} Services` : 'Custom Services',
+        amount: `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
+        received: `₹${(Number(amountReceived) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
+        pending: `₹${pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
+        status: existingDeal?.status || 'New',
+        stage: existingDeal?.stage || 'Sales',
+        owner: existingDeal?.owner || currentUser?.name || 'Admin',
+        date: existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        source: existingDeal?.source || 'Manual',
+        // Partner BDM split details
+        hasPartnerBdm: hasPartnerBdm,
         has_partner_bdm: hasPartnerBdm,
         partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
         partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
@@ -1019,106 +1037,128 @@ export const Deals = () => {
         partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
         partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
         partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
-      },
-      servicesData: dealServices.map(s => {
-        const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
-        const gstVal = t > 0 ? Number((t * 0.18).toFixed(2)) : 0;
-        const b = t > 0 ? Number((t - gstVal).toFixed(2)) : (Number(s.baseAmount) || 0);
-        return {
-          ...s,
-          totalAmount: String(t || s.totalAmount || ''),
-          baseAmount: String(b || s.baseAmount || '')
-        };
-      }),
-      totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount },
-      paymentScreenshotName: paymentScreenshotName,
-      documentsData: docsToSave,
-      zohoId: existingDeal?.zohoId || undefined,
-      zohoStatus: existingDeal?.zohoStatus || 'pending',
-    };
+        // Full details
+        formData: {
+          ...formData,
+          companyZohoId,
+          clientZohoId,
+          hasPartnerBdm,
+          has_partner_bdm: hasPartnerBdm,
+          partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
+          partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
+          partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
+          partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
+          partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
+          partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
+        },
+        servicesData: dealServices.map(s => {
+          const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
+          const gstVal = t > 0 ? Number((t * 0.18).toFixed(2)) : 0;
+          const b = t > 0 ? Number((t - gstVal).toFixed(2)) : (Number(s.baseAmount) || 0);
+          return {
+            ...s,
+            totalAmount: String(t || s.totalAmount || ''),
+            baseAmount: String(b || s.baseAmount || '')
+          };
+        }),
+        totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount },
+        paymentScreenshotName: paymentScreenshotName,
+        documentsData: docsToSave,
+        zohoId: existingDeal?.zohoId || undefined,
+        zohoStatus: existingDeal?.zohoStatus || 'pending',
+      };
 
-    // 5. Call Zoho CRM REST API to insert or update record in Deals module
-    try {
-      const zohoRes = await saveOrUpdateZohoDeal(dealData);
-      const finalZohoId = zohoRes.zohoId || dealData.zohoId;
+      // 5. Call Zoho CRM REST API to insert or update record in Deals module
+      try {
+        const zohoRes = await saveOrUpdateZohoDeal(dealData);
+        const finalZohoId = zohoRes.zohoId || dealData.zohoId;
 
-      if (zohoRes.success && finalZohoId) {
-        dealData.zohoId = finalZohoId;
-        dealData.zohoStatus = 'synced';
-        dealData.zohoSyncedAt = new Date().toISOString();
+        if (zohoRes.success && finalZohoId) {
+          dealData.zohoId = finalZohoId;
+          dealData.zohoStatus = 'synced';
+          dealData.zohoSyncedAt = new Date().toISOString();
 
-        // Upload attached payment screenshot & documents to Zoho CRM record if any
-        if (paymentScreenshotFile) {
-          try {
-            await uploadZohoAttachment(finalZohoId, paymentScreenshotFile, paymentScreenshotFile.name, 'Deals');
-          } catch (attErr) {
-            console.warn('[Zoho CRM] Payment screenshot attachment failed:', attErr);
+          // Upload attached payment screenshot & documents to Zoho CRM record if any
+          if (paymentScreenshotFile) {
+            try {
+              await uploadZohoAttachment(finalZohoId, paymentScreenshotFile, paymentScreenshotFile.name, 'Deals');
+            } catch (attErr) {
+              console.warn('[Zoho CRM] Payment screenshot attachment failed:', attErr);
+            }
           }
-        }
-        for (const docFile of documents) {
-          try {
-            await uploadZohoAttachment(finalZohoId, docFile, docFile.name, 'Deals');
-          } catch (attErr) {
-            console.warn('[Zoho CRM] Document attachment failed:', attErr);
+          for (const docFile of documents) {
+            try {
+              await uploadZohoAttachment(finalZohoId, docFile, docFile.name, 'Deals');
+            } catch (attErr) {
+              console.warn('[Zoho CRM] Document attachment failed:', attErr);
+            }
           }
+
+          const syncSummary = [
+            `Deal #${finalZohoId}`,
+            companyZohoId ? `Company #${companyZohoId}` : null,
+            clientZohoId ? `Client #${clientZohoId}` : null
+          ].filter(Boolean).join(' • ');
+
+          setToast({
+            type: 'success',
+            message: isEditing ? 'Deal Updated & Synced to Zoho CRM!' : 'Deal, Client & Company Synced to Zoho CRM!',
+            submessage: syncSummary
+          });
+        } else {
+          dealData.zohoStatus = 'failed';
+          dealData.zohoError = zohoRes.message;
+          setToast({
+            type: 'error',
+            message: `Deal Saved Locally (Zoho ${isEditing ? 'Update' : 'Sync'} Failed)`,
+            submessage: zohoRes.message || 'Check Zoho CRM credentials or field requirements'
+          });
         }
-
-        const syncSummary = [
-          `Deal #${finalZohoId}`,
-          companyZohoId ? `Company #${companyZohoId}` : null,
-          clientZohoId ? `Client #${clientZohoId}` : null
-        ].filter(Boolean).join(' • ');
-
-        setToast({
-          type: 'success',
-          message: isEditing ? 'Deal Updated & Synced to Zoho CRM!' : 'Deal, Client & Company Synced to Zoho CRM!',
-          submessage: syncSummary
-        });
-      } else {
+      } catch (zErr: any) {
+        console.error('Zoho CRM sync error:', zErr);
         dealData.zohoStatus = 'failed';
-        dealData.zohoError = zohoRes.message;
+        dealData.zohoError = zErr?.message || 'Sync failed';
         setToast({
           type: 'error',
-          message: `Deal Saved Locally (Zoho ${isEditing ? 'Update' : 'Sync'} Failed)`,
-          submessage: zohoRes.message || 'Check Zoho CRM credentials or field requirements'
+          message: `Deal Saved Locally (Zoho ${isEditing ? 'Update' : 'Sync'} Error)`,
+          submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
         });
       }
-    } catch (zErr: any) {
-      console.error('Zoho CRM sync error:', zErr);
-      dealData.zohoStatus = 'failed';
-      dealData.zohoError = zErr?.message || 'Sync failed';
+
+      let newDealsList;
+      if (editingDealId) {
+        // Retain old status/date/owner if editing
+        newDealsList = deals.map((d: any) => {
+          if (d.id === editingDealId) {
+            return {
+              ...dealData,
+              status: d.status,
+              owner: d.owner,
+              date: d.date,
+              zohoId: dealData.zohoId || d.zohoId,
+              zohoStatus: dealData.zohoStatus || d.zohoStatus
+            };
+          }
+          return d;
+        });
+      } else {
+        newDealsList = [dealData, ...deals];
+      }
+
+      setDeals(newDealsList);
+      saveDealToIndexedDB(dealData).catch(e => console.warn('Single deal IDB save error:', e));
+      safeSaveDealsToStorage(newDealsList);
+    } catch (createErr: any) {
+      console.error('Deal creation error:', createErr);
       setToast({
         type: 'error',
-        message: `Deal Saved Locally (Zoho ${isEditing ? 'Update' : 'Sync'} Error)`,
-        submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+        message: 'Failed to complete deal creation',
+        submessage: createErr?.message || 'An unexpected error occurred'
       });
+    } finally {
+      setIsSubmitting(false);
+      handleCloseModal();
     }
-
-    let newDealsList;
-    if (editingDealId) {
-      // Retain old status/date/owner if editing
-      newDealsList = deals.map((d: any) => {
-        if (d.id === editingDealId) {
-          return {
-            ...dealData,
-            status: d.status,
-            owner: d.owner,
-            date: d.date,
-            zohoId: dealData.zohoId || d.zohoId,
-            zohoStatus: dealData.zohoStatus || d.zohoStatus
-          };
-        }
-        return d;
-      });
-    } else {
-      newDealsList = [dealData, ...deals];
-    }
-
-    setDeals(newDealsList);
-    localStorage.setItem('be_deals', JSON.stringify(newDealsList));
-
-    setIsSubmitting(false);
-    handleCloseModal();
   };
 
   const handleDeleteDeal = async (deal: any) => {
@@ -1126,7 +1166,7 @@ export const Deals = () => {
     if (confirm(`Are you sure you want to delete deal "${dealName}"?`)) {
       const newDealsList = deals.filter((d: any) => d.id !== deal.id);
       setDeals(newDealsList);
-      localStorage.setItem('be_deals', JSON.stringify(newDealsList));
+      safeSaveDealsToStorage(newDealsList);
 
       if (deal.zohoId) {
         try {
@@ -1199,7 +1239,9 @@ export const Deals = () => {
         const updatedCompaniesList = existingComp 
           ? existingCompanies.map((c: any) => c.id === existingComp.id ? { ...c, ...companyToSave } : c)
           : [companyToSave, ...existingCompanies];
-        localStorage.setItem('be_companies', JSON.stringify(updatedCompaniesList));
+        try {
+          localStorage.setItem('be_companies', JSON.stringify(updatedCompaniesList));
+        } catch (e) {}
       }
 
       // 2. Ensure Client is created and synced if present
@@ -1238,7 +1280,9 @@ export const Deals = () => {
         const updatedClientsList = existingClient
           ? existingClients.map((cl: any) => cl.id === existingClient.id ? { ...cl, ...clientToSave } : cl)
           : [clientToSave, ...existingClients];
-        localStorage.setItem('be_clients', JSON.stringify(updatedClientsList));
+        try {
+          localStorage.setItem('be_clients', JSON.stringify(updatedClientsList));
+        } catch (e) {}
       }
 
       // 3. Save or update the deal in Zoho CRM
@@ -1262,7 +1306,7 @@ export const Deals = () => {
           } : d
         );
         setDeals(updatedList);
-        localStorage.setItem('be_deals', JSON.stringify(updatedList));
+        safeSaveDealsToStorage(updatedList);
         setToast({
           type: 'success',
           message: `Deal Synced to Zoho CRM!`,
@@ -1273,7 +1317,7 @@ export const Deals = () => {
           d.id === deal.id ? { ...d, zohoStatus: 'failed', zohoError: zohoRes.message } : d
         );
         setDeals(updatedList);
-        localStorage.setItem('be_deals', JSON.stringify(updatedList));
+        safeSaveDealsToStorage(updatedList);
         setToast({
           type: 'error',
           message: `Zoho CRM Sync Failed`,
@@ -1292,24 +1336,6 @@ export const Deals = () => {
   };
 
   const cancelSyncRef = useRef(false);
-
-  const safeSaveDealsToStorage = (dealsList: any[]) => {
-    // 1. Save complete 10,000+ dataset to IndexedDB
-    saveAllDealsToIndexedDB(dealsList).catch(err => console.warn('IndexedDB save warning:', err));
-
-    // 2. Save 2,000 deals to localStorage as sync cache fallback
-    try {
-      const trimmed = dealsList.slice(0, 2000);
-      localStorage.setItem('be_deals', JSON.stringify(trimmed));
-    } catch (err) {
-      try {
-        const trimmed = dealsList.slice(0, 500);
-        localStorage.setItem('be_deals', JSON.stringify(trimmed));
-      } catch (e) {
-        console.warn('LocalStorage unavailable for caching deals:', e);
-      }
-    }
-  };
 
   const processZohoDealsBatch = (rawDeals: any[], currentDeals: any[]) => {
     const updatedDeals = [...currentDeals];
@@ -1954,7 +1980,7 @@ export const Deals = () => {
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-bold text-gray-900">Deals</h1>
             <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              {deals.length.toLocaleString()} Loaded
+              {rbacDeals.length.toLocaleString()} Deals
             </span>
             {hasMoreZohoRecords && (
               <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-semibold text-xs rounded-full border border-blue-200 animate-pulse">
@@ -2081,7 +2107,7 @@ export const Deals = () => {
       
       {/* Deals Table */}
       {(() => {
-        const filteredDeals = deals.filter((deal: any) => {
+        const filteredDeals = rbacDeals.filter((deal: any) => {
           if (activeTab === 'Manual Deals' && deal.source === 'Quotation') return false;
           if (activeTab === 'From Quotations' && deal.source !== 'Quotation') return false;
           if (searchQuery) {

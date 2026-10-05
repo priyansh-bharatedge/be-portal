@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, Download, Send, Cloud, CloudOff, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Loader2, Printer } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
 import { saveDocument } from '../../lib/db';
 import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal, fetchZohoQuotations } from '../../services/zohoService';
 import { downloadQuotationPDF, downloadQuotationHTML, printQuotation, generateQuotationPDFBlob } from '../../utils/quotationTemplate';
@@ -16,6 +17,7 @@ interface DealService {
 
 export const Quotations = () => {
   const navigate = useNavigate();
+  const { currentUser, filterRecords } = useAuth();
   const [activeTab, setActiveTab] = useState('All Quotations');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -23,6 +25,8 @@ export const Quotations = () => {
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
   const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Zoho & Submission States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -365,6 +369,29 @@ export const Quotations = () => {
     return [];
   });
 
+  const rbacQuotations = useMemo(() => {
+    return filterRecords ? filterRecords(quotations, 'Quotations') : quotations;
+  }, [quotations, filterRecords, currentUser]);
+
+  const filteredQuotations = useMemo(() => {
+    return rbacQuotations.filter((deal: any) => {
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchClient = deal.client && deal.client.toLowerCase().includes(q);
+        const matchCompany = deal.company && deal.company.toLowerCase().includes(q);
+        const matchService = deal.service && deal.service.toLowerCase().includes(q);
+        const matchId = deal.id && deal.id.toLowerCase().includes(q);
+        if (!matchClient && !matchCompany && !matchService && !matchId) return false;
+      }
+      return true;
+    });
+  }, [rbacQuotations, searchQuery]);
+
+  const totalQuotationsCount = filteredQuotations.length;
+  const paginatedQuotations = useMemo(() => {
+    return filteredQuotations.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredQuotations, currentPage, itemsPerPage]);
+
   const handleFetchFromZoho = async (showNotification = true) => {
     setIsFetchingZoho(true);
     try {
@@ -466,25 +493,9 @@ export const Quotations = () => {
     handleFetchFromZoho(false);
   }, []);
 
-  // Pagination States
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
-
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, activeTab]);
-
-  const filteredQuotations = quotations.filter((q: any) =>
-    (q.client && String(q.client).toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (q.company && String(q.company).toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (q.id && String(q.id).toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const totalQuotationsCount = filteredQuotations.length;
-  const paginatedQuotations = filteredQuotations.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -747,11 +758,18 @@ export const Quotations = () => {
       }
 
       setQuotations(newQuotationsList);
-      localStorage.setItem('be_quotations', JSON.stringify(newQuotationsList));
+      try {
+        localStorage.setItem('be_quotations', JSON.stringify(newQuotationsList));
+      } catch (e) {
+        console.warn('LocalStorage save error for quotations:', e);
+      }
 
       handleCloseModal();
+    } catch (qErr) {
+      console.error('Quotation save error:', qErr);
     } finally {
       setIsSubmitting(false);
+      handleCloseModal();
     }
   };
 

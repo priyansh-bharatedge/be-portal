@@ -54,25 +54,28 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Initialize storage and clean up dummy data
   useEffect(() => {
-    const CLEARED_KEY = 'be_dummy_cleared_clean_v3';
+    const CLEARED_KEY = 'be_superadmin_auth_v4';
     const isCleaned = localStorage.getItem(CLEARED_KEY);
 
     if (!isCleaned) {
-      // Purge all dummy data across all modules
-      localStorage.setItem('be_deals', JSON.stringify([]));
-      localStorage.setItem('be_quotations', JSON.stringify([]));
-      localStorage.setItem('be_companies', JSON.stringify([]));
-      localStorage.setItem('be_clients', JSON.stringify([]));
-      localStorage.setItem('be_salaries', JSON.stringify([]));
-      localStorage.setItem('be_dsr_reports', JSON.stringify([]));
-      localStorage.setItem('be_queries', JSON.stringify([]));
-      localStorage.setItem('be_leaves', JSON.stringify([]));
-      localStorage.setItem('be_attendance', JSON.stringify([]));
-      localStorage.setItem('be_emp_docs', JSON.stringify([]));
-      localStorage.setItem('be_employees', JSON.stringify([]));
-      localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
+      // Set active super admin to new credentials
+      const saved = localStorage.getItem('be_active_user');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.email === 'md@bharat-edge.com' || parsed.email === 'admin@bharatedge.com' || parsed.role === 'Super Admin') {
+            localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
+            setCurrentUser(DEMO_USERS[0]);
+          }
+        } catch (e) {
+          localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
+          setCurrentUser(DEMO_USERS[0]);
+        }
+      } else {
+        localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
+        setCurrentUser(DEMO_USERS[0]);
+      }
       localStorage.setItem(CLEARED_KEY, 'true');
-      setCurrentUser(DEMO_USERS[0]);
     }
   }, []);
 
@@ -81,23 +84,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.email !== 'admin@bharatedge.com') {
+        if (parsed.email !== 'admin@bharatedge.com' && parsed.email !== 'md@bharat-edge.com') {
           return parsed;
         }
       } catch (e) {
         console.error('Failed to parse active user', e);
       }
     }
-    return DEMO_USERS[0]; // Default Super Admin md@bharat-edge.com
+    return DEMO_USERS[0]; // Default Super Admin superadmin@be.com
   });
 
   const getAllUsersFromStorage = (): AuthUser[] => {
     try {
       const savedEmps = localStorage.getItem('be_employees');
+      let mapped: AuthUser[] = [];
       if (savedEmps) {
         const emps = JSON.parse(savedEmps);
-        const mapped = emps.map((e: any) => {
-          const sRole = e.systemRole || (e.role?.includes('HR') ? 'HR' : e.role?.includes('HOD') ? 'HOD' : e.role?.includes('TL') || e.role?.includes('Lead') ? 'TL' : e.role?.includes('Super Admin') ? 'Super Admin' : 'TM');
+        mapped = emps.map((e: any) => {
+          const sRole: SystemRole = (
+            e.systemRole === 'Super Admin' ? 'Super Admin' :
+            e.systemRole === 'HR' ? 'HR' :
+            e.systemRole === 'HOD' ? 'HOD' :
+            e.systemRole === 'TL' ? 'TL' :
+            e.systemRole === 'TM' ? 'TM' :
+            (e.role === 'Super Admin' ? 'Super Admin' :
+             e.role === 'HR' || e.role === 'HR Admin' ? 'HR' :
+             e.role === 'HOD' || e.role === 'Admin (HOD)' ? 'HOD' :
+             e.role === 'TL' || e.role === 'Team Leader' ? 'TL' : 'TM')
+          );
           return {
             id: e.id,
             name: e.name,
@@ -109,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             department: e.dept || e.formData?.dept || 'General',
             designation: e.role || e.formData?.role || 'Employee',
             empId: e.id,
+            zohoId: e.zohoId || '',
             password: e.password || e.formData?.password,
             isActivated: e.isActivated || e.formData?.isActivated || false,
             passwordSet: e.passwordSet || e.formData?.passwordSet || false,
@@ -120,8 +135,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             target: e.target || e.formData?.target || e.monthlyTarget || e.formData?.monthlyTarget || ''
           };
         });
-        if (mapped.length > 0) return mapped;
       }
+      
+      const hasSuperAdmin = mapped.some(u => u.email?.toLowerCase() === 'superadmin@be.com' || u.role === 'Super Admin');
+      const hasHR = mapped.some(u => u.email?.toLowerCase() === 'hrmshr@be.com' || u.role === 'HR');
+      let combined = [...mapped];
+      if (!hasSuperAdmin && DEMO_USERS[0]) combined.unshift(DEMO_USERS[0]);
+      if (!hasHR && DEMO_USERS[1]) combined.push(DEMO_USERS[1]);
+      return combined.length > 0 ? combined : DEMO_USERS;
     } catch (e) {
       console.error('Failed to parse employees for users', e);
     }
@@ -154,12 +175,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const usersList = getAllUsersFromStorage();
     const userForRole = usersList.find(u => u.role === role) || {
       id: `USER-${role.replace(/\s+/g, '-').toUpperCase()}`,
-      name: role === 'Super Admin' ? 'Managing Director' : `${role} User`,
-      email: role === 'Super Admin' ? 'md@bharat-edge.com' : `${role.toLowerCase().replace(/\s+/g, '')}@bharat-edge.com`,
+      name: role === 'Super Admin' ? 'Super Admin' : role === 'HR' ? 'HR Admin' : `${role} User`,
+      email: role === 'Super Admin' ? 'superadmin@be.com' : role === 'HR' ? 'hrmshr@be.com' : `${role.toLowerCase().replace(/\s+/g, '')}@bharat-edge.com`,
       role: role,
       department: role === 'Super Admin' ? 'Management' : role === 'HR' ? 'Human Resources' : role === 'HOD' ? 'Operations' : 'Operations',
-      designation: role === 'Super Admin' ? 'Managing Director & Super Admin' : `${role} Officer`,
-      empId: `EMP-${role.replace(/\s+/g, '')}`
+      designation: role === 'Super Admin' ? 'Managing Director & Super Admin' : role === 'HR' ? 'HR Manager & Admin' : `${role} Officer`,
+      empId: `EMP-${role.replace(/\s+/g, '')}`,
+      password: role === 'Super Admin' ? 'beportaladmin2026' : role === 'HR' ? 'hrmshrportal2026' : undefined,
+      isActivated: true,
+      passwordSet: true
     };
     switchUser(userForRole);
   };
@@ -168,6 +192,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail) {
       return { success: false, exists: false, error: 'Email address is required.' };
+    }
+
+    // Direct check for Super Admin
+    if (cleanEmail === 'superadmin@be.com' || cleanEmail === 'superadmin' || cleanEmail === 'md@bharat-edge.com') {
+      const superAdminUser = DEMO_USERS[0];
+      return {
+        success: true,
+        exists: true,
+        hasPassword: true,
+        employee: {
+          id: superAdminUser.id,
+          zohoId: '',
+          name: superAdminUser.name,
+          email: superAdminUser.email,
+          password: 'beportaladmin2026',
+          hasPassword: true,
+          role: 'Super Admin',
+          department: superAdminUser.department,
+          designation: superAdminUser.designation
+        }
+      };
+    }
+
+    // Direct check for HR Admin
+    if (cleanEmail === 'hrmshr@be.com' || cleanEmail === 'hr' || cleanEmail === 'hr@bharat-edge.com' || cleanEmail === 'hrms') {
+      const hrUser = DEMO_USERS[1] || {
+        id: 'HR-ADMIN',
+        name: 'HR Admin',
+        email: 'hrmshr@be.com',
+        role: 'HR',
+        department: 'Human Resources',
+        designation: 'HR Manager & Admin'
+      };
+      return {
+        success: true,
+        exists: true,
+        hasPassword: true,
+        employee: {
+          id: hrUser.id,
+          zohoId: '',
+          name: hrUser.name,
+          email: hrUser.email,
+          password: 'hrmshrportal2026',
+          hasPassword: true,
+          role: 'HR',
+          department: hrUser.department,
+          designation: hrUser.designation
+        }
+      };
     }
 
     try {
@@ -190,11 +263,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           e.formData?.workEmail?.trim().toLowerCase() === cleanEmail ||
           e.id?.toString().trim().toLowerCase() === cleanEmail
         );
-        const demoMatch = DEMO_USERS.find((u: any) => u.email?.trim().toLowerCase() === cleanEmail);
+        const demoMatch = DEMO_USERS.find((u: any) => 
+          u.email?.trim().toLowerCase() === cleanEmail ||
+          (cleanEmail === 'superadmin' && u.role === 'Super Admin')
+        );
 
         const matchedUser = localMatch || demoMatch;
         if (matchedUser) {
-          const rawPass = matchedUser.password || matchedUser.formData?.password;
+          const rawPass = matchedUser.password || matchedUser.formData?.password || (matchedUser.role === 'Super Admin' ? 'beportaladmin2026' : '');
           const hasPassword = Boolean(rawPass && String(rawPass).trim().length > 0);
           return {
             success: true,
@@ -232,11 +308,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       e.formData?.email?.trim().toLowerCase() === cleanEmail ||
       e.formData?.workEmail?.trim().toLowerCase() === cleanEmail
     );
-    const demoMatch = DEMO_USERS.find((u: any) => u.email?.trim().toLowerCase() === cleanEmail);
+    const demoMatch = DEMO_USERS.find((u: any) => 
+      u.email?.trim().toLowerCase() === cleanEmail ||
+      (cleanEmail === 'superadmin' && u.role === 'Super Admin')
+    );
     const matchedUser = localMatch || demoMatch;
 
     if (matchedUser) {
-      const rawPass = matchedUser.password || matchedUser.formData?.password;
+      const rawPass = matchedUser.password || matchedUser.formData?.password || (matchedUser.role === 'Super Admin' ? 'beportaladmin2026' : '');
       const hasPassword = Boolean(rawPass && String(rawPass).trim().length > 0);
       return {
         success: true,
@@ -423,7 +502,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
 
     const cleanId = (emailOrId || '').trim().toLowerCase();
-    const empIndex = emps.findIndex((e: any) => 
+    let empIndex = emps.findIndex((e: any) => 
       e.id === empId || 
       e.id?.toLowerCase() === cleanId ||
       e.empId?.toLowerCase() === cleanId ||
@@ -434,7 +513,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     if (empIndex === -1) {
-      return { success: false, error: 'Employee account record not found.' };
+      const newEmpEntry = {
+        id: session?.empId || `EMP-${Date.now()}`,
+        name: session?.empName || 'Employee',
+        email: session?.targetEmail || cleanId,
+        password: cleanPassword,
+        isActivated: true,
+        passwordSet: true,
+        role: 'Team Member',
+        systemRole: 'TM' as SystemRole,
+        dept: 'General',
+        status: 'Active',
+        formData: {
+          email: session?.targetEmail || cleanId,
+          empId: session?.empId || `EMP-${Date.now()}`,
+          password: cleanPassword,
+          isActivated: true,
+          passwordSet: true,
+          systemRole: 'TM'
+        }
+      };
+      emps.push(newEmpEntry);
+      empIndex = emps.length - 1;
     }
 
     // Save updated password and mark account as activated
@@ -459,7 +559,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.removeItem('be_active_otp_session');
 
     const updatedEmp = emps[empIndex];
-    const sRole = updatedEmp.systemRole || (updatedEmp.role?.includes('HR') ? 'HR' : updatedEmp.role?.includes('HOD') ? 'HOD' : updatedEmp.role?.includes('TL') ? 'TL' : updatedEmp.role?.includes('Super Admin') ? 'Super Admin' : 'TM');
+    const sRole: SystemRole = (
+      updatedEmp.systemRole === 'Super Admin' ? 'Super Admin' :
+      updatedEmp.systemRole === 'HR' ? 'HR' :
+      updatedEmp.systemRole === 'HOD' ? 'HOD' :
+      updatedEmp.systemRole === 'TL' ? 'TL' :
+      updatedEmp.systemRole === 'TM' ? 'TM' :
+      (updatedEmp.role === 'Super Admin' ? 'Super Admin' :
+       updatedEmp.role === 'HR' || updatedEmp.role === 'HR Admin' ? 'HR' :
+       updatedEmp.role === 'HOD' || updatedEmp.role === 'Admin (HOD)' ? 'HOD' :
+       updatedEmp.role === 'TL' || updatedEmp.role === 'Team Leader' ? 'TL' : 'TM')
+    );
     
     const authUser: AuthUser = {
       id: updatedEmp.id,
@@ -472,6 +582,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       department: updatedEmp.dept || updatedEmp.formData?.dept || 'General',
       designation: updatedEmp.role || updatedEmp.formData?.role || 'Employee',
       empId: updatedEmp.id,
+      zohoId: updatedEmp.zohoId || '',
       password: cleanPassword,
       isActivated: true,
       passwordSet: true,
@@ -515,7 +626,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const foundByRole = usersList.find(u => 
         u.role === role || 
         (role === 'HR' && (u.email?.toLowerCase().includes('hr@') || u.role === 'HR')) ||
-        (role === 'Super Admin' && (u.email === 'md@bharat-edge.com' || u.role === 'Super Admin')) ||
+        (role === 'Super Admin' && (u.email === 'superadmin@be.com' || u.email === 'md@bharat-edge.com' || u.role === 'Super Admin')) ||
         (role === 'HOD' && (u.email === 'mishal@bharat-edge.com' || u.role === 'HOD'))
       );
       if (foundByRole) {
@@ -535,7 +646,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // 3. Search for registered user across all email & ID fields
-    const found = usersList.find(u => {
+    let found = usersList.find(u => {
       const emailMatches = u.email?.trim().toLowerCase() === cleanEmail;
       const personalEmailMatches = u.personalEmail?.trim().toLowerCase() === cleanEmail;
       const workEmailMatches = u.workEmail?.trim().toLowerCase() === cleanEmail;
@@ -545,16 +656,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (!found) {
+      // Check directly in localStorage be_employees as secondary fallback
+      try {
+        const rawEmps = localStorage.getItem('be_employees');
+        if (rawEmps) {
+          const emps = JSON.parse(rawEmps);
+          const matched = emps.find((e: any) => 
+            e.email?.trim().toLowerCase() === cleanEmail ||
+            e.formData?.email?.trim().toLowerCase() === cleanEmail ||
+            e.formData?.workEmail?.trim().toLowerCase() === cleanEmail ||
+            e.id?.toString().trim().toLowerCase() === cleanEmail
+          );
+          if (matched) {
+            const sRole: SystemRole = (
+              matched.systemRole === 'Super Admin' ? 'Super Admin' :
+              matched.systemRole === 'HR' ? 'HR' :
+              matched.systemRole === 'HOD' ? 'HOD' :
+              matched.systemRole === 'TL' ? 'TL' : 'TM'
+            );
+            found = {
+              id: matched.id,
+              name: matched.name,
+              email: matched.email || matched.formData?.workEmail || cleanEmail,
+              personalEmail: matched.formData?.email || matched.email,
+              workEmail: matched.formData?.workEmail || matched.email,
+              mobile: matched.mobile || '',
+              role: sRole,
+              department: matched.dept || matched.formData?.dept || 'General',
+              designation: matched.role || matched.formData?.role || 'Employee',
+              empId: matched.id,
+              zohoId: matched.zohoId || '',
+              password: matched.password || matched.formData?.password,
+              isActivated: true,
+              passwordSet: true
+            };
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (!found) {
       return { 
         success: false, 
         error: `No account found for "${email}". Please enter the registered email or Employee ID.` 
       };
     }
 
-    // 4. Validate password (accept employee's custom password or default admin123)
+    // 4. Validate password (accept superadmin, hr admin, or employee's custom password)
     const userCustomPassword = (found as any).password;
     let isValid = false;
-    if (userCustomPassword) {
+    if (cleanEmail === 'superadmin@be.com' || found.role === 'Super Admin') {
+      isValid = cleanPassword === 'beportaladmin2026' || cleanPassword === (userCustomPassword || 'beportaladmin2026') || cleanPassword === 'admin123';
+    } else if (cleanEmail === 'hrmshr@be.com' || found.role === 'HR') {
+      isValid = cleanPassword === 'hrmshrportal2026' || cleanPassword === (userCustomPassword || 'hrmshrportal2026') || cleanPassword === 'admin123';
+    } else if (userCustomPassword) {
       isValid = cleanPassword === userCustomPassword || cleanPassword === 'admin123';
     } else {
       const validPasswords = ['admin123', 'admin', 'password', '123456'];
@@ -564,7 +719,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isValid) {
       const hasPasswordSet = Boolean(userCustomPassword);
       return { 
-        success: false,
+        success: false, 
         error: hasPasswordSet 
           ? 'Incorrect password. Please try again or use "Forgot / Set Password" with OTP.'
           : 'Incorrect password. (First time login? Click "First-Time Login" to verify via OTP and set password)' 
@@ -577,21 +732,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem('be_active_user');
-    switchRole('Super Admin');
+    setCurrentUser(DEMO_USERS[0]);
   };
 
-  const isHR = (currentUser.role as string) === 'HR' || 
-               (currentUser.role as string) === 'HR Admin' || 
-               currentUser.email?.toLowerCase() === 'hr@bharat-edge.com' ||
-               currentUser.email?.toLowerCase().includes('hr@') ||
-               currentUser.department?.toLowerCase().includes('human resources');
-  const isSuperAdmin = !isHR && (currentUser.role === 'Super Admin' || currentUser.email === 'md@bharat-edge.com');
-  const isHOD = !isHR && !isSuperAdmin && (currentUser.role === 'HOD' || currentUser.email === 'mishal@bharat-edge.com');
-  const isTL = !isHR && !isSuperAdmin && !isHOD && currentUser.role === 'TL';
-  const isTM = !isHR && !isSuperAdmin && !isHOD && !isTL;
+  const isSuperAdmin = currentUser.role === 'Super Admin' || 
+                       currentUser.email?.toLowerCase() === 'superadmin@be.com' || 
+                       currentUser.email?.toLowerCase() === 'md@bharat-edge.com';
+  const isHR = !isSuperAdmin && (
+    currentUser.role === 'HR' || 
+    currentUser.email?.toLowerCase() === 'hrmshr@be.com'
+  );
+  const isHOD = !isSuperAdmin && !isHR && (currentUser.role === 'HOD');
+  const isTL = !isSuperAdmin && !isHR && !isHOD && (currentUser.role === 'TL');
+  const isTM = !isSuperAdmin && !isHR && !isHOD && !isTL;
 
-  const activeRole: SystemRole = isHR ? 'HR' : isSuperAdmin ? 'Super Admin' : isHOD ? 'HOD' : isTL ? 'TL' : 'TM';
-  const roleInfo = ROLE_DEFINITIONS[activeRole] || ROLE_DEFINITIONS['Super Admin'];
+  const activeRole: SystemRole = isSuperAdmin ? 'Super Admin' : isHR ? 'HR' : isHOD ? 'HOD' : isTL ? 'TL' : 'TM';
+  const roleInfo = ROLE_DEFINITIONS[activeRole] || ROLE_DEFINITIONS['TM'];
 
   const can = (permission: string): boolean => {
     switch (permission) {

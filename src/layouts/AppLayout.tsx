@@ -6,7 +6,7 @@ import {
   Settings, LogOut, LayoutDashboard, Briefcase, Users, 
   Building2, FileText, BarChart3, Calendar, ShieldAlert,
   HelpCircle, UserCircle, SwitchCamera, ClipboardList,
-  Crown, Shield, User, RefreshCw, UserCheck
+  Crown, Shield, User, RefreshCw, UserCheck, ArrowLeft
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,7 +20,7 @@ export const AppLayout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
 
-  const { currentUser, currentRole, roleInfo, isHR, isHOD, isSuperAdmin, switchRole } = useAuth();
+  const { currentUser, currentRole, roleInfo, isHR, isHOD, isSuperAdmin, switchRole, logout } = useAuth();
 
   // Determine current module based on URL path
   const currentModule = location.pathname.split('/')[1] as 'crm' | 'hrms' | 'quality';
@@ -40,6 +40,7 @@ export const AppLayout = () => {
   const isSuperAdminUser = isSuperAdmin || 
                            currentRole === 'Super Admin' || 
                            (currentUser.role as string) === 'Super Admin' || 
+                           currentUser.email?.toLowerCase() === 'superadmin@be.com' ||
                            currentUser.email === 'md@bharat-edge.com';
 
   // Role-based module access restrictions:
@@ -181,10 +182,10 @@ export const AppLayout = () => {
         </nav>
       </div>
 
-      {/* Sidebar Role Badge & Logout */}
+      {/* Sidebar Role Badge, Back & Logout */}
       {isSidebarOpen ? (
-        <div className="border-t border-gray-100 p-3 space-y-2">
-          <div className="p-3.5 bg-gray-50/70 rounded-2xl border border-gray-100/80">
+        <div className="border-t border-gray-100 p-3 space-y-1.5">
+          <div className="p-3.5 bg-gray-50/70 rounded-2xl border border-gray-100/80 mb-2">
             <div className="mb-1.5">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Active Role</span>
             </div>
@@ -203,18 +204,42 @@ export const AppLayout = () => {
             </div>
           </div>
 
+          {/* Back to Modules Navigation */}
           <button
-            onClick={() => navigate('/login')}
-            className="flex items-center w-full px-3 py-2.5 text-xs font-bold text-red-600 rounded-xl hover:bg-red-50 hover:text-red-700 transition-colors group"
+            onClick={() => navigate('/modules')}
+            className="flex items-center w-full px-3 py-2 text-xs font-bold text-gray-700 bg-gray-50/80 hover:bg-orange-50 hover:text-be-orange border border-gray-100 hover:border-orange-200 rounded-xl transition-all group shadow-xs"
+            title="Back to Module Selection"
+          >
+            <ArrowLeft size={16} className="mr-2 text-gray-400 group-hover:text-be-orange transition-transform group-hover:-translate-x-1" />
+            <span>Back to Modules</span>
+          </button>
+
+          {/* Logout */}
+          <button
+            onClick={() => {
+              if (logout) logout();
+              navigate('/login');
+            }}
+            className="flex items-center w-full px-3 py-2 text-xs font-bold text-red-600 rounded-xl hover:bg-red-50 hover:text-red-700 transition-colors group"
           >
             <LogOut size={16} className="mr-2.5 text-red-500 group-hover:text-red-700" />
             <span>Logout</span>
           </button>
         </div>
       ) : (
-        <div className="p-2 border-t border-gray-100 flex justify-center">
+        <div className="p-2 border-t border-gray-100 flex flex-col items-center space-y-1">
           <button
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/modules')}
+            className="p-2.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors"
+            title="Back to Modules"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <button
+            onClick={() => {
+              if (logout) logout();
+              navigate('/login');
+            }}
             className="p-2.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors"
             title="Logout"
           >
@@ -302,16 +327,6 @@ export const AppLayout = () => {
             <button className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
               <Bell size={18} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
-
-            {/* Switch Role Quick Button */}
-            <button
-              onClick={() => setIsRoleModalOpen(true)}
-              className="flex items-center px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-be-orange border border-orange-200 text-xs font-bold transition-all shadow-sm hover:shadow"
-              title="Switch role between Super Admin, HR, HOD, TL, TM"
-            >
-              <RefreshCw size={13} className="mr-1.5 animate-spin-hover" />
-              <span className="hidden sm:inline">Switch Role</span>
             </button>
 
             <div className="h-7 w-px bg-gray-200 hidden sm:block"></div>

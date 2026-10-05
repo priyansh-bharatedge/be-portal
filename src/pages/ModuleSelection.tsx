@@ -87,17 +87,15 @@ export const ModuleSelection = () => {
   const isSuperAdminUser = isSuperAdmin || 
                            currentRole === 'Super Admin' || 
                            (currentUser.role as string) === 'Super Admin' || 
+                           currentUser.email?.toLowerCase() === 'superadmin@be.com' ||
                            currentUser.email === 'md@bharat-edge.com';
 
   // Module access rules:
-  // - HR: HRMS only
+  // - HR: HRMS only (CRM & Quality hidden)
   // - All other roles (Super Admin, HOD, Team Leader (TL), Team Member (TM)): CRM, HRMS, QUALITY (all 3)
   let allowedModules = modules;
   if (isHREmployee) {
     allowedModules = modules.filter(m => m.id === 'hrms');
-  } else {
-    // Super Admin, HOD, TL, and TM have access to CRM, HRMS, and QUALITY
-    allowedModules = modules;
   }
 
   return (

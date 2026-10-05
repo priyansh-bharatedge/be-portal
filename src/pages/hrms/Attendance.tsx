@@ -71,7 +71,7 @@ export interface AttendanceItem {
 }
 
 export const Attendance = () => {
-  const { currentUser, isTM, isSuperAdmin, isHR, isTL } = useAuth();
+  const { currentUser, isTM, isSuperAdmin, isHR, isTL, isHOD } = useAuth();
   const [records, setRecords] = useState<AttendanceItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [isAllDates, setIsAllDates] = useState(false);
@@ -282,6 +282,19 @@ export const Attendance = () => {
   // Filter employees according to user's role permissions
   const visibleEmployees = useMemo(() => {
     if (isFullAdmin) return allEmployees;
+    if (isHOD && currentUser.department) {
+      return allEmployees.filter((e: any) => {
+        const isSelf = e.id === currentUser.id || e.empId === currentUser.empId || (e.name && currentUser.name && e.name.toLowerCase() === currentUser.name.toLowerCase());
+        const isDept = (e.dept || e.department || e.formData?.dept || e.formData?.department || '').toLowerCase() === currentUser.department.toLowerCase();
+        const isSubordinate =
+          e.teamLeaderId === currentUser.id ||
+          e.teamLeaderId === currentUser.empId ||
+          (e.teamLeaderName && currentUser.name && e.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase())) ||
+          (e.formData?.teamLeaderId && (e.formData.teamLeaderId === currentUser.id || e.formData.teamLeaderId === currentUser.empId)) ||
+          (e.formData?.teamLeaderName && currentUser.name && e.formData.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase()));
+        return isSelf || isDept || isSubordinate;
+      });
+    }
     if (isTeamLead) {
       return allEmployees.filter((e: any) => {
         const isSelf = e.id === currentUser.id || e.empId === currentUser.empId || e.name?.toLowerCase() === currentUser.name?.toLowerCase();
@@ -303,7 +316,7 @@ export const Attendance = () => {
     return filtered.length > 0
       ? filtered
       : [{ id: currentUser.empId || currentUser.id || 'EMP-USER', name: currentUser.name || 'Employee' }];
-  }, [allEmployees, currentUser, isFullAdmin, isTeamLead]);
+  }, [allEmployees, currentUser, isFullAdmin, isTeamLead, isHOD]);
 
   // Main table displayed records (by selectedDate / searchQuery)
   const displayedRecords = useMemo(() => {

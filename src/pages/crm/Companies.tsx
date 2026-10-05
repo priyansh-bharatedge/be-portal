@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, Filter, Edit, Trash2, Building2, FileText, Calendar, CheckCircle2, X, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, Mail } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { saveOrUpdateZohoCompany, deleteZohoCompany, insertZohoCompany, fetchZohoCompanies } from '../../services/zohoService';
 import { Pagination } from '../../components/ui/Pagination';
 
@@ -22,6 +23,7 @@ export interface Company {
 }
 
 export const Companies = () => {
+  const { currentUser, filterRecords } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,6 +33,10 @@ export const Companies = () => {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
+
+  const rbacCompanies = useMemo(() => {
+    return filterRecords ? filterRecords(companies, 'Companies') : companies;
+  }, [companies, filterRecords, currentUser]);
 
   // Form State
   const initialFormData = {
@@ -71,7 +77,11 @@ export const Companies = () => {
 
   const saveToStorage = (newCompanies: Company[]) => {
     setCompanies(newCompanies);
-    localStorage.setItem('be_companies', JSON.stringify(newCompanies));
+    try {
+      localStorage.setItem('be_companies', JSON.stringify(newCompanies));
+    } catch (e) {
+      console.warn('LocalStorage save error for companies:', e);
+    }
   };
 
   const validateForm = () => {
@@ -99,65 +109,69 @@ export const Companies = () => {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    const companyId = editingCompany ? editingCompany.id : `CMP-${Math.floor(1000 + Math.random() * 9000)}`;
-    
-    const companyData: Company = {
-      id: companyId,
-      ...formData,
-      gstNumber: formData.gstNumber ? formData.gstNumber.toUpperCase() : '',
-      source: editingCompany ? (editingCompany.source || 'Manual') : 'Manual',
-      addedOn: editingCompany ? editingCompany.addedOn : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      zohoId: editingCompany?.zohoId,
-      zohoStatus: editingCompany?.zohoStatus || 'pending',
-    };
-
-    // Sync to Zoho CRM Companies Module
     try {
-      const zohoRes = await saveOrUpdateZohoCompany(companyData);
-      const finalZohoId = zohoRes.zohoId || companyData.zohoId;
+      const companyId = editingCompany ? editingCompany.id : `CMP-${Math.floor(1000 + Math.random() * 9000)}`;
+      
+      const companyData: Company = {
+        id: companyId,
+        ...formData,
+        gstNumber: formData.gstNumber ? formData.gstNumber.toUpperCase() : '',
+        source: editingCompany ? (editingCompany.source || 'Manual') : 'Manual',
+        addedOn: editingCompany ? editingCompany.addedOn : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        zohoId: editingCompany?.zohoId,
+        zohoStatus: editingCompany?.zohoStatus || 'pending',
+      };
 
-      if (zohoRes.success && finalZohoId) {
-        companyData.zohoId = finalZohoId;
-        companyData.zohoStatus = 'synced';
-        companyData.zohoSyncedAt = new Date().toISOString();
-        companyData.zohoError = undefined;
+      // Sync to Zoho CRM Companies Module
+      try {
+        const zohoRes = await saveOrUpdateZohoCompany(companyData);
+        const finalZohoId = zohoRes.zohoId || companyData.zohoId;
 
-        setToast({
-          type: 'success',
-          message: editingCompany ? 'Company Updated & Synced to Zoho CRM!' : 'Company Created & Synced to Zoho CRM!',
-          submessage: `${editingCompany ? 'Updated' : 'Inserted'} in Zoho Companies module (ID: #${finalZohoId})`
-        });
-      } else {
+        if (zohoRes.success && finalZohoId) {
+          companyData.zohoId = finalZohoId;
+          companyData.zohoStatus = 'synced';
+          companyData.zohoSyncedAt = new Date().toISOString();
+          companyData.zohoError = undefined;
+
+          setToast({
+            type: 'success',
+            message: editingCompany ? 'Company Updated & Synced to Zoho CRM!' : 'Company Created & Synced to Zoho CRM!',
+            submessage: `${editingCompany ? 'Updated' : 'Inserted'} in Zoho Companies module (ID: #${finalZohoId})`
+          });
+        } else {
+          companyData.zohoStatus = 'failed';
+          companyData.zohoError = zohoRes.message;
+          setToast({
+            type: 'error',
+            message: `Company Saved Locally (Zoho ${editingCompany ? 'Update' : 'Sync'} Failed)`,
+            submessage: zohoRes.message || 'Check Zoho CRM credentials or module permissions'
+          });
+        }
+      } catch (zErr: any) {
+        console.error('[Zoho CRM] Company sync exception:', zErr);
         companyData.zohoStatus = 'failed';
-        companyData.zohoError = zohoRes.message;
+        companyData.zohoError = zErr?.message || 'Sync failed';
         setToast({
           type: 'error',
-          message: `Company Saved Locally (Zoho ${editingCompany ? 'Update' : 'Sync'} Failed)`,
-          submessage: zohoRes.message || 'Check Zoho CRM credentials or module permissions'
+          message: `Company Saved Locally (Zoho ${editingCompany ? 'Update' : 'Sync'} Error)`,
+          submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
         });
       }
-    } catch (zErr: any) {
-      console.error('[Zoho CRM] Company sync exception:', zErr);
-      companyData.zohoStatus = 'failed';
-      companyData.zohoError = zErr?.message || 'Sync failed';
-      setToast({
-        type: 'error',
-        message: `Company Saved Locally (Zoho ${editingCompany ? 'Update' : 'Sync'} Error)`,
-        submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
-      });
+
+      let updatedCompanies: Company[];
+      if (editingCompany) {
+        updatedCompanies = companies.map(c => c.id === editingCompany.id ? companyData : c);
+      } else {
+        updatedCompanies = [companyData, ...companies];
+      }
+      
+      saveToStorage(updatedCompanies);
+    } catch (err: any) {
+      console.error('Company save error:', err);
     } finally {
       setIsSubmitting(false);
+      closeModal();
     }
-
-    let updatedCompanies: Company[];
-    if (editingCompany) {
-      updatedCompanies = companies.map(c => c.id === editingCompany.id ? companyData : c);
-    } else {
-      updatedCompanies = [companyData, ...companies];
-    }
-    
-    saveToStorage(updatedCompanies);
-    closeModal();
   };
 
   const handleSyncToZoho = async (company: Company) => {
@@ -362,7 +376,7 @@ export const Companies = () => {
     setCurrentPage(1);
   }, [searchQuery, activeTab]);
 
-  const filteredCompanies = companies.filter(c => {
+  const filteredCompanies = rbacCompanies.filter(c => {
     const source = c.source || 'Manual';
     if (activeTab === 'Manual Companies' && source !== 'Manual') return false;
     if (activeTab === 'From Deals' && source !== 'From Deals') return false;

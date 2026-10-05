@@ -34,12 +34,27 @@ export const INITIAL_EMPLOYEES: EmployeeData[] = [];
 export const DEMO_USERS: AuthUser[] = [
   {
     id: 'SUPER-ADMIN',
-    name: 'Managing Director',
-    email: 'md@bharat-edge.com',
+    name: 'Super Admin',
+    email: 'superadmin@be.com',
     role: 'Super Admin',
     department: 'Management',
     designation: 'Managing Director & Super Admin',
-    empId: 'SUPER-ADMIN'
+    empId: 'SUPER-ADMIN',
+    password: 'beportaladmin2026',
+    isActivated: true,
+    passwordSet: true
+  },
+  {
+    id: 'HR-ADMIN',
+    name: 'HR Admin',
+    email: 'hrmshr@be.com',
+    role: 'HR',
+    department: 'Human Resources',
+    designation: 'HR Manager & Admin',
+    empId: 'HR-ADMIN',
+    password: 'hrmshrportal2026',
+    isActivated: true,
+    passwordSet: true
   }
 ];
 

@@ -9,6 +9,7 @@
  */
 
 
+import { fetchZohoWithRbac, injectEmployeeLookup } from './zohoRbacService';
 export * from './zohoRbacService';
 
 export interface ZohoFetchOptions {
@@ -91,12 +92,13 @@ async function safeParseResponse(response: Response): Promise<any> {
  */
 export async function insertZohoQuotation(quotation: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Quotations', quotation);
     const response = await fetch('/api/zoho/insert-quotation', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(quotation),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -129,12 +131,13 @@ export async function insertZohoQuotation(quotation: any): Promise<ZohoApiRespon
  */
 export async function updateZohoQuotation(quotation: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Quotations', quotation);
     const response = await fetch('/api/zoho/update-quotation', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(quotation),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -636,12 +639,13 @@ export async function deleteZohoRecord(module: string, zohoId: string): Promise<
  */
 export async function insertZohoLeave(leave: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Leaves', leave);
     const response = await fetch('/api/zoho/insert-leave', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(leave),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -674,12 +678,13 @@ export async function insertZohoLeave(leave: any): Promise<ZohoApiResponse> {
  */
 export async function updateZohoLeave(leave: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Leaves', leave);
     const response = await fetch('/api/zoho/update-leave', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(leave),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -757,67 +762,17 @@ export async function deleteZohoLeave(zohoId: string): Promise<ZohoApiResponse> 
 }
 
 /**
- * Fetches all live quotation records from Zoho CRM Quotations module.
+ * Fetches all live quotation records from Zoho CRM Quotations module with RBAC scoping.
  */
 export async function fetchZohoQuotations(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
-  try {
-    const qs = buildQueryString(options);
-    const response = await fetch('/api/zoho/get-quotations' + qs);
-    const result = await safeParseResponse(response);
-    if (response.ok && result.success && Array.isArray(result.data)) {
-      return {
-        success: true,
-        data: result.data,
-        info: result.info,
-        message: 'Quotations fetched successfully from Zoho CRM'
-      };
-    }
-    return {
-      success: false,
-      data: [],
-      info: result.info,
-      message: result.message || 'Failed to fetch quotations from Zoho CRM'
-    };
-  } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching quotations:', error);
-    return {
-      success: false,
-      data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-quotations endpoint'
-    };
-  }
+  return fetchZohoWithRbac('Quotations', options);
 }
 
 /**
- * Fetches all live employee records from Zoho CRM Employee module.
+ * Fetches all live employee records from Zoho CRM Employee module with RBAC scoping.
  */
 export async function fetchZohoEmployees(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
-  try {
-    const qs = buildQueryString(options);
-    const response = await fetch('/api/zoho/get-employees' + qs);
-    const result = await safeParseResponse(response);
-    if (response.ok && result.success && Array.isArray(result.data)) {
-      return {
-        success: true,
-        data: result.data,
-        info: result.info,
-        message: 'Employees fetched successfully from Zoho CRM'
-      };
-    }
-    return {
-      success: false,
-      data: [],
-      info: result.info,
-      message: result.message || 'Failed to fetch employees from Zoho CRM'
-    };
-  } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching employees:', error);
-    return {
-      success: false,
-      data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-employees endpoint'
-    };
-  }
+  return fetchZohoWithRbac('Employee', options);
 }
 
 /**
@@ -851,35 +806,10 @@ export async function fetchSalesEmployees(): Promise<ZohoFetchResult> {
 }
 
 /**
- * Fetches all live leave records from Zoho CRM Leave_Management module.
+ * Fetches all live leave records from Zoho CRM Leave_Management module with RBAC scoping.
  */
 export async function fetchZohoLeaves(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
-  try {
-    const qs = buildQueryString(options);
-    const response = await fetch('/api/zoho/get-leaves' + qs);
-    const result = await safeParseResponse(response);
-    if (response.ok && result.success && Array.isArray(result.data)) {
-      return {
-        success: true,
-        data: result.data,
-        info: result.info,
-        message: 'Leaves fetched successfully from Zoho CRM'
-      };
-    }
-    return {
-      success: false,
-      data: [],
-      info: result.info,
-      message: result.message || 'Failed to fetch leaves from Zoho CRM'
-    };
-  } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching leaves:', error);
-    return {
-      success: false,
-      data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-leaves endpoint'
-    };
-  }
+  return fetchZohoWithRbac('Leaves', options);
 }
 
 /**
@@ -888,12 +818,13 @@ export async function fetchZohoLeaves(options?: ZohoFetchOptions): Promise<ZohoF
  */
 export async function insertZohoCompany(company: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Companies', company);
     const response = await fetch('/api/zoho/insert-company', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(company),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -926,12 +857,13 @@ export async function insertZohoCompany(company: any): Promise<ZohoApiResponse> 
  */
 export async function updateZohoCompany(company: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Companies', company);
     const response = await fetch('/api/zoho/update-company', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(company),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -1009,35 +941,10 @@ export async function deleteZohoCompany(zohoId: string): Promise<ZohoApiResponse
 }
 
 /**
- * Fetches all live company records from Zoho CRM Companies module.
+ * Fetches all live company records from Zoho CRM Companies module with RBAC scoping.
  */
 export async function fetchZohoCompanies(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
-  try {
-    const qs = buildQueryString(options);
-    const response = await fetch('/api/zoho/get-companies' + qs);
-    const result = await safeParseResponse(response);
-    if (response.ok && result.success && Array.isArray(result.data)) {
-      return {
-        success: true,
-        data: result.data,
-        info: result.info,
-        message: 'Companies fetched successfully from Zoho CRM'
-      };
-    }
-    return {
-      success: false,
-      data: [],
-      info: result.info,
-      message: result.message || 'Failed to fetch companies from Zoho CRM'
-    };
-  } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching companies:', error);
-    return {
-      success: false,
-      data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-companies endpoint'
-    };
-  }
+  return fetchZohoWithRbac('Companies', options);
 }
 
 /**
@@ -1046,12 +953,13 @@ export async function fetchZohoCompanies(options?: ZohoFetchOptions): Promise<Zo
  */
 export async function insertZohoClient(client: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Clients', client);
     const response = await fetch('/api/zoho/insert-client', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(client),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -1084,12 +992,13 @@ export async function insertZohoClient(client: any): Promise<ZohoApiResponse> {
  */
 export async function updateZohoClient(client: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Clients', client);
     const response = await fetch('/api/zoho/update-client', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(client),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -1167,35 +1076,10 @@ export async function deleteZohoClient(zohoId: string): Promise<ZohoApiResponse>
 }
 
 /**
- * Fetches all live client records from Zoho CRM Clients module.
+ * Fetches all live client records from Zoho CRM Clients module with RBAC scoping.
  */
 export async function fetchZohoClients(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
-  try {
-    const qs = buildQueryString(options);
-    const response = await fetch('/api/zoho/get-clients' + qs);
-    const result = await safeParseResponse(response);
-    if (response.ok && result.success && Array.isArray(result.data)) {
-      return {
-        success: true,
-        data: result.data,
-        info: result.info,
-        message: 'Clients fetched successfully from Zoho CRM'
-      };
-    }
-    return {
-      success: false,
-      data: [],
-      info: result.info,
-      message: result.message || 'Failed to fetch clients from Zoho CRM'
-    };
-  } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching clients:', error);
-    return {
-      success: false,
-      data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-clients endpoint'
-    };
-  }
+  return fetchZohoWithRbac('Clients', options);
 }
 
 /**
@@ -1204,12 +1088,13 @@ export async function fetchZohoClients(options?: ZohoFetchOptions): Promise<Zoho
  */
 export async function insertZohoDeal(deal: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Deals', deal);
     const response = await fetch('/api/zoho/insert-deal', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(deal),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -1242,12 +1127,13 @@ export async function insertZohoDeal(deal: any): Promise<ZohoApiResponse> {
  */
 export async function updateZohoDeal(deal: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Deals', deal);
     const response = await fetch('/api/zoho/update-deal', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(deal),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -1302,35 +1188,10 @@ export async function deleteZohoQuotation(zohoId: string): Promise<ZohoApiRespon
 }
 
 /**
- * Fetches all live deal records from Zoho CRM Deals module.
+ * Fetches all live deal records from Zoho CRM Deals module with RBAC scoping.
  */
 export async function fetchZohoDeals(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
-  try {
-    const qs = buildQueryString(options);
-    const response = await fetch('/api/zoho/get-deals' + qs);
-    const result = await safeParseResponse(response);
-    if (response.ok && result.success && Array.isArray(result.data)) {
-      return {
-        success: true,
-        data: result.data,
-        info: result.info,
-        message: 'Deals fetched successfully from Zoho CRM'
-      };
-    }
-    return {
-      success: false,
-      data: [],
-      info: result.info,
-      message: result.message || 'Failed to fetch deals from Zoho CRM'
-    };
-  } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching deals:', error);
-    return {
-      success: false,
-      data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-deals endpoint'
-    };
-  }
+  return fetchZohoWithRbac('Deals', options);
 }
 
 /**
@@ -1672,12 +1533,13 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
  */
 export async function insertZohoPolicy(policy: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Company_Policies', policy);
     const response = await fetch('/api/zoho/insert-policy', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(policy),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -1710,12 +1572,13 @@ export async function insertZohoPolicy(policy: any): Promise<ZohoApiResponse> {
  */
 export async function updateZohoPolicy(policy: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Company_Policies', policy);
     const response = await fetch('/api/zoho/update-policy', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(policy),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -1881,12 +1744,13 @@ export async function insertZohoPolicyWithAttachment(
  */
 export async function insertZohoCalendarEvent(event: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Company_Calendar', event);
     const response = await fetch('/api/zoho/insert-calendar', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(event),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -1919,12 +1783,13 @@ export async function insertZohoCalendarEvent(event: any): Promise<ZohoApiRespon
  */
 export async function updateZohoCalendarEvent(event: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Company_Calendar', event);
     const response = await fetch('/api/zoho/update-calendar', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(event),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -2002,35 +1867,10 @@ export async function deleteZohoCalendarEvent(zohoId: string): Promise<ZohoApiRe
 }
 
 /**
- * Fetches all live calendar events from Zoho CRM Company_Calendar module.
+ * Fetches all live calendar events from Zoho CRM Company_Calendar module with RBAC scoping.
  */
 export async function fetchZohoCalendarEvents(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
-  try {
-    const qs = buildQueryString(options);
-    const response = await fetch('/api/zoho/get-calendar' + qs);
-    const result = await safeParseResponse(response);
-    if (response.ok && result.success && Array.isArray(result.data)) {
-      return {
-        success: true,
-        data: result.data,
-        info: result.info,
-        message: 'Calendar events fetched successfully from Zoho CRM'
-      };
-    }
-    return {
-      success: false,
-      data: [],
-      info: result.info,
-      message: result.message || 'Failed to fetch calendar events from Zoho CRM'
-    };
-  } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching calendar events:', error);
-    return {
-      success: false,
-      data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-calendar endpoint'
-    };
-  }
+  return fetchZohoWithRbac('Company_Calendar', options);
 }
 
 /**
@@ -2039,12 +1879,13 @@ export async function fetchZohoCalendarEvents(options?: ZohoFetchOptions): Promi
  */
 export async function insertZohoDsr(dsr: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('DSR', dsr);
     const response = await fetch('/api/zoho/insert-dsr', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(dsr),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -2077,12 +1918,13 @@ export async function insertZohoDsr(dsr: any): Promise<ZohoApiResponse> {
  */
 export async function updateZohoDsr(dsr: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('DSR', dsr);
     const response = await fetch('/api/zoho/update-dsr', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(dsr),
+      body: JSON.stringify(payload),
     });
 
     const data = await safeParseResponse(response);
@@ -2160,35 +2002,10 @@ export async function deleteZohoDsr(zohoId: string): Promise<ZohoApiResponse> {
 }
 
 /**
- * Fetches all live DSR records from Zoho CRM DSR module.
+ * Fetches all live DSR records from Zoho CRM DSR module with RBAC scoping.
  */
 export async function fetchZohoDsr(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
-  try {
-    const qs = buildQueryString(options);
-    const response = await fetch('/api/zoho/get-dsr' + qs);
-    const result = await safeParseResponse(response);
-    if (response.ok && result.success && Array.isArray(result.data)) {
-      return {
-        success: true,
-        data: result.data,
-        info: result.info,
-        message: 'DSR records fetched successfully from Zoho CRM'
-      };
-    }
-    return {
-      success: false,
-      data: [],
-      info: result.info,
-      message: result.message || 'Failed to fetch dsr records from Zoho CRM'
-    };
-  } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching dsr records:', error);
-    return {
-      success: false,
-      data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-dsr endpoint'
-    };
-  }
+  return fetchZohoWithRbac('DSR', options);
 }
 
 export interface ZohoAttendanceRecord {
@@ -2288,10 +2105,11 @@ export async function fetchZohoAttendance(options?: ZohoAttendanceFetchOptions):
  */
 export async function saveOrUpdateZohoAttendance(record: ZohoAttendancePayload): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Attendance', record as any);
     const response = await fetch('/api/zoho/save-attendance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(record),
+      body: JSON.stringify(payload),
     });
     const data = await safeParseResponse(response);
     if (response.ok && data.success) {
@@ -2390,35 +2208,10 @@ export function parsePunchesTimeline(punchesStr?: string | null): string[] {
 }
 
 /**
- * Fetches all live query records from Zoho CRM Cases module.
+ * Fetches all live query records from Zoho CRM Cases module with RBAC scoping.
  */
 export async function fetchZohoQueries(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
-  try {
-    const qs = buildQueryString(options);
-    const response = await fetch('/api/zoho/get-queries' + qs);
-    const result = await safeParseResponse(response);
-    if (response.ok && result.success && Array.isArray(result.data)) {
-      return {
-        success: true,
-        data: result.data,
-        info: result.info,
-        message: 'Queries fetched successfully from Zoho CRM'
-      };
-    }
-    return {
-      success: false,
-      data: [],
-      info: result.info,
-      message: result.message || 'Failed to fetch queries from Zoho CRM'
-    };
-  } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching queries:', error);
-    return {
-      success: false,
-      data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-queries endpoint'
-    };
-  }
+  return fetchZohoWithRbac('Raised_Queries', options);
 }
 
 /**
@@ -2426,10 +2219,11 @@ export async function fetchZohoQueries(options?: ZohoFetchOptions): Promise<Zoho
  */
 export async function insertZohoQuery(query: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Raised_Queries', query);
     const response = await fetch('/api/zoho/insert-query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(query),
+      body: JSON.stringify(payload),
     });
     const data = await safeParseResponse(response);
     if (response.ok && data.success) {
@@ -2459,10 +2253,11 @@ export async function insertZohoQuery(query: any): Promise<ZohoApiResponse> {
  */
 export async function updateZohoQuery(query: any): Promise<ZohoApiResponse> {
   try {
+    const payload = injectEmployeeLookup('Raised_Queries', query);
     const response = await fetch('/api/zoho/update-query', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(query),
+      body: JSON.stringify(payload),
     });
     const data = await safeParseResponse(response);
     if (response.ok && data.success) {

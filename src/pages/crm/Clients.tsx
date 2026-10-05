@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, Filter, X, UserCircle, Building2, Phone, Mail, Edit, Trash2, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { Pagination } from '../../components/ui/Pagination';
 import { saveOrUpdateZohoClient, deleteZohoClient, insertZohoClient, fetchZohoClients } from '../../services/zohoService';
 
@@ -21,6 +22,7 @@ export interface Client {
 }
 
 export const Clients = () => {
+  const { currentUser, filterRecords } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,6 +34,10 @@ export const Clients = () => {
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+
+  const rbacClients = useMemo(() => {
+    return filterRecords ? filterRecords(clients, 'Clients') : clients;
+  }, [clients, filterRecords, currentUser]);
 
   // Form State
   const initialFormData = {
@@ -75,7 +81,11 @@ export const Clients = () => {
 
   const saveToStorage = (newClients: Client[]) => {
     setClients(newClients);
-    localStorage.setItem('be_clients', JSON.stringify(newClients));
+    try {
+      localStorage.setItem('be_clients', JSON.stringify(newClients));
+    } catch (e) {
+      console.warn('LocalStorage save error for clients:', e);
+    }
   };
 
   const validateForm = () => {
@@ -104,64 +114,68 @@ export const Clients = () => {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    const clientId = editingClient ? editingClient.id : `CL-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const clientData: Client = {
-      id: clientId,
-      ...formData,
-      source: editingClient ? (editingClient.source || 'Manual') : 'Manual',
-      addedOn: editingClient ? editingClient.addedOn : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      zohoId: editingClient?.zohoId,
-      zohoStatus: editingClient?.zohoStatus || 'pending',
-    };
-
-    // Sync to Zoho CRM Clients Module
     try {
-      const zohoRes = await saveOrUpdateZohoClient(clientData);
-      const finalZohoId = zohoRes.zohoId || clientData.zohoId;
+      const clientId = editingClient ? editingClient.id : `CL-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      if (zohoRes.success && finalZohoId) {
-        clientData.zohoId = finalZohoId;
-        clientData.zohoStatus = 'synced';
-        clientData.zohoSyncedAt = new Date().toISOString();
-        clientData.zohoError = undefined;
+      const clientData: Client = {
+        id: clientId,
+        ...formData,
+        source: editingClient ? (editingClient.source || 'Manual') : 'Manual',
+        addedOn: editingClient ? editingClient.addedOn : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        zohoId: editingClient?.zohoId,
+        zohoStatus: editingClient?.zohoStatus || 'pending',
+      };
 
-        setToast({
-          type: 'success',
-          message: editingClient ? 'Client Updated & Synced to Zoho CRM!' : 'Client Created & Synced to Zoho CRM!',
-          submessage: `${editingClient ? 'Updated' : 'Inserted'} in Zoho Clients module (ID: #${finalZohoId})`
-        });
-      } else {
+      // Sync to Zoho CRM Clients Module
+      try {
+        const zohoRes = await saveOrUpdateZohoClient(clientData);
+        const finalZohoId = zohoRes.zohoId || clientData.zohoId;
+
+        if (zohoRes.success && finalZohoId) {
+          clientData.zohoId = finalZohoId;
+          clientData.zohoStatus = 'synced';
+          clientData.zohoSyncedAt = new Date().toISOString();
+          clientData.zohoError = undefined;
+
+          setToast({
+            type: 'success',
+            message: editingClient ? 'Client Updated & Synced to Zoho CRM!' : 'Client Created & Synced to Zoho CRM!',
+            submessage: `${editingClient ? 'Updated' : 'Inserted'} in Zoho Clients module (ID: #${finalZohoId})`
+          });
+        } else {
+          clientData.zohoStatus = 'failed';
+          clientData.zohoError = zohoRes.message;
+          setToast({
+            type: 'error',
+            message: `Client Saved Locally (Zoho ${editingClient ? 'Update' : 'Sync'} Failed)`,
+            submessage: zohoRes.message || 'Check Zoho CRM credentials or module permissions'
+          });
+        }
+      } catch (zErr: any) {
+        console.error('[Zoho CRM] Client sync exception:', zErr);
         clientData.zohoStatus = 'failed';
-        clientData.zohoError = zohoRes.message;
+        clientData.zohoError = zErr?.message || 'Sync failed';
         setToast({
           type: 'error',
-          message: `Client Saved Locally (Zoho ${editingClient ? 'Update' : 'Sync'} Failed)`,
-          submessage: zohoRes.message || 'Check Zoho CRM credentials or module permissions'
+          message: `Client Saved Locally (Zoho ${editingClient ? 'Update' : 'Sync'} Error)`,
+          submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
         });
       }
-    } catch (zErr: any) {
-      console.error('[Zoho CRM] Client sync exception:', zErr);
-      clientData.zohoStatus = 'failed';
-      clientData.zohoError = zErr?.message || 'Sync failed';
-      setToast({
-        type: 'error',
-        message: `Client Saved Locally (Zoho ${editingClient ? 'Update' : 'Sync'} Error)`,
-        submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
-      });
+
+      let updatedClients: Client[];
+      if (editingClient) {
+        updatedClients = clients.map(c => c.id === editingClient.id ? clientData : c);
+      } else {
+        updatedClients = [clientData, ...clients];
+      }
+      
+      saveToStorage(updatedClients);
+    } catch (err: any) {
+      console.error('Client save error:', err);
     } finally {
       setIsSubmitting(false);
+      closeModal();
     }
-
-    let updatedClients: Client[];
-    if (editingClient) {
-      updatedClients = clients.map(c => c.id === editingClient.id ? clientData : c);
-    } else {
-      updatedClients = [clientData, ...clients];
-    }
-    
-    saveToStorage(updatedClients);
-    closeModal();
   };
 
   const handleSyncToZoho = async (client: Client) => {
@@ -358,7 +372,7 @@ export const Clients = () => {
     setFormErrors({});
   };
 
-  const filteredClients = clients.filter(c => {
+  const filteredClients = rbacClients.filter(c => {
     const source = c.source || 'Manual';
     if (activeTab === 'Manual Clients' && source !== 'Manual') return false;
     if (activeTab === 'From Deals' && source !== 'From Deals') return false;

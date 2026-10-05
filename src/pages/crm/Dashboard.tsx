@@ -28,7 +28,7 @@ import {
 
 export const CrmDashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, isSuperAdmin, isHOD, isTL, isHR, currentRole } = useAuth();
+  const { currentUser, isSuperAdmin, isHOD, isTL, isHR, currentRole, filterRecords } = useAuth();
 
   const [deals, setDeals] = useState<any[]>([]);
   const [quotations, setQuotations] = useState<any[]>([]);
@@ -584,48 +584,56 @@ export const CrmDashboard = () => {
     return false;
   };
 
+  // =========================================================================
+  // RBAC SCOPED DATA
+  // =========================================================================
+  const rbacDeals = useMemo(() => filterRecords(deals, 'Deals'), [deals, filterRecords, currentUser]);
+  const rbacQuotations = useMemo(() => filterRecords(quotations, 'Quotations'), [quotations, filterRecords, currentUser]);
+  const rbacClients = useMemo(() => filterRecords(clients, 'Clients'), [clients, filterRecords, currentUser]);
+  const rbacQueries = useMemo(() => filterRecords(queries, 'Raised_Queries'), [queries, filterRecords, currentUser]);
+
   // 1. QUOTATION ANALYTICS
   const totalQuotationsSent = useMemo(() => {
-    return quotations.length;
-  }, [quotations]);
+    return rbacQuotations.length;
+  }, [rbacQuotations]);
 
   const totalQuotationsSentAmount = useMemo(() => {
-    return quotations.reduce((sum, q) => sum + parseMoney(q.amount || q.totals?.grandTotal), 0);
-  }, [quotations]);
+    return rbacQuotations.reduce((sum, q) => sum + parseMoney(q.amount || q.totals?.grandTotal), 0);
+  }, [rbacQuotations]);
 
   const quotationsConvertedInDeals = useMemo(() => {
-    const convertedFromQuotations = quotations.filter(q =>
+    const convertedFromQuotations = rbacQuotations.filter(q =>
       q.status === 'Converted' ||
-      deals.some(d =>
+      rbacDeals.some(d =>
         (d.quotationId && (d.quotationId === q.id || d.quotationId === q.zohoId)) ||
         (d.id && d.id === q.id.replace('QT-', 'DL-')) ||
         (d.client && q.formData?.clientName && d.client.toLowerCase() === q.formData.clientName.toLowerCase())
       )
     ).length;
 
-    const dealsWithQuotationSource = deals.filter(d =>
+    const dealsWithQuotationSource = rbacDeals.filter(d =>
       d.source === 'Quotation' || d.quotationId || (d.id && d.id.startsWith('DL-QT'))
     ).length;
 
     return Math.max(convertedFromQuotations, dealsWithQuotationSource);
-  }, [quotations, deals]);
+  }, [rbacQuotations, rbacDeals]);
 
   const quotationConversionRate = totalQuotationsSent > 0
     ? Math.min(100, Math.round((quotationsConvertedInDeals / totalQuotationsSent) * 100))
     : 0;
 
   // 2. REVENUE CALCULATIONS (TODAY, MONTH, ALL-TIME)
-  const todayDealsList = useMemo(() => deals.filter(isDealToday), [deals]);
+  const todayDealsList = useMemo(() => rbacDeals.filter(isDealToday), [rbacDeals]);
   const todayRevenueReceived = useMemo(() => todayDealsList.reduce((sum, d) => sum + getDealReceived(d), 0), [todayDealsList]);
   const todayRevenueBooked = useMemo(() => todayDealsList.reduce((sum, d) => sum + getDealAmount(d), 0), [todayDealsList]);
 
-  const monthDealsList = useMemo(() => deals.filter(isDealThisMonth), [deals]);
+  const monthDealsList = useMemo(() => rbacDeals.filter(isDealThisMonth), [rbacDeals]);
   const monthRevenueReceived = useMemo(() => monthDealsList.reduce((sum, d) => sum + getDealReceived(d), 0), [monthDealsList]);
   const monthRevenueBooked = useMemo(() => monthDealsList.reduce((sum, d) => sum + getDealAmount(d), 0), [monthDealsList]);
 
-  const totalDealValue = useMemo(() => deals.reduce((sum, d) => sum + getDealAmount(d), 0), [deals]);
-  const totalReceivedValue = useMemo(() => deals.reduce((sum, d) => sum + getDealReceived(d), 0), [deals]);
-  const totalPendingValue = useMemo(() => deals.reduce((sum, d) => sum + getDealPending(d), 0), [deals]);
+  const totalDealValue = useMemo(() => rbacDeals.reduce((sum, d) => sum + getDealAmount(d), 0), [rbacDeals]);
+  const totalReceivedValue = useMemo(() => rbacDeals.reduce((sum, d) => sum + getDealReceived(d), 0), [rbacDeals]);
+  const totalPendingValue = useMemo(() => rbacDeals.reduce((sum, d) => sum + getDealPending(d), 0), [rbacDeals]);
 
   // 3. TARGET VS ACHIEVEMENT FOR HOD & SUPER ADMIN
   const targetScopeEmployees = useMemo(() => {
@@ -653,7 +661,7 @@ export const CrmDashboard = () => {
   const top5Services = useMemo(() => {
     const servicesMap = new Map<string, { service: string; count: number; totalRevenue: number; receivedRevenue: number; latestDate: string }>();
 
-    deals.forEach((d) => {
+    rbacDeals.forEach((d) => {
       let sName = d.service || d.Choose_Wisely || 'General Consulting';
       if (!sName || sName === 'N/A' || sName === 'Choose Wisely') sName = 'Business Services';
 
@@ -689,7 +697,7 @@ export const CrmDashboard = () => {
       sharePercent: totalDealValue > 0 ? Math.round((item.totalRevenue / totalDealValue) * 100) : 0,
       relativePercent: Math.round((item.totalRevenue / maxRevenue) * 100)
     }));
-  }, [deals, totalDealValue]);
+  }, [rbacDeals, totalDealValue]);
 
   // 5. TOP 5 PERFORMER EMPLOYEES
   const top5PerformerEmployees = useMemo(() => {
@@ -727,7 +735,7 @@ export const CrmDashboard = () => {
     });
 
     // 2. Aggregate deals data by primary owner and Partner BDM
-    deals.forEach(deal => {
+    rbacDeals.forEach(deal => {
       const amt = getDealAmount(deal);
       const rec = getDealReceived(deal);
       const isWon = deal.status === 'Won' || deal.stage?.includes('Won') || deal.stage === 'Operations executors';
@@ -821,7 +829,7 @@ export const CrmDashboard = () => {
         relativePercent: Math.round((item.totalRevenue / maxRev) * 100)
       };
     });
-  }, [deals, employees]);
+  }, [rbacDeals, employees]);
 
   // 6. TOP 5 PERFORMER TEAMS & SQUADS
   const top5PerformerTeams = useMemo(() => {
@@ -863,7 +871,7 @@ export const CrmDashboard = () => {
     });
 
     // 2. Link deals to team
-    deals.forEach(deal => {
+    rbacDeals.forEach(deal => {
       const amt = getDealAmount(deal);
       const rec = getDealReceived(deal);
       const isWon = deal.status === 'Won' || deal.stage?.includes('Won');
@@ -924,7 +932,7 @@ export const CrmDashboard = () => {
       sharePercent: totalDealValue > 0 ? Math.round((item.totalRevenue / totalDealValue) * 100) : 0,
       relativePercent: Math.round((item.totalRevenue / maxRev) * 100)
     }));
-  }, [deals, employees, totalDealValue]);
+  }, [rbacDeals, employees, totalDealValue]);
 
   // 7. PIPELINE & CHART DATA
   const pipelineCategories = [
@@ -939,13 +947,13 @@ export const CrmDashboard = () => {
 
   const pipelineData = pipelineCategories.map(cat => ({
     name: cat.label,
-    count: deals.filter(d => cat.matcher(d.stage || d.status || '')).length
+    count: rbacDeals.filter(d => cat.matcher(d.stage || d.status || '')).length
   }));
 
   // Monthly revenue aggregation
   const monthlyRevenueMap = new Map<string, { received: number; pending: number; total: number }>();
 
-  deals.forEach(d => {
+  rbacDeals.forEach(d => {
     let monthLabel = '';
     if (d.date) {
       try {
@@ -987,9 +995,9 @@ export const CrmDashboard = () => {
     ];
   }
 
-  const recentDeals = deals.slice(0, 6);
-  const recentQuotationsList = quotations.slice(0, 6);
-  const openQueriesCount = queries.filter(q => q.status !== 'Resolved' && q.status !== 'Closed').length;
+  const recentDeals = rbacDeals.slice(0, 6);
+  const recentQuotationsList = rbacQuotations.slice(0, 6);
+  const openQueriesCount = rbacQueries.filter(q => q.status !== 'Resolved' && q.status !== 'Closed').length;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -1020,7 +1028,7 @@ export const CrmDashboard = () => {
               {currentRole || 'Administrator'} View
             </span>
             <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              {deals.length.toLocaleString()} Live Deals
+              {rbacDeals.length.toLocaleString()} Live Deals
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-2 font-medium">
@@ -1067,7 +1075,7 @@ export const CrmDashboard = () => {
             className="flex items-center px-4 py-2.5 bg-gradient-to-r from-be-orange to-amber-600 text-white rounded-xl text-xs font-bold hover:from-orange-600 hover:to-amber-700 transition-all shadow-md shadow-orange-500/20"
           >
             <Send size={14} className="mr-1.5" />
-            Quotations ({quotations.length})
+            Quotations ({rbacQuotations.length})
           </button>
         </div>
       </div>
@@ -1565,7 +1573,7 @@ export const CrmDashboard = () => {
             </div>
           </div>
           <div className="h-80 w-full flex items-center justify-center">
-            {deals.length > 0 ? (
+            {rbacDeals.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={revenueChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                   <defs>
@@ -1609,7 +1617,7 @@ export const CrmDashboard = () => {
               </div>
             </div>
             <div className="w-full min-h-[220px] flex items-center justify-center">
-              {deals.length > 0 ? (
+              {rbacDeals.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={pipelineData} layout="vertical" margin={{ top: 0, right: 15, left: -10, bottom: 0 }}>
                     <defs>
@@ -1653,14 +1661,14 @@ export const CrmDashboard = () => {
                 className={`px-3.5 py-1.5 rounded-xl transition-all ${recentTab === 'deals' ? 'bg-white text-gray-900 shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
                   }`}
               >
-                Recent Deals ({deals.length})
+                Recent Deals ({rbacDeals.length})
               </button>
               <button
                 onClick={() => setRecentTab('quotations')}
                 className={`px-3.5 py-1.5 rounded-xl transition-all ${recentTab === 'quotations' ? 'bg-white text-gray-900 shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
                   }`}
               >
-                Recent Quotations ({quotations.length})
+                Recent Quotations ({rbacQuotations.length})
               </button>
             </div>
           </div>

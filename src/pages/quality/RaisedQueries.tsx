@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Search,
   Filter,
@@ -21,6 +21,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { saveDocument, getDocument, deleteDocument } from "../../lib/db";
 import { fetchZohoQueries, saveOrUpdateZohoQuery, deleteZohoQuery } from "../../services/zohoService";
+import { useAuth } from "../../context/AuthContext";
 
 interface Query {
   id: string;
@@ -39,12 +40,15 @@ interface Query {
 }
 
 export const RaisedQueries = () => {
+  const { currentUser, filterRecords } = useAuth();
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [queries, setQueries] = useState<Query[]>([]);
   const [deals, setDeals] = useState<any[]>([]);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
+
+  const rbacQueries = useMemo(() => filterRecords(queries, 'Raised_Queries'), [queries, filterRecords, currentUser]);
 
   const [formData, setFormData] = useState({
     salesEmployee: "",
@@ -445,7 +449,7 @@ export const RaisedQueries = () => {
               </tr>
             </thead>
             <tbody className="text-gray-700">
-              {queries.map((q) => (
+              {rbacQueries.map((q) => (
                 <tr
                   key={q.id}
                   className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm cursor-pointer"
@@ -535,7 +539,7 @@ export const RaisedQueries = () => {
                   </td>
                 </tr>
               ))}
-              {queries.length === 0 && (
+              {rbacQueries.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
                     {isFetchingZoho ? (

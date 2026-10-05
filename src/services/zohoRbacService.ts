@@ -46,35 +46,53 @@ export function resolveAccessibleEmployeeIds(
   const role = user.role;
   const userEmpId = (user.empId || user.id || '').trim().toLowerCase();
   const userZohoId = (user.zohoId || '').trim();
+  const userName = (user.name || '').trim().toLowerCase();
+  const userEmail = (user.email || '').trim().toLowerCase();
 
   // 1. Super Admin / Admin has full organizational visibility
-  if (role === 'Super Admin' || user.email === 'md@bharat-edge.com') {
+  if (role === 'Super Admin' || userEmail === 'superadmin@be.com' || userEmail === 'md@bharat-edge.com') {
     return { employeeIds: [], zohoIds: [], isAll: true };
   }
 
   // 2. HR Admin has full visibility over HRMS and organization
-  if (role === 'HR' || user.email?.toLowerCase().includes('hr@')) {
+  if (role === 'HR' || userEmail === 'hrmshr@be.com') {
     return { employeeIds: [], zohoIds: [], isAll: true };
   }
 
-  // 3. Head of Department (HOD) - can view all records in their department
+  // 3. Head of Department (HOD) - Department-wide + Team (Combines with TL logic for direct reports)
+  // In departments like Marketing, the HOD and Team Leader are often the exact same person.
+  // Therefore, the HOD logic dynamically combines with TL logic to ensure both department-wide
+  // records AND direct reports via Reporting_Manager are accessible.
   if (role === 'HOD') {
     const userDept = (user.department || '').trim().toLowerCase();
-    const deptEmployees = allEmployees.filter((e: any) => {
-      const eDept = (e.dept || e.department || e.formData?.dept || '').trim().toLowerCase();
-      return eDept === userDept || (userDept === 'management');
-    });
-
     const empIds = new Set<string>();
     const zIds = new Set<string>();
 
     if (userEmpId) empIds.add(userEmpId);
     if (userZohoId) zIds.add(userZohoId);
+    if (user.id) empIds.add(String(user.id).toLowerCase());
 
-    deptEmployees.forEach((e: any) => {
-      if (e.id) empIds.add(String(e.id).toLowerCase());
-      if (e.empId) empIds.add(String(e.empId).toLowerCase());
-      if (e.zohoId) zIds.add(String(e.zohoId));
+    allEmployees.forEach((e: any) => {
+      const eDept = (e.dept || e.department || e.formData?.dept || '').trim().toLowerCase();
+      const tlId = (e.teamLeaderId || e.formData?.teamLeaderId || '').trim().toLowerCase();
+      const tlName = (e.teamLeaderName || e.Who_is_the_Team_Leader_TL || e.formData?.teamLeaderName || '').trim().toLowerCase();
+      const rmId = (e.reportingManagerId || e.formData?.reportingManagerId || '').trim().toLowerCase();
+      const rmName = (e.reportingManagerName || e.Reporting_Manager || e.formData?.reportingManagerName || '').trim().toLowerCase();
+
+      const inDept = eDept === userDept || (userDept === 'management') || (userDept === 'sales' && (eDept.includes('sale') || eDept.includes('bdm'))) || (userDept === 'operations' && eDept.includes('operat'));
+      const isDirectReport = (
+        (tlId && (tlId === userEmpId || tlId === userZohoId.toLowerCase())) ||
+        (rmId && (rmId === userEmpId || rmId === userZohoId.toLowerCase())) ||
+        (tlName && userName && (tlName === userName || userName.includes(tlName))) ||
+        (rmName && userName && (rmName === userName || userName.includes(rmName)))
+      );
+
+      if (inDept || isDirectReport) {
+        if (e.id) empIds.add(String(e.id).toLowerCase());
+        if (e.empId) empIds.add(String(e.empId).toLowerCase());
+        if (e.zohoId) zIds.add(String(e.zohoId));
+        if (e.Employment_ID) empIds.add(String(e.Employment_ID).toLowerCase());
+      }
     });
 
     return {
@@ -84,33 +102,34 @@ export function resolveAccessibleEmployeeIds(
     };
   }
 
-  // 4. Team Leader (TL) - can view own data AND all team members reporting to them
+  // 4. Team Leader (TL) - Self + Team (direct reports via Reporting_Manager or Team Leader)
   if (role === 'TL') {
-    const teamEmployees = allEmployees.filter((e: any) => {
-      const tlId = (e.teamLeaderId || e.formData?.teamLeaderId || '').trim().toLowerCase();
-      const tlName = (e.teamLeaderName || e.formData?.teamLeaderName || '').trim().toLowerCase();
-      const rmId = (e.reportingManagerId || e.formData?.reportingManagerId || '').trim().toLowerCase();
-      const rmName = (e.reportingManagerName || e.formData?.reportingManagerName || '').trim().toLowerCase();
-      const userName = (user.name || '').trim().toLowerCase();
-
-      return (
-        (tlId && (tlId === userEmpId || tlId === userZohoId.toLowerCase())) ||
-        (rmId && (rmId === userEmpId || rmId === userZohoId.toLowerCase())) ||
-        (tlName && userName && tlName === userName) ||
-        (rmName && userName && rmName === userName)
-      );
-    });
-
     const empIds = new Set<string>();
     const zIds = new Set<string>();
 
     if (userEmpId) empIds.add(userEmpId);
     if (userZohoId) zIds.add(userZohoId);
+    if (user.id) empIds.add(String(user.id).toLowerCase());
 
-    teamEmployees.forEach((e: any) => {
-      if (e.id) empIds.add(String(e.id).toLowerCase());
-      if (e.empId) empIds.add(String(e.empId).toLowerCase());
-      if (e.zohoId) zIds.add(String(e.zohoId));
+    allEmployees.forEach((e: any) => {
+      const tlId = (e.teamLeaderId || e.formData?.teamLeaderId || '').trim().toLowerCase();
+      const tlName = (e.teamLeaderName || e.Who_is_the_Team_Leader_TL || e.formData?.teamLeaderName || '').trim().toLowerCase();
+      const rmId = (e.reportingManagerId || e.formData?.reportingManagerId || '').trim().toLowerCase();
+      const rmName = (e.reportingManagerName || e.Reporting_Manager || e.formData?.reportingManagerName || '').trim().toLowerCase();
+
+      const isSubordinate = (
+        (tlId && (tlId === userEmpId || tlId === userZohoId.toLowerCase())) ||
+        (rmId && (rmId === userEmpId || rmId === userZohoId.toLowerCase())) ||
+        (tlName && userName && (tlName === userName || userName.includes(tlName))) ||
+        (rmName && userName && (rmName === userName || userName.includes(rmName)))
+      );
+
+      if (isSubordinate) {
+        if (e.id) empIds.add(String(e.id).toLowerCase());
+        if (e.empId) empIds.add(String(e.empId).toLowerCase());
+        if (e.zohoId) zIds.add(String(e.zohoId));
+        if (e.Employment_ID) empIds.add(String(e.Employment_ID).toLowerCase());
+      }
     });
 
     return {
@@ -121,11 +140,29 @@ export function resolveAccessibleEmployeeIds(
   }
 
   // 5. Team Member (TM) - strictly self only
-  const selfEmpIds = userEmpId ? [userEmpId] : [];
-  const selfZohoIds = userZohoId ? [userZohoId] : [];
+  const selfEmpIds = new Set<string>();
+  const selfZohoIds = new Set<string>();
+  if (userEmpId) selfEmpIds.add(userEmpId);
+  if (userZohoId) selfZohoIds.add(userZohoId);
+  if (user.id) selfEmpIds.add(String(user.id).toLowerCase());
+
+  // Also query registered employee list to add their linked Zoho record ID
+  const matchedSelf = allEmployees.find((e: any) => {
+    const eEmail = (e.email || e.workEmail || e.formData?.workEmail || e.formData?.email || '').trim().toLowerCase();
+    const eEmpId = (e.id || e.empId || e.Employment_ID || e.formData?.empId || '').toString().trim().toLowerCase();
+    const eName = (e.name || '').trim().toLowerCase();
+    return (userEmail && eEmail === userEmail) || (userEmpId && eEmpId === userEmpId) || (userName && eName === userName);
+  });
+  if (matchedSelf) {
+    if (matchedSelf.zohoId) selfZohoIds.add(String(matchedSelf.zohoId));
+    if (matchedSelf.empId) selfEmpIds.add(String(matchedSelf.empId).toLowerCase());
+    if (matchedSelf.id) selfEmpIds.add(String(matchedSelf.id).toLowerCase());
+    if (matchedSelf.Employment_ID) selfEmpIds.add(String(matchedSelf.Employment_ID).toLowerCase());
+  }
+
   return {
-    employeeIds: selfEmpIds,
-    zohoIds: selfZohoIds,
+    employeeIds: Array.from(selfEmpIds),
+    zohoIds: Array.from(selfZohoIds),
     isAll: false
   };
 }
@@ -139,66 +176,132 @@ export function resolveAccessibleEmployeeIds(
 export function injectEmployeeLookup(
   moduleName: string,
   payload: Record<string, any>,
-  customUser?: AuthUser | null
+  customUser?: AuthUser | null,
+  allEmployees: any[] = getAllEmployeesList()
 ): Record<string, any> {
   const config = ZOHO_MODULE_LOOKUP_MAP[moduleName];
 
-  // 1. If module is explicitly exempt from employee lookup, return unmodified
-  if (config?.isLookupExempt || moduleName === 'Company_Calendar' || moduleName === 'Company_Policies' || moduleName === 'Calendar' || moduleName === 'Policies') {
-    return { ...payload };
-  }
-
   const user = customUser || getActiveAuthUser();
-  if (!user) {
-    return { ...payload };
-  }
-
-  const employeeZohoId = user.zohoId || user.empId || user.id;
-  if (!employeeZohoId) {
-    return { ...payload };
-  }
-
-  const lookupField = config?.lookupField || 'Employee';
   const updatedPayload: Record<string, any> = { ...payload };
 
-  // 2. Inject standard Zoho CRM lookup object if not already explicitly provided
-  if (!updatedPayload[lookupField]) {
+  // 1. Resolve employee Zoho ID, Employment ID, and Name from payload or active user session
+  let employeeZohoId = (
+    payload.employeeZohoId ||
+    payload.empZohoId ||
+    payload.formData?.employeeZohoId ||
+    (typeof payload.Employee === 'object' ? payload.Employee?.id : null) ||
+    (typeof payload.Employee === 'string' && /^\d+$/.test(payload.Employee) ? payload.Employee : null) ||
+    user?.zohoId
+  );
+
+  let employeeName = (
+    payload.employeeName ||
+    payload.empName ||
+    payload.salesEmployee ||
+    payload.formData?.employeeName ||
+    (typeof payload.Employee === 'object' ? payload.Employee?.name : null) ||
+    user?.name
+  );
+
+  let employmentId = (
+    payload.empId ||
+    payload.employeeId ||
+    payload.Employment_ID ||
+    payload.Employee_Code ||
+    payload.formData?.empId ||
+    user?.empId ||
+    user?.id
+  );
+
+  // If zohoId is not yet a real Zoho record ID (18-19 digit number), resolve from registered employee directory
+  if ((!employeeZohoId || !/^\d{15,}$/.test(String(employeeZohoId))) && user) {
+    const userEmail = (user.email || '').trim().toLowerCase();
+    const userId = (user.id || '').trim().toLowerCase();
+    const userEmpId = (user.empId || '').trim().toLowerCase();
+    const userName = (user.name || '').trim().toLowerCase();
+
+    const matchedEmp = allEmployees.find((e: any) => {
+      const eEmail = (e.email || e.workEmail || e.formData?.workEmail || e.formData?.email || '').trim().toLowerCase();
+      const eId = String(e.id || '').trim().toLowerCase();
+      const eEmpId = String(e.empId || e.Employment_ID || e.formData?.empId || '').trim().toLowerCase();
+      const eName = String(e.name || '').trim().toLowerCase();
+      return (
+        (userEmail && eEmail === userEmail) ||
+        (userEmpId && eEmpId === userEmpId) ||
+        (userId && eId === userId) ||
+        (userName && eName === userName)
+      );
+    });
+
+    if (matchedEmp) {
+      if (matchedEmp.zohoId) employeeZohoId = String(matchedEmp.zohoId);
+      if (!employeeName && matchedEmp.name) employeeName = matchedEmp.name;
+      if (!employmentId && (matchedEmp.id || matchedEmp.empId)) employmentId = matchedEmp.empId || matchedEmp.id;
+    }
+  }
+
+  // Fallback to employmentId if no specific zohoId available
+  if (!employeeZohoId && employmentId) {
+    employeeZohoId = employmentId;
+  }
+
+  // 2. Inject standard Zoho CRM lookup object and metadata
+  if (employeeZohoId) {
+    const lookupField = config?.lookupField || 'Employee';
+
+    // Standard Zoho CRM lookup object
     updatedPayload[lookupField] = {
       id: String(employeeZohoId),
-      name: user.name || undefined
+      ...(employeeName ? { name: employeeName } : {})
     };
-  } else if (typeof updatedPayload[lookupField] === 'string') {
-    updatedPayload[lookupField] = {
-      id: updatedPayload[lookupField],
-      name: user.name || undefined
-    };
+
+    // Standard client & server payload keys
+    updatedPayload.employeeZohoId = String(employeeZohoId);
+    if (employeeName) {
+      updatedPayload.employeeName = employeeName;
+      updatedPayload.empName = employeeName;
+      if (!updatedPayload.salesEmployee) updatedPayload.salesEmployee = employeeName;
+    }
+    if (employmentId) {
+      updatedPayload.empId = String(employmentId);
+      updatedPayload.employeeId = String(employmentId);
+      updatedPayload.Employment_ID = String(employmentId);
+      updatedPayload.Employee_Code = String(employmentId);
+    }
   }
 
   // 3. Populate secondary lookup / owner fields for complete cross-module layout compatibility
-  if (config?.secondaryLookupFields) {
+  if (config?.secondaryLookupFields && user) {
     config.secondaryLookupFields.forEach(field => {
       if (!updatedPayload[field]) {
         if (field.toLowerCase().includes('name')) {
-          updatedPayload[field] = user.name;
+          updatedPayload[field] = employeeName || user.name;
         } else if (field.toLowerCase().includes('id') || field.toLowerCase().includes('code')) {
-          updatedPayload[field] = String(employeeZohoId);
+          updatedPayload[field] = String(employeeZohoId || user.empId || user.id);
         }
       }
     });
   }
 
   // 4. Inject standard audit metadata
-  if (!updatedPayload.Employee_ID && !updatedPayload.empId) {
+  if (!updatedPayload.Employee_ID && !updatedPayload.empId && user) {
     updatedPayload.Employee_ID = user.empId || user.id;
   }
-  if (!updatedPayload.Employee_Name && !updatedPayload.employeeName) {
+  if (!updatedPayload.Employee_Name && !updatedPayload.employeeName && user) {
     updatedPayload.Employee_Name = user.name;
   }
-  if (!updatedPayload.Department_Name && !updatedPayload.department) {
+  if (!updatedPayload.Department_Name && !updatedPayload.department && user) {
     updatedPayload.Department_Name = user.department;
   }
 
   return updatedPayload;
+}
+
+/**
+ * Convenience helper to associate the active logged-in employee record as a lookup on any record
+ */
+export function attachCurrentUserEmployeeLookup<T = any>(record: T, customUser?: AuthUser | null): T {
+  return injectEmployeeLookup('Generic', record as any, customUser) as T;
 }
 
 /**
@@ -281,50 +384,91 @@ export function filterRecordsByRbac<T = any>(
   if (!user) return records;
 
   const config = ZOHO_MODULE_LOOKUP_MAP[moduleName];
-  if (config?.isLookupExempt) return records;
+  if (config?.isLookupExempt || moduleName === 'Company_Calendar' || moduleName === 'Company_Policies' || moduleName === 'Calendar' || moduleName === 'Policies') {
+    return records;
+  }
 
   const { employeeIds, zohoIds, isAll } = resolveAccessibleEmployeeIds(user, allEmployees);
   if (isAll) return records;
 
   const idSet = new Set<string>();
-  employeeIds.forEach(id => idSet.add(id.toLowerCase()));
-  zohoIds.forEach(id => idSet.add(id.toLowerCase()));
+  employeeIds.forEach(id => {
+    if (id && id.trim()) idSet.add(id.trim().toLowerCase());
+  });
+  zohoIds.forEach(id => {
+    if (id && id.trim()) idSet.add(id.trim().toLowerCase());
+  });
 
   const userName = (user.name || '').trim().toLowerCase();
   const userEmail = (user.email || '').trim().toLowerCase();
+  const userDept = (user.department || '').trim().toLowerCase();
 
   return records.filter((rec: any) => {
     // 1. Check direct Employee lookup object
     if (rec.Employee && typeof rec.Employee === 'object') {
-      const empId = String(rec.Employee.id || '').toLowerCase();
-      const empName = String(rec.Employee.name || '').toLowerCase();
+      const empId = String(rec.Employee.id || '').trim().toLowerCase();
+      const empName = String(rec.Employee.name || '').trim().toLowerCase();
       if (empId && idSet.has(empId)) return true;
-      if (empName && empName === userName) return true;
+      if (empName && userName && (empName === userName || (empName.length >= 3 && userName.includes(empName)) || (userName.length >= 3 && empName.includes(userName)) || idSet.has(empName))) return true;
     }
 
     // 2. Check string Employee ID fields
-    const directEmpId = String(rec.Employee || rec.employeeId || rec.empId || rec.Employee_ID || '').toLowerCase();
+    const directEmpId = String(rec.Employee || rec.employeeId || rec.empId || rec.Employment_ID || rec.Employee_Code || rec.Employee_ID || '').trim().toLowerCase();
     if (directEmpId && idSet.has(directEmpId)) return true;
 
     // 3. Check Owner / BDM / Creator fields
     if (rec.Owner && typeof rec.Owner === 'object') {
-      const ownerId = String(rec.Owner.id || '').toLowerCase();
-      const ownerName = String(rec.Owner.name || '').toLowerCase();
+      const ownerId = String(rec.Owner.id || '').trim().toLowerCase();
+      const ownerName = String(rec.Owner.name || '').trim().toLowerCase();
       if (ownerId && idSet.has(ownerId)) return true;
-      if (ownerName && (ownerName === userName || idSet.has(ownerName))) return true;
+      if (ownerName && userName && (ownerName === userName || (ownerName.length >= 3 && userName.includes(ownerName)) || (userName.length >= 3 && ownerName.includes(userName)) || idSet.has(ownerName))) return true;
     }
 
-    const ownerStr = String(rec.owner || rec.Owner || rec.Created_By || rec.salesEmployee || '').toLowerCase();
-    if (ownerStr && (ownerStr === userName || idSet.has(ownerStr) || ownerStr === userEmail)) {
+    const ownerStr = String(rec.owner || rec.Owner || rec.Created_By || rec.salesEmployee || rec.BDM_names || '').trim().toLowerCase();
+    if (ownerStr && userName && (ownerStr === userName || (ownerStr.length >= 3 && userName.includes(ownerStr)) || (userName.length >= 3 && ownerStr.includes(userName)) || idSet.has(ownerStr))) {
+      return true;
+    }
+    if (ownerStr && userEmail && ownerStr === userEmail) {
       return true;
     }
 
-    // 4. Check Partner BDM ID
-    const bdmId = String(rec.partnerBdmId || rec.partner_bdm_id || rec.Partner_BDM_ID || '').toLowerCase();
+    // 4. Check Partner BDM
+    const bdmId = String(rec.partnerBdmId || rec.partner_bdm_id || rec.Partner_BDM_ID || '').trim().toLowerCase();
     if (bdmId && idSet.has(bdmId)) return true;
+    const bdmName = String(rec.partnerBdmName || rec.partner_bdm_name || rec.Partner_BDM_Name || '').trim().toLowerCase();
+    if (bdmName && userName && (bdmName === userName || (bdmName.length >= 3 && userName.includes(bdmName)) || (userName.length >= 3 && bdmName.includes(userName)))) return true;
+
+    // 5. For HOD role, check if record's department matches HOD's department
+    if (user.role === 'HOD') {
+      const recDept = String(rec.Department || rec.department || rec.Department_Name || '').trim().toLowerCase();
+      if (recDept && userDept && (recDept === userDept || userDept === 'management' || (userDept === 'sales' && (recDept.includes('sale') || recDept.includes('bdm'))))) return true;
+    }
+
+    // 6. Check if associated employee name belongs to accessible employees
+    const recEmpName = String(rec.employeeName || rec.Employee_Name || '').trim().toLowerCase();
+    if (recEmpName && userName && (recEmpName === userName || (recEmpName.length >= 3 && userName.includes(recEmpName)) || (userName.length >= 3 && recEmpName.includes(userName)) || idSet.has(recEmpName))) return true;
 
     return false;
   });
+}
+
+/**
+ * Maps standard module names to their respective API endpoint paths
+ */
+export function getEndpointForModule(moduleName: string): string {
+  const norm = moduleName.toLowerCase().replace(/_/g, '-');
+  if (norm === 'leave-management' || norm === 'leave' || norm === 'leaves') return '/api/zoho/get-leaves';
+  if (norm === 'daily-attendance' || norm === 'attendance') return '/api/zoho/get-attendance';
+  if (norm === 'raised-queries' || norm === 'cases' || norm === 'queries' || norm === 'query') return '/api/zoho/get-queries';
+  if (norm === 'company-policies' || norm === 'policies' || norm === 'policy') return '/api/zoho/get-policies';
+  if (norm === 'company-calendar' || norm === 'calendar') return '/api/zoho/get-calendar';
+  if (norm === 'employee' || norm === 'employees') return '/api/zoho/get-employees';
+  if (norm === 'quotation' || norm === 'quotations') return '/api/zoho/get-quotations';
+  if (norm === 'deal' || norm === 'deals') return '/api/zoho/get-deals';
+  if (norm === 'client' || norm === 'clients') return '/api/zoho/get-clients';
+  if (norm === 'company' || norm === 'companies') return '/api/zoho/get-companies';
+  if (norm === 'dsr') return '/api/zoho/get-dsr';
+  return `/api/zoho/get-${norm}`;
 }
 
 /**
@@ -352,8 +496,12 @@ export async function mutateZohoWithRbac<T = any>(
       Employee: { insert: '/api/zoho/insert-employee', update: '/api/zoho/update-employee' },
       DSR: { insert: '/api/zoho/insert-dsr', update: '/api/zoho/update-dsr' },
       Leaves: { insert: '/api/zoho/insert-leave', update: '/api/zoho/update-leave' },
+      Leave_Management: { insert: '/api/zoho/insert-leave', update: '/api/zoho/update-leave' },
       Salary: { insert: '/api/zoho/insert-salary', update: '/api/zoho/update-salary' },
       Raised_Queries: { insert: '/api/zoho/insert-query', update: '/api/zoho/update-query' },
+      Cases: { insert: '/api/zoho/insert-query', update: '/api/zoho/update-query' },
+      Company_Policies: { insert: '/api/zoho/insert-policy', update: '/api/zoho/update-policy' },
+      Company_Calendar: { insert: '/api/zoho/insert-calendar', update: '/api/zoho/update-calendar' },
     };
 
     const target = endpointMap[moduleName] || {
@@ -402,15 +550,17 @@ export async function fetchZohoWithRbac<T = any>(
     if (options?.per_page) queryParams.set('per_page', String(options.per_page || 200));
     if (options?.page_token) queryParams.set('page_token', options.page_token);
 
-    let url = `/api/zoho/get-${moduleName.toLowerCase().replace(/_/g, '-')}`;
+    const baseUrl = getEndpointForModule(moduleName);
     
     // If user has restricted role criteria, append criteria query
     if (!isUnfiltered && criteria) {
       queryParams.set('criteria', criteria);
+    } else if (options?.criteria) {
+      queryParams.set('criteria', options.criteria);
     }
 
     const qs = queryParams.toString();
-    const finalUrl = qs ? `${url}?${qs}` : url;
+    const finalUrl = qs ? `${baseUrl}?${qs}` : baseUrl;
 
     const response = await fetch(finalUrl);
     const result = await response.json();
@@ -441,3 +591,4 @@ export async function fetchZohoWithRbac<T = any>(
     };
   }
 }
+

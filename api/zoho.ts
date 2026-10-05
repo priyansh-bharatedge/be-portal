@@ -138,6 +138,17 @@ function buildQuotationZohoPayload(quotation: any): Record<string, any> {
     });
   }
 
+  // Associate Employee Lookup field with the logged-in employee record
+  const empLookupId = quotation.employeeZohoId || fd.employeeZohoId || quotation.empZohoId || fd.empZohoId || (typeof quotation.Employee === 'object' ? quotation.Employee?.id : (typeof quotation.Employee === 'string' && /^\d+$/.test(quotation.Employee) ? quotation.Employee : null));
+  if (empLookupId && String(empLookupId).trim() !== '') {
+    payload.Employee = { id: String(empLookupId).trim() };
+  }
+  const empCode = quotation.empId || fd.empId || quotation.employeeId || fd.employeeId;
+  if (empCode) {
+    payload.Employment_ID = String(empCode);
+    payload.Employee_Code = String(empCode);
+  }
+
   return payload;
 }
 
@@ -363,6 +374,17 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
     payload.partner_bdm_id = String(partnerBdmId);
   }
 
+  // Associate Employee Lookup field with the logged-in employee record
+  const empLookupId = deal.employeeZohoId || fd.employeeZohoId || deal.empZohoId || fd.empZohoId || (typeof deal.Employee === 'object' ? deal.Employee?.id : (typeof deal.Employee === 'string' && /^\d+$/.test(deal.Employee) ? deal.Employee : null));
+  if (empLookupId && String(empLookupId).trim() !== '') {
+    payload.Employee = { id: String(empLookupId).trim() };
+  }
+  const empCode = deal.empId || fd.empId || deal.employeeId || fd.employeeId;
+  if (empCode) {
+    payload.Employment_ID = String(empCode);
+    payload.Employee_Code = String(empCode);
+  }
+
   return payload;
 }
 
@@ -530,8 +552,15 @@ function buildLeaveZohoPayload(leave: any): Record<string, any> {
     payload.Secondary_Email = leave.secondaryEmail || leave.personalEmail;
   }
 
-  if (leave.employeeZohoId || leave.empZohoId) {
-    payload.Employee = { id: String(leave.employeeZohoId || leave.empZohoId) };
+  // Associate Employee Lookup field with the logged-in employee record
+  const empLookupId = leave.employeeZohoId || leave.empZohoId || (typeof leave.Employee === 'object' ? leave.Employee?.id : (typeof leave.Employee === 'string' && /^\d+$/.test(leave.Employee) ? leave.Employee : null));
+  if (empLookupId && String(empLookupId).trim() !== '') {
+    payload.Employee = { id: String(empLookupId).trim() };
+  }
+  const empCode = leave.empId || leave.employeeId;
+  if (empCode) {
+    payload.Employment_ID = String(empCode);
+    payload.Employee_Code = String(empCode);
   }
 
   return payload;
@@ -570,6 +599,17 @@ function buildCompanyZohoPayload(company: any): Record<string, any> {
   const tag = company.tag || fd.tag || company.Tag;
   if (tag) payload.Tag = tag;
 
+  // Associate Employee Lookup field with the logged-in employee record
+  const empLookupId = company.employeeZohoId || fd.employeeZohoId || company.empZohoId || fd.empZohoId || (typeof company.Employee === 'object' ? company.Employee?.id : (typeof company.Employee === 'string' && /^\d+$/.test(company.Employee) ? company.Employee : null));
+  if (empLookupId && String(empLookupId).trim() !== '') {
+    payload.Employee = { id: String(empLookupId).trim() };
+  }
+  const empCode = company.empId || fd.empId || company.employeeId || fd.employeeId;
+  if (empCode) {
+    payload.Employment_ID = String(empCode);
+    payload.Employee_Code = String(empCode);
+  }
+
   return payload;
 }
 
@@ -602,6 +642,17 @@ function buildClientZohoPayload(client: any): Record<string, any> {
 
   const tag = client.tag || fd.tag || client.Tag;
   if (tag) payload.Tag = tag;
+
+  // Associate Employee Lookup field with the logged-in employee record
+  const empLookupId = client.employeeZohoId || fd.employeeZohoId || client.empZohoId || fd.empZohoId || (typeof client.Employee === 'object' ? client.Employee?.id : (typeof client.Employee === 'string' && /^\d+$/.test(client.Employee) ? client.Employee : null));
+  if (empLookupId && String(empLookupId).trim() !== '') {
+    payload.Employee = { id: String(empLookupId).trim() };
+  }
+  const empCode = client.empId || fd.empId || client.employeeId || fd.employeeId;
+  if (empCode) {
+    payload.Employment_ID = String(empCode);
+    payload.Employee_Code = String(empCode);
+  }
 
   return payload;
 }
@@ -647,6 +698,12 @@ function buildCompanyPolicyZohoPayload(policy: any): Record<string, any> {
     payload.Email_Opt_Out = Boolean(policy.emailOptOut);
   } else if (fd.emailOptOut !== undefined && fd.emailOptOut !== null) {
     payload.Email_Opt_Out = Boolean(fd.emailOptOut);
+  }
+
+  // Associate Employee Lookup field with the logged-in employee record
+  const empLookupId = policy.employeeZohoId || fd.employeeZohoId || policy.empZohoId || fd.empZohoId || (typeof policy.Employee === 'object' ? policy.Employee?.id : (typeof policy.Employee === 'string' && /^\d+$/.test(policy.Employee) ? policy.Employee : null));
+  if (empLookupId && String(empLookupId).trim() !== '') {
+    payload.Employee = { id: String(empLookupId).trim() };
   }
 
   return payload;
@@ -700,6 +757,12 @@ function buildCompanyCalendarZohoPayload(event: any): Record<string, any> {
     payload.Email_Opt_Out = Boolean(fd.emailOptOut);
   }
 
+  // Associate Employee Lookup field with the logged-in employee record
+  const empLookupId = event.employeeZohoId || fd.employeeZohoId || event.empZohoId || fd.empZohoId || (typeof event.Employee === 'object' ? event.Employee?.id : (typeof event.Employee === 'string' && /^\d+$/.test(event.Employee) ? event.Employee : null));
+  if (empLookupId && String(empLookupId).trim() !== '') {
+    payload.Employee = { id: String(empLookupId).trim() };
+  }
+
   return payload;
 }
 
@@ -743,9 +806,15 @@ function buildDsrZohoPayload(dsr: any): Record<string, any> {
     payload.Tag = String(tag).trim();
   }
 
-  const empLookupId = dsr.employeeZohoId || fd.employeeZohoId || dsr.empZohoId || fd.empZohoId || (typeof dsr.Employee === 'object' ? dsr.Employee?.id : null);
+  // Associate Employee Lookup field with the logged-in employee record
+  const empLookupId = dsr.employeeZohoId || fd.employeeZohoId || dsr.empZohoId || fd.empZohoId || (typeof dsr.Employee === 'object' ? dsr.Employee?.id : (typeof dsr.Employee === 'string' && /^\d+$/.test(dsr.Employee) ? dsr.Employee : null));
   if (empLookupId && String(empLookupId).trim() !== '') {
     payload.Employee = { id: String(empLookupId).trim() };
+  }
+  const empCode = dsr.empId || fd.empId || dsr.employeeId || fd.employeeId;
+  if (empCode) {
+    payload.Employment_ID = String(empCode);
+    payload.Employee_Code = String(empCode);
   }
 
   if (dsr.emailOptOut !== undefined && dsr.emailOptOut !== null) {
@@ -858,6 +927,72 @@ function buildZohoPaginationQuery(req: ApiRequest, urlObj: URL): string {
   return queryParts.join('&');
 }
 
+async function executeZohoGet(
+  apiBase: string,
+  moduleName: string,
+  fields: string,
+  req: ApiRequest,
+  res: ApiResponse,
+  urlObj: URL,
+  entityName = moduleName
+) {
+  try {
+    let accessToken = await getAccessToken();
+    const criteria = urlObj.searchParams.get('criteria') || (typeof req.query?.criteria === 'string' ? req.query.criteria : '') || (Array.isArray(req.query?.criteria) ? req.query.criteria[0] : '');
+    const paginationQuery = buildZohoPaginationQuery(req, urlObj);
+
+    let crmEndpoint = criteria
+      ? `${apiBase}/crm/v8/${moduleName}/search?fields=${fields}&${paginationQuery}`
+      : `${apiBase}/crm/v8/${moduleName}?fields=${fields}&${paginationQuery}`;
+
+    let crmRes = await fetch(crmEndpoint, {
+      method: 'GET',
+      headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+    });
+
+    if (crmRes.status === 401) {
+      cachedToken = null;
+      accessToken = await getAccessToken();
+      crmRes = await fetch(crmEndpoint, {
+        method: 'GET',
+        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+      });
+    }
+
+    // Graceful fallback: If search?criteria failed with 400 or not found, fallback to list endpoint
+    if (!crmRes.ok && criteria && (crmRes.status === 400 || crmRes.status === 404)) {
+      console.warn(`[Zoho CRM] Search endpoint failed (${crmRes.status}) for ${moduleName}, falling back to list endpoint`);
+      const fallbackPagination = buildZohoPaginationQuery(req, new URL(req.url?.split('?')[0] || '/', 'http://localhost'));
+      const fallbackEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${fields}&${fallbackPagination}`;
+      const fallbackRes = await fetch(fallbackEndpoint, {
+        method: 'GET',
+        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+      });
+      if (fallbackRes.ok || fallbackRes.status === 204) {
+        crmRes = fallbackRes;
+      }
+    }
+
+    if (crmRes.status === 204) {
+      return sendJson(res, 200, { success: true, data: [] });
+    }
+
+    let crmData: any = await crmRes.json();
+    if (crmData?.code === 'NO_CONTENT' || crmData?.code === 'RECORD_NOT_FOUND') {
+      return sendJson(res, 200, { success: true, data: [] });
+    }
+
+    if (crmData?.data) {
+      return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
+    } else {
+      return sendJson(res, 400, { success: false, message: crmData?.message || `Failed to fetch ${entityName} from Zoho CRM`, errorDetails: crmData });
+    }
+  } catch (err: any) {
+    console.error(`[Zoho CRM API] Error executing GET for ${moduleName}:`, err);
+    return sendJson(res, 500, { success: false, message: err?.message || `Error fetching ${entityName} from Zoho CRM` });
+  }
+}
+
 function logZohoApiCall(actionName: string, method: string, endpoint: string, payload: any, statusCode: number, responseData: any) {
   console.log('\n==================== [ZOHO CRM API CALL] ====================');
   console.log('📌 Action:      ' + actionName);
@@ -967,35 +1102,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     // 2.5 Get Quotations
     if (action === 'get-quotations' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_MODULE_NAME || 'Quotations';
-      const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Created_Time,Modified_Time';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${quotationFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch quotations from Zoho CRM', errorDetails: crmData });
-      }
+      const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Employee,Created_Time,Modified_Time';
+      return executeZohoGet(apiBase, moduleName, quotationFields, req, res, urlObj, 'quotations');
     }
 
     // 3. Insert / Update Deal
@@ -1096,35 +1205,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     }
 
     if (action === 'get-deals' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
-      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company_name,Client_Name,Owner,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Deal_Amount,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Deal_Received_Amount,Total_Pending_Amount,Pending_amount,Deal_Pending_Amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,Partner_BDM_Name,Partner_BDM_Amount,Partner_BDM_ID,Quotation';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch deals from Zoho CRM', errorDetails: crmData });
-      }
+      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company_name,Client_Name,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Deal_Amount,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Deal_Received_Amount,Total_Pending_Amount,Pending_amount,Deal_Pending_Amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,Partner_BDM_Name,Partner_BDM_Amount,Partner_BDM_ID,Quotation';
+      return executeZohoGet(apiBase, moduleName, dealFields, req, res, urlObj, 'deals');
     }
 
     // 5. Insert / Update Employee (Includes Password field sync)
@@ -1440,35 +1523,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     // 6. Get Employees
     if (action === 'get-employees' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
       const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Contact_Number,Personal_Email_Address,Email,Gender,Marital_Status,Nationality,Blood_Group,Date_of_Birth,Date_of_Joining,Department,Designation_Job_Title,System_Role,Employment_Type,Permanent_Address,Current_Address,Education_Qualification,Professional_Certifications,Key_Skills,Languages_Known,Previous_Employer,Total_Experience,Emergency_Contact_First_Name,Emergency_Contact_Last_Name,Emergency_Contact_Number,Relationship_with_Contact,Who_is_the_Team_Leader_TL,Reporting_Manager,Pan_Number,Aadhaar_Number,Passport_Number,Driving_License_Number,Bank_Account_Number,Bank_Name,IFSC_Code,PF_Applicable,PF_Number,ESIC_Number,UAN_Number,Medical_Insurance_Number,Salary_Entity,Company_Entity,Password,Created_Time,Modified_Time';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch employees from Zoho CRM', errorDetails: crmData });
-      }
+      return executeZohoGet(apiBase, moduleName, employeeFields, req, res, urlObj, 'employees');
     }
 
     // 6b. Get Sales Employees & BDMs
@@ -1643,35 +1700,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     // 8. Get Leaves
     if (action === 'get-leaves' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_LEAVE_MODULE_NAME || 'Leave_Management';
       const leaveFields = 'id,Name,Leave_Type,Start_Date,End_Date,Approved_by_TL,Approved_by_HR,Approved_by_MD,Email,Secondary_Email,Employee,Created_Time,Modified_Time';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${leaveFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch leaves from Zoho CRM', errorDetails: crmData });
-      }
+      return executeZohoGet(apiBase, moduleName, leaveFields, req, res, urlObj, 'leaves');
     }
 
     // 9. Insert / Update Company
@@ -1733,35 +1764,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     // 10. Get Companies
     if (action === 'get-companies' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_COMPANIES_MODULE_NAME || 'Companies';
-      const companyFields = 'id,Name,Business_Type,Date_of_Incorporation,GST_Number,Email,Secondary_Email,Status,Tag,Created_Time,Modified_Time';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${companyFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch companies from Zoho CRM', errorDetails: crmData });
-      }
+      const companyFields = 'id,Name,Business_Type,Date_of_Incorporation,GST_Number,Email,Secondary_Email,Employee,Status,Tag,Created_Time,Modified_Time';
+      return executeZohoGet(apiBase, moduleName, companyFields, req, res, urlObj, 'companies');
     }
 
     // 11. Insert / Update Client
@@ -1823,35 +1828,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     // 12. Get Clients
     if (action === 'get-clients' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_CLIENTS_MODULE_NAME || 'Clients';
-      const clientFields = 'id,Name,Company_Name,Email,Mobile_Number,Secondary_Email,Status,Tag,Created_Time,Modified_Time';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${clientFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch clients from Zoho CRM', errorDetails: crmData });
-      }
+      const clientFields = 'id,Name,Company_Name,Email,Mobile_Number,Secondary_Email,Employee,Status,Tag,Created_Time,Modified_Time';
+      return executeZohoGet(apiBase, moduleName, clientFields, req, res, urlObj, 'clients');
     }
 
     // 13. Insert / Update Policy
@@ -1919,35 +1898,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     // 14. Get Policies
     if (action === 'get-policies' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_COMPANY_POLICIES_MODULE_NAME || 'Company_Policies';
       const policyFields = 'id,Name,Policy_Content,Department,Email,Secondary_Email,Tag,Email_Opt_Out,Created_By,Modified_By,Created_Time,Modified_Time';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${policyFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch company policies from Zoho CRM', errorDetails: crmData });
-      }
+      return executeZohoGet(apiBase, moduleName, policyFields, req, res, urlObj, 'company policies');
     }
 
     // 15. Insert / Update Calendar
@@ -2015,35 +1968,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     // 16. Get Calendar
     if (action === 'get-calendar' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_CALENDAR_MODULE_NAME || 'Company_Calendar';
       const calFields = 'id,Name,Date,Category_Type,Description,Email,Secondary_Email,Tag,Email_Opt_Out,Created_Time,Modified_Time';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${calFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch calendar events from Zoho CRM', errorDetails: crmData });
-      }
+      return executeZohoGet(apiBase, moduleName, calFields, req, res, urlObj, 'calendar events');
     }
 
     // 17. Insert / Update DSR
@@ -2111,35 +2038,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     // 18. Get DSR
     if (action === 'get-dsr' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_DSR_MODULE_NAME || 'DSR';
       const dsrFields = 'id,Name,Date,Description,Email,Secondary_Email,Tag,Employee,Email_Opt_Out,Created_Time,Modified_Time';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${dsrFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch DSR records from Zoho CRM', errorDetails: crmData });
-      }
+      return executeZohoGet(apiBase, moduleName, dsrFields, req, res, urlObj, 'DSR records');
     }
 
     // 19. Get Daily Attendance
@@ -2396,35 +2297,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     // 20. Get Raised Queries / Cases
     if (action === 'get-queries' && method === 'GET') {
-      let accessToken = await getAccessToken();
       const moduleName = 'Cases';
-      const caseFields = 'id,Case_Number,Subject,Description,Status,Priority,Created_Time,Modified_Time';
-      const paginationQuery = buildZohoPaginationQuery(req, urlObj);
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${caseFields}&${paginationQuery}`;
-
-      let crmRes = await fetch(crmEndpoint, {
-        method: 'GET',
-        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
-      let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-
-      if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
-        cachedToken = null;
-        accessToken = await getAccessToken();
-        crmRes = await fetch(crmEndpoint, {
-          method: 'GET',
-          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-        });
-        crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
-      }
-
-      if (crmData?.data) {
-        return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
-      } else if (crmRes.status === 204 || crmData?.code === 'NO_CONTENT') {
-        return sendJson(res, 200, { success: true, data: [] });
-      } else {
-        return sendJson(res, 400, { success: false, message: crmData?.message || 'Failed to fetch queries from Zoho CRM', errorDetails: crmData });
-      }
+      const caseFields = 'id,Case_Number,Subject,Description,Status,Priority,Employee,Created_Time,Modified_Time';
+      return executeZohoGet(apiBase, moduleName, caseFields, req, res, urlObj, 'queries');
     }
 
     // 21. Insert / Update Query
@@ -2433,6 +2308,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       const isUpdate = Boolean(q.zohoId || action === 'update-query');
       const httpMethod = isUpdate ? 'PUT' : 'POST';
 
+      const empLookupId = q.employeeZohoId || q.empZohoId || (typeof q.Employee === 'object' ? q.Employee?.id : (typeof q.Employee === 'string' && /^\d+$/.test(q.Employee) ? q.Employee : null));
       const payload: any = {
         Subject: q.query || q.subject || 'Quality Query',
         Description: q.description || '',
@@ -2440,6 +2316,12 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         Priority: q.priority || 'Medium',
       };
       if (q.zohoId) payload.id = String(q.zohoId);
+      if (empLookupId && String(empLookupId).trim() !== '') {
+        payload.Employee = { id: String(empLookupId).trim() };
+      }
+      if (q.empId || q.employeeId) {
+        payload.Employment_ID = String(q.empId || q.employeeId);
+      }
 
       let accessToken = await getAccessToken();
       const moduleName = 'Cases';

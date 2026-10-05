@@ -12,7 +12,7 @@ export const Settings = () => {
   // Profile Form
   const [formData, setFormData] = useState({
     name: currentUser?.name || 'Employee',
-    email: currentUser?.email || currentUser?.personalEmail || 'md@bharat-edge.com',
+    email: currentUser?.email || currentUser?.personalEmail || 'superadmin@be.com',
     company: 'BharatEdge Startup Advisors Private Limited',
     phone: currentUser?.mobile || '+91 9876543210'
   });
