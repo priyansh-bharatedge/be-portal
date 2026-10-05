@@ -19,6 +19,12 @@ export interface Client {
   zohoStatus?: 'synced' | 'pending' | 'failed';
   zohoSyncedAt?: string;
   zohoError?: string;
+  employeeZohoId?: string;
+  employeeName?: string;
+  employeeEmail?: string;
+  empId?: string;
+  salesEmployee?: string;
+  Employee?: { id: string; name?: string };
 }
 
 export const Clients = () => {
@@ -124,6 +130,12 @@ export const Clients = () => {
         addedOn: editingClient ? editingClient.addedOn : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         zohoId: editingClient?.zohoId,
         zohoStatus: editingClient?.zohoStatus || 'pending',
+        employeeZohoId: editingClient?.employeeZohoId || currentUser?.zohoId,
+        employeeName: editingClient?.employeeName || currentUser?.name,
+        employeeEmail: editingClient?.employeeEmail || currentUser?.email,
+        empId: editingClient?.empId || currentUser?.empId || currentUser?.id,
+        salesEmployee: editingClient?.salesEmployee || currentUser?.name,
+        Employee: editingClient?.Employee || (currentUser?.zohoId ? { id: currentUser.zohoId, name: currentUser.name } : undefined),
       };
 
       // Sync to Zoho CRM Clients Module
@@ -260,6 +272,9 @@ export const Clients = () => {
           zohoId: String(r.id),
           zohoStatus: 'synced',
           zohoSyncedAt: new Date().toISOString(),
+          employeeZohoId: r.Employee?.id ? String(r.Employee.id) : (r.employeeZohoId || ''),
+          employeeName: r.Employee?.name || r.Employee_Name || r.employeeName || '',
+          Employee: r.Employee ? { id: String(r.Employee.id), name: r.Employee.name } : undefined,
         }));
 
         setClients(prev => {

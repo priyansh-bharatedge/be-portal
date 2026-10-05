@@ -922,7 +922,12 @@ export const Deals = () => {
             source: existingComp?.source || 'From Deals',
             addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             zohoId: existingComp?.zohoId,
-            zohoStatus: existingComp?.zohoStatus || 'pending'
+            zohoStatus: existingComp?.zohoStatus || 'pending',
+            employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
+            employeeName: existingDeal?.employeeName || currentUser?.name,
+            employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
+            empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
+            salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
           };
 
           // Sync to Zoho CRM if not synced yet
@@ -979,7 +984,12 @@ export const Deals = () => {
             source: existingClient?.source || 'From Deals',
             addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             zohoId: existingClient?.zohoId,
-            zohoStatus: existingClient?.zohoStatus || 'pending'
+            zohoStatus: existingClient?.zohoStatus || 'pending',
+            employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
+            employeeName: existingDeal?.employeeName || currentUser?.name,
+            employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
+            empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
+            salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
           };
 
           // Sync to Zoho CRM if not synced yet
@@ -1233,7 +1243,12 @@ export const Deals = () => {
           source: existingComp?.source || 'From Deals',
           addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           zohoId: existingComp?.zohoId,
-          zohoStatus: existingComp?.zohoStatus || 'pending'
+          zohoStatus: existingComp?.zohoStatus || 'pending',
+          employeeZohoId: deal.employeeZohoId || deal.formData?.employeeZohoId || currentUser?.zohoId,
+          employeeName: deal.employeeName || deal.formData?.employeeName || currentUser?.name,
+          employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
+          empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
+          salesEmployee: deal.salesEmployee || currentUser?.name,
         };
         try {
           const cRes = await saveOrUpdateZohoCompany(companyToSave);
@@ -1274,7 +1289,12 @@ export const Deals = () => {
           source: existingClient?.source || 'From Deals',
           addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           zohoId: existingClient?.zohoId,
-          zohoStatus: existingClient?.zohoStatus || 'pending'
+          zohoStatus: existingClient?.zohoStatus || 'pending',
+          employeeZohoId: deal.employeeZohoId || deal.formData?.employeeZohoId || currentUser?.zohoId,
+          employeeName: deal.employeeName || deal.formData?.employeeName || currentUser?.name,
+          employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
+          empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
+          salesEmployee: deal.salesEmployee || currentUser?.name,
         };
         try {
           const clRes = await saveOrUpdateZohoClient(clientToSave);

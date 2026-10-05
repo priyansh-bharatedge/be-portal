@@ -888,7 +888,12 @@ export const Quotations = () => {
             source: existingComp?.source || 'From Deals',
             addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             zohoId: existingComp?.zohoId,
-            zohoStatus: existingComp?.zohoStatus || 'pending'
+            zohoStatus: existingComp?.zohoStatus || 'pending',
+            employeeZohoId: qToConvert.employeeZohoId || currentUser?.zohoId,
+            employeeName: qToConvert.employeeName || currentUser?.name,
+            employeeEmail: qToConvert.employeeEmail || currentUser?.email,
+            empId: qToConvert.empId || currentUser?.empId || currentUser?.id,
+            salesEmployee: qToConvert.salesEmployee || currentUser?.name,
           };
 
           if (!companyToSave.zohoId) {
@@ -941,7 +946,12 @@ export const Quotations = () => {
             source: existingClient?.source || 'From Deals',
             addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             zohoId: existingClient?.zohoId,
-            zohoStatus: existingClient?.zohoStatus || 'pending'
+            zohoStatus: existingClient?.zohoStatus || 'pending',
+            employeeZohoId: qToConvert.employeeZohoId || currentUser?.zohoId,
+            employeeName: qToConvert.employeeName || currentUser?.name,
+            employeeEmail: qToConvert.employeeEmail || currentUser?.email,
+            empId: qToConvert.empId || currentUser?.empId || currentUser?.id,
+            salesEmployee: qToConvert.salesEmployee || currentUser?.name,
           };
 
           if (!clientToSave.zohoId) {

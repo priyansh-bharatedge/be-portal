@@ -2038,6 +2038,22 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       const moduleName = process.env.VITE_ZOHO_COMPANIES_MODULE_NAME || 'Companies';
       const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
 
+      // Dynamically resolve Employee lookup to valid Zoho numeric record ID
+      if (!payload.Employee?.id || !/^\d{15,}$/.test(String(payload.Employee.id))) {
+        const empLookupInfo = {
+          id: company.employeeZohoId || company.formData?.employeeZohoId || company.empZohoId || company.formData?.empZohoId || (typeof company.Employee === 'object' ? company.Employee?.id : company.Employee),
+          name: company.employeeName || company.formData?.employeeName || company.empName || company.salesEmployee || company.owner || (typeof company.Employee === 'object' ? company.Employee?.name : null),
+          email: company.employeeEmail || company.formData?.employeeEmail || company.userEmail || company.formData?.userEmail || company.email,
+          empId: company.empId || company.formData?.empId || company.employeeId || company.formData?.employeeId,
+        };
+        const resolvedEmpId = await resolveZohoEmployeeId(empLookupInfo, accessToken, apiBase);
+        if (resolvedEmpId) {
+          payload.Employee = { id: resolvedEmpId };
+        } else {
+          delete payload.Employee;
+        }
+      }
+
       let crmRes = await fetch(crmEndpoint, {
         method: httpMethod,
         headers: {
@@ -2101,6 +2117,22 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_CLIENTS_MODULE_NAME || 'Clients';
       const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
+
+      // Dynamically resolve Employee lookup to valid Zoho numeric record ID
+      if (!payload.Employee?.id || !/^\d{15,}$/.test(String(payload.Employee.id))) {
+        const empLookupInfo = {
+          id: client.employeeZohoId || client.formData?.employeeZohoId || client.empZohoId || client.formData?.empZohoId || (typeof client.Employee === 'object' ? client.Employee?.id : client.Employee),
+          name: client.employeeName || client.formData?.employeeName || client.empName || client.salesEmployee || client.owner || (typeof client.Employee === 'object' ? client.Employee?.name : null),
+          email: client.employeeEmail || client.formData?.employeeEmail || client.userEmail || client.formData?.userEmail || client.email,
+          empId: client.empId || client.formData?.empId || client.employeeId || client.formData?.employeeId,
+        };
+        const resolvedEmpId = await resolveZohoEmployeeId(empLookupInfo, accessToken, apiBase);
+        if (resolvedEmpId) {
+          payload.Employee = { id: resolvedEmpId };
+        } else {
+          delete payload.Employee;
+        }
+      }
 
       let crmRes = await fetch(crmEndpoint, {
         method: httpMethod,

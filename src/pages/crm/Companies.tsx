@@ -20,6 +20,12 @@ export interface Company {
   zohoStatus?: 'synced' | 'pending' | 'failed';
   zohoSyncedAt?: string;
   zohoError?: string;
+  employeeZohoId?: string;
+  employeeName?: string;
+  employeeEmail?: string;
+  empId?: string;
+  salesEmployee?: string;
+  Employee?: { id: string; name?: string };
 }
 
 export const Companies = () => {
@@ -120,6 +126,12 @@ export const Companies = () => {
         addedOn: editingCompany ? editingCompany.addedOn : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         zohoId: editingCompany?.zohoId,
         zohoStatus: editingCompany?.zohoStatus || 'pending',
+        employeeZohoId: editingCompany?.employeeZohoId || currentUser?.zohoId,
+        employeeName: editingCompany?.employeeName || currentUser?.name,
+        employeeEmail: editingCompany?.employeeEmail || currentUser?.email,
+        empId: editingCompany?.empId || currentUser?.empId || currentUser?.id,
+        salesEmployee: editingCompany?.salesEmployee || currentUser?.name,
+        Employee: editingCompany?.Employee || (currentUser?.zohoId ? { id: currentUser.zohoId, name: currentUser.name } : undefined),
       };
 
       // Sync to Zoho CRM Companies Module
@@ -257,6 +269,9 @@ export const Companies = () => {
           zohoId: String(r.id),
           zohoStatus: 'synced',
           zohoSyncedAt: new Date().toISOString(),
+          employeeZohoId: r.Employee?.id ? String(r.Employee.id) : (r.employeeZohoId || ''),
+          employeeName: r.Employee?.name || r.Employee_Name || r.employeeName || '',
+          Employee: r.Employee ? { id: String(r.Employee.id), name: r.Employee.name } : undefined,
         }));
 
         setCompanies(prev => {

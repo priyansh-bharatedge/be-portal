@@ -2226,6 +2226,22 @@ function zohoApiPlugin(): Plugin {
               const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
               const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
 
+              // Dynamically resolve Employee lookup to valid Zoho numeric record ID
+              if (!payload.Employee?.id || !/^\d{15,}$/.test(String(payload.Employee.id))) {
+                const empLookupInfo = {
+                  id: company.employeeZohoId || company.formData?.employeeZohoId || company.empZohoId || company.formData?.empZohoId || (typeof company.Employee === 'object' ? company.Employee?.id : company.Employee),
+                  name: company.employeeName || company.formData?.employeeName || company.empName || company.salesEmployee || company.owner || (typeof company.Employee === 'object' ? company.Employee?.name : null),
+                  email: company.employeeEmail || company.formData?.employeeEmail || company.userEmail || company.formData?.userEmail || company.email,
+                  empId: company.empId || company.formData?.empId || company.employeeId || company.formData?.employeeId,
+                };
+                const resolvedEmpId = await resolveZohoEmployeeId(empLookupInfo, accessToken, apiBase);
+                if (resolvedEmpId) {
+                  payload.Employee = { id: resolvedEmpId };
+                } else {
+                  delete payload.Employee;
+                }
+              }
+
               console.log(`[Vite Zoho Plugin] ${isUpdate ? 'Updating' : 'Inserting'} Company in Zoho CRM (${moduleName}):`, payload.Name, company.zohoId ? `(ID: ${company.zohoId})` : '');
 
               let crmRes = await fetch(crmEndpoint, {
@@ -2367,6 +2383,22 @@ function zohoApiPlugin(): Plugin {
               const moduleName = env.VITE_ZOHO_CLIENTS_MODULE_NAME || 'Clients';
               const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
               const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
+
+              // Dynamically resolve Employee lookup to valid Zoho numeric record ID
+              if (!payload.Employee?.id || !/^\d{15,}$/.test(String(payload.Employee.id))) {
+                const empLookupInfo = {
+                  id: client.employeeZohoId || client.formData?.employeeZohoId || client.empZohoId || client.formData?.empZohoId || (typeof client.Employee === 'object' ? client.Employee?.id : client.Employee),
+                  name: client.employeeName || client.formData?.employeeName || client.empName || client.salesEmployee || client.owner || (typeof client.Employee === 'object' ? client.Employee?.name : null),
+                  email: client.employeeEmail || client.formData?.employeeEmail || client.userEmail || client.formData?.userEmail || client.email,
+                  empId: client.empId || client.formData?.empId || client.employeeId || client.formData?.employeeId,
+                };
+                const resolvedEmpId = await resolveZohoEmployeeId(empLookupInfo, accessToken, apiBase);
+                if (resolvedEmpId) {
+                  payload.Employee = { id: resolvedEmpId };
+                } else {
+                  delete payload.Employee;
+                }
+              }
 
               console.log(`[Vite Zoho Plugin] ${isUpdate ? 'Updating' : 'Inserting'} Client in Zoho CRM (${moduleName}):`, payload.Name, client.zohoId ? `(ID: ${client.zohoId})` : '');
 
