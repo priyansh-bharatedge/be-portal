@@ -219,15 +219,15 @@ export const Employees = () => {
           mergedList.push(zEmp);
         }
 
-        // Preserve any local non-synced employees
+        // Preserve only local draft employees (items created locally without a Zoho record)
         for (const lEmp of localList) {
-          const lId = lEmp.id ? (lEmp.id ?? '').toLowerCase() : '';
-          const lZoho = lEmp.zohoId ? String(lEmp.zohoId) : '';
-          if (lZoho && seenZohoIds.has(lZoho)) continue;
-          if (lId && seenIds.has(lId)) continue;
-          if (lId) seenIds.add(lId);
-          if (lZoho) seenZohoIds.add(lZoho);
-          mergedList.push(lEmp);
+          if (!lEmp.zohoId) {
+            const lId = lEmp.id ? (lEmp.id ?? '').toLowerCase() : '';
+            if (lId && !seenIds.has(lId)) {
+              seenIds.add(lId);
+              mergedList.push(lEmp);
+            }
+          }
         }
 
         setEmployees(mergedList);

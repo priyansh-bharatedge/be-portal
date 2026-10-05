@@ -112,36 +112,6 @@ function zohoApiPlugin(): Plugin {
       console.warn('[Zoho CRM] Employee search query failed:', err);
     }
 
-    // 4. If not found in Zoho CRM Employee module, automatically create the employee record in Zoho CRM
-    if (cleanName) {
-      try {
-        const newEmpPayload: Record<string, any> = {
-          Name: cleanName,
-          Email: cleanEmail || `${cleanName.toLowerCase().replace(/\s+/g, '')}@bharat-edge.com`,
-          Employment_ID: cleanCode || `EMP-${Date.now().toString().slice(-4)}`,
-          System_Role: 'TM',
-        };
-        const createRes = await fetch(`${apiBase}/crm/v8/Employee`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Zoho-oauthtoken ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            data: [newEmpPayload],
-          }),
-        });
-        const createData: any = await createRes.json();
-        if (createData.data?.[0]?.code === 'SUCCESS' && createData.data[0].details?.id) {
-          const newId = String(createData.data[0].details.id);
-          employeeLookupCache.set(cacheKey, newId);
-          return newId;
-        }
-      } catch (createErr) {
-        console.warn('[Zoho CRM] Auto-creation of employee record failed:', createErr);
-      }
-    }
-
     return null;
   }
 
@@ -1966,67 +1936,11 @@ function zohoApiPlugin(): Plugin {
             }
 
             const customEmps: any[] = crmData?.data || [];
-            const seenKeys = new Set<string>();
-            const mergedEmps: any[] = [];
-
-            for (const emp of customEmps) {
-              const emailKey = (emp.Email || emp.Personal_Email_Address || '').toLowerCase().trim();
-              const zohoIdKey = String(emp.id || '');
-              if (emailKey) seenKeys.add(emailKey);
-              if (zohoIdKey) seenKeys.add(zohoIdKey);
-              mergedEmps.push(emp);
-            }
-
-            // Fetch Zoho Users to merge any staff members not yet in custom Employee module
-            try {
-              let usersRes = await fetch(`${apiBase}/crm/v8/users?type=AllUsers`, {
-                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-              });
-              if (usersRes.status === 200) {
-                const uData: any = await usersRes.json();
-                const rawUsers = uData?.users || [];
-                for (const u of rawUsers) {
-                  const uEmail = (u.email || '').toLowerCase().trim();
-                  const uId = String(u.id || '');
-                  if (!seenKeys.has(uEmail) && !seenKeys.has(uId)) {
-                    if (uEmail) seenKeys.add(uEmail);
-                    if (uId) seenKeys.add(uId);
-
-                    const fullName = u.full_name || [u.first_name, u.last_name].filter(Boolean).join(' ') || u.name || 'Team Member';
-                    const role = mapZohoUserToRole(u);
-                    const dept = mapZohoUserToDept(u);
-                    const designation = u.profile?.name || u.role?.name || (role === 'TM' ? 'Operations Team Member' : `${role} Officer`);
-
-                    mergedEmps.push({
-                      id: u.id,
-                      Name: u.first_name || fullName.split(' ')[0],
-                      Last_Name: u.last_name || fullName.split(' ').slice(1).join(' '),
-                      Employment_ID: `EMP-${String(u.id).slice(-4)}`,
-                      Email: u.email || '',
-                      Personal_Email_Address: u.email || '',
-                      Contact_Number: u.phone || u.mobile || '',
-                      Department: dept,
-                      Designation_Job_Title: designation,
-                      System_Role: role,
-                      Date_of_Joining: u.created_time ? u.created_time.split('T')[0] : '2026-02-03',
-                      Employment_Type: 'Full Time',
-                      Who_is_the_Team_Leader_TL: '',
-                      Reporting_Manager: role === 'TL' || role === 'HOD' ? 'Super Admin / Managing Director' : '',
-                      Salary_Entity: 'BSPL',
-                      Company_Entity: 'BharatEdge',
-                      Password: '',
-                    });
-                  }
-                }
-              }
-            } catch (uErr) {
-              console.warn('[Vite Zoho Plugin] Error fetching Zoho CRM users for employee list:', uErr);
-            }
 
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({
               success: true,
-              data: mergedEmps,
+              data: customEmps,
               info: crmData?.info,
             }));
           } catch (err: any) {
