@@ -368,10 +368,10 @@ export function buildZohoRbacCriteria(
     };
   }
 
-  // Build recursive Zoho CRM Search criteria: (((Field:equals:A)or(Field:equals:B))or(Field:equals:C))
-  let criteria = `(${lookupField}:equals:${targetIds[0]})`;
+  const searchFieldName = lookupField === 'id' ? 'id' : `${lookupField}.id`;
+  let criteria = `(${searchFieldName}:equals:${targetIds[0]})`;
   for (let i = 1; i < targetIds.length; i++) {
-    criteria = `(${criteria}or(${lookupField}:equals:${targetIds[i]}))`;
+    criteria = `(${criteria}or(${searchFieldName}:equals:${targetIds[i]}))`;
   }
 
   // Build COQL WHERE clause: Employee.id in ('id1', 'id2', ...)

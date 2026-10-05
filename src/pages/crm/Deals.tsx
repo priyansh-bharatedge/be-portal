@@ -678,7 +678,10 @@ export const Deals = () => {
         console.warn('IndexedDB initial load error:', err);
       }
       if (isMounted) {
-        if (count < 10480 || hasZeroAmounts) {
+        if (currentUser?.role && currentUser.role !== 'Super Admin' && currentUser.role !== 'HR') {
+          // For Team Member, Team Leader, HOD: immediately fetch live scoped deals from Zoho CRM using RBAC lookup criteria
+          handleFetchFromZoho(false);
+        } else if (count < 10480 || hasZeroAmounts) {
           // If fresh, incomplete (< 10,480), or cached with ₹0, automatically stream fresh records with real amounts
           handleFetchAllBatchesFromZoho(false, count < 10480 || hasZeroAmounts);
         } else {
@@ -689,7 +692,7 @@ export const Deals = () => {
     };
     loadDeals();
     return () => { isMounted = false; };
-  }, []);
+  }, [currentUser?.role, currentUser?.zohoId, currentUser?.id]);
 
   // Listen for real-time live deal updates from DealDetails view
   useEffect(() => {
@@ -1036,6 +1039,9 @@ export const Deals = () => {
         status: existingDeal?.status || 'New',
         stage: existingDeal?.stage || 'Sales',
         owner: existingDeal?.owner || currentUser?.name || 'Admin',
+        Employee: (existingDeal?.employeeZohoId || currentUser?.zohoId)
+          ? { id: existingDeal?.employeeZohoId || currentUser?.zohoId, name: existingDeal?.employeeName || currentUser?.name }
+          : undefined,
         employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
         employeeName: existingDeal?.employeeName || currentUser?.name,
         employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
@@ -1695,6 +1701,24 @@ export const Deals = () => {
         partnerBdmAmount = updatedDeals[existingIdx].partnerBdmAmount;
       }
 
+      // Resolve Employee lookup details from Zoho CRM Deal
+      const employeeName = 
+        (zDeal.Employee && typeof zDeal.Employee === 'object' ? zDeal.Employee.name : (typeof zDeal.Employee === 'string' && !/^\d+$/.test(zDeal.Employee) ? zDeal.Employee : '')) ||
+        zDeal.employeeName ||
+        zDeal.salesEmployee ||
+        zDeal.Created_By_Employee ||
+        (existingIdx >= 0 ? updatedDeals[existingIdx]?.employeeName : '') ||
+        (existingIdx >= 0 ? updatedDeals[existingIdx]?.salesEmployee : '') ||
+        '';
+
+      const employeeZohoId = 
+        (zDeal.Employee && typeof zDeal.Employee === 'object' ? zDeal.Employee.id : (typeof zDeal.Employee === 'string' && /^\d+$/.test(zDeal.Employee) ? zDeal.Employee : null)) ||
+        zDeal.employeeZohoId ||
+        (existingIdx >= 0 ? updatedDeals[existingIdx]?.employeeZohoId : '') ||
+        '';
+
+      const empCode = zDeal.Employment_ID || zDeal.Employee_Code || (existingIdx >= 0 ? updatedDeals[existingIdx]?.empId : '') || '';
+
       const dealObj: any = {
         id: resolvedDealId,
         client: resolvedClientName,
@@ -1706,6 +1730,11 @@ export const Deals = () => {
         status: statusName,
         stage: stageName,
         owner: zDeal.Owner?.name || (existingIdx >= 0 ? updatedDeals[existingIdx]?.owner : 'Admin') || 'Admin',
+        Employee: zDeal.Employee || (employeeZohoId ? { id: employeeZohoId, name: employeeName } : undefined),
+        employeeZohoId,
+        employeeName,
+        salesEmployee: employeeName || (existingIdx >= 0 ? updatedDeals[existingIdx]?.salesEmployee : ''),
+        empId: empCode,
         date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (zDeal.Booking_Date ? new Date(zDeal.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingIdx >= 0 ? updatedDeals[existingIdx]?.date : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))),
         source: (existingIdx >= 0 ? updatedDeals[existingIdx]?.source : 'Zoho CRM') || 'Zoho CRM',
         hasPartnerBdm,
@@ -1730,6 +1759,10 @@ export const Deals = () => {
           city: zDeal.City || '',
           state: stateName,
           businessType: zDeal.Company_Type || zDeal.Choose_Wisely || 'Private Limited',
+          employeeName,
+          employeeZohoId,
+          salesEmployee: employeeName || (existingIdx >= 0 ? updatedDeals[existingIdx]?.salesEmployee : ''),
+          empId: empCode,
           hasPartnerBdm,
           has_partner_bdm: hasPartnerBdm,
           partnerBdmId,
