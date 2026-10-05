@@ -6,19 +6,17 @@ import {
   Settings, LogOut, LayoutDashboard, Briefcase, Users, 
   Building2, FileText, BarChart3, Calendar, ShieldAlert,
   HelpCircle, UserCircle, SwitchCamera, ClipboardList,
-  Crown, Shield, User, RefreshCw, UserCheck, ArrowLeft
+  Crown, Shield, User, UserCheck, ArrowLeft
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { RoleSwitcherModal } from '../components/RoleSwitcherModal';
 
 export const AppLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
 
   const { currentUser, currentRole, roleInfo, isHR, isHOD, isSuperAdmin, switchRole, logout } = useAuth();
 
@@ -368,14 +366,6 @@ export const AppLayout = () => {
                   </button>
 
                   <button 
-                    onClick={() => setIsRoleModalOpen(true)} 
-                    className="flex w-full items-center px-3 py-2 text-xs font-semibold text-be-orange rounded-lg hover:bg-orange-50 transition-colors"
-                  >
-                    <RefreshCw size={14} className="mr-2.5 text-be-orange" />
-                    Switch Role / User
-                  </button>
-
-                  <button 
                     onClick={() => navigate('/settings')} 
                     className="flex w-full items-center px-3 py-2 text-xs font-semibold text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
@@ -403,12 +393,6 @@ export const AppLayout = () => {
           <Outlet />
         </main>
       </div>
-
-      {/* Role & User Switcher Modal */}
-      <RoleSwitcherModal 
-        isOpen={isRoleModalOpen} 
-        onClose={() => setIsRoleModalOpen(false)} 
-      />
     </div>
   );
 };
