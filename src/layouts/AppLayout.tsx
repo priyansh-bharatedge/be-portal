@@ -12,7 +12,7 @@ import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { RoleSwitcherModal } from '../components/RoleSwitcherModal';
-import { GlobalSearchModal } from '../components/GlobalSearchModal';
+import { HeaderSearchBar } from '../components/HeaderSearchBar';
 
 export const AppLayout = () => {
   const location = useLocation();
@@ -20,27 +20,6 @@ export const AppLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
-  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
-
-  // Global Keyboard Shortcut: Ctrl+K or Cmd+K or / to open Global Search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is actively typing inside an input/textarea/select
-      const target = e.target as HTMLElement;
-      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
-      
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsGlobalSearchOpen(prev => !prev);
-      } else if (e.key === '/' && !isInput) {
-        e.preventDefault();
-        setIsGlobalSearchOpen(true);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   const { currentUser, currentRole, roleInfo, isHR, isHOD, isSuperAdmin, switchRole, logout } = useAuth();
 
@@ -337,30 +316,8 @@ export const AppLayout = () => {
 
           <div className="flex items-center space-x-3 sm:space-x-4">
 
-            {/* Global Search Bar (Desktop) */}
-            <div 
-              onClick={() => setIsGlobalSearchOpen(true)}
-              className="hidden lg:flex items-center relative max-w-xs w-full cursor-pointer group"
-            >
-              <Search className="w-4 h-4 text-gray-400 group-hover:text-be-orange absolute left-3 transition-colors" />
-              <div 
-                className="w-56 pl-9 pr-8 py-1.5 bg-gray-50 group-hover:bg-white border border-gray-100 group-hover:border-orange-200 rounded-full text-xs font-medium text-gray-400 group-hover:text-gray-700 shadow-2xs transition-all flex items-center justify-between"
-              >
-                <span>Search portal...</span>
-                <kbd className="text-[10px] font-bold font-mono px-1.5 py-0.5 bg-gray-100 group-hover:bg-orange-50 group-hover:text-be-orange text-gray-500 rounded border border-gray-200 group-hover:border-orange-200">
-                  Ctrl+K
-                </kbd>
-              </div>
-            </div>
-
-            {/* Mobile Search Button */}
-            <button 
-              onClick={() => setIsGlobalSearchOpen(true)}
-              className="lg:hidden p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-              title="Search Portal (Ctrl+K)"
-            >
-              <Search size={18} />
-            </button>
+            {/* Direct Header Search Bar */}
+            <HeaderSearchBar />
 
             <button className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
               <Bell size={18} />
@@ -391,12 +348,6 @@ export const AppLayout = () => {
           <Outlet />
         </main>
       </div>
-
-      {/* Global Universal Search Modal */}
-      <GlobalSearchModal 
-        isOpen={isGlobalSearchOpen} 
-        onClose={() => setIsGlobalSearchOpen(false)} 
-      />
 
       {/* Role & User Switcher Modal */}
       <RoleSwitcherModal 
