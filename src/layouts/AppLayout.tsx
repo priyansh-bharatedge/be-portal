@@ -6,17 +6,19 @@ import {
   Settings, LogOut, LayoutDashboard, Briefcase, Users, 
   Building2, FileText, BarChart3, Calendar, ShieldAlert,
   HelpCircle, UserCircle, SwitchCamera, ClipboardList,
-  Crown, Shield, User, UserCheck, ArrowLeft
+  Crown, Shield, User, RefreshCw, UserCheck, ArrowLeft
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { RoleSwitcherModal } from '../components/RoleSwitcherModal';
 
 export const AppLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
 
   const { currentUser, currentRole, roleInfo, isHR, isHOD, isSuperAdmin, switchRole, logout } = useAuth();
 
@@ -329,59 +331,17 @@ export const AppLayout = () => {
 
             <div className="h-7 w-px bg-gray-200 hidden sm:block"></div>
 
-            {/* Profile Dropdown */}
-            <div className="flex items-center group relative cursor-pointer">
+            {/* User Profile */}
+            <div className="flex items-center">
               <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-orange-100 to-orange-50 text-be-orange flex items-center justify-center border border-orange-200 shrink-0 font-bold text-xs shadow-sm">
                 {(currentUser.name || '').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
               </div>
-              <div className="hidden md:block text-left mr-2 ml-2">
+              <div className="hidden md:block text-left ml-2">
                 <div className="text-xs font-bold text-gray-900 leading-tight flex items-center">
                   {currentUser.name}
                 </div>
                 <div className="text-[10px] text-gray-500 font-medium">
                   {roleInfo.shortLabel}
-                </div>
-              </div>
-              
-              {/* Profile Dropdown Menu */}
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform origin-top-right z-50 p-2">
-                <div className="p-3 border-b border-gray-50 bg-gray-50/50 rounded-xl mb-1">
-                  <p className="text-xs font-bold text-gray-900">{currentUser.name}</p>
-                  <p className="text-[11px] text-gray-500 truncate">{currentUser.email}</p>
-                  <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border bg-white text-gray-700">
-                    Role: {roleInfo.label}
-                  </div>
-                </div>
-
-                <div className="p-1 space-y-1">
-                  <button 
-                    onClick={() => {
-                      const empId = currentUser.empId || currentUser.id || 'EMP-001';
-                      navigate(`/hrms/employees/${empId}`);
-                    }} 
-                    className="flex w-full items-center px-3 py-2 text-xs font-semibold text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <UserCircle size={14} className="mr-2.5 text-gray-400" />
-                    My Profile
-                  </button>
-
-                  <button 
-                    onClick={() => navigate('/settings')} 
-                    className="flex w-full items-center px-3 py-2 text-xs font-semibold text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <Settings size={14} className="mr-2.5 text-gray-400" />
-                    Settings
-                  </button>
-
-                  <div className="pt-1 border-t border-gray-50">
-                    <button 
-                      onClick={() => navigate('/login')} 
-                      className="flex w-full items-center px-3 py-2 text-xs font-semibold text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                      <LogOut size={14} className="mr-2.5" />
-                      Logout
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -393,6 +353,12 @@ export const AppLayout = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Role & User Switcher Modal */}
+      <RoleSwitcherModal 
+        isOpen={isRoleModalOpen} 
+        onClose={() => setIsRoleModalOpen(false)} 
+      />
     </div>
   );
 };
