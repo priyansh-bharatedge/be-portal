@@ -56,6 +56,7 @@ export const Calendar = () => {
   const [selectedEmpId, setSelectedEmpId] = useState<string>('me');
   const [filterCategory, setFilterCategory] = useState<'All' | 'Attendance' | 'Holidays' | 'Leaves' | 'Events'>('All');
   const [selectedDateStr, setSelectedDateStr] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ title: '', date: new Date().toISOString().split('T')[0], type: 'Event' as Event['type'], description: '' });
@@ -237,9 +238,20 @@ export const Calendar = () => {
     return result;
   }, [customEvents, attendance, leaves, selectedEmpId, currentUser]);
 
-  // Filter by category
+  // Filter by category & search query
   const filteredEvents = useMemo(() => {
     return allEvents.filter(ev => {
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesQ =
+          (ev.title && String(ev.title).toLowerCase().includes(q)) ||
+          (ev.description && String(ev.description).toLowerCase().includes(q)) ||
+          (ev.type && String(ev.type).toLowerCase().includes(q)) ||
+          (ev.empName && String(ev.empName).toLowerCase().includes(q)) ||
+          (ev.date && String(ev.date).includes(q));
+        if (!matchesQ) return false;
+      }
+
       if (filterCategory === 'All') return true;
       if (filterCategory === 'Attendance') return ['Present', 'Absent', 'Half Day', 'Late'].includes(ev.type);
       if (filterCategory === 'Holidays') return ev.type === 'Holiday';
@@ -247,7 +259,7 @@ export const Calendar = () => {
       if (filterCategory === 'Events') return ev.type === 'Event' || ev.type === 'Deadline';
       return true;
     });
-  }, [allEvents, filterCategory]);
+  }, [allEvents, filterCategory, searchQuery]);
 
   const getEventBadgeClass = (type: Event['type']) => {
     switch (type) {
@@ -301,6 +313,17 @@ export const Calendar = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Search */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search calendar..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-3 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:bg-white focus:border-be-orange outline-none shadow-xs w-44"
+            />
+          </div>
+
           {/* Employee Filter for Admins and TLs */}
           {(isFullAdmin || isTL) && (
             <div className="flex items-center space-x-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs">

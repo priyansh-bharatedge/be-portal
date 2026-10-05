@@ -376,12 +376,19 @@ export const Quotations = () => {
   const filteredQuotations = useMemo(() => {
     return rbacQuotations.filter((deal: any) => {
       if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const matchClient = deal.client && deal.client.toLowerCase().includes(q);
-        const matchCompany = deal.company && deal.company.toLowerCase().includes(q);
-        const matchService = deal.service && deal.service.toLowerCase().includes(q);
-        const matchId = deal.id && deal.id.toLowerCase().includes(q);
-        if (!matchClient && !matchCompany && !matchService && !matchId) return false;
+        const q = searchQuery.toLowerCase().trim();
+        const matchClient = deal.client && String(deal.client).toLowerCase().includes(q);
+        const matchCompany = deal.company && String(deal.company).toLowerCase().includes(q);
+        const matchService = deal.service && String(deal.service).toLowerCase().includes(q);
+        const matchId = deal.id && String(deal.id).toLowerCase().includes(q);
+        const matchZohoId = deal.zohoId && String(deal.zohoId).toLowerCase().includes(q);
+        const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
+        const matchStatus = deal.status && String(deal.status).toLowerCase().includes(q);
+        const matchOwner = (deal.owner || deal.employeeName || deal.salesEmployee) && String(deal.owner || deal.employeeName || deal.salesEmployee).toLowerCase().includes(q);
+        const matchEmail = deal.formData?.email && String(deal.formData.email).toLowerCase().includes(q);
+        const matchMobile = deal.formData?.mobile && String(deal.formData.mobile).includes(q);
+
+        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchAmount && !matchStatus && !matchOwner && !matchEmail && !matchMobile) return false;
       }
       return true;
     });

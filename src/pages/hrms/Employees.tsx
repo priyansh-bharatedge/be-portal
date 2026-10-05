@@ -888,13 +888,30 @@ export const Employees = () => {
     : matchedEmployees;
 
   const filteredEmployees = visibleEmployees.filter(e => {
-    const q = searchQuery.toLowerCase();
+    if (!searchQuery) {
+      const matchesRole = selectedRoleFilter === 'All' || e.systemRole === selectedRoleFilter;
+      const matchesDept = selectedDeptFilter === 'All' || e.dept === selectedDeptFilter;
+      return matchesRole && matchesDept;
+    }
+
+    const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
-      (e.name ?? '').toLowerCase().includes(q) ||
-      (e.id ?? '').toLowerCase().includes(q) ||
-      (e.dept ?? '').toLowerCase().includes(q) ||
-      (e.role ?? '').toLowerCase().includes(q) ||
-      (e.systemRole ? e.systemRole.toLowerCase().includes(q) : false);
+      (e.name && String(e.name).toLowerCase().includes(q)) ||
+      (e.id && String(e.id).toLowerCase().includes(q)) ||
+      (e.zohoId && String(e.zohoId).toLowerCase().includes(q)) ||
+      (e.email && String(e.email).toLowerCase().includes(q)) ||
+      (e.formData?.email && String(e.formData.email).toLowerCase().includes(q)) ||
+      (e.formData?.workEmail && String(e.formData.workEmail).toLowerCase().includes(q)) ||
+      (e.mobile && String(e.mobile).includes(q)) ||
+      (e.formData?.mobile && String(e.formData.mobile).includes(q)) ||
+      (e.dept && String(e.dept).toLowerCase().includes(q)) ||
+      (e.role && String(e.role).toLowerCase().includes(q)) ||
+      (e.systemRole && String(e.systemRole).toLowerCase().includes(q)) ||
+      (e.teamLeaderName && String(e.teamLeaderName).toLowerCase().includes(q)) ||
+      (e.reportingManagerName && String(e.reportingManagerName).toLowerCase().includes(q)) ||
+      (e.status && String(e.status).toLowerCase().includes(q)) ||
+      (e.formData?.panNumber && String(e.formData.panNumber).toLowerCase().includes(q)) ||
+      (e.formData?.aadhaarNumber && String(e.formData.aadhaarNumber).includes(q));
 
     const matchesRole = selectedRoleFilter === 'All' || e.systemRole === selectedRoleFilter;
     const matchesDept = selectedDeptFilter === 'All' || e.dept === selectedDeptFilter;

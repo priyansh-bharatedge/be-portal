@@ -2179,12 +2179,19 @@ export const Deals = () => {
           if (activeTab === 'Manual Deals' && deal.source === 'Quotation') return false;
           if (activeTab === 'From Quotations' && deal.source !== 'Quotation') return false;
           if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            const matchClient = deal.client && (deal.client ?? '').toLowerCase().includes(q);
-            const matchCompany = deal.company && (deal.company ?? '').toLowerCase().includes(q);
-            const matchService = deal.service && (deal.service ?? '').toLowerCase().includes(q);
-            const matchId = deal.id && (deal.id ?? '').toLowerCase().includes(q);
-            if (!matchClient && !matchCompany && !matchService && !matchId) return false;
+            const q = searchQuery.toLowerCase().trim();
+            const matchClient = deal.client && String(deal.client).toLowerCase().includes(q);
+            const matchCompany = deal.company && String(deal.company).toLowerCase().includes(q);
+            const matchService = deal.service && String(deal.service).toLowerCase().includes(q);
+            const matchId = deal.id && String(deal.id).toLowerCase().includes(q);
+            const matchZohoId = deal.zohoId && String(deal.zohoId).toLowerCase().includes(q);
+            const matchOwner = deal.owner && String(deal.owner).toLowerCase().includes(q);
+            const matchEmpName = (deal.employeeName || deal.salesEmployee) && String(deal.employeeName || deal.salesEmployee).toLowerCase().includes(q);
+            const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
+            const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
+            const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
+
+            if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchStatus && !matchAmount && !matchEmpCode) return false;
           }
           return true;
         });

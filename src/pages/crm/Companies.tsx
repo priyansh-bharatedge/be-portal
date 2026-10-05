@@ -397,10 +397,17 @@ export const Companies = () => {
     if (activeTab === 'From Deals' && source !== 'From Deals') return false;
     if (activeTab === 'Zoho CRM' && source !== 'Zoho CRM') return false;
     
-    return (c.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-           (c.gstNumber && c.gstNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
-           (c.type && (c.type ?? '').toLowerCase().includes(searchQuery.toLowerCase())) ||
-           (c.email && (c.email ?? '').toLowerCase().includes(searchQuery.toLowerCase()));
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (c.name && String(c.name).toLowerCase().includes(q)) || 
+           (c.gstNumber && String(c.gstNumber).toLowerCase().includes(q)) ||
+           (c.type && String(c.type).toLowerCase().includes(q)) ||
+           (c.email && String(c.email).toLowerCase().includes(q)) ||
+           (c.secondaryEmail && String(c.secondaryEmail).toLowerCase().includes(q)) ||
+           (c.id && String(c.id).toLowerCase().includes(q)) ||
+           (c.zohoId && String(c.zohoId).toLowerCase().includes(q)) ||
+           (c.status && String(c.status).toLowerCase().includes(q)) ||
+           ((c.employeeName || c.salesEmployee) && String(c.employeeName || c.salesEmployee).toLowerCase().includes(q));
   });
 
   const totalCompaniesCount = filteredCompanies.length;

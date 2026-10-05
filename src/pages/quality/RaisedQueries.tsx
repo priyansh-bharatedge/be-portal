@@ -48,7 +48,26 @@ export const RaisedQueries = () => {
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
 
+  const [searchQuery, setSearchQuery] = useState('');
   const rbacQueries = useMemo(() => filterRecords(queries, 'Raised_Queries'), [queries, filterRecords, currentUser]);
+
+  const filteredQueries = useMemo(() => {
+    if (!searchQuery) return rbacQueries;
+    const q = searchQuery.toLowerCase().trim();
+    return rbacQueries.filter((item: any) => {
+      return (item.id && String(item.id).toLowerCase().includes(q)) ||
+             (item.zohoId && String(item.zohoId).toLowerCase().includes(q)) ||
+             (item.client && String(item.client).toLowerCase().includes(q)) ||
+             (item.company && String(item.company).toLowerCase().includes(q)) ||
+             (item.service && String(item.service).toLowerCase().includes(q)) ||
+             (item.query && String(item.query).toLowerCase().includes(q)) ||
+             (item.description && String(item.description).toLowerCase().includes(q)) ||
+             (item.assignee && String(item.assignee).toLowerCase().includes(q)) ||
+             (item.status && String(item.status).toLowerCase().includes(q)) ||
+             (item.priority && String(item.priority).toLowerCase().includes(q)) ||
+             (item.salesEmployee && String(item.salesEmployee).toLowerCase().includes(q));
+    });
+  }, [rbacQueries, searchQuery]);
 
   const [formData, setFormData] = useState({
     salesEmployee: "",
@@ -398,11 +417,21 @@ export const RaisedQueries = () => {
             Manage and track client issues, quality queries, and Zoho CRM cases.
           </p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search queries..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none shadow-sm transition-shadow w-60"
+            />
+          </div>
           <button
             onClick={() => handleFetchZohoQueries(true)}
             disabled={isFetchingZoho}
-            className="flex items-center px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-60"
+            className="flex items-center px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-60"
             title="Fetch live query cases from Zoho CRM"
           >
             <RefreshCw size={15} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
@@ -424,7 +453,7 @@ export const RaisedQueries = () => {
               setSelectedFile(null);
               setIsRaiseModalOpen(true);
             }}
-            className="flex items-center px-4 py-2.5 bg-be-orange text-white rounded-lg text-sm font-medium hover:bg-be-orangeHover transition-colors shadow-sm"
+            className="flex items-center px-4 py-2 bg-be-orange text-white rounded-lg text-sm font-medium hover:bg-be-orangeHover transition-colors shadow-sm"
           >
             <MessageSquarePlus size={16} className="mr-2" />
             Raise Query
@@ -449,7 +478,7 @@ export const RaisedQueries = () => {
               </tr>
             </thead>
             <tbody className="text-gray-700">
-              {rbacQueries.map((q) => (
+              {filteredQueries.map((q) => (
                 <tr
                   key={q.id}
                   className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm cursor-pointer"
