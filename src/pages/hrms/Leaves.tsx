@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { Search, Plus, Filter, Check, X, Calendar as CalendarIcon, Briefcase, Info, Users, User, Clock, CheckCircle2, XCircle, AlertCircle, Sparkles, ChevronRight, Trash2, RefreshCw, Cloud, CloudCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { saveOrUpdateZohoLeave, deleteZohoLeave, updateZohoLeave, insertZohoLeave, fetchZohoLeaves } from '../../services/zohoService';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 interface LeaveRequest {
   id: string;
@@ -24,16 +26,35 @@ interface LeaveRequest {
 }
 
 export const Leaves = () => {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { currentUser, isTM, isSuperAdmin, isHR, isTL, isHOD } = useAuth();
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
   const [typeFilter, setTypeFilter] = useState<string>('All');
-  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<string>(() => {
+    const s = searchParams.get('status') || location.state?.status;
+    if (s === 'Approved') return 'Approved';
+    if (s === 'Pending' || s === 'Pending TL' || s === 'Pending HR') return s;
+    return 'All';
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingLeave, setViewingLeave] = useState<LeaveRequest | null>(null);
   const [syncToast, setSyncToast] = useState<{ message: string; type: 'success' | 'warning' | 'info' | 'error' } | null>(null);
   const [syncingLeaveId, setSyncingLeaveId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; leave: LeaveRequest | null; isDeleting: boolean }>({
+    isOpen: false,
+    leave: null,
+    isDeleting: false
+  });
+
+  useEffect(() => {
+    const s = searchParams.get('status') || location.state?.status;
+    if (s) setStatusFilter(s);
+    const q = searchParams.get('search') || location.state?.search;
+    if (q) setSearchQuery(q);
+  }, [searchParams, location.state]);
 
   const isTeamLeader = isTL || (currentUser.role as string) === 'TL';
   const isFullAdmin = isSuperAdmin || isHR;
@@ -117,15 +138,15 @@ export const Leaves = () => {
         localStorage.setItem('be_leaves', JSON.stringify(mergedList));
 
         if (showNotification) {
-          showToast(`Synced ${zohoLeaves.length} leave record(s) from Zoho CRM`, 'success');
+          showToast(`Synced ${zohoLeaves.length} leave record(s) from database`, 'success');
         }
       } else if (showNotification) {
-        showToast(res.message || 'No leave records in Zoho CRM', 'info');
+        showToast(res.message || 'No leave records found', 'info');
       }
     } catch (err: any) {
       console.warn('[Zoho CRM] Leave sync error:', err);
       if (showNotification) {
-        showToast('Failed to fetch leaves from Zoho CRM', 'error');
+        showToast('Failed to fetch leaves from database', 'error');
       }
     } finally {
       setIsFetchingZoho(false);
@@ -236,7 +257,7 @@ export const Leaves = () => {
           const withZohoId = updatedLeavesList.map(l => l.id === id ? { ...l, zohoId: zohoRes.zohoId } : l);
           saveToStorage(withZohoId);
         }
-        showToast(`Status updated in Zoho CRM (${newStatus})`, 'success');
+        showToast(`Leave status updated to ${newStatus}`, 'success');
       } else {
         console.warn('[Zoho CRM] Status sync warning:', zohoRes.message);
       }
@@ -247,19 +268,24 @@ export const Leaves = () => {
     }
   };
 
-  const handleDeleteLeave = async (leave: LeaveRequest) => {
-    const confirmDelete = window.confirm(`Are you sure you want to delete leave request "${leave.id} (${leave.empName})"?\n\nThis will remove it from the portal and Zoho CRM.`);
-    if (!confirmDelete) return;
+  const handleDeleteLeave = (leave: LeaveRequest) => {
+    setDeleteTarget({ isOpen: true, leave, isDeleting: false });
+  };
+
+  const confirmDeleteLeave = async () => {
+    const leave = deleteTarget.leave;
+    if (!leave) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
 
     try {
       setSyncingLeaveId(leave.id);
-      // If synced in Zoho CRM, delete from Zoho CRM
+      // If synced in Zoho CRM, delete from database
       if (leave.zohoId) {
         const delRes = await deleteZohoLeave(leave.zohoId);
         if (delRes.success) {
-          showToast(`Deleted from Zoho CRM (ID: #${leave.zohoId})`, 'success');
+          showToast(`Deleted from database (ID: #${leave.zohoId})`, 'success');
         } else {
-          console.warn('[Zoho CRM] Delete warning from Zoho CRM:', delRes.message);
+          console.warn('[Zoho CRM] Delete warning from database:', delRes.message);
         }
       }
       const filtered = leaves.filter(l => l.id !== leave.id);
@@ -267,9 +293,10 @@ export const Leaves = () => {
       showToast('Leave request deleted successfully', 'success');
     } catch (err: any) {
       console.error('[Zoho CRM] Error deleting leave request:', err);
-      showToast('Deleted locally (Zoho delete error: ' + err.message + ')', 'warning');
+      showToast('Deleted locally (Delete error: ' + err.message + ')', 'warning');
     } finally {
       setSyncingLeaveId(null);
+      setDeleteTarget({ isOpen: false, leave: null, isDeleting: false });
     }
   };
 
@@ -281,12 +308,12 @@ export const Leaves = () => {
         const zohoId = zohoRes.zohoId || leave.zohoId;
         const updated = leaves.map(l => l.id === leave.id ? { ...l, zohoId } : l);
         saveToStorage(updated);
-        showToast(`Synced with Zoho CRM Leave_Management (ID: #${zohoId})`, 'success');
+        showToast(`Synced successfully (ID: #${zohoId})`, 'success');
       } else {
-        showToast(`Zoho CRM sync failed: ${zohoRes.message}`, 'error');
+        showToast(`Sync failed: ${zohoRes.message}`, 'error');
       }
     } catch (err: any) {
-      showToast(`Error syncing with Zoho CRM: ${err.message}`, 'error');
+      showToast(`Error syncing leave: ${err.message}`, 'error');
     } finally {
       setSyncingLeaveId(null);
     }
@@ -333,7 +360,7 @@ export const Leaves = () => {
     const updatedList = [newLeave, ...leaves];
     saveToStorage(updatedList);
     closeModal();
-    showToast('Leave request applied successfully. Syncing with Zoho CRM...', 'info');
+    showToast('Leave request submitted successfully.', 'info');
 
     // Asynchronously sync to Zoho CRM Leave_Management module
     try {
@@ -342,13 +369,13 @@ export const Leaves = () => {
       if (zohoRes.success && zohoRes.zohoId) {
         const syncedList = updatedList.map(l => l.id === newLeave.id ? { ...l, zohoId: zohoRes.zohoId } : l);
         saveToStorage(syncedList);
-        showToast(`Stored in Zoho CRM Leave_Management (ID: #${zohoRes.zohoId})`, 'success');
+        showToast(`Leave request recorded (ID: #${zohoRes.zohoId})`, 'success');
       } else {
-        showToast(`Saved locally (Zoho CRM: ${zohoRes.message})`, 'warning');
+        showToast(`Saved locally (${zohoRes.message})`, 'warning');
       }
     } catch (err: any) {
       console.error('[Zoho CRM] Error inserting leave request:', err);
-      showToast('Saved locally (Zoho offline/token issue)', 'warning');
+      showToast('Saved locally (Sync pending)', 'warning');
     } finally {
       setSyncingLeaveId(null);
     }
@@ -396,7 +423,9 @@ export const Leaves = () => {
         (l.reason ?? '').toLowerCase().includes(q);
 
       const matchesType = typeFilter === 'All' || l.type === typeFilter;
-      const matchesStatus = statusFilter === 'All' || l.status === statusFilter;
+      const matchesStatus = statusFilter === 'All' || 
+        l.status === statusFilter || 
+        (statusFilter === 'Pending' && (l.status === 'Pending TL' || l.status === 'Pending HR'));
 
       return matchesSearch && matchesType && matchesStatus;
     });
@@ -506,11 +535,10 @@ export const Leaves = () => {
           <button
             onClick={() => syncLeavesFromZoho(true)}
             disabled={isFetchingZoho}
-            title="Sync live leave requests from Zoho CRM"
-            className="bg-white hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-300 px-4 py-3 rounded-2xl font-bold flex items-center transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50 text-sm"
+            title="Refresh & Sync from database"
+            className="w-11 h-11 bg-white hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-300 rounded-2xl flex items-center justify-center transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50 shrink-0"
           >
-            <Cloud size={16} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-pulse' : ''}`} />
-            {isFetchingZoho ? 'Syncing...' : 'Sync Zoho CRM'}
+            <RefreshCw size={18} className={`text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
           </button>
 
           <button
@@ -718,22 +746,6 @@ export const Leaves = () => {
                           </div>
                           <div className="text-gray-500 text-xs font-medium flex items-center gap-2 mt-0.5">
                             <span>{leave.empId}</span>
-                            {leave.zohoId ? (
-                              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold flex items-center" title={`Zoho CRM ID: ${leave.zohoId}`}>
-                                <Sparkles size={10} className="mr-1 text-emerald-600" />
-                                Zoho ID: {leave.zohoId}
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => handleManualSync(leave)}
-                                disabled={isSyncing}
-                                className="text-[10px] text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-1.5 py-0.5 rounded border border-orange-200 font-semibold flex items-center transition-colors"
-                                title="Click to sync this leave to Zoho CRM Leave_Management module"
-                              >
-                                <RefreshCw size={9} className={`mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
-                                Sync Zoho
-                              </button>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -924,7 +936,7 @@ export const Leaves = () => {
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">Leave Approval Flow</h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Reference ID: {viewingLeave.id} {viewingLeave.zohoId && `• Zoho ID: ${viewingLeave.zohoId}`}
+                    Reference ID: {viewingLeave.id} {viewingLeave.zohoId && `• Sync ID: ${viewingLeave.zohoId}`}
                   </p>
                 </div>
                 <button type="button" onClick={() => setViewingLeave(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
@@ -1036,7 +1048,7 @@ export const Leaves = () => {
                   <h2 className="text-xl font-bold text-gray-900">
                     {activeTab === 'personal' || isEmployeeSelfOnly ? 'Apply for Leave' : 'Create Leave Request'}
                   </h2>
-                  <p className="text-xs text-gray-500 mt-0.5">Submit request for multi-stage approval & Zoho CRM sync</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Submit request for multi-stage approval & synchronization</p>
                 </div>
                 <button type="button" onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
                   <X size={20} />
@@ -1139,6 +1151,17 @@ export const Leaves = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, leave: null, isDeleting: false })}
+        onConfirm={confirmDeleteLeave}
+        title="Delete Leave Request"
+        itemName={deleteTarget.leave ? `${deleteTarget.leave.id} (${deleteTarget.leave.empName})` : undefined}
+        message={deleteTarget.leave ? `Are you sure you want to delete leave request "${deleteTarget.leave.id} (${deleteTarget.leave.empName})"?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

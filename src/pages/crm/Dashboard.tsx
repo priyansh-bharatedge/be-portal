@@ -288,18 +288,18 @@ export const CrmDashboard = () => {
       }
 
       const hasPartnerBdm = Boolean(
-        zDeal.Has_Partner_BDM || 
-        zDeal.has_partner_bdm || 
-        zDeal.Partner_BDM || 
-        zDeal.Partner_BDM_Name || 
+        zDeal.Has_Partner_BDM ||
+        zDeal.has_partner_bdm ||
+        zDeal.Partner_BDM ||
+        zDeal.Partner_BDM_Name ||
         zDeal.partner_bdm_name
       );
 
-      const partnerBdmName = 
-        zDeal.Partner_BDM_Name || 
-        zDeal.Partner_BDM_name || 
-        zDeal.Partner_BDM_Names || 
-        zDeal.partner_bdm_name || 
+      const partnerBdmName =
+        zDeal.Partner_BDM_Name ||
+        zDeal.Partner_BDM_name ||
+        zDeal.Partner_BDM_Names ||
+        zDeal.partner_bdm_name ||
         '';
 
       const partnerBdmAmount = parseMoney(zDeal.Partner_BDM_Amount || zDeal.partner_bdm_amount || (hasPartnerBdm && recAmt > 0 ? (recAmt / 1.18) / 2 : 0));
@@ -441,6 +441,12 @@ export const CrmDashboard = () => {
           date: z.Created_Time ? new Date(z.Created_Time).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
           zohoId: String(z.id),
           zohoStatus: 'synced',
+          owner: z.Owner?.name || z.Created_By?.name || (typeof z.Employee === 'object' ? z.Employee?.name : null) || z.Sales_Representative || currentUser?.name || 'Admin',
+          Employee: z.Employee,
+          employeeId: typeof z.Employee === 'object' ? z.Employee?.id : (z.Employee || z.Employee_ID || ''),
+          employeeZohoId: typeof z.Employee === 'object' ? z.Employee?.id : (z.Employee || ''),
+          employeeName: typeof z.Employee === 'object' ? z.Employee?.name : (z.Employee_Name || z.Sales_Representative || z.Owner?.name || currentUser?.name || ''),
+          salesEmployee: typeof z.Employee === 'object' ? z.Employee?.name : (z.Sales_Representative || z.Owner?.name || currentUser?.name || ''),
         }));
 
         setQuotations(prev => {
@@ -477,10 +483,10 @@ export const CrmDashboard = () => {
       const updated = e.detail;
       if (!updated) return;
       setDeals(prevDeals => {
-        const idx = prevDeals.findIndex(d => 
-          d.id === updated.id || 
-          d.zohoId === updated.zohoId || 
-          d.id === updated.zohoId || 
+        const idx = prevDeals.findIndex(d =>
+          d.id === updated.id ||
+          d.zohoId === updated.zohoId ||
+          d.id === updated.zohoId ||
           d.zohoId === updated.id ||
           (d.id && updated.id && String(d.id).includes(String(updated.id))) ||
           (d.id && updated.zohoId && String(d.id).includes(String(updated.zohoId)))
@@ -517,7 +523,7 @@ export const CrmDashboard = () => {
   useEffect(() => {
     const dealsToEnrich = deals.slice(0, 20).filter(
       (d: any) => (getDealAmount(d) === 0 || !d.servicesData || d.servicesData.length === 0) &&
-                  (d.zohoId || (d.id && String(d.id).length > 8))
+        (d.zohoId || (d.id && String(d.id).length > 8))
     );
 
     if (dealsToEnrich.length === 0) return;
@@ -537,10 +543,10 @@ export const CrmDashboard = () => {
               }
               return prevDeals;
             });
-            saveDealToIndexedDB(enriched).catch(() => {});
+            saveDealToIndexedDB(enriched).catch(() => { });
           }
         }
-      }).catch(() => {});
+      }).catch(() => { });
     });
   }, [deals]);
 
@@ -849,7 +855,7 @@ export const CrmDashboard = () => {
     employees.forEach(emp => {
       const tlName = (emp.teamLeaderName || emp.formData?.teamLeaderName || '').trim();
       const deptName = emp.dept || emp.formData?.dept || 'Sales';
-      
+
       const teamKey = tlName ? `Team ${tlName}` : `${deptName} Department`;
       const current = teamMap.get(teamKey) || {
         name: teamKey,
@@ -878,7 +884,7 @@ export const CrmDashboard = () => {
 
       const ownerName = (deal.owner || deal.Deal_Owner || deal.bdm || '').trim().toLowerCase();
       const matchedEmp = employees.find(e => (e.name || '').trim().toLowerCase() === ownerName || (e.id || '').toLowerCase() === ownerName);
-      
+
       let teamKey = '';
       if (matchedEmp) {
         const tl = matchedEmp.teamLeaderName || matchedEmp.formData?.teamLeaderName;
@@ -1022,14 +1028,6 @@ export const CrmDashboard = () => {
             <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center">
               CRM Executive Dashboard
             </h1>
-            <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-extrabold text-xs rounded-full shadow-sm shadow-orange-500/20 flex items-center">
-              {isSuperAdmin && <Crown size={13} className="mr-1.5" />}
-              {isHOD && <Shield size={13} className="mr-1.5" />}
-              {currentRole || 'Administrator'} View
-            </span>
-            <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              {rbacDeals.length.toLocaleString()} Live Deals
-            </span>
           </div>
           <p className="text-sm text-gray-500 mt-2 font-medium">
             Real-time quotation conversion metrics, daily/monthly revenue insights, target achievements, and top-selling services.
@@ -1065,10 +1063,10 @@ export const CrmDashboard = () => {
           <button
             onClick={loadData}
             disabled={isRefreshing}
-            className="flex items-center px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all shadow-sm"
+            title="Refresh"
+            className="flex items-center justify-center p-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
           >
-            <RefreshCw size={14} className={`mr-2 ${isRefreshing ? 'animate-spin text-be-orange' : 'text-gray-500'}`} />
-            {isRefreshing ? 'Syncing...' : 'Sync Zoho'}
+            <RefreshCw size={15} className={`${isRefreshing ? 'animate-spin text-be-orange' : 'text-gray-500'}`} />
           </button>
           <button
             onClick={() => navigate('/crm/quotations')}
@@ -1087,15 +1085,16 @@ export const CrmDashboard = () => {
         {/* Card 1: Quotations Sent */}
         <div
           onClick={() => navigate('/crm/quotations')}
-          className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-300 cursor-pointer relative overflow-hidden group"
+          title="Click to view all Quotations in Quotation Hub"
+          className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-300 hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden group"
         >
           <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-blue-500/5 group-hover:scale-150 transition-transform duration-700"></div>
           <div className="flex justify-between items-start mb-4 relative z-10">
             <div className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30 transform group-hover:scale-110 transition-transform">
               <FileText size={22} />
             </div>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-              Quotation Hub
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+              Quotation Hub <ArrowUpRight size={12} />
             </span>
           </div>
           <div className="relative z-10">
@@ -1112,16 +1111,17 @@ export const CrmDashboard = () => {
 
         {/* Card 2: Quotations Converted in Deals */}
         <div
-          onClick={() => navigate('/crm/deals')}
-          className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-emerald-200 transition-all duration-300 cursor-pointer relative overflow-hidden group"
+          onClick={() => navigate('/crm/deals?tab=From%20Quotations', { state: { tab: 'From Quotations' } })}
+          title="Click to view all Deals converted from Quotations"
+          className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-emerald-300 hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden group"
         >
           <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-emerald-500/5 group-hover:scale-150 transition-transform duration-700"></div>
           <div className="flex justify-between items-start mb-4 relative z-10">
             <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30 transform group-hover:scale-110 transition-transform">
               <CheckCircle2 size={22} />
             </div>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-              {quotationConversionRate}% Converted
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              {quotationConversionRate}% Converted <ArrowUpRight size={12} />
             </span>
           </div>
           <div className="relative z-10">
@@ -1137,18 +1137,22 @@ export const CrmDashboard = () => {
         </div>
 
         {/* Card 3: Today's Revenue */}
-        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-amber-200 transition-all duration-300 relative overflow-hidden group">
+        <div
+          onClick={() => navigate('/crm/deals?filter=today', { state: { filter: 'today' } })}
+          title="Click to view Today's Booked Deals"
+          className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-amber-300 hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden group"
+        >
           <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-amber-500/5 group-hover:scale-150 transition-transform duration-700"></div>
           <div className="flex justify-between items-start mb-4 relative z-10">
             <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-orange-500/30 transform group-hover:scale-110 transition-transform">
               <Clock size={22} />
             </div>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-100">
-              Today: {todayDMY}
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-100 flex items-center gap-1 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+              Today: {todayDMY} <ArrowUpRight size={12} />
             </span>
           </div>
           <div className="relative z-10">
-            <p className="text-3xl font-black text-gray-900 tracking-tight">
+            <p className="text-3xl font-black text-gray-900 tracking-tight group-hover:text-amber-600 transition-colors">
               {formatCurrencyShort(todayRevenueReceived > 0 ? todayRevenueReceived : todayRevenueBooked)}
             </p>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-1">Today's Revenue</p>
@@ -1160,18 +1164,22 @@ export const CrmDashboard = () => {
         </div>
 
         {/* Card 4: Monthly Revenue */}
-        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-purple-200 transition-all duration-300 relative overflow-hidden group">
+        <div
+          onClick={() => navigate('/crm/deals?filter=this_month', { state: { filter: 'this_month' } })}
+          title="Click to view This Month's Deals"
+          className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-purple-300 hover:-translate-y-1 transition-all duration-300 cursor-pointer relative overflow-hidden group"
+        >
           <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-purple-500/5 group-hover:scale-150 transition-transform duration-700"></div>
           <div className="flex justify-between items-start mb-4 relative z-10">
             <div className="p-3.5 rounded-2xl bg-gradient-to-br from-purple-500 to-fuchsia-600 text-white shadow-lg shadow-purple-500/30 transform group-hover:scale-110 transition-transform">
               <Calendar size={22} />
             </div>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-800 border border-purple-100">
-              {currentMonthName} {currentYear}
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-800 border border-purple-100 flex items-center gap-1 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+              {currentMonthName} {currentYear} <ArrowUpRight size={12} />
             </span>
           </div>
           <div className="relative z-10">
-            <p className="text-3xl font-black text-gray-900 tracking-tight">
+            <p className="text-3xl font-black text-gray-900 tracking-tight group-hover:text-purple-600 transition-colors">
               {formatCurrencyShort(monthRevenueReceived > 0 ? monthRevenueReceived : monthRevenueBooked)}
             </p>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-1">Monthly Revenue ({currentMonthName})</p>
@@ -1211,8 +1219,14 @@ export const CrmDashboard = () => {
                 <div className="text-[10px] text-gray-300 font-bold uppercase">Monthly Target</div>
                 <div className="text-lg font-black text-amber-400">₹{totalMonthlyTarget.toLocaleString('en-IN')}</div>
               </div>
-              <div className="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10">
-                <div className="text-[10px] text-gray-300 font-bold uppercase">Revenue Booked</div>
+              <div
+                onClick={() => navigate('/crm/deals?filter=this_month', { state: { filter: 'this_month' } })}
+                title="Click to view all deals booked this month"
+                className="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 hover:bg-white/20 transition-all cursor-pointer group"
+              >
+                <div className="text-[10px] text-gray-300 font-bold uppercase flex items-center gap-1">
+                  Revenue Booked <ArrowUpRight size={10} className="text-emerald-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </div>
                 <div className="text-lg font-black text-emerald-400">{formatCurrencyShort(monthlyRevenueForTarget)}</div>
               </div>
               <button
@@ -1229,7 +1243,6 @@ export const CrmDashboard = () => {
           <div className="space-y-3 relative z-10">
             <div className="flex justify-between items-center text-xs font-bold">
               <span className="flex items-center text-gray-300">
-                <Sparkles size={14} className="mr-1.5 text-amber-400" />
                 Progress to Target: <strong className="text-white ml-1">{targetAchievementPercent}%</strong>
               </span>
               <span className="text-gray-300">
@@ -1264,10 +1277,9 @@ export const CrmDashboard = () => {
                 <Flame size={22} className="text-be-orange mr-2" />
                 Top 5 Highest Selling & Most Recent Services
               </h2>
-
             </div>
             <p className="text-xs text-gray-500 mt-1 font-medium">
-              Top performing products and consulting packages across all closed and live deals.
+              Top performing products and consulting packages across all closed and live deals. Click any service to view its deals.
             </p>
           </div>
 
@@ -1293,15 +1305,17 @@ export const CrmDashboard = () => {
             return (
               <div
                 key={srv.service}
-                className="bg-gradient-to-b from-gray-50/70 to-white rounded-2xl p-4 border border-gray-200/80 shadow-sm hover:shadow-md hover:border-orange-300 transition-all flex flex-col justify-between group"
+                onClick={() => navigate('/crm/deals?search=' + encodeURIComponent(srv.service), { state: { search: srv.service } })}
+                title={`Click to view all deals for "${srv.service}"`}
+                className="bg-gradient-to-b from-gray-50/70 to-white rounded-2xl p-4 border border-gray-200/80 shadow-sm hover:shadow-xl hover:border-orange-400 hover:scale-[1.02] transition-all duration-300 cursor-pointer flex flex-col justify-between group"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <span className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${badgeStyle.split(' ')[0]} ${badgeStyle.split(' ')[1]} text-white flex items-center justify-center font-black text-xs shadow-sm`}>
                       #{srv.rank}
                     </span>
-                    <span className="text-[11px] font-extrabold text-gray-500 bg-white px-2 py-0.5 rounded-md border border-gray-200">
-                      {srv.count} Deals
+                    <span className="text-[11px] font-extrabold text-gray-500 bg-white px-2 py-0.5 rounded-md border border-gray-200 flex items-center gap-1 group-hover:border-orange-300 transition-colors">
+                      {srv.count} Deals <ArrowUpRight size={10} className="text-be-orange opacity-0 group-hover:opacity-100 transition-opacity" />
                     </span>
                   </div>
 
@@ -1363,7 +1377,7 @@ export const CrmDashboard = () => {
                     Top 5 Performer Employees
                   </h2>
                   <p className="text-xs text-gray-500 font-medium mt-0.5">
-                    Highest revenue generated by sales staff & BDMs
+                    Highest revenue generated by sales staff. Click any row to view their deals.
                   </p>
                 </div>
               </div>
@@ -1389,7 +1403,9 @@ export const CrmDashboard = () => {
                 return (
                   <div
                     key={emp.id + emp.name}
-                    className="p-4 rounded-2xl border border-gray-100 hover:border-orange-200 bg-gray-50/50 hover:bg-orange-50/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                    onClick={() => navigate('/crm/deals?search=' + encodeURIComponent(emp.name), { state: { search: emp.name } })}
+                    title={`Click to view deals closed by ${emp.name}`}
+                    className="p-4 rounded-2xl border border-gray-100 hover:border-orange-300 bg-gray-50/50 hover:bg-orange-50/40 hover:scale-[1.01] hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
                   >
                     <div className="flex items-center space-x-3 min-w-0">
                       <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shadow-md shrink-0 ${badgeClass}`}>
@@ -1402,8 +1418,8 @@ export const CrmDashboard = () => {
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center space-x-2">
-                          <h4 className="font-extrabold text-sm text-gray-900 truncate group-hover:text-be-orange transition-colors">
-                            {emp.name}
+                          <h4 className="font-extrabold text-sm text-gray-900 truncate group-hover:text-be-orange transition-colors flex items-center gap-1">
+                            {emp.name} <ArrowUpRight size={12} className="opacity-0 group-hover:opacity-100 text-be-orange transition-opacity" />
                           </h4>
                           {emp.rank === 1 && (
                             <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black rounded-full uppercase shrink-0">
@@ -1459,7 +1475,7 @@ export const CrmDashboard = () => {
                     Top 5 Performer Teams
                   </h2>
                   <p className="text-xs text-gray-500 font-medium mt-0.5">
-                    Highest closing team leader squads & departments
+                    Highest closing team leader squads & departments. Click any squad to view deals.
                   </p>
                 </div>
               </div>
@@ -1485,7 +1501,9 @@ export const CrmDashboard = () => {
                 return (
                   <div
                     key={team.name}
-                    className="p-4 rounded-2xl border border-gray-100 hover:border-blue-200 bg-gray-50/50 hover:bg-blue-50/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                    onClick={() => navigate('/crm/deals?search=' + encodeURIComponent(team.leadName || team.name), { state: { search: team.leadName || team.name } })}
+                    title={`Click to view deals for ${team.name}`}
+                    className="p-4 rounded-2xl border border-gray-100 hover:border-blue-300 bg-gray-50/50 hover:bg-blue-50/40 hover:scale-[1.01] hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
                   >
                     <div className="flex items-center space-x-3 min-w-0">
                       <div className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shadow-md shrink-0 ${badgeClass}`}>
@@ -1498,8 +1516,8 @@ export const CrmDashboard = () => {
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center space-x-2">
-                          <h4 className="font-extrabold text-sm text-gray-900 truncate group-hover:text-blue-600 transition-colors">
-                            {team.name}
+                          <h4 className="font-extrabold text-sm text-gray-900 truncate group-hover:text-blue-600 transition-colors flex items-center gap-1">
+                            {team.name} <ArrowUpRight size={12} className="opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity" />
                           </h4>
                           {team.rank === 1 && (
                             <span className="px-2 py-0.5 bg-blue-100 text-blue-900 text-[10px] font-black rounded-full uppercase shrink-0">
@@ -1562,11 +1580,19 @@ export const CrmDashboard = () => {
               <p className="text-xs text-gray-500 mt-0.5 font-medium">Received vs Pending amounts across deals</p>
             </div>
             <div className="flex items-center space-x-4 text-xs font-semibold">
-              <span className="flex items-center text-emerald-600">
+              <span
+                onClick={() => navigate('/crm/deals?filter=this_month', { state: { filter: 'this_month' } })}
+                title="Click to view this month's deals"
+                className="flex items-center text-emerald-600 cursor-pointer hover:underline"
+              >
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 mr-1.5"></span>
                 Received: {formatCurrencyShort(totalReceivedValue)}
               </span>
-              <span className="flex items-center text-orange-600">
+              <span
+                onClick={() => navigate('/crm/deals?filter=pending', { state: { filter: 'pending' } })}
+                title="Click to view pending amount deals"
+                className="flex items-center text-orange-600 cursor-pointer hover:underline"
+              >
                 <span className="w-2.5 h-2.5 rounded-full bg-orange-500 mr-1.5"></span>
                 Pending: {formatCurrencyShort(totalPendingValue)}
               </span>
@@ -1601,7 +1627,7 @@ export const CrmDashboard = () => {
               <div className="text-center py-12 text-gray-400">
                 <FolderKanban size={40} className="mx-auto mb-2 text-gray-300" />
                 <p className="font-semibold text-sm text-gray-500">No revenue data available yet</p>
-                <p className="text-xs text-gray-400 mt-1">Deals will populate automatically from Zoho CRM</p>
+                <p className="text-xs text-gray-400 mt-1">Deals will populate automatically from database</p>
               </div>
             )}
           </div>
@@ -1610,15 +1636,33 @@ export const CrmDashboard = () => {
         {/* Deals by Status & Queries */}
         <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-bold text-gray-900">Deal Pipeline Stages</h2>
-                <p className="text-xs text-gray-500 mt-0.5 font-medium">Deals distribution across stages</p>
+                <p className="text-xs text-gray-500 mt-0.5 font-medium">Click any stage to filter deals</p>
               </div>
             </div>
-            <div className="w-full min-h-[220px] flex items-center justify-center">
+
+            {/* Clickable Stage Badges */}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {pipelineCategories.map(cat => {
+                const count = rbacDeals.filter(d => cat.matcher(d.stage || d.status || '')).length;
+                return (
+                  <button
+                    key={cat.label}
+                    onClick={() => navigate('/crm/deals?search=' + encodeURIComponent(cat.label), { state: { search: cat.label } })}
+                    className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-gray-50 hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-200 transition-all flex items-center gap-1.5"
+                  >
+                    <span>{cat.label}</span>
+                    <span className="px-1.5 py-0.2 bg-white rounded-full text-[10px] text-gray-500 font-extrabold border border-gray-100">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="w-full min-h-[190px] flex items-center justify-center">
               {rbacDeals.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={190}>
                   <BarChart data={pipelineData} layout="vertical" margin={{ top: 0, right: 15, left: -10, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorBar" x1="0" y1="0" x2="1" y2="0">
@@ -1640,11 +1684,16 @@ export const CrmDashboard = () => {
             </div>
           </div>
 
-          <div className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-rose-50 rounded-2xl border border-orange-100 flex items-start shadow-inner">
-            <AlertCircle className="text-be-orange shrink-0 mt-0.5 mr-3" size={18} />
-            <p className="text-xs text-gray-800 leading-relaxed font-medium">
+          <div
+            onClick={() => navigate('/quality/queries?status=Open')}
+            title="Click to view all Open Quality Queries"
+            className="mt-4 p-4 bg-gradient-to-r from-orange-50 to-rose-50 rounded-2xl border border-orange-100 hover:border-orange-300 hover:shadow-md transition-all cursor-pointer flex items-start shadow-inner group"
+          >
+            <AlertCircle className="text-be-orange shrink-0 mt-0.5 mr-3 group-hover:scale-110 transition-transform" size={18} />
+            <p className="text-xs text-gray-800 leading-relaxed font-medium flex-1">
               <strong>{openQueriesCount} active queries</strong> pending in the Quality module.
             </p>
+            <ArrowUpRight size={14} className="text-be-orange opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
         </div>
       </div>
@@ -1705,7 +1754,11 @@ export const CrmDashboard = () => {
                     const dispRec = deal.received && deal.received !== '₹0' ? deal.received : (recNum > 0 ? `₹${recNum.toLocaleString('en-IN')}` : '₹0');
 
                     return (
-                      <tr key={deal.id} className="hover:bg-orange-50/30 transition-colors">
+                      <tr
+                        key={deal.id}
+                        onClick={() => navigate(`/crm/deals/${deal.id}`)}
+                        className="hover:bg-orange-50/40 transition-colors cursor-pointer"
+                      >
                         <td className="px-6 py-4 font-bold text-gray-900 font-mono text-xs">{deal.id}</td>
                         <td className="px-6 py-4">{deal.client || deal.company || 'Client'}</td>
                         <td className="px-6 py-4 text-gray-800">{deal.service || 'Service'}</td>
@@ -1717,7 +1770,7 @@ export const CrmDashboard = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-gray-500 text-xs">{deal.date}</td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => navigate(`/crm/deals/${deal.id}`)} className="p-1.5 text-gray-400 hover:text-be-orange rounded-lg hover:bg-orange-50 transition-colors">
                             <MoreHorizontal size={18} />
                           </button>
@@ -1747,7 +1800,11 @@ export const CrmDashboard = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
                   {recentQuotationsList.map((q) => (
-                    <tr key={q.id} className="hover:bg-orange-50/30 transition-colors">
+                    <tr
+                      key={q.id}
+                      onClick={() => navigate(`/crm/quotations/${q.id}`)}
+                      className="hover:bg-orange-50/40 transition-colors cursor-pointer"
+                    >
                       <td className="px-6 py-4 font-bold text-gray-900 font-mono text-xs">{q.id}</td>
                       <td className="px-6 py-4">{q.client} {q.company && q.company !== 'N/A' ? `(${q.company})` : ''}</td>
                       <td className="px-6 py-4 font-bold text-gray-900">{q.amount}</td>
@@ -1757,7 +1814,7 @@ export const CrmDashboard = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-500 text-xs">{q.date}</td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => navigate(`/crm/quotations/${q.id}`)} className="p-1.5 text-gray-400 hover:text-be-orange rounded-lg hover:bg-orange-50 transition-colors">
                           <MoreHorizontal size={18} />
                         </button>

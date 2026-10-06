@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Book, Plus, Trash2, Edit, Download, Paperclip, Info, 
   Search, CheckCircle2, AlertCircle, X, Tag as TagIcon, Mail, Building2, Eye, 
-  FileText, ShieldCheck, Globe, Loader2
+  FileText, ShieldCheck, Globe, Loader2, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { saveDocument, getDocument, deleteDocument } from '../../lib/db';
@@ -14,6 +14,7 @@ import {
   uploadZohoAttachmentToPolicy,
   fetchZohoPolicies 
 } from '../../services/zohoService';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 export interface Policy {
   id: string;
@@ -133,15 +134,15 @@ export const Policies = () => {
         if (showNotification) {
           setToast({
             type: 'success',
-            message: `Synced ${zohoPolicies.length} Policy/Policies from Zoho CRM`,
-            submessage: 'Policy database is updated with live Zoho CRM records'
+            message: `Synced ${zohoPolicies.length} Policy/Policies from database`,
+            submessage: 'Policy database is updated with live database records'
           });
         }
       } else if (showNotification) {
         setToast({
           type: 'info',
-          message: 'No policies returned from Zoho CRM',
-          submessage: res.message || 'Check connection or Zoho CRM records'
+          message: 'No policies returned from database',
+          submessage: res.message || 'Check connection or policy records'
         });
       }
     } catch (err: any) {
@@ -149,7 +150,7 @@ export const Policies = () => {
       if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Failed to fetch policies from Zoho CRM',
+          message: 'Failed to fetch policies from database',
           submessage: err?.message || 'Network error communicating with server'
         });
       }
@@ -486,15 +487,10 @@ export const Policies = () => {
           <button
             onClick={() => syncPoliciesFromZoho(true)}
             disabled={isFetchingZoho}
-            title="Sync live company policies from Zoho CRM"
-            className="bg-white hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-300 px-4 py-2.5 rounded-xl font-bold text-sm flex items-center shadow-sm hover:shadow active:scale-95 disabled:opacity-50 transition-all"
+            title="Refresh & Sync from database"
+            className="w-10 h-10 bg-white hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-300 rounded-xl flex items-center justify-center shadow-sm hover:shadow active:scale-95 disabled:opacity-50 transition-all shrink-0"
           >
-            {isFetchingZoho ? (
-              <Loader2 size={16} className="mr-2 animate-spin text-be-orange" />
-            ) : (
-              <Globe size={16} className="mr-2 text-be-orange" />
-            )}
-            {isFetchingZoho ? 'Syncing...' : 'Sync Zoho CRM'}
+            <RefreshCw size={18} className={`text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
           </button>
 
           {canManage ? (
@@ -1025,53 +1021,15 @@ export const Policies = () => {
       </AnimatePresence>
 
       {/* Delete Confirmation Modal */}
-      <AnimatePresence>
-        {deleteConfirmPolicy && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-gray-100 space-y-4"
-            >
-              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-                <Trash2 size={24} />
-              </div>
-              <div className="text-center">
-                <h3 className="text-lg font-bold text-gray-900">Delete Company Policy?</h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Are you sure you want to delete <span className="font-bold text-gray-800">"{deleteConfirmPolicy.title}"</span>?
-                </p>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  disabled={isDeleting}
-                  onClick={() => setDeleteConfirmPolicy(null)}
-                  className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={isDeleting}
-                  onClick={handleDeletePolicy}
-                  className="px-5 py-2 text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md shadow-rose-600/20 transition-all flex items-center disabled:opacity-60"
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 size={16} className="mr-2 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    'Yes, Delete'
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <DeleteConfirmModal
+        isOpen={Boolean(deleteConfirmPolicy)}
+        onClose={() => !isDeleting && setDeleteConfirmPolicy(null)}
+        onConfirm={handleDeletePolicy}
+        title="Delete Company Policy"
+        itemName={deleteConfirmPolicy?.title}
+        message={deleteConfirmPolicy ? `Are you sure you want to delete policy "${deleteConfirmPolicy.title}"?` : undefined}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 };

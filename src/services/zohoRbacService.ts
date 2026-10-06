@@ -168,8 +168,8 @@ export function resolveAccessibleEmployeeIds(
 }
 
 /**
- * Automatically injects the Zoho CRM Employee lookup object into any mutation payload.
- * Format for Zoho CRM: {"Employee": {"id": "CURRENT_USER_EMPLOYEE_ID"}}
+ * Automatically injects the System Employee lookup object into any mutation payload.
+ * Format for System: {"Employee": {"id": "CURRENT_USER_EMPLOYEE_ID"}}
  * 
  * Exempt modules: "Company_Calendar", "Company_Policies"
  */
@@ -245,11 +245,11 @@ export function injectEmployeeLookup(
     employeeZohoId = employmentId;
   }
 
-  // 2. Inject standard Zoho CRM lookup object and metadata
+  // 2. Inject standard System lookup object and metadata
   if (employeeZohoId) {
     const lookupField = config?.lookupField || 'Employee';
 
-    // Standard Zoho CRM lookup object
+    // Standard System lookup object
     updatedPayload[lookupField] = {
       id: String(employeeZohoId),
       ...(employeeName ? { name: employeeName } : {})
@@ -323,7 +323,7 @@ export function attachCurrentUserEmployeeLookup<T = any>(record: T, customUser?:
 }
 
 /**
- * Builds Zoho CRM-compatible Search criteria and COQL WHERE clauses based on the user's RBAC scope.
+ * Builds System-compatible Search criteria and COQL WHERE clauses based on the user's RBAC scope.
  */
 export function buildZohoRbacCriteria(
   moduleName: string,
@@ -466,6 +466,26 @@ export function filterRecordsByRbac<T = any>(
     const recEmpName = String(rec.employeeName || rec.Employee_Name || '').trim().toLowerCase();
     if (recEmpName && userName && (recEmpName === userName || (recEmpName.length >= 3 && userName.includes(recEmpName)) || (userName.length >= 3 && recEmpName.includes(userName)) || idSet.has(recEmpName))) return true;
 
+    // 7. Check embedded formData employee identifiers
+    const fdEmpName = String(rec.formData?.employeeName || rec.formData?.salesEmployee || rec.formData?.empName || '').trim().toLowerCase();
+    if (fdEmpName && userName && (fdEmpName === userName || (fdEmpName.length >= 3 && userName.includes(fdEmpName)) || (userName.length >= 3 && fdEmpName.includes(userName)) || idSet.has(fdEmpName))) return true;
+
+    const fdEmpEmail = String(rec.formData?.employeeEmail || rec.formData?.userEmail || rec.employeeEmail || rec.userEmail || rec.empEmail || '').trim().toLowerCase();
+    if (fdEmpEmail && userEmail && fdEmpEmail === userEmail) return true;
+
+    const fdEmpId = String(rec.formData?.empId || rec.formData?.employeeId || rec.formData?.employeeZohoId || rec.empId || rec.employeeId || '').trim().toLowerCase();
+    if (fdEmpId && idSet.has(fdEmpId)) return true;
+
+    // 8. Special fallback for Quotations: if created locally or before employee metadata was linked
+    if (moduleName === 'Quotations' || moduleName === 'quotation' || moduleName === 'CRM') {
+      const isUnassigned = (!rec.Employee || (typeof rec.Employee === 'object' && !rec.Employee.id && !rec.Employee.name)) &&
+                           !rec.employeeId && !rec.empId && !rec.employeeName &&
+                           (!rec.owner || rec.owner === 'Admin');
+      if (isUnassigned) {
+        return true;
+      }
+    }
+
     return false;
   });
 }
@@ -551,7 +571,7 @@ export async function mutateZohoWithRbac<T = any>(
 
 /**
  * Centralized RBAC Fetch Utility (GET)
- * Automatically builds role-specific criteria and queries Zoho CRM.
+ * Automatically builds role-specific criteria and queries System.
  */
 export async function fetchZohoWithRbac<T = any>(
   moduleName: string,
@@ -598,7 +618,7 @@ export async function fetchZohoWithRbac<T = any>(
       success: false,
       data: [],
       info: result.info,
-      message: result.message || `Failed to fetch ${moduleName} from Zoho CRM`
+      message: result.message || `Failed to fetch ${moduleName} from server`
     };
   } catch (err: any) {
     console.error(`[Zoho RBAC] Fetch error for ${moduleName}:`, err);

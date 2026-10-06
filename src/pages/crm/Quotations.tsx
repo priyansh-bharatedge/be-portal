@@ -7,6 +7,7 @@ import { saveDocument } from '../../lib/db';
 import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal, fetchZohoQuotations } from '../../services/zohoService';
 import { downloadQuotationPDF, downloadQuotationHTML, printQuotation, generateQuotationPDFBlob } from '../../utils/quotationTemplate';
 import { Pagination } from '../../components/ui/Pagination';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 interface DealService {
   id: string;
@@ -34,6 +35,11 @@ export const Quotations = () => {
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
   const [isTestingZoho, setIsTestingZoho] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; quotation: any | null; isDeleting: boolean }>({
+    isOpen: false,
+    quotation: null,
+    isDeleting: false
+  });
 
   const [formData, setFormData] = useState({
     clientName: '', mobile: '', email: '', gender: 'Male',
@@ -369,6 +375,47 @@ export const Quotations = () => {
     return [];
   });
 
+  // Auto-migrate any unassigned local quotations so they are linked to current user
+  useEffect(() => {
+    if (currentUser?.name) {
+      try {
+        const saved = localStorage.getItem('be_quotations');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            let changed = false;
+            const updated = parsed.map((q: any) => {
+              if ((!q.owner || q.owner === 'Admin') && (!q.Employee || !q.employeeName)) {
+                changed = true;
+                return {
+                  ...q,
+                  owner: currentUser.name,
+                  employeeName: currentUser.name,
+                  empName: currentUser.name,
+                  employeeId: currentUser.empId || currentUser.id,
+                  empId: currentUser.empId || currentUser.id,
+                  employeeZohoId: currentUser.zohoId || '',
+                  employeeEmail: currentUser.email || '',
+                  salesEmployee: currentUser.name,
+                  department: currentUser.department || 'Sales',
+                  Employee: {
+                    id: currentUser.zohoId || currentUser.empId || currentUser.id,
+                    name: currentUser.name
+                  }
+                };
+              }
+              return q;
+            });
+            if (changed) {
+              setQuotations(updated);
+              localStorage.setItem('be_quotations', JSON.stringify(updated));
+            }
+          }
+        }
+      } catch (e) { }
+    }
+  }, [currentUser]);
+
   const rbacQuotations = useMemo(() => {
     return filterRecords ? filterRecords(quotations, 'Quotations') : quotations;
   }, [quotations, filterRecords, currentUser]);
@@ -408,7 +455,7 @@ export const Quotations = () => {
           if (showNotification) {
             setToast({
               type: 'info',
-              message: 'No Quotations Found in Zoho CRM',
+              message: 'No Quotations Found',
               submessage: 'Quotations module returned 0 records'
             });
           }
@@ -424,6 +471,14 @@ export const Quotations = () => {
           date: z.Created_Time ? new Date(z.Created_Time).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
           zohoId: String(z.id),
           zohoStatus: 'synced',
+          owner: z.Owner?.name || z.Created_By?.name || (typeof z.Employee === 'object' ? z.Employee?.name : null) || z.Sales_Representative || currentUser?.name || 'Admin',
+          Employee: z.Employee,
+          employeeId: typeof z.Employee === 'object' ? z.Employee?.id : (z.Employee || z.Employee_ID || ''),
+          employeeZohoId: typeof z.Employee === 'object' ? z.Employee?.id : (z.Employee || ''),
+          employeeName: typeof z.Employee === 'object' ? z.Employee?.name : (z.Employee_Name || z.Sales_Representative || z.Owner?.name || currentUser?.name || ''),
+          salesEmployee: typeof z.Employee === 'object' ? z.Employee?.name : (z.Sales_Representative || z.Owner?.name || currentUser?.name || ''),
+          Owner: z.Owner,
+          Created_By: z.Created_By,
           formData: {
             clientName: z.Name ? z.Name.split(' - ')[1] || z.Name : '',
             companyName: z.Company_Name || '',
@@ -440,6 +495,8 @@ export const Quotations = () => {
             companyPan: z.Company_PAN_Number || '',
             sector: z.Sector || '',
             industry: z.Industry || '',
+            employeeName: typeof z.Employee === 'object' ? z.Employee?.name : (z.Employee_Name || ''),
+            employeeZohoId: typeof z.Employee === 'object' ? z.Employee?.id : (z.Employee || ''),
           },
           servicesData: Array.isArray(z.Services_And_Pricing) ? z.Services_And_Pricing.map((s: any, idx: number) => ({
             id: String(idx + 1),
@@ -471,22 +528,22 @@ export const Quotations = () => {
         if (showNotification) {
           setToast({
             type: 'success',
-            message: `Fetched ${res.data.length} Quotation(s) from Zoho CRM!`,
+            message: `Fetched ${res.data.length} Quotation(s) Successfully!`,
             submessage: 'Quotations synchronized successfully'
           });
         }
       } else if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Failed to fetch quotations from Zoho CRM',
-          submessage: res.message || 'Check connection or Zoho API rate limits'
+          message: 'Failed to fetch quotations',
+          submessage: res.message || 'Check network connection or server limits'
         });
       }
     } catch (err: any) {
       if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Error connecting to Zoho CRM',
+          message: 'Error connecting to server',
           submessage: err.message || 'Network communication error'
         });
       }
@@ -530,20 +587,20 @@ export const Quotations = () => {
       if (res.success) {
         setToast({
           type: 'success',
-          message: 'Zoho CRM Connected Successfully!',
+          message: 'Connected Successfully!',
           submessage: 'OAuth token generated and verified for .in domain'
         });
       } else {
         setToast({
           type: 'error',
-          message: 'Zoho CRM Connection Failed',
+          message: 'Connection Failed',
           submessage: res.message
         });
       }
     } catch (err: any) {
       setToast({
         type: 'error',
-        message: 'Zoho CRM Connection Error',
+        message: 'Connection Error',
         submessage: err?.message || 'Check network or credentials in .env'
       });
     } finally {
@@ -586,8 +643,8 @@ export const Quotations = () => {
         localStorage.setItem('be_quotations', JSON.stringify(updatedList));
         setToast({
           type: 'success',
-          message: `Quotation ${quotation.id} Synced to Zoho CRM!`,
-          submessage: `Zoho CRM Record #${res.zohoId} with Quotation_${quotation.id}.pdf attached`
+          message: `Quotation ${quotation.id} Saved Successfully!`,
+          submessage: `Record #${res.zohoId} with Quotation_${quotation.id}.pdf attached`
         });
       } else {
         const updatedList = quotations.map((q: any) => {
@@ -604,14 +661,14 @@ export const Quotations = () => {
         localStorage.setItem('be_quotations', JSON.stringify(updatedList));
         setToast({
           type: 'error',
-          message: `Zoho Sync Failed for ${quotation.id}`,
+          message: `Sync Failed for ${quotation.id}`,
           submessage: res.message || 'Please check API field names and token validity.'
         });
       }
     } catch (err: any) {
       setToast({
         type: 'error',
-        message: `Zoho Sync Error for ${quotation.id}`,
+        message: `Sync Error for ${quotation.id}`,
         submessage: err?.message || 'Network communication error'
       });
     } finally {
@@ -659,10 +716,29 @@ export const Quotations = () => {
         received: `₹${(Number(amountReceived) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
         pending: `₹${pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
         status: existingQuotation?.status || 'Draft',
-        owner: existingQuotation?.owner || 'Admin',
+        owner: existingQuotation?.owner || currentUser?.name || 'Admin',
         date: existingQuotation?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        // RBAC & Ownership
+        employeeName: existingQuotation?.employeeName || currentUser?.name || '',
+        empName: existingQuotation?.empName || currentUser?.name || '',
+        employeeId: existingQuotation?.employeeId || currentUser?.empId || currentUser?.id || '',
+        empId: existingQuotation?.empId || currentUser?.empId || currentUser?.id || '',
+        employeeZohoId: existingQuotation?.employeeZohoId || currentUser?.zohoId || '',
+        employeeEmail: existingQuotation?.employeeEmail || currentUser?.email || currentUser?.workEmail || '',
+        salesEmployee: existingQuotation?.salesEmployee || currentUser?.name || '',
+        department: existingQuotation?.department || currentUser?.department || 'Sales',
+        Employee: existingQuotation?.Employee || (currentUser ? {
+          id: currentUser.zohoId || currentUser.empId || currentUser.id,
+          name: currentUser.name
+        } : undefined),
         // Full details
-        formData: { ...formData },
+        formData: {
+          ...formData,
+          employeeName: existingQuotation?.formData?.employeeName || currentUser?.name,
+          employeeEmail: existingQuotation?.formData?.employeeEmail || currentUser?.email,
+          empId: existingQuotation?.formData?.empId || currentUser?.empId || currentUser?.id,
+          employeeZohoId: existingQuotation?.formData?.employeeZohoId || currentUser?.zohoId
+        },
         servicesData: quotationServices.map(s => {
           const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
           const gstVal = t > 0 ? Number((t * 0.18).toFixed(2)) : 0;
@@ -721,16 +797,16 @@ export const Quotations = () => {
 
           setToast({
             type: 'success',
-            message: isEditing ? 'Quotation Updated & Synced to Zoho CRM!' : 'Quotation Created & Synced to Zoho CRM!',
-            submessage: `${isEditing ? 'Updated' : 'Created'} in Zoho Quotations (ID: #${finalZohoId}) with updated Quotation_${quotationId}.pdf attached`
+            message: isEditing ? 'Quotation Updated Successfully!' : 'Quotation Created Successfully!',
+            submessage: `${isEditing ? 'Updated' : 'Created'} in Quotations (ID: #${finalZohoId}) with updated Quotation_${quotationId}.pdf attached`
           });
         } else {
           quotationData.zohoStatus = 'failed';
           quotationData.zohoError = zohoRes.message;
           setToast({
             type: 'error',
-            message: `Quotation Saved Locally (Zoho ${isEditing ? 'Update' : 'Sync'} Failed)`,
-            submessage: zohoRes.message || 'Check Zoho CRM credentials or field requirements'
+            message: `Quotation Saved Locally (Sync Failed)`,
+            submessage: zohoRes.message || 'Check field requirements'
           });
         }
       } catch (zErr: any) {
@@ -739,8 +815,8 @@ export const Quotations = () => {
         quotationData.zohoError = zErr?.message || 'Sync failed';
         setToast({
           type: 'error',
-          message: `Quotation Saved Locally (Zoho ${isEditing ? 'Update' : 'Sync'} Error)`,
-          submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+          message: `Quotation Saved Locally (Sync Error)`,
+          submessage: zErr?.message || 'Failed to communicate with server'
         });
       }
 
@@ -785,9 +861,17 @@ export const Quotations = () => {
     downloadQuotationPDF(q);
   };
 
-  const handleDeleteQuotation = async (deal: any) => {
+  const handleDeleteQuotation = (deal: any) => {
+    setDeleteTarget({ isOpen: true, quotation: deal, isDeleting: false });
+  };
+
+  const confirmDeleteQuotation = async () => {
+    const deal = deleteTarget.quotation;
+    if (!deal) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
     const qName = deal.formData?.clientName || deal.client || deal.id;
-    if (confirm(`Are you sure you want to delete quotation "${qName}"?`)) {
+
+    try {
       const newQuotationsList = quotations.filter((d: any) => d.id !== deal.id);
       setQuotations(newQuotationsList);
       localStorage.setItem('be_quotations', JSON.stringify(newQuotationsList));
@@ -804,16 +888,16 @@ export const Quotations = () => {
           } else {
             setToast({
               type: 'error',
-              message: `Quotation Deleted Locally (Zoho Delete Failed)`,
-              submessage: zohoRes.message || 'Failed to delete record from Zoho CRM'
+              message: `Quotation Deleted Locally (Delete Failed)`,
+              submessage: zohoRes.message || 'Failed to delete record'
             });
           }
         } catch (zErr: any) {
           console.error('[Zoho CRM] Delete error:', zErr);
           setToast({
             type: 'error',
-            message: `Quotation Deleted Locally (Zoho Delete Error)`,
-            submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+            message: `Quotation Deleted Locally (Delete Error)`,
+            submessage: zErr?.message || 'Failed to communicate with server'
           });
         }
       } else {
@@ -823,6 +907,8 @@ export const Quotations = () => {
           submessage: 'Record has been deleted successfully'
         });
       }
+    } finally {
+      setDeleteTarget({ isOpen: false, quotation: null, isDeleting: false });
     }
   };
 
@@ -838,8 +924,8 @@ export const Quotations = () => {
         localStorage.setItem('be_quotations', JSON.stringify(updatedList));
         setToast({
           type: 'success',
-          message: `Quotation Synced to Zoho CRM!`,
-          submessage: `Zoho Record ID: #${zohoRes.zohoId}`
+          message: `Quotation Synced Successfully!`,
+          submessage: `Record ID: #${zohoRes.zohoId}`
         });
       } else {
         const updatedList = quotations.map((q: any) => 
@@ -849,15 +935,15 @@ export const Quotations = () => {
         localStorage.setItem('be_quotations', JSON.stringify(updatedList));
         setToast({
           type: 'error',
-          message: `Zoho CRM Sync Failed`,
+          message: `Quotation Sync Failed`,
           submessage: zohoRes.message || 'Please check field formats or credentials'
         });
       }
     } catch (err: any) {
       setToast({
         type: 'error',
-        message: `Zoho CRM Sync Error`,
-        submessage: err?.message || 'Failed to communicate with Zoho CRM'
+        message: `Quotation Sync Error`,
+        submessage: err?.message || 'Failed to communicate with server'
       });
     } finally {
       setSyncingId(null);
@@ -1115,11 +1201,10 @@ export const Quotations = () => {
           <button
             onClick={() => handleFetchFromZoho(true)}
             disabled={isFetchingZoho}
-            className="flex items-center px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm hover:shadow disabled:opacity-60"
-            title="Fetch live records from Zoho CRM Quotations module"
+            className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm hover:shadow disabled:opacity-60 shrink-0"
+            title="Refresh & Sync"
           >
-            <RefreshCw size={15} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
-            {isFetchingZoho ? 'Fetching...' : 'Fetch Zoho CRM'}
+            <RefreshCw size={16} className={`text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => handleOpenModal()}
@@ -1144,7 +1229,6 @@ export const Quotations = () => {
                 <th className="px-6 py-3">Received</th>
                 <th className="px-6 py-3">Pending</th>
                 <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Zoho Sync</th>
                 <th className="px-6 py-3">Owner</th>
                 <th className="px-6 py-3 text-right">Actions</th>
               </tr>
@@ -1171,36 +1255,6 @@ export const Quotations = () => {
                       <option value="Draft" className="bg-white text-gray-900 text-sm">Draft</option>
                       <option value="Sent" className="bg-white text-gray-900 text-sm">Sent</option>
                     </select>
-                  </td>
-                  <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
-                    <div className="flex items-center space-x-2">
-                      {deal.zohoStatus === 'synced' ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          <Cloud className="w-3 h-3 mr-1 text-emerald-600" />
-                          Synced {deal.zohoId ? `#${deal.zohoId.slice(-4)}` : ''}
-                        </span>
-                      ) : deal.zohoStatus === 'failed' ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200" title={deal.zohoError}>
-                          <AlertCircle className="w-3 h-3 mr-1 text-rose-600" />
-                          Failed
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                          <Cloud className="w-3 h-3 mr-1 text-amber-600 opacity-60" />
-                          Pending
-                        </span>
-                      )}
-                      {deal.zohoStatus !== 'synced' && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleManualSyncQuotation(deal); }}
-                          disabled={syncingId === deal.id}
-                          className="p-1 hover:bg-orange-100 text-orange-600 rounded transition-colors"
-                          title="Retry sync with Zoho CRM"
-                        >
-                          <RefreshCw size={12} className={syncingId === deal.id ? 'animate-spin' : ''} />
-                        </button>
-                      )}
-                    </div>
                   </td>
                   <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100 flex items-center space-x-2">
                     <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">
@@ -1268,12 +1322,12 @@ export const Quotations = () => {
                     {isFetchingZoho ? (
                       <div className="flex flex-col items-center justify-center py-4">
                         <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
-                        <p className="text-sm font-semibold text-gray-800">Fetching live quotation records from Zoho CRM...</p>
+                        <p className="text-sm font-semibold text-gray-800">Fetching live quotation records...</p>
                       </div>
                     ) : (
                       <>
                         <p className="text-lg font-medium text-gray-900">No quotations found</p>
-                        <p className="text-xs text-gray-400 mt-1">Create a new quotation or sync live records from Zoho CRM.</p>
+                        <p className="text-xs text-gray-400 mt-1">Create a new quotation or sync live records.</p>
                       </>
                     )}
                   </td>
@@ -1602,7 +1656,7 @@ export const Quotations = () => {
                     {isSubmitting ? (
                       <>
                         <Loader2 size={16} className="mr-2 animate-spin" />
-                        <span>Syncing to Zoho CRM...</span>
+                        <span>Saving Quotation...</span>
                       </>
                     ) : (
                       <>
@@ -1617,6 +1671,17 @@ export const Quotations = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, quotation: null, isDeleting: false })}
+        onConfirm={confirmDeleteQuotation}
+        title="Delete Quotation"
+        itemName={deleteTarget.quotation ? (deleteTarget.quotation.formData?.clientName || deleteTarget.quotation.client || deleteTarget.quotation.id) : undefined}
+        message={deleteTarget.quotation ? `Are you sure you want to delete quotation "${deleteTarget.quotation.formData?.clientName || deleteTarget.quotation.client || deleteTarget.quotation.id}"?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

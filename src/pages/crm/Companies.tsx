@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, Filter, Edit, Trash2, Building2, FileText, Calendar, CheckCircle2, X, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, Mail } from 'lucide-react';
+import { Search, Plus, Filter, Edit, Trash2, Building2, FileText, Calendar, CheckCircle2, X, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, Mail, Eye, Phone, Tag, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { saveOrUpdateZohoCompany, deleteZohoCompany, insertZohoCompany, fetchZohoCompanies } from '../../services/zohoService';
 import { Pagination } from '../../components/ui/Pagination';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 export interface Company {
   id: string;
@@ -39,6 +40,12 @@ export const Companies = () => {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
+  const [viewingCompany, setViewingCompany] = useState<Company | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; company: Company | null; isDeleting: boolean }>({
+    isOpen: false,
+    company: null,
+    isDeleting: false
+  });
 
   const rbacCompanies = useMemo(() => {
     return filterRecords ? filterRecords(companies, 'Companies') : companies;
@@ -69,7 +76,7 @@ export const Companies = () => {
       } catch (e) {}
     }
 
-    // Auto-fetch live companies from Zoho CRM on mount
+    // Auto-fetch live companies from server on mount
     handleFetchZohoCompanies(false);
   }, []);
 
@@ -134,7 +141,7 @@ export const Companies = () => {
         Employee: editingCompany?.Employee || (currentUser?.zohoId ? { id: currentUser.zohoId, name: currentUser.name } : undefined),
       };
 
-      // Sync to Zoho CRM Companies Module
+      // Sync to server Companies Module
       try {
         const zohoRes = await saveOrUpdateZohoCompany(companyData);
         const finalZohoId = zohoRes.zohoId || companyData.zohoId;
@@ -147,16 +154,16 @@ export const Companies = () => {
 
           setToast({
             type: 'success',
-            message: editingCompany ? 'Company Updated & Synced to Zoho CRM!' : 'Company Created & Synced to Zoho CRM!',
-            submessage: `${editingCompany ? 'Updated' : 'Inserted'} in Zoho Companies module (ID: #${finalZohoId})`
+            message: editingCompany ? 'Company Updated Successfully!' : 'Company Created Successfully!',
+            submessage: `${editingCompany ? 'Updated' : 'Inserted'} in Companies module (ID: #${finalZohoId})`
           });
         } else {
           companyData.zohoStatus = 'failed';
           companyData.zohoError = zohoRes.message;
           setToast({
             type: 'error',
-            message: `Company Saved Locally (Zoho ${editingCompany ? 'Update' : 'Sync'} Failed)`,
-            submessage: zohoRes.message || 'Check Zoho CRM credentials or module permissions'
+            message: `Company Saved Locally (Sync Failed)`,
+            submessage: zohoRes.message || 'Check network or module permissions'
           });
         }
       } catch (zErr: any) {
@@ -165,8 +172,8 @@ export const Companies = () => {
         companyData.zohoError = zErr?.message || 'Sync failed';
         setToast({
           type: 'error',
-          message: `Company Saved Locally (Zoho ${editingCompany ? 'Update' : 'Sync'} Error)`,
-          submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+          message: `Company Saved Locally (Sync Error)`,
+          submessage: zErr?.message || 'Failed to communicate with server'
         });
       }
 
@@ -206,8 +213,8 @@ export const Companies = () => {
         saveToStorage(updatedList);
         setToast({
           type: 'success',
-          message: `Company "${company.name}" Synced to Zoho CRM!`,
-          submessage: `Zoho CRM Record #${res.zohoId}`
+          message: `Company "${company.name}" Synced Successfully!`,
+          submessage: `Record ID: #${res.zohoId}`
         });
       } else {
         const updatedList = companies.map(c => {
@@ -223,14 +230,14 @@ export const Companies = () => {
         saveToStorage(updatedList);
         setToast({
           type: 'error',
-          message: `Zoho Sync Failed for "${company.name}"`,
-          submessage: res.message || 'Check Zoho CRM field requirements'
+          message: `Sync Failed for "${company.name}"`,
+          submessage: res.message || 'Check field requirements'
         });
       }
     } catch (err: any) {
       setToast({
         type: 'error',
-        message: `Zoho Sync Error for "${company.name}"`,
+        message: `Sync Error for "${company.name}"`,
         submessage: err?.message || 'Network communication error'
       });
     } finally {
@@ -247,7 +254,7 @@ export const Companies = () => {
           if (showNotification) {
             setToast({
               type: 'info',
-              message: 'No Live Companies Found in Zoho CRM',
+              message: 'No Live Companies Found',
               submessage: 'Companies module returned 0 records'
             });
           }
@@ -264,7 +271,7 @@ export const Companies = () => {
           email: r.Email || '',
           secondaryEmail: r.Secondary_Email || '',
           status: (r.Status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
-          source: 'Zoho CRM',
+          source: 'Cloud',
           addedOn: r.Created_Time ? new Date(r.Created_Time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB'),
           zohoId: String(r.id),
           zohoStatus: 'synced',
@@ -300,22 +307,22 @@ export const Companies = () => {
         if (showNotification) {
           setToast({
             type: 'success',
-            message: `Fetched ${res.data.length} Companies from Zoho CRM!`,
+            message: `Fetched ${res.data.length} Companies successfully!`,
             submessage: 'Live CRM data synchronized successfully'
           });
         }
       } else if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Failed to fetch companies from Zoho CRM',
-          submessage: res.message || 'Check connection or Zoho API rate limits'
+          message: 'Failed to fetch companies from server',
+          submessage: res.message || 'Check network connection or server limits'
         });
       }
     } catch (e: any) {
       if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Error connecting to Zoho CRM',
+          message: 'Error connecting to server',
           submessage: e.message || 'Network communication error'
         });
       }
@@ -324,41 +331,51 @@ export const Companies = () => {
     }
   };
 
-  const handleDelete = async (company: Company) => {
-    if (!confirm(`Are you sure you want to delete company "${company.name}"?`)) return;
+  const handleDelete = (company: Company) => {
+    setDeleteTarget({ isOpen: true, company, isDeleting: false });
+  };
 
-    saveToStorage(companies.filter(c => c.id !== company.id));
+  const confirmDeleteCompany = async () => {
+    const company = deleteTarget.company;
+    if (!company) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
 
-    if (company.zohoId) {
-      try {
-        const zohoRes = await deleteZohoCompany(company.zohoId);
-        if (zohoRes.success) {
-          setToast({
-            type: 'success',
-            message: `Company "${company.name}" Deleted`,
-            submessage: `Record #${company.zohoId} deleted from Zoho CRM`
-          });
-        } else {
+    try {
+      saveToStorage(companies.filter(c => c.id !== company.id));
+
+      if (company.zohoId) {
+        try {
+          const zohoRes = await deleteZohoCompany(company.zohoId);
+          if (zohoRes.success) {
+            setToast({
+              type: 'success',
+              message: `Company "${company.name}" Deleted`,
+              submessage: `Record #${company.zohoId} deleted from server`
+            });
+          } else {
+            setToast({
+              type: 'error',
+              message: `Company Deleted Locally (Delete Failed)`,
+              submessage: zohoRes.message || 'Check record status'
+            });
+          }
+        } catch (zErr: any) {
+          console.error('[Zoho CRM] Company delete exception:', zErr);
           setToast({
             type: 'error',
-            message: `Company Deleted Locally (Zoho Delete Failed)`,
-            submessage: zohoRes.message || 'Check Zoho CRM record status'
+            message: `Company Deleted Locally (Delete Error)`,
+            submessage: zErr?.message || 'Failed to communicate with server'
           });
         }
-      } catch (zErr: any) {
-        console.error('[Zoho CRM] Company delete exception:', zErr);
+      } else {
         setToast({
-          type: 'error',
-          message: `Company Deleted Locally (Zoho Delete Error)`,
-          submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+          type: 'success',
+          message: `Company "${company.name}" Deleted`,
+          submessage: 'Record has been removed locally'
         });
       }
-    } else {
-      setToast({
-        type: 'success',
-        message: `Company "${company.name}" Deleted`,
-        submessage: 'Record has been removed locally'
-      });
+    } finally {
+      setDeleteTarget({ isOpen: false, company: null, isDeleting: false });
     }
   };
 
@@ -395,7 +412,7 @@ export const Companies = () => {
     const source = c.source || 'Manual';
     if (activeTab === 'Manual Companies' && source !== 'Manual') return false;
     if (activeTab === 'From Deals' && source !== 'From Deals') return false;
-    if (activeTab === 'Zoho CRM' && source !== 'Zoho CRM') return false;
+    if (activeTab === 'Cloud Records' && source !== 'Cloud Records') return false;
     
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase().trim();
@@ -464,17 +481,16 @@ export const Companies = () => {
               {companies.length} Total
             </span>
           </div>
-          <p className="text-gray-500 text-sm mt-1">Manage corporate entities, GST, and Zoho CRM Companies records.</p>
+          <p className="text-gray-500 text-sm mt-1">Manage corporate entities, GST, and company records.</p>
         </div>
         <div className="flex items-center space-x-3">
           <button
             onClick={() => handleFetchZohoCompanies(true)}
             disabled={isFetchingZoho}
-            className="px-3.5 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-semibold flex items-center shadow-sm transition-all disabled:opacity-60"
-            title="Fetch live records from Zoho CRM Companies module"
+            className="w-10 h-10 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg flex items-center justify-center shadow-sm transition-all disabled:opacity-60 shrink-0"
+            title="Refresh & Sync from server"
           >
-            <RefreshCw size={16} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
-            {isFetchingZoho ? 'Fetching Zoho...' : 'Fetch Zoho CRM'}
+            <RefreshCw size={16} className={`text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
           </button>
           <button 
             onClick={() => setIsModalOpen(true)}
@@ -488,7 +504,7 @@ export const Companies = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-        {['All Companies', 'Manual Companies', 'From Deals', 'Zoho CRM'].map(tab => (
+        {['All Companies', 'Manual Companies', 'From Deals', 'Cloud Records'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -530,7 +546,6 @@ export const Companies = () => {
                 <th className="px-6 py-3">Business Type</th>
                 <th className="px-6 py-3">Tax & Contact Info</th>
                 <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Zoho CRM Sync</th>
                 <th className="px-6 py-3">Added On</th>
                 <th className="px-6 py-3 text-right">Actions</th>
               </tr>
@@ -586,40 +601,23 @@ export const Companies = () => {
                       {company.status}
                     </span>
                   </td>
-                  <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
-                    {company.zohoStatus === 'synced' || company.zohoId ? (
-                      <span 
-                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm"
-                        title={`Zoho Record ID: ${company.zohoId}`}
-                      >
-                        <Cloud size={13} className="mr-1.5 text-emerald-600" />
-                        <span>Zoho #{String(company.zohoId || '').slice(-6)}</span>
-                      </span>
-                    ) : company.zohoStatus === 'failed' ? (
-                      <span 
-                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-sm"
-                        title={company.zohoError || 'Sync failed'}
-                      >
-                        <CloudOff size={13} className="mr-1.5 text-rose-600" />
-                        <span>Sync Failed</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-sm">
-                        <CloudOff size={13} className="mr-1.5 text-amber-600" />
-                        <span>Local Only</span>
-                      </span>
-                    )}
-                  </td>
                   <td className="px-6 py-5 text-gray-600 font-medium whitespace-nowrap border-t border-b border-gray-100 group-hover:border-orange-100">
                     {company.addedOn}
                   </td>
                   <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100">
                     <div className="flex items-center justify-end space-x-2">
                       <button
+                        onClick={() => setViewingCompany(company)}
+                        className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                        title="View Company Details"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      <button
                         onClick={() => handleSyncToZoho(company)}
                         disabled={syncingId === company.id}
                         className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors disabled:opacity-50"
-                        title={company.zohoId ? 'Re-sync to Zoho CRM' : 'Sync to Zoho CRM Companies Module'}
+                        title={company.zohoId ? 'Re-sync Record' : 'Sync Record'}
                       >
                         {syncingId === company.id ? <Loader2 size={16} className="animate-spin text-be-orange" /> : <RefreshCw size={16} />}
                       </button>
@@ -639,14 +637,14 @@ export const Companies = () => {
                     {isFetchingZoho ? (
                       <div className="flex flex-col items-center justify-center py-6">
                         <Loader2 className="w-8 h-8 animate-spin text-be-orange mb-3" />
-                        <p className="text-sm font-semibold text-gray-800">Fetching live company records from Zoho CRM...</p>
-                        <p className="text-xs text-gray-400 mt-1">Connecting to Zoho CRM API</p>
+                        <p className="text-sm font-semibold text-gray-800">Fetching live company records from server...</p>
+                        <p className="text-xs text-gray-400 mt-1">Connecting to server API</p>
                       </div>
                     ) : (
                       <>
                         <Building2 size={48} className="mx-auto text-gray-300 mb-3" />
                         <p className="text-lg font-medium text-gray-900">No companies found</p>
-                        <p className="text-sm">Try adjusting your search query, fetch from Zoho CRM, or add a new company.</p>
+                        <p className="text-sm">Try adjusting your search query, fetch from server, or add a new company.</p>
                       </>
                     )}
                   </td>
@@ -692,7 +690,7 @@ export const Companies = () => {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-gray-900">{editingCompany ? 'Edit Company' : 'Add New Company'}</h2>
-                    <p className="text-xs text-gray-500">Synced directly to Zoho CRM Companies module</p>
+                    <p className="text-xs text-gray-500">Synced directly to server Companies module</p>
                   </div>
                 </div>
                 <button type="button" onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
@@ -813,10 +811,10 @@ export const Companies = () => {
                   {isSubmitting ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      <span>Syncing to Zoho...</span>
+                      <span>Saving...</span>
                     </>
                   ) : (
-                    <span>{editingCompany ? 'Save Changes' : 'Create & Sync to Zoho'}</span>
+                    <span>{editingCompany ? 'Save Changes' : 'Create Company'}</span>
                   )}
                 </button>
               </div>
@@ -824,6 +822,168 @@ export const Companies = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* View Company Details Modal */}
+      <AnimatePresence>
+        {viewingCompany && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm"
+              onClick={() => setViewingCompany(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white rounded-2xl shadow-2xl z-10 flex flex-col overflow-hidden w-full max-w-lg relative max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between bg-white">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 rounded-xl bg-orange-100 text-be-orange flex items-center justify-center text-lg font-black border border-orange-200">
+                    {(viewingCompany.name ?? 'CO').substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{viewingCompany.name || 'Unnamed Company'}</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        viewingCompany.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-gray-50 text-gray-500 border border-gray-200'
+                      }`}>{viewingCompany.status || 'Active'}</span>
+                      <span className="text-xs text-gray-400">ID: <strong className="text-gray-700">{viewingCompany.id}</strong></span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingCompany(null)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/50">
+
+                {/* Business Info */}
+                <div>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
+                    <Building2 size={14} className="mr-1.5 text-be-orange" />
+                    Business Information
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium mb-1">Business Type</div>
+                      <div className="text-sm font-semibold text-gray-900">{viewingCompany.type || '-'}</div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium mb-1">GST Number</div>
+                      <div className="text-sm font-semibold text-gray-900 font-mono">{viewingCompany.gstNumber || '-'}</div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <Calendar size={13} className="mr-1.5 text-gray-400" />
+                        Date of Incorporation
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">{viewingCompany.doi || '-'}</div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium mb-1">Source</div>
+                      <div className="text-sm font-semibold text-gray-900">{viewingCompany.source || 'Direct'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Details */}
+                <div>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
+                    <Mail size={14} className="mr-1.5 text-be-orange" />
+                    Contact Details
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <Mail size={13} className="mr-1.5 text-gray-400" />
+                        Primary Email
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900 break-all">{viewingCompany.email || '-'}</div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <Mail size={13} className="mr-1.5 text-gray-400" />
+                        Secondary Email
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900 break-all">{viewingCompany.secondaryEmail || '-'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Record Info */}
+                <div>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
+                    <Tag size={14} className="mr-1.5 text-be-orange" />
+                    Record & System Information
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <Calendar size={13} className="mr-1.5 text-gray-400" />
+                        Date Added
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">{viewingCompany.addedOn || '-'}</div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <User size={13} className="mr-1.5 text-gray-400" />
+                        Assigned Sales BDM
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        {viewingCompany.salesEmployee || viewingCompany.employeeName || viewingCompany.Employee?.name || 'Admin'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-5 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+                <button
+                  onClick={() => setViewingCompany(null)}
+                  className="px-5 py-2.5 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-xl font-semibold text-sm transition-colors shadow-sm"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    const c = viewingCompany;
+                    setViewingCompany(null);
+                    openEditModal(c);
+                  }}
+                  className="px-5 py-2.5 bg-be-orange hover:bg-orange-600 text-white rounded-xl font-semibold text-sm transition-colors shadow-sm flex items-center gap-2"
+                >
+                  <Edit size={15} />
+                  <span>Edit Company</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, company: null, isDeleting: false })}
+        onConfirm={confirmDeleteCompany}
+        title="Delete Company"
+        itemName={deleteTarget.company?.name}
+        message={deleteTarget.company ? `Are you sure you want to delete company "${deleteTarget.company.name}"?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

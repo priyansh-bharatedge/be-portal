@@ -34,6 +34,7 @@ import {
   downloadSalarySlipHTML
 } from '../../utils/salarySlipTemplate';
 import { SalarySlipDocument } from '../../components/hrms/SalarySlipDocument';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 // Reference initial records
 const SAMPLE_INITIAL_SALARIES: SalaryRecord[] = [];
@@ -45,6 +46,11 @@ export const Salary = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [monthFilter, setMonthFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; salary: SalaryRecord | null; isDeleting: boolean }>({
+    isOpen: false,
+    salary: null,
+    isDeleting: false
+  });
 
   // Preview Modal
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -150,6 +156,21 @@ export const Salary = () => {
   const saveToStorage = (data: SalaryRecord[]) => {
     setSalaries(data);
     localStorage.setItem('be_salaries', JSON.stringify(data));
+  };
+
+  const handleDeleteSalary = (sal: SalaryRecord) => {
+    setDeleteTarget({ isOpen: true, salary: sal, isDeleting: false });
+  };
+
+  const confirmDeleteSalary = async () => {
+    const sal = deleteTarget.salary;
+    if (!sal) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
+    try {
+      saveToStorage(salaries.filter((s) => s.id !== sal.id));
+    } finally {
+      setDeleteTarget({ isOpen: false, salary: null, isDeleting: false });
+    }
   };
 
   // Calculations
@@ -381,9 +402,6 @@ export const Salary = () => {
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">
               {isEmployeeSelfOnly ? 'My Salary & Payslips' : 'Salary & Payroll Management'}
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
-              Official Payslip v2
-            </span>
           </div>
           <p className="text-gray-500 text-sm mt-1">
             {isEmployeeSelfOnly
@@ -676,11 +694,7 @@ export const Salary = () => {
                               <Edit size={16} />
                             </button>
                             <button
-                              onClick={() => {
-                                if (confirm(`Delete salary record for ${sal.empName}?`)) {
-                                  saveToStorage(salaries.filter((s) => s.id !== sal.id));
-                                }
-                              }}
+                              onClick={() => handleDeleteSalary(sal)}
                               className="p-1.5 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
                               title="Delete"
                             >
@@ -1205,6 +1219,17 @@ export const Salary = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, salary: null, isDeleting: false })}
+        onConfirm={confirmDeleteSalary}
+        title="Delete Salary Record"
+        itemName={deleteTarget.salary ? `${deleteTarget.salary.empName} (${deleteTarget.salary.month})` : undefined}
+        message={deleteTarget.salary ? `Are you sure you want to delete the salary record for "${deleteTarget.salary.empName}" (${deleteTarget.salary.month})?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

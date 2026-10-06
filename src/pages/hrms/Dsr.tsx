@@ -14,6 +14,7 @@ import {
   deleteZohoDsr, 
   fetchZohoDsr 
 } from '../../services/zohoService';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 export const DSR = () => {
   const { currentUser, isTL, isSuperAdmin, isHR, isHOD } = useAuth();
@@ -33,6 +34,11 @@ export const DSR = () => {
   const [reviewingReport, setReviewingReport] = useState<DsrReport | null>(null);
   const [tlFeedbackInput, setTlFeedbackInput] = useState('');
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; report: DsrReport | null; isDeleting: boolean }>({
+    isOpen: false,
+    report: null,
+    isDeleting: false
+  });
 
   // Form State: Date & DSR Description only
   const getTodayISO = () => new Date().toISOString().split('T')[0];
@@ -316,15 +322,26 @@ export const DSR = () => {
   };
 
   const handleDeleteReport = (id: string) => {
-    if (confirm('Are you sure you want to delete this DSR report?')) {
-      const targetReport = reports.find(r => r.id === id);
-      const updated = reports.filter(r => r.id !== id);
+    const targetReport = reports.find(r => r.id === id);
+    if (!targetReport) return;
+    setDeleteTarget({ isOpen: true, report: targetReport, isDeleting: false });
+  };
+
+  const confirmDeleteReport = async () => {
+    const targetReport = deleteTarget.report;
+    if (!targetReport) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
+
+    try {
+      const updated = reports.filter(r => r.id !== targetReport.id);
       saveReports(updated);
       showToast('🗑️ DSR report removed.');
 
       if (targetReport?.zohoId) {
-        deleteZohoDsr(targetReport.zohoId).catch(err => console.error('[Zoho CRM] DSR delete error:', err));
+        await deleteZohoDsr(targetReport.zohoId).catch(err => console.error('[Zoho CRM] DSR delete error:', err));
       }
+    } finally {
+      setDeleteTarget({ isOpen: false, report: null, isDeleting: false });
     }
   };
 
@@ -959,6 +976,17 @@ export const DSR = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, report: null, isDeleting: false })}
+        onConfirm={confirmDeleteReport}
+        title="Delete DSR Report"
+        itemName={deleteTarget.report ? `DSR - ${deleteTarget.report.empName} (${deleteTarget.report.reportDate})` : undefined}
+        message={deleteTarget.report ? `Are you sure you want to delete this DSR report for "${deleteTarget.report.empName}" on ${deleteTarget.report.reportDate}?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

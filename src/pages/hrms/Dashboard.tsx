@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, UserCheck, UserX, Clock, Calendar, Briefcase, 
-  Download, Filter
+  Download, Filter, ArrowUpRight
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { fetchZohoEmployees, fetchZohoAttendance, fetchZohoLeaves } from '../../services/zohoService';
 
 export const HrmsDashboard = () => {
+  const navigate = useNavigate();
   const { currentUser, isSuperAdmin, isHR, isTL, isTM } = useAuth();
   const [employees, setEmployees] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
@@ -115,28 +117,28 @@ export const HrmsDashboard = () => {
   const totalLateToday = attendance.filter(a => a.date === today && a.status === 'Late').length;
   const totalPendingLeaves = leaves.filter(l => l.status === 'Pending HR' || l.status === 'Pending TL').length;
 
-  // Dynamic 6 Stat Cards based on role
+  // Dynamic 6 Stat Cards based on role with click-through navigation paths
   const stats = isTeamMember ? [
-    { title: 'My Department', value: myDept, icon: <Users size={24} />, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { title: 'Present Days', value: String(myPresentDays || 1), icon: <UserCheck size={24} />, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { title: 'Absent Days', value: String(myAbsentDays), icon: <UserX size={24} />, color: 'text-red-500', bg: 'bg-red-50' },
-    { title: 'Approved Leaves', value: String(myApprovedLeaves), icon: <Calendar size={24} />, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { title: 'Late Days', value: String(myLateDays), icon: <Clock size={24} />, color: 'text-orange-600', bg: 'bg-orange-50' },
-    { title: 'Pending Leaves', value: String(myPendingLeaves), icon: <Briefcase size={24} />, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { title: 'My Department', value: myDept, icon: <Users size={24} />, color: 'text-blue-600', bg: 'bg-blue-50', path: '/hrms/employees' },
+    { title: 'Present Days', value: String(myPresentDays || 1), icon: <UserCheck size={24} />, color: 'text-emerald-600', bg: 'bg-emerald-50', path: '/hrms/attendance?status=Present' },
+    { title: 'Absent Days', value: String(myAbsentDays), icon: <UserX size={24} />, color: 'text-red-500', bg: 'bg-red-50', path: '/hrms/attendance?status=Absent' },
+    { title: 'Approved Leaves', value: String(myApprovedLeaves), icon: <Calendar size={24} />, color: 'text-purple-600', bg: 'bg-purple-50', path: '/hrms/leaves?status=Approved' },
+    { title: 'Late Days', value: String(myLateDays), icon: <Clock size={24} />, color: 'text-orange-600', bg: 'bg-orange-50', path: '/hrms/attendance?status=Late' },
+    { title: 'Pending Leaves', value: String(myPendingLeaves), icon: <Briefcase size={24} />, color: 'text-amber-600', bg: 'bg-amber-50', path: '/hrms/leaves?status=Pending' },
   ] : isTeamLead ? [
-    { title: 'Team Members', value: String(myTeamMembers.length), icon: <Users size={24} />, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { title: 'Present Today', value: String(teamPresentToday), icon: <UserCheck size={24} />, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { title: 'Absent Today', value: String(teamAbsentToday), icon: <UserX size={24} />, color: 'text-red-500', bg: 'bg-red-50' },
-    { title: 'On Leave', value: String(teamOnLeaveToday), icon: <Calendar size={24} />, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { title: 'Late Today', value: '0', icon: <Clock size={24} />, color: 'text-orange-600', bg: 'bg-orange-50' },
-    { title: 'Pending Approvals', value: String(pendingLeavesAwaitingTL), icon: <Briefcase size={24} />, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { title: 'Team Members', value: String(myTeamMembers.length), icon: <Users size={24} />, color: 'text-blue-600', bg: 'bg-blue-50', path: '/hrms/my-team' },
+    { title: 'Present Today', value: String(teamPresentToday), icon: <UserCheck size={24} />, color: 'text-emerald-600', bg: 'bg-emerald-50', path: '/hrms/attendance?status=Present' },
+    { title: 'Absent Today', value: String(teamAbsentToday), icon: <UserX size={24} />, color: 'text-red-500', bg: 'bg-red-50', path: '/hrms/attendance?status=Absent' },
+    { title: 'On Leave', value: String(teamOnLeaveToday), icon: <Calendar size={24} />, color: 'text-purple-600', bg: 'bg-purple-50', path: '/hrms/leaves?status=Approved' },
+    { title: 'Late Today', value: '0', icon: <Clock size={24} />, color: 'text-orange-600', bg: 'bg-orange-50', path: '/hrms/attendance?status=Late' },
+    { title: 'Pending Approvals', value: String(pendingLeavesAwaitingTL), icon: <Briefcase size={24} />, color: 'text-amber-600', bg: 'bg-amber-50', path: '/hrms/leaves?status=Pending' },
   ] : [
-    { title: 'Total Employees', value: String(totalEmployeesCount), icon: <Users size={24} />, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { title: 'Present Today', value: String(totalPresentToday), icon: <UserCheck size={24} />, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { title: 'Absent Today', value: String(totalAbsentToday), icon: <UserX size={24} />, color: 'text-red-500', bg: 'bg-red-50' },
-    { title: 'On Leave', value: String(totalOnLeaveToday), icon: <Calendar size={24} />, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { title: 'Late Today', value: String(totalLateToday), icon: <Clock size={24} />, color: 'text-orange-600', bg: 'bg-orange-50' },
-    { title: 'Pending Leaves', value: String(totalPendingLeaves), icon: <Briefcase size={24} />, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { title: 'Total Employees', value: String(totalEmployeesCount), icon: <Users size={24} />, color: 'text-blue-600', bg: 'bg-blue-50', path: '/hrms/employees' },
+    { title: 'Present Today', value: String(totalPresentToday), icon: <UserCheck size={24} />, color: 'text-emerald-600', bg: 'bg-emerald-50', path: '/hrms/attendance?status=Present' },
+    { title: 'Absent Today', value: String(totalAbsentToday), icon: <UserX size={24} />, color: 'text-red-500', bg: 'bg-red-50', path: '/hrms/attendance?status=Absent' },
+    { title: 'On Leave', value: String(totalOnLeaveToday), icon: <Calendar size={24} />, color: 'text-purple-600', bg: 'bg-purple-50', path: '/hrms/leaves?status=Approved' },
+    { title: 'Late Today', value: String(totalLateToday), icon: <Clock size={24} />, color: 'text-orange-600', bg: 'bg-orange-50', path: '/hrms/attendance?status=Late' },
+    { title: 'Pending Leaves', value: String(totalPendingLeaves), icon: <Briefcase size={24} />, color: 'text-amber-600', bg: 'bg-amber-50', path: '/hrms/leaves?status=Pending' },
   ];
 
   // Dynamic Chart Data
@@ -213,12 +215,17 @@ export const HrmsDashboard = () => {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {stats.map((stat, idx) => (
-          <div key={idx} className="card p-4 flex flex-col items-center justify-center text-center hover:shadow-md transition-shadow">
-            <div className={`p-3 rounded-full mb-3 ${stat.bg} ${stat.color}`}>
+          <div
+            key={idx}
+            onClick={() => stat.path && navigate(stat.path)}
+            title={`Click to view ${stat.title}`}
+            className="card p-4 flex flex-col items-center justify-center text-center hover:shadow-xl hover:border-orange-300 hover:-translate-y-1 transition-all duration-200 cursor-pointer group"
+          >
+            <div className={`p-3 rounded-2xl mb-3 ${stat.bg} ${stat.color} group-hover:scale-110 transition-transform`}>
               {stat.icon}
             </div>
-            <p className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</p>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{stat.title}</p>
+            <p className="text-2xl font-black text-gray-900 mb-1 group-hover:text-be-orange transition-colors">{stat.value}</p>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{stat.title}</p>
           </div>
         ))}
       </div>

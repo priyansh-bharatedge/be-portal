@@ -1,5 +1,5 @@
 /**
- * Zoho CRM REST API Integration Service (v8)
+ * System REST API Integration Service (v8)
  * Domain: .in (accounts.zoho.in / zohoapis.in) & .com (accounts.zoho.com / zohoapis.com)
  * Modules: Quotations, Leads, Deals
  * Documentation: 
@@ -71,24 +71,24 @@ async function safeParseResponse(response: Response): Promise<any> {
     const text = await response.text();
     if (!text || !text.trim()) {
       const resData = { success: response.ok, message: response.statusText || 'Empty response' };
-      console.log(`[Zoho CRM API] Response from ${response.url} (Status ${response.status}):`, resData);
+      console.log(`[System API] Response from ${response.url} (Status ${response.status}):`, resData);
       return resData;
     }
     const parsed = JSON.parse(text);
-    console.log(`[Zoho CRM API] Response from ${response.url} (Status ${response.status}):`, parsed);
+    console.log(`[System API] Response from ${response.url} (Status ${response.status}):`, parsed);
     return parsed;
   } catch (e: any) {
     const errData = {
       success: false,
       message: `Invalid server response (${response.status}): ${response.statusText || 'Unable to parse JSON'}`,
     };
-    console.error(`[Zoho CRM API] Error parsing response from ${response.url}:`, errData);
+    console.error(`[System API] Error parsing response from ${response.url}:`, errData);
     return errData;
   }
 }
 
 /**
- * Inserts a new record into the Zoho CRM Quotations module using REST API v8.
+ * Inserts a new record into the System Quotations module using REST API v8.
  */
 export async function insertZohoQuotation(quotation: any): Promise<ZohoApiResponse> {
   try {
@@ -106,28 +106,28 @@ export async function insertZohoQuotation(quotation: any): Promise<ZohoApiRespon
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'Quotation inserted successfully into Zoho CRM',
+        message: data.message || 'Quotation inserted successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to insert quotation into Zoho CRM',
+        message: data.message || 'Failed to insert quotation successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while inserting quotation:', error);
+    console.error('[System] Client exception while inserting quotation:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing record in the Zoho CRM Quotations module using REST API v8.
+ * Updates an existing record in the System Quotations module using REST API v8.
  */
 export async function updateZohoQuotation(quotation: any): Promise<ZohoApiResponse> {
   try {
@@ -145,21 +145,21 @@ export async function updateZohoQuotation(quotation: any): Promise<ZohoApiRespon
       return {
         success: true,
         zohoId: data.zohoId || quotation.zohoId,
-        message: data.message || 'Quotation updated successfully in Zoho CRM',
+        message: data.message || 'Quotation updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update quotation in Zoho CRM',
+        message: data.message || 'Failed to update quotation successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating quotation:', error);
+    console.error('[System] Client exception while updating quotation:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
@@ -176,13 +176,13 @@ export async function saveOrUpdateZohoQuotation(quotation: any): Promise<ZohoApi
 }
 
 /**
- * Uploads a file attachment to a specific Zoho CRM record using REST API v8.
+ * Uploads a file attachment to a specific System record using REST API v8.
  * e.g. POST https://www.zohoapis.com/crm/v8/{module}/{recordId}/Attachments
  * 
- * @param recordId - The Zoho CRM Record ID (e.g., '1000000231009' or newly inserted zohoId)
+ * @param recordId - The System Record ID (e.g., '1000000231009' or newly inserted zohoId)
  * @param file - The File or Blob to attach (e.g. PDF quotation, screenshot, documents)
  * @param fileName - Optional custom filename (e.g. 'Quotation_QT-1025.pdf')
- * @param module - The Zoho CRM module name (defaults to 'Quotations', can be 'Leads', 'Deals', etc.)
+ * @param module - The module name (defaults to 'Quotations', can be 'Leads', 'Deals', etc.)
  */
 export async function uploadZohoAttachment(
   recordId: string,
@@ -208,28 +208,28 @@ export async function uploadZohoAttachment(
         success: true,
         zohoId: recordId,
         attachmentId: data.attachmentId,
-        message: data.message || 'File attachment uploaded successfully to Zoho CRM',
+        message: data.message || 'File attachment uploaded successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to upload attachment to Zoho CRM',
+        message: data.message || 'Failed to upload attachment successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while uploading attachment:', error);
+    console.error('[System] Client exception while uploading attachment:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM attachment endpoint',
+      message: error?.message || 'Network error communicating with attachment endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Fetches all attachments for a Zoho CRM record.
+ * Fetches all attachments for a System record.
  * Endpoint: GET /api/zoho/get-attachments?module={module}&recordId={recordId}
  */
 export async function fetchZohoAttachments(
@@ -254,12 +254,12 @@ export async function fetchZohoAttachments(
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to fetch attachments from Zoho CRM',
+        message: data.message || 'Failed to fetch attachments successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Error fetching attachments:', error);
+    console.error('[System] Error fetching attachments:', error);
     return {
       success: false,
       message: error?.message || 'Network error fetching attachments',
@@ -287,7 +287,7 @@ export function getZohoAttachmentDownloadUrl(
 }
 
 /**
- * Triggers a direct file download for a Zoho CRM attachment.
+ * Triggers a direct file download for a System attachment.
  */
 export async function downloadZohoAttachment(
   module: string = 'Deals',
@@ -311,7 +311,7 @@ export async function downloadZohoAttachment(
     document.body.removeChild(a);
     URL.revokeObjectURL(blobUrl);
   } catch (err) {
-    console.error('[Zoho CRM] Direct download failed:', err);
+    console.error('[System] Direct download failed:', err);
     // Fallback direct navigation
     const url = getZohoAttachmentDownloadUrl(module, recordId, attachmentId, false);
     window.open(url, '_blank');
@@ -370,7 +370,7 @@ export async function insertZohoQuotationWithAttachment(
       },
     };
   } catch (err: any) {
-    console.warn('[Zoho CRM] Record created successfully but attachment failed:', err);
+    console.warn('[System] Record created successfully but attachment failed:', err);
     return {
       success: true,
       zohoId: insertRes.zohoId,
@@ -382,14 +382,14 @@ export async function insertZohoQuotationWithAttachment(
 }
 
 /**
- * Validates connection with Zoho CRM
+ * Validates connection with System
  */
 export async function testZohoConnection(): Promise<{ success: boolean; message: string }> {
   try {
     const response = await fetch('/api/zoho/test-connection');
     const data = await safeParseResponse(response);
     if (response.ok && data.success) {
-      return { success: true, message: data.message || 'Successfully connected to Zoho CRM' };
+      return { success: true, message: data.message || 'Successfully connected successfully' };
     } else {
       return { success: false, message: data.message || 'Connection test failed' };
     }
@@ -399,7 +399,7 @@ export async function testZohoConnection(): Promise<{ success: boolean; message:
 }
 
 /**
- * Inserts a new record into the Zoho CRM Employee module using REST API v8.
+ * Inserts a new record into the System Employee module using REST API v8.
  * Module API Name: Employee
  */
 export async function insertZohoEmployee(employee: any): Promise<ZohoApiResponse> {
@@ -417,28 +417,28 @@ export async function insertZohoEmployee(employee: any): Promise<ZohoApiResponse
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'Employee inserted successfully into Zoho CRM',
+        message: data.message || 'Employee inserted successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to insert employee into Zoho CRM',
+        message: data.message || 'Failed to insert employee successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while inserting employee:', error);
+    console.error('[System] Client exception while inserting employee:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing record in the Zoho CRM Employee module using REST API v8.
+ * Updates an existing record in the System Employee module using REST API v8.
  */
 export async function updateZohoEmployee(employee: any): Promise<ZohoApiResponse> {
   try {
@@ -455,28 +455,28 @@ export async function updateZohoEmployee(employee: any): Promise<ZohoApiResponse
       return {
         success: true,
         zohoId: data.zohoId || employee.zohoId,
-        message: data.message || 'Employee updated successfully in Zoho CRM',
+        message: data.message || 'Employee updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update employee in Zoho CRM',
+        message: data.message || 'Failed to update employee successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating employee:', error);
+    console.error('[System] Client exception while updating employee:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates specifically the Password field in the Zoho CRM Employee module by finding the record via email.
+ * Updates specifically the Password field in the System Employee module by finding the record via email.
  */
 export async function updateZohoEmployeePassword(email: string, password: string, zohoId?: string): Promise<ZohoApiResponse> {
   try {
@@ -493,21 +493,21 @@ export async function updateZohoEmployeePassword(email: string, password: string
       return {
         success: true,
         zohoId: data.zohoId || zohoId,
-        message: data.message || 'Password updated successfully in Zoho CRM',
+        message: data.message || 'Password updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update employee password in Zoho CRM',
+        message: data.message || 'Failed to update employee password successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating employee password:', error);
+    console.error('[System] Client exception while updating employee password:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM password update endpoint',
+      message: error?.message || 'Network error communicating with password update endpoint',
       errorDetails: error,
     };
   }
@@ -523,7 +523,7 @@ export interface ZohoEmployeeSearchResult {
 }
 
 /**
- * Searches Zoho CRM "Employee" module by email and returns record existence and password state.
+ * Searches System "Employee" module by email and returns record existence and password state.
  */
 export async function searchZohoEmployeeByEmail(email: string): Promise<ZohoEmployeeSearchResult> {
   try {
@@ -537,17 +537,17 @@ export async function searchZohoEmployeeByEmail(email: string): Promise<ZohoEmpl
     const data = await safeParseResponse(response);
     return data;
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception searching employee by email:', error);
+    console.error('[System] Client exception searching employee by email:', error);
     return {
       success: false,
       exists: false,
-      error: error?.message || 'Network error communicating with Zoho CRM search endpoint',
+      error: error?.message || 'Network error communicating with search endpoint',
     };
   }
 }
 
 /**
- * Automatically inserts or updates an employee record in Zoho CRM depending on whether employee.zohoId exists.
+ * Automatically inserts or updates an employee record successfully depending on whether employee.zohoId exists.
  */
 export async function saveOrUpdateZohoEmployee(employee: any): Promise<ZohoApiResponse> {
   if (employee.zohoId) {
@@ -557,7 +557,7 @@ export async function saveOrUpdateZohoEmployee(employee: any): Promise<ZohoApiRe
 }
 
 /**
- * Deletes an employee record from Zoho CRM using REST API v8.
+ * Deletes an employee record successfully using REST API v8.
  * Module API Name: Employee
  */
 export async function deleteZohoEmployee(zohoId: string): Promise<ZohoApiResponse> {
@@ -575,28 +575,28 @@ export async function deleteZohoEmployee(zohoId: string): Promise<ZohoApiRespons
       return {
         success: true,
         zohoId: data.zohoId || zohoId,
-        message: data.message || `Employee #${zohoId} deleted successfully from Zoho CRM`,
+        message: data.message || `Employee #${zohoId} deleted successfully`,
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to delete employee from Zoho CRM',
+        message: data.message || 'Failed to delete employee successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while deleting employee:', error);
+    console.error('[System] Client exception while deleting employee:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM delete endpoint',
+      message: error?.message || 'Network error communicating with delete endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Deletes a record from any specified Zoho CRM module.
+ * Deletes a record from any specified module.
  */
 export async function deleteZohoRecord(module: string, zohoId: string): Promise<ZohoApiResponse> {
   try {
@@ -613,28 +613,28 @@ export async function deleteZohoRecord(module: string, zohoId: string): Promise<
       return {
         success: true,
         zohoId: data.zohoId || zohoId,
-        message: data.message || `Record #${zohoId} deleted successfully from Zoho CRM`,
+        message: data.message || `Record #${zohoId} deleted successfully`,
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to delete record from Zoho CRM',
+        message: data.message || 'Failed to delete record successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while deleting record:', error);
+    console.error('[System] Client exception while deleting record:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM delete endpoint',
+      message: error?.message || 'Network error communicating with delete endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Inserts a new record into the Zoho CRM Leave_Management module using REST API v8.
+ * Inserts a new record into the System Leave_Management module using REST API v8.
  * Module API Name: Leave_Management
  */
 export async function insertZohoLeave(leave: any): Promise<ZohoApiResponse> {
@@ -653,28 +653,28 @@ export async function insertZohoLeave(leave: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'Leave request inserted successfully into Zoho CRM',
+        message: data.message || 'Leave request inserted successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to insert leave request into Zoho CRM',
+        message: data.message || 'Failed to insert leave request successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while inserting leave request:', error);
+    console.error('[System] Client exception while inserting leave request:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing record in the Zoho CRM Leave_Management module using REST API v8.
+ * Updates an existing record in the System Leave_Management module using REST API v8.
  */
 export async function updateZohoLeave(leave: any): Promise<ZohoApiResponse> {
   try {
@@ -692,28 +692,28 @@ export async function updateZohoLeave(leave: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId || leave.zohoId,
-        message: data.message || 'Leave request updated successfully in Zoho CRM',
+        message: data.message || 'Leave request updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update leave request in Zoho CRM',
+        message: data.message || 'Failed to update leave request successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating leave request:', error);
+    console.error('[System] Client exception while updating leave request:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Automatically inserts or updates a leave request in Zoho CRM depending on whether leave.zohoId exists.
+ * Automatically inserts or updates a leave request successfully depending on whether leave.zohoId exists.
  */
 export async function saveOrUpdateZohoLeave(leave: any): Promise<ZohoApiResponse> {
   if (leave.zohoId) {
@@ -723,7 +723,7 @@ export async function saveOrUpdateZohoLeave(leave: any): Promise<ZohoApiResponse
 }
 
 /**
- * Deletes a leave request from Zoho CRM using REST API v8.
+ * Deletes a leave request successfully using REST API v8.
  * Module API Name: Leave_Management
  */
 export async function deleteZohoLeave(zohoId: string): Promise<ZohoApiResponse> {
@@ -741,42 +741,42 @@ export async function deleteZohoLeave(zohoId: string): Promise<ZohoApiResponse> 
       return {
         success: true,
         zohoId: data.zohoId || zohoId,
-        message: data.message || `Leave request #${zohoId} deleted successfully from Zoho CRM`,
+        message: data.message || `Leave request #${zohoId} deleted successfully`,
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to delete leave request from Zoho CRM',
+        message: data.message || 'Failed to delete leave request successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while deleting leave request:', error);
+    console.error('[System] Client exception while deleting leave request:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM delete endpoint',
+      message: error?.message || 'Network error communicating with delete endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Fetches all live quotation records from Zoho CRM Quotations module with RBAC scoping.
+ * Fetches all live quotation records successfully Quotations module with RBAC scoping.
  */
 export async function fetchZohoQuotations(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   return fetchZohoWithRbac('Quotations', options);
 }
 
 /**
- * Fetches all live employee records from Zoho CRM Employee module with RBAC scoping.
+ * Fetches all live employee records successfully Employee module with RBAC scoping.
  */
 export async function fetchZohoEmployees(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   return fetchZohoWithRbac('Employee', options);
 }
 
 /**
- * Fetches all live Sales employees & BDMs from Zoho CRM (combining Employee module and Zoho CRM Active BDM Users).
+ * Fetches all live Sales employees & BDMs successfully (combining Employee module and System Active BDM Users).
  */
 export async function fetchSalesEmployees(): Promise<ZohoFetchResult> {
   try {
@@ -787,33 +787,33 @@ export async function fetchSalesEmployees(): Promise<ZohoFetchResult> {
         success: true,
         data: result.data,
         info: result.info,
-        message: 'Sales employees fetched successfully from Zoho CRM'
+        message: 'Sales employees fetched successfully successfully'
       };
     }
     return {
       success: false,
       data: [],
-      message: result.message || 'Failed to fetch sales employees from Zoho CRM'
+      message: result.message || 'Failed to fetch sales employees successfully'
     };
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching sales employees:', error);
+    console.error('[System] Client exception while fetching sales employees:', error);
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-sales-employees endpoint'
+      message: error?.message || 'Network error communicating with server endpoint endpoint'
     };
   }
 }
 
 /**
- * Fetches all live leave records from Zoho CRM Leave_Management module with RBAC scoping.
+ * Fetches all live leave records successfully Leave_Management module with RBAC scoping.
  */
 export async function fetchZohoLeaves(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   return fetchZohoWithRbac('Leaves', options);
 }
 
 /**
- * Inserts a new record into the Zoho CRM Companies module using REST API v8.
+ * Inserts a new record into the System Companies module using REST API v8.
  * Module API Name: Companies
  */
 export async function insertZohoCompany(company: any): Promise<ZohoApiResponse> {
@@ -832,28 +832,28 @@ export async function insertZohoCompany(company: any): Promise<ZohoApiResponse> 
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'Company inserted successfully into Zoho CRM',
+        message: data.message || 'Company inserted successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to insert company into Zoho CRM',
+        message: data.message || 'Failed to insert company successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while inserting company:', error);
+    console.error('[System] Client exception while inserting company:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing record in the Zoho CRM Companies module using REST API v8.
+ * Updates an existing record in the System Companies module using REST API v8.
  */
 export async function updateZohoCompany(company: any): Promise<ZohoApiResponse> {
   try {
@@ -871,28 +871,28 @@ export async function updateZohoCompany(company: any): Promise<ZohoApiResponse> 
       return {
         success: true,
         zohoId: data.zohoId || company.zohoId,
-        message: data.message || 'Company updated successfully in Zoho CRM',
+        message: data.message || 'Company updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update company in Zoho CRM',
+        message: data.message || 'Failed to update company successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating company:', error);
+    console.error('[System] Client exception while updating company:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Automatically inserts or updates a company record in Zoho CRM depending on whether company.zohoId exists.
+ * Automatically inserts or updates a company record successfully depending on whether company.zohoId exists.
  */
 export async function saveOrUpdateZohoCompany(company: any): Promise<ZohoApiResponse> {
   if (company.zohoId) {
@@ -902,7 +902,7 @@ export async function saveOrUpdateZohoCompany(company: any): Promise<ZohoApiResp
 }
 
 /**
- * Deletes a company record from Zoho CRM using REST API v8.
+ * Deletes a company record successfully using REST API v8.
  * Module API Name: Companies
  */
 export async function deleteZohoCompany(zohoId: string): Promise<ZohoApiResponse> {
@@ -920,35 +920,35 @@ export async function deleteZohoCompany(zohoId: string): Promise<ZohoApiResponse
       return {
         success: true,
         zohoId: data.zohoId || zohoId,
-        message: data.message || `Company #${zohoId} deleted successfully from Zoho CRM`,
+        message: data.message || `Company #${zohoId} deleted successfully`,
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to delete company from Zoho CRM',
+        message: data.message || 'Failed to delete company successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while deleting company:', error);
+    console.error('[System] Client exception while deleting company:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM delete endpoint',
+      message: error?.message || 'Network error communicating with delete endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Fetches all live company records from Zoho CRM Companies module with RBAC scoping.
+ * Fetches all live company records successfully Companies module with RBAC scoping.
  */
 export async function fetchZohoCompanies(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   return fetchZohoWithRbac('Companies', options);
 }
 
 /**
- * Inserts a new record into the Zoho CRM Clients module using REST API v8.
+ * Inserts a new record into the System Clients module using REST API v8.
  * Module API Name: Clients
  */
 export async function insertZohoClient(client: any): Promise<ZohoApiResponse> {
@@ -967,28 +967,28 @@ export async function insertZohoClient(client: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'Client inserted successfully into Zoho CRM',
+        message: data.message || 'Client inserted successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to insert client into Zoho CRM',
+        message: data.message || 'Failed to insert client successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while inserting client:', error);
+    console.error('[System] Client exception while inserting client:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing record in the Zoho CRM Clients module using REST API v8.
+ * Updates an existing record in the System Clients module using REST API v8.
  */
 export async function updateZohoClient(client: any): Promise<ZohoApiResponse> {
   try {
@@ -1006,28 +1006,28 @@ export async function updateZohoClient(client: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId || client.zohoId,
-        message: data.message || 'Client updated successfully in Zoho CRM',
+        message: data.message || 'Client updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update client in Zoho CRM',
+        message: data.message || 'Failed to update client successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating client:', error);
+    console.error('[System] Client exception while updating client:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Automatically inserts or updates a client record in Zoho CRM depending on whether client.zohoId exists.
+ * Automatically inserts or updates a client record successfully depending on whether client.zohoId exists.
  */
 export async function saveOrUpdateZohoClient(client: any): Promise<ZohoApiResponse> {
   if (client.zohoId) {
@@ -1037,7 +1037,7 @@ export async function saveOrUpdateZohoClient(client: any): Promise<ZohoApiRespon
 }
 
 /**
- * Deletes a client record from Zoho CRM using REST API v8.
+ * Deletes a client record successfully using REST API v8.
  * Module API Name: Clients
  */
 export async function deleteZohoClient(zohoId: string): Promise<ZohoApiResponse> {
@@ -1055,35 +1055,35 @@ export async function deleteZohoClient(zohoId: string): Promise<ZohoApiResponse>
       return {
         success: true,
         zohoId: data.zohoId || zohoId,
-        message: data.message || `Client #${zohoId} deleted successfully from Zoho CRM`,
+        message: data.message || `Client #${zohoId} deleted successfully`,
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to delete client from Zoho CRM',
+        message: data.message || 'Failed to delete client successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while deleting client:', error);
+    console.error('[System] Client exception while deleting client:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM delete endpoint',
+      message: error?.message || 'Network error communicating with delete endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Fetches all live client records from Zoho CRM Clients module with RBAC scoping.
+ * Fetches all live client records successfully Clients module with RBAC scoping.
  */
 export async function fetchZohoClients(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   return fetchZohoWithRbac('Clients', options);
 }
 
 /**
- * Inserts a new record into the Zoho CRM Deals module using REST API v8.
+ * Inserts a new record into the System Deals module using REST API v8.
  * Module API Name: Deals
  */
 export async function insertZohoDeal(deal: any): Promise<ZohoApiResponse> {
@@ -1102,28 +1102,28 @@ export async function insertZohoDeal(deal: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'Deal inserted successfully into Zoho CRM',
+        message: data.message || 'Deal inserted successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to insert deal into Zoho CRM',
+        message: data.message || 'Failed to insert deal successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while inserting deal:', error);
+    console.error('[System] Client exception while inserting deal:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing record in the Zoho CRM Deals module using REST API v8.
+ * Updates an existing record in the System Deals module using REST API v8.
  */
 export async function updateZohoDeal(deal: any): Promise<ZohoApiResponse> {
   try {
@@ -1141,28 +1141,28 @@ export async function updateZohoDeal(deal: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId || deal.zohoId,
-        message: data.message || 'Deal updated successfully in Zoho CRM',
+        message: data.message || 'Deal updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update deal in Zoho CRM',
+        message: data.message || 'Failed to update deal successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating deal:', error);
+    console.error('[System] Client exception while updating deal:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Automatically inserts or updates a deal record in Zoho CRM depending on whether deal.zohoId exists.
+ * Automatically inserts or updates a deal record successfully depending on whether deal.zohoId exists.
  */
 export async function saveOrUpdateZohoDeal(deal: any): Promise<ZohoApiResponse> {
   if (deal.zohoId) {
@@ -1172,7 +1172,7 @@ export async function saveOrUpdateZohoDeal(deal: any): Promise<ZohoApiResponse> 
 }
 
 /**
- * Deletes a deal record from Zoho CRM using REST API v8.
+ * Deletes a deal record successfully using REST API v8.
  * Module API Name: Deals
  */
 export async function deleteZohoDeal(zohoId: string): Promise<ZohoApiResponse> {
@@ -1180,7 +1180,7 @@ export async function deleteZohoDeal(zohoId: string): Promise<ZohoApiResponse> {
 }
 
 /**
- * Deletes a quotation record from Zoho CRM using REST API v8.
+ * Deletes a quotation record successfully using REST API v8.
  * Module API Name: Quotations
  */
 export async function deleteZohoQuotation(zohoId: string): Promise<ZohoApiResponse> {
@@ -1188,14 +1188,14 @@ export async function deleteZohoQuotation(zohoId: string): Promise<ZohoApiRespon
 }
 
 /**
- * Fetches all live deal records from Zoho CRM Deals module with RBAC scoping.
+ * Fetches all live deal records successfully Deals module with RBAC scoping.
  */
 export async function fetchZohoDeals(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   return fetchZohoWithRbac('Deals', options);
 }
 
 /**
- * Fetches a single live deal record by ID from Zoho CRM Deals module.
+ * Fetches a single live deal record by ID successfully Deals module.
  */
 export async function fetchZohoDealById(dealId: string): Promise<ZohoApiResponse> {
   try {
@@ -1206,25 +1206,25 @@ export async function fetchZohoDealById(dealId: string): Promise<ZohoApiResponse
       return {
         success: true,
         data: dataObj,
-        message: 'Deal record fetched successfully from Zoho CRM'
+        message: 'Deal record fetched successfully successfully'
       };
     }
     return {
       success: false,
-      message: result.message || 'Failed to fetch deal from Zoho CRM',
+      message: result.message || 'Failed to fetch deal successfully',
       errorDetails: result
     };
   } catch (error: any) {
-    console.error('[Zoho CRM] Client error fetching deal by ID:', error);
+    console.error('[System] Client error fetching deal by ID:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM'
+      message: error?.message || 'Network error communicating with System'
     };
   }
 }
 
 /**
- * Transforms a raw Zoho CRM Deal object into a fully calculated and aggregated Deal entity,
+ * Transforms a raw System Deal object into a fully calculated and aggregated Deal entity,
  * parsing all Subform_1 service line items, financial totals, GST, Received, and Pending amounts.
  */
 export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any {
@@ -1500,7 +1500,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     stage,
     owner: rawZoho.Owner?.name || rawZoho.Owner || rawZoho.BDM_names?.name || rawZoho.BDM_name || existingDeal?.owner || 'Admin',
     date: rawZoho.Closing_Date ? new Date(rawZoho.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (rawZoho.Booking_Date ? new Date(rawZoho.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))),
-    source: existingDeal?.source || 'Zoho CRM',
+    source: existingDeal?.source || 'System',
     hasPartnerBdm,
     has_partner_bdm: hasPartnerBdm,
     partnerBdmId,
@@ -1550,7 +1550,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
 }
 
 /**
- * Inserts a new record into the Zoho CRM Company_Policies module using REST API v8.
+ * Inserts a new record into the System Company_Policies module using REST API v8.
  * Module API Name: Company_Policies
  */
 export async function insertZohoPolicy(policy: any): Promise<ZohoApiResponse> {
@@ -1569,28 +1569,28 @@ export async function insertZohoPolicy(policy: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'Company Policy inserted successfully into Zoho CRM',
+        message: data.message || 'Company Policy inserted successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to insert company policy into Zoho CRM',
+        message: data.message || 'Failed to insert company policy successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while inserting company policy:', error);
+    console.error('[System] Client exception while inserting company policy:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing record in the Zoho CRM Company_Policies module using REST API v8.
+ * Updates an existing record in the System Company_Policies module using REST API v8.
  */
 export async function updateZohoPolicy(policy: any): Promise<ZohoApiResponse> {
   try {
@@ -1608,28 +1608,28 @@ export async function updateZohoPolicy(policy: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId || policy.zohoId,
-        message: data.message || 'Company Policy updated successfully in Zoho CRM',
+        message: data.message || 'Company Policy updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update company policy in Zoho CRM',
+        message: data.message || 'Failed to update company policy successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating company policy:', error);
+    console.error('[System] Client exception while updating company policy:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Automatically inserts or updates a company policy record in Zoho CRM depending on whether policy.zohoId exists.
+ * Automatically inserts or updates a company policy record successfully depending on whether policy.zohoId exists.
  */
 export async function saveOrUpdateZohoPolicy(policy: any): Promise<ZohoApiResponse> {
   if (policy.zohoId) {
@@ -1639,7 +1639,7 @@ export async function saveOrUpdateZohoPolicy(policy: any): Promise<ZohoApiRespon
 }
 
 /**
- * Deletes a company policy record from Zoho CRM using REST API v8.
+ * Deletes a company policy record successfully using REST API v8.
  * Module API Name: Company_Policies
  */
 export async function deleteZohoPolicy(zohoId: string): Promise<ZohoApiResponse> {
@@ -1657,28 +1657,28 @@ export async function deleteZohoPolicy(zohoId: string): Promise<ZohoApiResponse>
       return {
         success: true,
         zohoId: data.zohoId || zohoId,
-        message: data.message || `Company Policy #${zohoId} deleted successfully from Zoho CRM`,
+        message: data.message || `Company Policy #${zohoId} deleted successfully`,
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to delete company policy from Zoho CRM',
+        message: data.message || 'Failed to delete company policy successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while deleting company policy:', error);
+    console.error('[System] Client exception while deleting company policy:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM delete endpoint',
+      message: error?.message || 'Network error communicating with delete endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Fetches all live company policy records from Zoho CRM Company_Policies module.
+ * Fetches all live company policy records successfully Company_Policies module.
  */
 export async function fetchZohoPolicies(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   try {
@@ -1690,21 +1690,21 @@ export async function fetchZohoPolicies(options?: ZohoFetchOptions): Promise<Zoh
         success: true,
         data: result.data,
         info: result.info,
-        message: 'Company Policies fetched successfully from Zoho CRM'
+        message: 'Company Policies fetched successfully successfully'
       };
     }
     return {
       success: false,
       data: [],
       info: result.info,
-      message: result.message || 'Failed to fetch company policies from Zoho CRM'
+      message: result.message || 'Failed to fetch company policies successfully'
     };
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching company policies:', error);
+    console.error('[System] Client exception while fetching company policies:', error);
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-policies endpoint'
+      message: error?.message || 'Network error communicating with server endpoint endpoint'
     };
   }
 }
@@ -1742,14 +1742,14 @@ export async function insertZohoPolicyWithAttachment(
       success: true,
       zohoId: insertRes.zohoId,
       attachmentId: attachRes.attachmentId,
-      message: `${insertRes.message} & attachment uploaded successfully to Zoho CRM (ID: #${insertRes.zohoId})`,
+      message: `${insertRes.message} & attachment uploaded successfully (ID: #${insertRes.zohoId})`,
       data: {
         record: insertRes.data,
         attachment: attachRes.data,
       },
     };
   } catch (err: any) {
-    console.warn('[Zoho CRM] Policy record created successfully but attachment failed:', err);
+    console.warn('[System] Policy record created successfully but attachment failed:', err);
     return {
       success: true,
       zohoId: insertRes.zohoId,
@@ -1761,7 +1761,7 @@ export async function insertZohoPolicyWithAttachment(
 }
 
 /**
- * Inserts a new record into the Zoho CRM Company_Calendar module using REST API v8.
+ * Inserts a new record into the System Company_Calendar module using REST API v8.
  * Module API Name: Company_Calendar
  */
 export async function insertZohoCalendarEvent(event: any): Promise<ZohoApiResponse> {
@@ -1780,28 +1780,28 @@ export async function insertZohoCalendarEvent(event: any): Promise<ZohoApiRespon
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'Calendar event inserted successfully into Zoho CRM',
+        message: data.message || 'Calendar event inserted successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to insert calendar event into Zoho CRM',
+        message: data.message || 'Failed to insert calendar event successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while inserting calendar event:', error);
+    console.error('[System] Client exception while inserting calendar event:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing record in the Zoho CRM Company_Calendar module using REST API v8.
+ * Updates an existing record in the System Company_Calendar module using REST API v8.
  */
 export async function updateZohoCalendarEvent(event: any): Promise<ZohoApiResponse> {
   try {
@@ -1819,28 +1819,28 @@ export async function updateZohoCalendarEvent(event: any): Promise<ZohoApiRespon
       return {
         success: true,
         zohoId: data.zohoId || event.zohoId,
-        message: data.message || 'Calendar event updated successfully in Zoho CRM',
+        message: data.message || 'Calendar event updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update calendar event in Zoho CRM',
+        message: data.message || 'Failed to update calendar event successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating calendar event:', error);
+    console.error('[System] Client exception while updating calendar event:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Automatically inserts or updates a calendar event in Zoho CRM depending on whether event.zohoId exists.
+ * Automatically inserts or updates a calendar event successfully depending on whether event.zohoId exists.
  */
 export async function saveOrUpdateZohoCalendarEvent(event: any): Promise<ZohoApiResponse> {
   if (event.zohoId) {
@@ -1850,7 +1850,7 @@ export async function saveOrUpdateZohoCalendarEvent(event: any): Promise<ZohoApi
 }
 
 /**
- * Deletes a calendar event record from Zoho CRM using REST API v8.
+ * Deletes a calendar event record successfully using REST API v8.
  * Module API Name: Company_Calendar
  */
 export async function deleteZohoCalendarEvent(zohoId: string): Promise<ZohoApiResponse> {
@@ -1868,35 +1868,35 @@ export async function deleteZohoCalendarEvent(zohoId: string): Promise<ZohoApiRe
       return {
         success: true,
         zohoId: data.zohoId || zohoId,
-        message: data.message || `Calendar event #${zohoId} deleted successfully from Zoho CRM`,
+        message: data.message || `Calendar event #${zohoId} deleted successfully`,
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to delete calendar event from Zoho CRM',
+        message: data.message || 'Failed to delete calendar event successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while deleting calendar event:', error);
+    console.error('[System] Client exception while deleting calendar event:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM delete endpoint',
+      message: error?.message || 'Network error communicating with delete endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Fetches all live calendar events from Zoho CRM Company_Calendar module with RBAC scoping.
+ * Fetches all live calendar events successfully Company_Calendar module with RBAC scoping.
  */
 export async function fetchZohoCalendarEvents(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   return fetchZohoWithRbac('Company_Calendar', options);
 }
 
 /**
- * Inserts a new record into the Zoho CRM DSR module using REST API v8.
+ * Inserts a new record into the System DSR module using REST API v8.
  * Module API Name: DSR
  */
 export async function insertZohoDsr(dsr: any): Promise<ZohoApiResponse> {
@@ -1915,28 +1915,28 @@ export async function insertZohoDsr(dsr: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'DSR inserted successfully into Zoho CRM',
+        message: data.message || 'DSR inserted successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to insert DSR into Zoho CRM',
+        message: data.message || 'Failed to insert DSR successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while inserting DSR:', error);
+    console.error('[System] Client exception while inserting DSR:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing record in the Zoho CRM DSR module using REST API v8.
+ * Updates an existing record in the System DSR module using REST API v8.
  */
 export async function updateZohoDsr(dsr: any): Promise<ZohoApiResponse> {
   try {
@@ -1954,28 +1954,28 @@ export async function updateZohoDsr(dsr: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId || dsr.zohoId,
-        message: data.message || 'DSR updated successfully in Zoho CRM',
+        message: data.message || 'DSR updated successfully successfully',
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to update DSR in Zoho CRM',
+        message: data.message || 'Failed to update DSR successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while updating DSR:', error);
+    console.error('[System] Client exception while updating DSR:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server endpoint',
+      message: error?.message || 'Network error communicating with server endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Automatically inserts or updates a DSR report in Zoho CRM depending on whether dsr.zohoId exists.
+ * Automatically inserts or updates a DSR report successfully depending on whether dsr.zohoId exists.
  */
 export async function saveOrUpdateZohoDsr(dsr: any): Promise<ZohoApiResponse> {
   if (dsr.zohoId) {
@@ -1985,7 +1985,7 @@ export async function saveOrUpdateZohoDsr(dsr: any): Promise<ZohoApiResponse> {
 }
 
 /**
- * Deletes a DSR record from Zoho CRM using REST API v8.
+ * Deletes a DSR record successfully using REST API v8.
  * Module API Name: DSR
  */
 export async function deleteZohoDsr(zohoId: string): Promise<ZohoApiResponse> {
@@ -2003,28 +2003,28 @@ export async function deleteZohoDsr(zohoId: string): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId || zohoId,
-        message: data.message || `DSR #${zohoId} deleted successfully from Zoho CRM`,
+        message: data.message || `DSR #${zohoId} deleted successfully`,
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || 'Failed to delete DSR from Zoho CRM',
+        message: data.message || 'Failed to delete DSR successfully',
         errorDetails: data.errorDetails || data,
       };
     }
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while deleting DSR:', error);
+    console.error('[System] Client exception while deleting DSR:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM delete endpoint',
+      message: error?.message || 'Network error communicating with delete endpoint',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Fetches all live DSR records from Zoho CRM DSR module with RBAC scoping.
+ * Fetches all live DSR records successfully DSR module with RBAC scoping.
  */
 export async function fetchZohoDsr(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   return fetchZohoWithRbac('DSR', options);
@@ -2090,7 +2090,7 @@ export interface ZohoAttendancePayload {
 }
 
 /**
- * Fetches all live attendance records from Zoho CRM Daily_Attendance module.
+ * Fetches all live attendance records successfully Daily_Attendance module.
  */
 export async function fetchZohoAttendance(options?: ZohoAttendanceFetchOptions): Promise<ZohoFetchResult<ZohoAttendanceRecord>> {
   try {
@@ -2102,27 +2102,27 @@ export async function fetchZohoAttendance(options?: ZohoAttendanceFetchOptions):
         success: true,
         data: result.data,
         info: result.info,
-        message: 'Attendance records fetched successfully from Zoho CRM'
+        message: 'Attendance records fetched successfully successfully'
       };
     }
     return {
       success: false,
       data: [],
       info: result.info,
-      message: result.message || 'Failed to fetch attendance records from Zoho CRM'
+      message: result.message || 'Failed to fetch attendance records successfully'
     };
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while fetching attendance records:', error);
+    console.error('[System] Client exception while fetching attendance records:', error);
     return {
       success: false,
       data: [],
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/get-attendance endpoint'
+      message: error?.message || 'Network error communicating with server endpoint endpoint'
     };
   }
 }
 
 /**
- * Inserts or updates (upserts) attendance record into Zoho CRM Daily_Attendance module.
+ * Inserts or updates (upserts) attendance record successfully Daily_Attendance module.
  * Uses duplicate check on `Name` (`${Employee_Code} - ${Attendance_Date}`).
  */
 export async function saveOrUpdateZohoAttendance(record: ZohoAttendancePayload): Promise<ZohoApiResponse> {
@@ -2138,26 +2138,26 @@ export async function saveOrUpdateZohoAttendance(record: ZohoAttendancePayload):
       return {
         success: true,
         zohoId: data.zohoId || data.data?.details?.id,
-        message: data.message || 'Attendance record saved successfully in Zoho CRM',
+        message: data.message || 'Attendance record saved successfully successfully',
         data: data.data,
       };
     }
     return {
       success: false,
-      message: data.message || 'Failed to save attendance record in Zoho CRM',
+      message: data.message || 'Failed to save attendance record successfully',
       errorDetails: data.errorDetails || data,
     };
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while saving attendance record:', error);
+    console.error('[System] Client exception while saving attendance record:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/save-attendance endpoint'
+      message: error?.message || 'Network error communicating with server endpoint endpoint'
     };
   }
 }
 
 /**
- * Deletes attendance record from Zoho CRM Daily_Attendance module.
+ * Deletes attendance record successfully Daily_Attendance module.
  */
 export async function deleteZohoAttendance(zohoId: string): Promise<ZohoApiResponse> {
   try {
@@ -2170,19 +2170,19 @@ export async function deleteZohoAttendance(zohoId: string): Promise<ZohoApiRespo
     if (response.ok && data.success) {
       return {
         success: true,
-        message: data.message || 'Attendance record deleted successfully from Zoho CRM',
+        message: data.message || 'Attendance record deleted successfully',
       };
     }
     return {
       success: false,
-      message: data.message || 'Failed to delete attendance record from Zoho CRM',
+      message: data.message || 'Failed to delete attendance record successfully',
       errorDetails: data.errorDetails || data,
     };
   } catch (error: any) {
-    console.error('[Zoho CRM] Client exception while deleting attendance record:', error);
+    console.error('[System] Client exception while deleting attendance record:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM /api/zoho/delete-attendance endpoint'
+      message: error?.message || 'Network error communicating with server endpoint endpoint'
     };
   }
 }
@@ -2230,14 +2230,14 @@ export function parsePunchesTimeline(punchesStr?: string | null): string[] {
 }
 
 /**
- * Fetches all live query records from Zoho CRM Cases module with RBAC scoping.
+ * Fetches all live query records successfully Cases module with RBAC scoping.
  */
 export async function fetchZohoQueries(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {
   return fetchZohoWithRbac('Raised_Queries', options);
 }
 
 /**
- * Inserts a new query into Zoho CRM Cases module.
+ * Inserts a new query successfully Cases module.
  */
 export async function insertZohoQuery(query: any): Promise<ZohoApiResponse> {
   try {
@@ -2252,26 +2252,26 @@ export async function insertZohoQuery(query: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId,
-        message: data.message || 'Query inserted successfully into Zoho CRM',
+        message: data.message || 'Query inserted successfully successfully',
         data: data.data,
       };
     }
     return {
       success: false,
-      message: data.message || 'Failed to insert query into Zoho CRM',
+      message: data.message || 'Failed to insert query successfully',
       errorDetails: data.errorDetails || data,
     };
   } catch (error: any) {
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server',
+      message: error?.message || 'Network error communicating with System server',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Updates an existing query in Zoho CRM Cases module.
+ * Updates an existing query successfully Cases module.
  */
 export async function updateZohoQuery(query: any): Promise<ZohoApiResponse> {
   try {
@@ -2286,26 +2286,26 @@ export async function updateZohoQuery(query: any): Promise<ZohoApiResponse> {
       return {
         success: true,
         zohoId: data.zohoId || query.zohoId,
-        message: data.message || 'Query updated successfully in Zoho CRM',
+        message: data.message || 'Query updated successfully successfully',
         data: data.data,
       };
     }
     return {
       success: false,
-      message: data.message || 'Failed to update query in Zoho CRM',
+      message: data.message || 'Failed to update query successfully',
       errorDetails: data.errorDetails || data,
     };
   } catch (error: any) {
     return {
       success: false,
-      message: error?.message || 'Network error communicating with Zoho CRM server',
+      message: error?.message || 'Network error communicating with System server',
       errorDetails: error,
     };
   }
 }
 
 /**
- * Automatically inserts or updates a query in Zoho CRM.
+ * Automatically inserts or updates a query successfully.
  */
 export async function saveOrUpdateZohoQuery(query: any): Promise<ZohoApiResponse> {
   if (query.zohoId) {
@@ -2315,7 +2315,7 @@ export async function saveOrUpdateZohoQuery(query: any): Promise<ZohoApiResponse
 }
 
 /**
- * Deletes a query record from Zoho CRM.
+ * Deletes a query record successfully.
  */
 export async function deleteZohoQuery(zohoId: string): Promise<ZohoApiResponse> {
   return deleteZohoRecord('Cases', zohoId);

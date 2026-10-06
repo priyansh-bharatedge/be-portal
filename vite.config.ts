@@ -230,6 +230,17 @@ function zohoApiPlugin(): Plugin {
       });
     }
 
+    // Associate Employee Lookup field with the logged-in employee record
+    const empLookupId = quotation.employeeZohoId || fd.employeeZohoId || quotation.empZohoId || fd.empZohoId || (typeof quotation.Employee === 'object' ? quotation.Employee?.id : (typeof quotation.Employee === 'string' && /^\d+$/.test(quotation.Employee) ? quotation.Employee : null));
+    if (empLookupId && String(empLookupId).trim() !== '') {
+      payload.Employee = { id: String(empLookupId).trim() };
+    }
+    const empCode = quotation.empId || fd.empId || quotation.employeeId || fd.employeeId;
+    if (empCode) {
+      payload.Employment_ID = String(empCode);
+      payload.Employee_Code = String(empCode);
+    }
+
     return payload;
   }
 
@@ -1091,7 +1102,7 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_MODULE_NAME || 'Quotations';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Employee,Created_Time,Modified_Time';
+            const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Employee,Created_Time,Modified_Time,Owner,Created_By';
             const criteria = urlObj.searchParams.get('criteria') || '';
             const paginationQuery = buildZohoPaginationQuery(urlObj);
             const crmEndpoint = criteria 

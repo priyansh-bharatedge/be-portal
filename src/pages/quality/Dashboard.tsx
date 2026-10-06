@@ -1,15 +1,18 @@
+import { useNavigate } from 'react-router-dom';
 import { 
   ShieldAlert, AlertCircle, CheckCircle2, Clock, 
-  TrendingDown, TrendingUp, Download, Filter 
+  TrendingDown, TrendingUp, Download, Filter, ArrowUpRight 
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 export const QualityDashboard = () => {
+  const navigate = useNavigate();
+
   const stats = [
-    { title: 'Total Queries', value: '84', icon: <ShieldAlert size={24} />, trend: '+4', isUp: false, color: 'text-gray-600', bg: 'bg-gray-100' },
-    { title: 'Open', value: '18', icon: <AlertCircle size={24} />, trend: '-2', isUp: true, color: 'text-red-500', bg: 'bg-red-50' },
-    { title: 'In Progress', value: '24', icon: <Clock size={24} />, trend: '+5', isUp: false, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { title: 'Resolved', value: '42', icon: <CheckCircle2 size={24} />, trend: '+12', isUp: true, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { title: 'Total Queries', value: '84', icon: <ShieldAlert size={24} />, trend: '+4', isUp: false, color: 'text-gray-600', bg: 'bg-gray-100', path: '/quality/queries' },
+    { title: 'Open', value: '18', icon: <AlertCircle size={24} />, trend: '-2', isUp: true, color: 'text-red-500', bg: 'bg-red-50', path: '/quality/queries?status=Open' },
+    { title: 'In Progress', value: '24', icon: <Clock size={24} />, trend: '+5', isUp: false, color: 'text-blue-600', bg: 'bg-blue-50', path: '/quality/queries?status=In Progress' },
+    { title: 'Resolved', value: '42', icon: <CheckCircle2 size={24} />, trend: '+12', isUp: true, color: 'text-emerald-600', bg: 'bg-emerald-50', path: '/quality/queries?status=Resolved' },
   ];
 
   const queryData = [
@@ -70,9 +73,14 @@ export const QualityDashboard = () => {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, idx) => (
-          <div key={idx} className="card p-6">
+          <div
+            key={idx}
+            onClick={() => stat.path && navigate(stat.path)}
+            title={`Click to view ${stat.title}`}
+            className="card p-6 hover:shadow-xl hover:border-orange-300 hover:-translate-y-1 transition-all duration-200 cursor-pointer group"
+          >
             <div className="flex justify-between items-start mb-4">
-              <div className={`p-3 rounded-xl ${stat.bg} ${stat.color}`}>
+              <div className={`p-3 rounded-xl ${stat.bg} ${stat.color} group-hover:scale-110 transition-transform`}>
                 {stat.icon}
               </div>
               <div className={`flex items-center text-sm font-medium ${stat.isUp ? 'text-emerald-600' : 'text-red-500'}`}>
@@ -81,8 +89,11 @@ export const QualityDashboard = () => {
               </div>
             </div>
             <div>
-              <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
-              <p className="text-sm font-medium text-gray-500">{stat.title}</p>
+              <p className="text-3xl font-black text-gray-900 mb-1 group-hover:text-be-orange transition-colors">{stat.value}</p>
+              <p className="text-sm font-bold text-gray-500 flex items-center justify-between">
+                <span>{stat.title}</span>
+                <ArrowUpRight size={14} className="opacity-0 group-hover:opacity-100 text-be-orange transition-opacity" />
+              </p>
             </div>
           </div>
         ))}
@@ -113,11 +124,16 @@ export const QualityDashboard = () => {
           </div>
         </div>
 
-      {/* Recent Queries Table */}
+        {/* Recent Queries Table */}
         <div className="bg-transparent overflow-hidden flex flex-col mt-6">
           <div className="p-6 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-900">Recent Queries</h2>
-            <button className="text-sm font-medium text-be-orange hover:text-be-orangeHover transition-colors">View All</button>
+            <button
+              onClick={() => navigate('/quality/queries')}
+              className="text-sm font-bold text-be-orange hover:text-be-orangeHover transition-colors flex items-center gap-1"
+            >
+              View All →
+            </button>
           </div>
           <div className="overflow-x-auto pb-6 flex-1">
             <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-y-3">
@@ -131,8 +147,13 @@ export const QualityDashboard = () => {
               </thead>
               <tbody className="text-gray-700">
                 {recentQueries.map((q) => (
-                  <tr key={q.id} className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm">
-                    <td className="px-6 py-5 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100 font-bold text-gray-900">{q.id}</td>
+                  <tr
+                    key={q.id}
+                    onClick={() => navigate('/quality/queries?search=' + encodeURIComponent(q.id))}
+                    title={`Click to view query ${q.id}`}
+                    className="bg-white hover:bg-orange-50/40 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group shadow-sm cursor-pointer"
+                  >
+                    <td className="px-6 py-5 rounded-l-xl border-t border-b border-l border-gray-100 group-hover:border-orange-100 font-bold text-gray-900 group-hover:text-be-orange">{q.id}</td>
                     <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100 font-medium">{q.client}</td>
                     <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold shadow-sm ${getPriorityBadge(q.priority)}`}>

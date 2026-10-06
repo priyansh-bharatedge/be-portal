@@ -10,6 +10,7 @@ import {
   deleteZohoCalendarEvent, 
   fetchZohoCalendarEvents 
 } from '../../services/zohoService';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 interface Event {
   id: string;
@@ -57,6 +58,11 @@ export const Calendar = () => {
   const [filterCategory, setFilterCategory] = useState<'All' | 'Attendance' | 'Holidays' | 'Leaves' | 'Events'>('All');
   const [selectedDateStr, setSelectedDateStr] = useState<string>(new Date().toISOString().split('T')[0]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; event: Event | null; isDeleting: boolean }>({
+    isOpen: false,
+    event: null,
+    isDeleting: false
+  });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ title: '', date: new Date().toISOString().split('T')[0], type: 'Event' as Event['type'], description: '' });
@@ -157,18 +163,29 @@ export const Calendar = () => {
     }
   };
 
-  const handleDeleteCustomEvent = async (id: string) => {
-    const target = customEvents.find(e => e.id === id);
-    const updated = customEvents.filter(e => e.id !== id);
-    saveCustomEvents(updated);
+  const handleDeleteCustomEvent = (event: Event) => {
+    setDeleteTarget({ isOpen: true, event, isDeleting: false });
+  };
 
-    // Delete in Zoho CRM in background if zohoId exists
-    if (target?.zohoId) {
-      try {
-        await deleteZohoCalendarEvent(target.zohoId);
-      } catch (err) {
-        console.error('[Zoho CRM] Calendar delete error:', err);
+  const confirmDeleteEvent = async () => {
+    const target = deleteTarget.event;
+    if (!target) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
+
+    try {
+      const updated = customEvents.filter(e => e.id !== target.id);
+      saveCustomEvents(updated);
+
+      // Delete in Zoho CRM in background if zohoId exists
+      if (target.zohoId) {
+        try {
+          await deleteZohoCalendarEvent(target.zohoId);
+        } catch (err) {
+          console.error('[Zoho CRM] Calendar delete error:', err);
+        }
       }
+    } finally {
+      setDeleteTarget({ isOpen: false, event: null, isDeleting: false });
     }
   };
 
@@ -303,9 +320,6 @@ export const Calendar = () => {
             <h1 className="text-2xl font-bold text-gray-900 flex items-center">
               <CalIcon className="mr-2 text-be-orange" size={26} /> Company & Attendance Calendar
             </h1>
-            <span className="px-3 py-1 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              Color-Coded Live Hub
-            </span>
           </div>
           <p className="text-gray-500 text-sm mt-1">
             Track daily attendance records, official public holidays, approved leaves, and organizational events.
@@ -540,7 +554,7 @@ export const Calendar = () => {
                     </span>
                     {ev.id.startsWith('EV-') && (
                       <button 
-                        onClick={() => handleDeleteCustomEvent(ev.id)}
+                        onClick={() => handleDeleteCustomEvent(ev)}
                         className="text-gray-400 hover:text-red-500 p-1"
                         title="Delete custom event"
                       >
@@ -677,6 +691,17 @@ export const Calendar = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, event: null, isDeleting: false })}
+        onConfirm={confirmDeleteEvent}
+        title="Delete Calendar Event"
+        itemName={deleteTarget.event?.title}
+        message={deleteTarget.event ? `Are you sure you want to delete event "${deleteTarget.event.title}" on ${deleteTarget.event.date}?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

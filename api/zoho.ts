@@ -1203,7 +1203,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     // 2.5 Get Quotations
     if (action === 'get-quotations' && method === 'GET') {
       const moduleName = process.env.VITE_ZOHO_MODULE_NAME || 'Quotations';
-      const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Employee,Created_Time,Modified_Time';
+      const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Employee,Created_Time,Modified_Time,Owner,Created_By';
       return executeZohoGet(apiBase, moduleName, quotationFields, req, res, urlObj, 'quotations');
     }
 

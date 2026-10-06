@@ -3,11 +3,13 @@ import { User, Bell, Lock, Building, Save, Database, Trash2, CheckCircle2, Shiel
 import { useAuth } from '../context/AuthContext';
 import { INITIAL_EMPLOYEES, DEMO_USERS } from '../utils/initialData';
 import { updateZohoEmployeePassword } from '../services/zohoService';
+import { DeleteConfirmModal } from '../components/ui/DeleteConfirmModal';
 
 export const Settings = () => {
   const { currentUser, switchUser } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   
   // Profile Form
   const [formData, setFormData] = useState({
@@ -107,7 +109,7 @@ export const Settings = () => {
       setConfirmPassword('');
       setPasswordStatus({
         type: 'success',
-        message: `Password successfully updated and stored in Zoho CRM for employee (${userEmail})!`
+        message: `Password successfully updated for employee (${userEmail})!`
       });
     } catch (err: any) {
       setPasswordStatus({
@@ -120,25 +122,28 @@ export const Settings = () => {
   };
 
   const handleResetData = () => {
-    if (window.confirm('Are you sure you want to clear all test records (Deals, Quotes, Companies, Clients, Leaves, Salaries, Attendance, DSRs, Queries)? This will keep only the Super Admin account so you can test entering fresh data.')) {
-      localStorage.setItem('be_deals', JSON.stringify([]));
-      localStorage.setItem('be_quotations', JSON.stringify([]));
-      localStorage.setItem('be_companies', JSON.stringify([]));
-      localStorage.setItem('be_clients', JSON.stringify([]));
-      localStorage.setItem('be_salaries', JSON.stringify([]));
-      localStorage.setItem('be_dsr_reports', JSON.stringify([]));
-      localStorage.setItem('be_queries', JSON.stringify([]));
-      localStorage.setItem('be_leaves', JSON.stringify([]));
-      localStorage.setItem('be_attendance', JSON.stringify([]));
-      localStorage.setItem('be_emp_docs', JSON.stringify([]));
-      localStorage.setItem('be_employees', JSON.stringify(INITIAL_EMPLOYEES));
-      localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
-      setResetSuccess(true);
-      setTimeout(() => {
-        setResetSuccess(false);
-        window.location.reload();
-      }, 1500);
-    }
+    setIsResetConfirmOpen(true);
+  };
+
+  const confirmResetData = () => {
+    localStorage.setItem('be_deals', JSON.stringify([]));
+    localStorage.setItem('be_quotations', JSON.stringify([]));
+    localStorage.setItem('be_companies', JSON.stringify([]));
+    localStorage.setItem('be_clients', JSON.stringify([]));
+    localStorage.setItem('be_salaries', JSON.stringify([]));
+    localStorage.setItem('be_dsr_reports', JSON.stringify([]));
+    localStorage.setItem('be_queries', JSON.stringify([]));
+    localStorage.setItem('be_leaves', JSON.stringify([]));
+    localStorage.setItem('be_attendance', JSON.stringify([]));
+    localStorage.setItem('be_emp_docs', JSON.stringify([]));
+    localStorage.setItem('be_employees', JSON.stringify(INITIAL_EMPLOYEES));
+    localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
+    setIsResetConfirmOpen(false);
+    setResetSuccess(true);
+    setTimeout(() => {
+      setResetSuccess(false);
+      window.location.reload();
+    }, 1500);
   };
 
   return (
@@ -261,8 +266,8 @@ export const Settings = () => {
               <div className="p-3.5 bg-orange-50/70 border border-orange-200 rounded-xl text-xs text-orange-950 flex items-start gap-2.5">
                 <ShieldCheck size={18} className="text-be-orange flex-shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold block">Live Zoho CRM Password Sync</span>
-                  <span>Setting your new password here automatically updates and stores the actual password directly in your Zoho CRM employee record.</span>
+                  <span className="font-bold block">Password Synchronization</span>
+                  <span>Setting your new password here updates your employee credentials securely.</span>
                 </div>
               </div>
 
@@ -319,7 +324,7 @@ export const Settings = () => {
                   className="bg-be-orange hover:bg-orange-600 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold text-xs flex items-center transition-all shadow-md shadow-orange-500/20"
                 >
                   <Save size={16} className="mr-2" />
-                  {isSavingPassword ? 'Syncing to Zoho CRM...' : 'Update & Store Password'}
+                  {isSavingPassword ? 'Updating Password...' : 'Update & Store Password'}
                 </button>
               </div>
             </form>
@@ -358,6 +363,16 @@ export const Settings = () => {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={isResetConfirmOpen}
+        onClose={() => setIsResetConfirmOpen(false)}
+        onConfirm={confirmResetData}
+        title="Clear All Test Records"
+        itemName="All Test Records"
+        message="Are you sure you want to clear all test records (Deals, Quotes, Companies, Clients, Leaves, Salaries, Attendance, DSRs, Queries)? This will keep only the Super Admin account so you can enter fresh data."
+      />
     </div>
   );
 };

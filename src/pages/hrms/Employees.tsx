@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, X, UserPlus, Edit, Trash2, ChevronRight, Check, UploadCloud, Eye, Shield, Users, Crown, Briefcase, User, Info, ArrowRight, UserCheck, CheckCircle2, AlertCircle, Loader2, Cloud, FileText, Target } from 'lucide-react';
+import { Search, Filter, X, UserPlus, Edit, Trash2, ChevronRight, Check, UploadCloud, Eye, Shield, Users, Crown, Briefcase, User, Info, ArrowRight, UserCheck, CheckCircle2, AlertCircle, Loader2, Cloud, FileText, Target, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { saveDocument } from '../../lib/db';
@@ -9,6 +9,7 @@ import type { SystemRole } from '../../types/roles';
 import { INITIAL_EMPLOYEES } from '../../utils/initialData';
 import type { EmployeeData } from '../../utils/initialData';
 import { saveOrUpdateZohoEmployee, uploadZohoAttachment, deleteZohoEmployee, fetchZohoEmployees } from '../../services/zohoService';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 export const OPTIONAL_DOCUMENT_FIELDS = [
   {
@@ -87,6 +88,11 @@ export const Employees = () => {
   const [targetModalEmployee, setTargetModalEmployee] = useState<EmployeeData | null>(null);
   const [targetInputVal, setTargetInputVal] = useState<string>('');
   const [isSavingTarget, setIsSavingTarget] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; employee: EmployeeData | null; isDeleting: boolean }>({
+    isOpen: false,
+    employee: null,
+    isDeleting: false
+  });
 
   const initialFormData = {
     empId: '', firstName: '', middleName: '', lastName: '', dob: '', gender: 'Male', nationality: 'Indian',
@@ -237,15 +243,15 @@ export const Employees = () => {
         if (showNotification) {
           setToast({
             type: 'success',
-            message: `Synced ${zohoEmployees.length} Employee(s) from Zoho CRM`,
-            submessage: 'Employee directory is up to date with live Zoho database'
+            message: `Synced ${zohoEmployees.length} Employee(s) from database`,
+            submessage: 'Employee directory is up to date with live database'
           });
         }
       } else if (showNotification) {
         setToast({
           type: 'info',
-          message: 'No employees returned from Zoho CRM',
-          submessage: res.message || 'Check connection or Zoho CRM module records'
+          message: 'No employees returned from database',
+          submessage: res.message || 'Check connection or employee records'
         });
       }
     } catch (err: any) {
@@ -253,7 +259,7 @@ export const Employees = () => {
       if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Failed to fetch employees from Zoho CRM',
+          message: 'Failed to fetch employees from database',
           submessage: err?.message || 'Network error communicating with server'
         });
       }
@@ -280,7 +286,7 @@ export const Employees = () => {
       localStorage.setItem('be_employees', JSON.stringify([]));
     }
 
-    // Automatically sync live records from Zoho CRM on mount
+    // Automatically sync live records from database on mount
     syncEmployeesFromZoho(false);
   }, []);
 
@@ -619,16 +625,16 @@ export const Employees = () => {
 
         setToast({
           type: 'success',
-          message: editingEmployee ? 'Employee Updated & Synced to Zoho CRM!' : 'Employee Created & Synced to Zoho CRM!',
-          submessage: `${editingEmployee ? 'Updated' : 'Created'} in Zoho Employee module (ID: #${finalZohoId}) with ${docUploadCount} document(s) attached`
+          message: editingEmployee ? 'Employee Updated Successfully!' : 'Employee Created Successfully!',
+          submessage: `${editingEmployee ? 'Updated' : 'Created'} in Employee directory (ID: #${finalZohoId}) with ${docUploadCount} document(s) attached`
         });
       } else {
         newEmp.zohoStatus = 'failed';
         newEmp.zohoError = zohoRes.message;
         setToast({
           type: 'error',
-          message: `Employee Saved Locally (Zoho ${editingEmployee ? 'Update' : 'Sync'} Failed)`,
-          submessage: zohoRes.message || 'Check Zoho CRM credentials or field requirements'
+          message: `Employee Saved Locally (Sync Failed)`,
+          submessage: zohoRes.message || 'Check field requirements'
         });
       }
     } catch (zErr: any) {
@@ -637,8 +643,8 @@ export const Employees = () => {
       newEmp.zohoError = zErr?.message || 'Sync failed';
       setToast({
         type: 'error',
-        message: `Employee Saved Locally (Zoho ${editingEmployee ? 'Update' : 'Sync'} Error)`,
-        submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+        message: `Employee Saved Locally (Sync Error)`,
+        submessage: zErr?.message || 'Failed to communicate with server'
       });
     } finally {
       setIsSubmitting(false);
@@ -806,16 +812,23 @@ export const Employees = () => {
     setFormErrors({});
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!can('delete_employee')) {
       alert('Permission Denied: Only Super Admin can delete employee records.');
       return;
     }
     const targetEmp = employees.find(e => e.id === id);
     if (!targetEmp) return;
+    setDeleteTarget({ isOpen: true, employee: targetEmp, isDeleting: false });
+  };
 
-    if (confirm(`Are you sure you want to delete employee "${targetEmp.name}"? `)) {
-      saveToStorage(employees.filter(e => e.id !== id));
+  const confirmDeleteEmployee = async () => {
+    const targetEmp = deleteTarget.employee;
+    if (!targetEmp) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
+
+    try {
+      saveToStorage(employees.filter(e => e.id !== targetEmp.id));
 
       if (targetEmp.zohoId) {
         try {
@@ -829,16 +842,16 @@ export const Employees = () => {
           } else {
             setToast({
               type: 'error',
-              message: `Employee Deleted Locally (Zoho Delete Failed)`,
-              submessage: zohoRes.message || 'Check Zoho CRM permissions or record status'
+              message: `Employee Deleted Locally (Delete Failed)`,
+              submessage: zohoRes.message || 'Check permissions or record status'
             });
           }
         } catch (zErr: any) {
           console.error('[Zoho CRM] Employee delete exception:', zErr);
           setToast({
             type: 'error',
-            message: `Employee Deleted Locally (Zoho Delete Error)`,
-            submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+            message: `Employee Deleted Locally (Delete Error)`,
+            submessage: zErr?.message || 'Failed to communicate with server'
           });
         }
       } else {
@@ -848,6 +861,8 @@ export const Employees = () => {
           submessage: 'Record has been deleted successfully'
         });
       }
+    } finally {
+      setDeleteTarget({ isOpen: false, employee: null, isDeleting: false });
     }
   };
 
@@ -1011,15 +1026,10 @@ export const Employees = () => {
           <button
             onClick={() => syncEmployeesFromZoho(true)}
             disabled={isFetchingZoho}
-            title="Sync live records from Zoho CRM"
-            className="bg-white hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-300 px-4 py-2.5 rounded-xl font-bold flex items-center transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50"
+            title="Refresh & Sync from database"
+            className="w-10 h-10 bg-white hover:bg-orange-50 text-gray-700 hover:text-be-orange border border-gray-200 hover:border-orange-300 rounded-xl flex items-center justify-center transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-50 shrink-0"
           >
-            {isFetchingZoho ? (
-              <Loader2 size={16} className="mr-2 animate-spin text-be-orange" />
-            ) : (
-              <Cloud size={16} className="mr-2 text-be-orange" />
-            )}
-            {isFetchingZoho ? 'Syncing...' : 'Sync Zoho CRM'}
+            <RefreshCw size={18} className={`text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
           </button>
 
           {can('create_employee') ? (
@@ -2305,7 +2315,7 @@ export const Employees = () => {
                       {isSubmitting ? (
                         <>
                           <Loader2 size={16} className="animate-spin mr-2" />
-                          <span>Syncing with Zoho CRM...</span>
+                          <span>Saving Employee...</span>
                         </>
                       ) : (
                         editingEmployee ? 'Save Changes' : 'Create Employee'
@@ -2461,6 +2471,17 @@ export const Employees = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, employee: null, isDeleting: false })}
+        onConfirm={confirmDeleteEmployee}
+        title="Delete Employee"
+        itemName={deleteTarget.employee ? `${deleteTarget.employee.name} (${deleteTarget.employee.id})` : undefined}
+        message={deleteTarget.employee ? `Are you sure you want to delete employee "${deleteTarget.employee.name}" (${deleteTarget.employee.id})?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

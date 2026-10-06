@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Filter, FileText, Download, Trash2, Eye, UploadCloud, X, Calendar, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllDocuments, deleteDocument, saveDocument } from '../../lib/db';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 interface DocItem {
   id: string;
@@ -18,6 +19,11 @@ export const Documents = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; doc: DocItem | null; isDeleting: boolean }>({
+    isOpen: false,
+    doc: null,
+    isDeleting: false
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDocuments = async () => {
@@ -55,10 +61,21 @@ export const Documents = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this document?')) {
-      await deleteDocument(id);
-      fetchDocuments();
+  const handleDelete = (doc: DocItem) => {
+    setDeleteTarget({ isOpen: true, doc, isDeleting: false });
+  };
+
+  const confirmDeleteDoc = async () => {
+    const doc = deleteTarget.doc;
+    if (!doc) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
+    try {
+      await deleteDocument(doc.id);
+      await fetchDocuments();
+    } catch (e) {
+      console.error("Failed to delete document", e);
+    } finally {
+      setDeleteTarget({ isOpen: false, doc: null, isDeleting: false });
     }
   };
 
@@ -161,7 +178,7 @@ export const Documents = () => {
                           <button onClick={() => handleDownload(doc)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Download & View">
                             <Download size={16} />
                           </button>
-                          <button onClick={() => handleDelete(doc.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
+                          <button onClick={() => handleDelete(doc)} className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -249,6 +266,17 @@ export const Documents = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, doc: null, isDeleting: false })}
+        onConfirm={confirmDeleteDoc}
+        title="Delete Document"
+        itemName={deleteTarget.doc?.name}
+        message={deleteTarget.doc ? `Are you sure you want to delete document "${deleteTarget.doc.name}"?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

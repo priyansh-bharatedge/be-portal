@@ -9,6 +9,7 @@ import {
   downloadZohoAttachment, 
   getZohoAttachmentDownloadUrl 
 } from '../../services/zohoService';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 interface EmpDoc {
   id: string;
@@ -34,6 +35,11 @@ export const Documents = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [syncStatusText, setSyncStatusText] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; doc: EmpDoc | null; isDeleting: boolean }>({
+    isOpen: false,
+    doc: null,
+    isDeleting: false
+  });
 
   const canManage = isHR || isSuperAdmin;
   const isEmployeeSelfOnly = isTM || currentUser.role === 'TM' || !canManage;
@@ -60,7 +66,7 @@ export const Documents = () => {
     const empZohoId = resolveEmpZohoId();
     if (!empZohoId) {
       if (showNotification) {
-        alert("No linked Zoho CRM Employee ID found for your account. Please ensure your profile is linked to Zoho CRM.");
+        alert("No linked Employee ID found for your account. Please ensure your profile is active.");
       }
       return;
     }
@@ -105,7 +111,7 @@ export const Documents = () => {
           return merged;
         });
 
-        setSyncStatusText(`Synced ${liveDocs.length} live document${liveDocs.length === 1 ? '' : 's'} from Zoho CRM`);
+        setSyncStatusText(`Synced ${liveDocs.length} live document${liveDocs.length === 1 ? '' : 's'} from database`);
       }
     } catch (err: any) {
       console.warn('[Documents] Failed to fetch live Zoho attachments:', err);
@@ -239,12 +245,21 @@ export const Documents = () => {
     }
   };
 
-  const handleDelete = async (doc: EmpDoc) => {
-    if (confirm(`Are you sure you want to delete "${doc.title}"?`)) {
+  const handleDelete = (doc: EmpDoc) => {
+    setDeleteTarget({ isOpen: true, doc, isDeleting: false });
+  };
+
+  const confirmDeleteDoc = async () => {
+    const doc = deleteTarget.doc;
+    if (!doc) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
+    try {
       if (!doc.isZohoAttachment) {
         await deleteDocument(doc.fileId);
       }
       saveToStorage(documents.filter(d => d.id !== doc.id));
+    } finally {
+      setDeleteTarget({ isOpen: false, doc: null, isDeleting: false });
     }
   };
 
@@ -302,11 +317,10 @@ export const Documents = () => {
           <button
             onClick={() => fetchLiveZohoDocuments(true)}
             disabled={isFetchingZoho}
-            className="flex items-center px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-orange-50/50 hover:border-orange-200 text-gray-700 hover:text-be-orange font-bold text-sm shadow-sm transition-all disabled:opacity-60"
-            title="Fetch latest attachments from Zoho CRM"
+            className="w-10 h-10 rounded-xl border border-gray-200 bg-white hover:bg-orange-50/50 hover:border-orange-200 text-gray-700 hover:text-be-orange flex items-center justify-center shadow-sm transition-all disabled:opacity-60 shrink-0"
+            title="Refresh & Sync from database"
           >
-            <RefreshCw size={16} className={`mr-2 ${isFetchingZoho ? 'animate-spin text-be-orange' : 'text-gray-500'}`} />
-            {isFetchingZoho ? 'Fetching...' : 'Fetch Live Zoho CRM'}
+            <RefreshCw size={18} className={`${isFetchingZoho ? 'animate-spin text-be-orange' : 'text-gray-500'}`} />
           </button>
 
           {canManage ? (
@@ -341,7 +355,7 @@ export const Documents = () => {
 
         <div className="text-xs text-gray-500 flex items-center gap-1.5">
           <Cloud size={14} className="text-be-orange" />
-          <span>Live attachments synchronized directly with Zoho CRM Employee module</span>
+          <span>Live attachments synchronized with employee profile</span>
         </div>
       </div>
 
@@ -421,7 +435,7 @@ export const Documents = () => {
                   <td colSpan={5} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
                     <FileText size={36} className="mx-auto text-gray-300 mb-2" />
                     <p className="font-bold text-gray-700">No documents found on record.</p>
-                    <p className="text-xs text-gray-400 mt-1">Upload personal documents or click &quot;Fetch Live Zoho CRM&quot; to load files.</p>
+                    <p className="text-xs text-gray-400 mt-1">Upload personal documents or click &quot;Refresh&quot; to load files.</p>
                   </td>
                 </tr>
               )}
@@ -429,7 +443,7 @@ export const Documents = () => {
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-gray-500 bg-white rounded-2xl border border-gray-100">
                     <Loader2 size={32} className="mx-auto text-be-orange animate-spin mb-2" />
-                    <p className="font-bold text-gray-700">Fetching live documents from Zoho CRM...</p>
+                    <p className="font-bold text-gray-700">Fetching live documents from database...</p>
                   </td>
                 </tr>
               )}
@@ -444,7 +458,7 @@ export const Documents = () => {
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
               <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-50/50 to-white">
                 <h2 className="text-lg font-bold text-gray-900">Upload Personal Document</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Files will be saved in portal and synced directly to Zoho CRM Employee record.</p>
+                <p className="text-xs text-gray-500 mt-0.5">Files will be saved in portal and synced to employee profile.</p>
               </div>
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
                 {canManage && (
@@ -499,7 +513,7 @@ export const Documents = () => {
                         <Loader2 size={16} className="animate-spin mr-2" /> Uploading...
                       </>
                     ) : (
-                      'Save & Sync to Zoho'
+                      'Save Document'
                     )}
                   </button>
                 </div>
@@ -508,6 +522,17 @@ export const Documents = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, doc: null, isDeleting: false })}
+        onConfirm={confirmDeleteDoc}
+        title="Delete Document"
+        itemName={deleteTarget.doc?.title}
+        message={deleteTarget.doc ? `Are you sure you want to delete "${deleteTarget.doc.title}"?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

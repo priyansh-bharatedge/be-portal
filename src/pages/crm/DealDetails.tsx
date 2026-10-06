@@ -183,7 +183,7 @@ export const DealDetails = () => {
       <div className="p-16 text-center text-gray-500 bg-white rounded-2xl border border-gray-100 shadow-sm max-w-lg mx-auto my-12">
         <Loader2 className="w-10 h-10 text-be-orange animate-spin mx-auto mb-4" />
         <h2 className="text-lg font-bold text-gray-900 mb-1">Loading Deal Details</h2>
-        <p className="text-xs text-gray-500">Retrieving deal #{id} from portal storage and Zoho CRM...</p>
+        <p className="text-xs text-gray-500">Retrieving deal #{id} from storage and cloud database...</p>
       </div>
     );
   }
@@ -195,7 +195,7 @@ export const DealDetails = () => {
           !
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">Deal Not Found</h2>
-        <p className="text-sm text-gray-500 mb-6">The deal record "{id}" does not exist in local portal cache or could not be loaded from Zoho CRM.</p>
+        <p className="text-sm text-gray-500 mb-6">The deal record "{id}" does not exist in local portal cache or could not be loaded from cloud database.</p>
         <div className="flex justify-center gap-3">
           <button 
             onClick={() => loadLiveDeal(id || '')} 
@@ -668,10 +668,10 @@ export const DealDetails = () => {
       if (targetZohoId) {
         const res = await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
         if (res.success) {
-          setUploadToast({ type: 'success', message: `"${file.name}" uploaded to Zoho CRM successfully!` });
+          setUploadToast({ type: 'success', message: `"${file.name}" uploaded successfully!` });
           await loadAttachments(targetZohoId);
         } else {
-          setUploadToast({ type: 'error', message: res.message || 'Failed to upload document to Zoho CRM.' });
+          setUploadToast({ type: 'error', message: res.message || 'Failed to upload document.' });
         }
       } else {
         const docId = `${deal?.id || id || 'deal'}_${Date.now()}_${file.name}`;
@@ -710,12 +710,6 @@ export const DealDetails = () => {
           <div>
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">{deal.id}</h1>
-              {deal.zohoId && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Cloud size={12} className="mr-1 text-emerald-600" />
-                  Zoho #{String(deal.zohoId).slice(-6)}
-                </span>
-              )}
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                 deal.status === 'Won' ? 'bg-emerald-100 text-emerald-800' : 
                 deal.status === 'Negotiation' ? 'bg-blue-100 text-blue-800' :
@@ -738,10 +732,10 @@ export const DealDetails = () => {
             onClick={() => loadLiveDeal(deal?.zohoId || id || '')}
             disabled={isRefreshing}
             className="flex items-center px-3.5 py-2 text-sm font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl transition-all shadow-xs disabled:opacity-60"
-            title="Refresh latest live deal fields from Zoho CRM"
+            title="Refresh latest live deal fields"
           >
             <RefreshCw size={15} className={`mr-1.5 text-be-orange ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Syncing...' : 'Sync from Zoho'}
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           <button 
             onClick={() => navigate('/crm/deals')} 
@@ -769,7 +763,7 @@ export const DealDetails = () => {
                 <Building2 size={18} className="mr-2 text-be-orange" />
                 Client & Company Details
               </span>
-              <span className="text-xs font-normal text-gray-400">Zoho CRM Synchronized</span>
+              <span className="text-xs font-normal text-gray-400">Synchronized</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Client Info */}
@@ -1322,7 +1316,7 @@ export const DealDetails = () => {
                       {zohoAttachments.length + (deal.documentsData?.length || 0)}
                     </span>
                   </h2>
-                  <p className="text-[11px] text-gray-400">Live synchronized with Zoho CRM Deals Attachments</p>
+                  <p className="text-[11px] text-gray-400">Live synchronized with deal attachments</p>
                 </div>
               </div>
 
@@ -1362,7 +1356,7 @@ export const DealDetails = () => {
                   }}
                   disabled={loadingAttachments}
                   className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
-                  title="Refresh attachments from Zoho CRM"
+                  title="Refresh attachments"
                 >
                   <RefreshCw size={14} className={loadingAttachments ? 'animate-spin text-be-orange' : ''} />
                 </button>
@@ -1450,7 +1444,7 @@ export const DealDetails = () => {
                         </div>
                         <div className="mt-1 flex items-center gap-1">
                           <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/60">
-                            <Cloud size={10} className="mr-1" /> Zoho CRM
+                            <Cloud size={10} className="mr-1" /> Cloud
                           </span>
                         </div>
                       </div>
@@ -1557,7 +1551,7 @@ export const DealDetails = () => {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-gray-700">No attachments found for this deal</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">Upload invoices, payment proofs, agreements, or PAN/GST certificates to sync with Zoho CRM.</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">Upload invoices, payment proofs, agreements, or PAN/GST certificates.</p>
                 </div>
                 <button
                   type="button"
@@ -1819,7 +1813,7 @@ export const DealDetails = () => {
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-gray-400">Sync Source:</span>
-                <span className="font-medium text-gray-800">{deal.source || 'Zoho CRM'}</span>
+                <span className="font-medium text-gray-800">{deal.source || 'Cloud'}</span>
               </div>
             </div>
           </div>

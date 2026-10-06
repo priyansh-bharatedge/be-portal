@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink, Users, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
@@ -19,6 +19,7 @@ import {
   fetchSalesEmployees
 } from '../../services/zohoService';
 import { Pagination } from '../../components/ui/Pagination';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 import { Layers, DownloadCloud } from 'lucide-react';
 
 interface DealService {
@@ -30,14 +31,100 @@ interface DealService {
 
 export const Deals = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser, filterRecords } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
   const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
-  const [activeTab, setActiveTab] = useState('All Deals');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = searchParams.get('tab') || location.state?.tab;
+    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals') return tabParam;
+    return 'All Deals';
+  });
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
+  const [quickFilter, setQuickFilter] = useState<string>(() => searchParams.get('filter') || location.state?.filter || 'all');
+  const [statusFilter, setStatusFilter] = useState<string>(() => searchParams.get('status') || location.state?.status || 'all');
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; deal: any | null; isDeleting: boolean }>({
+    isOpen: false,
+    deal: null,
+    isDeleting: false
+  });
+
+  // Sync state with URL params and navigation state
+  useEffect(() => {
+    const tabParam = searchParams.get('tab') || location.state?.tab;
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+    const searchParam = searchParams.get('search') || location.state?.search;
+    if (searchParam !== null && searchParam !== undefined) {
+      setSearchQuery(searchParam);
+    }
+    const filterParam = searchParams.get('filter') || location.state?.filter;
+    if (filterParam) {
+      setQuickFilter(filterParam);
+    }
+    const statusParam = searchParams.get('status') || location.state?.status;
+    if (statusParam) {
+      setStatusFilter(statusParam);
+    }
+  }, [searchParams, location.state]);
+
+  const isDealToday = (d: any): boolean => {
+    if (!d) return false;
+    const now = new Date();
+    const todayYMD = now.toISOString().split('T')[0];
+    const todayDMY = now.toLocaleDateString('en-GB');
+    const raw = String(d.rawDate || d.date || d.Booking_Date || d.Closing_Date || '');
+    if (!raw) return false;
+    if (raw.includes(todayYMD) || raw.includes(todayDMY)) return true;
+    try {
+      const dt = new Date(raw);
+      if (!isNaN(dt.getTime())) {
+        return dt.getDate() === now.getDate() && dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear();
+      }
+    } catch (e) { }
+    return false;
+  };
+
+  const isDealThisMonth = (d: any): boolean => {
+    if (!d) return false;
+    const now = new Date();
+    const currentMonthIdx = now.getMonth();
+    const currentYear = now.getFullYear();
+    const raw = String(d.rawDate || d.date || d.Booking_Date || d.Closing_Date || '');
+    if (!raw) return false;
+    try {
+      const parts = raw.split('/');
+      if (parts.length === 3) {
+        const m = parseInt(parts[1], 10) - 1;
+        const y = parseInt(parts[2], 10);
+        if (m === currentMonthIdx && (!y || y === currentYear)) return true;
+      }
+      const dt = new Date(raw);
+      if (!isNaN(dt.getTime())) {
+        return dt.getMonth() === currentMonthIdx && dt.getFullYear() === currentYear;
+      }
+    } catch (e) { }
+    return false;
+  };
+
+  const isDealFromQuotation = (d: any): boolean => {
+    if (!d) return false;
+    return Boolean(
+      d.source === 'Quotation' ||
+      d.quotationId ||
+      (d.id && String(d.id).startsWith('DL-QT')) ||
+      d.isConvertedFromQuotation ||
+      d.fromQuotation ||
+      d.quotationNumber ||
+      d.rawZohoDeal?.Quotation_Number ||
+      d.rawZohoDeal?.Quotation_Id
+    );
+  };
 
   // Zoho CRM states
   const [deals, setDeals] = useState<any[]>(() => {
@@ -682,8 +769,17 @@ export const Deals = () => {
           // For Team Member, Team Leader, HOD: immediately fetch live scoped deals from Zoho CRM using RBAC lookup criteria
           handleFetchFromZoho(false);
         } else if (count < 10480 || hasZeroAmounts) {
-          // If fresh, incomplete (< 10,480), or cached with ₹0, automatically stream fresh records with real amounts
-          handleFetchAllBatchesFromZoho(false, count < 10480 || hasZeroAmounts);
+          // 1. Fetch first batch immediately (< 1s) so table appears instantly
+          handleFetchFromZoho(false).then(() => {
+            if (isMounted) {
+              // 2. Silently stream remaining batches in the background without blocking the UI
+              setTimeout(() => {
+                if (isMounted) {
+                  handleFetchAllBatchesFromZoho(false, false);
+                }
+              }, 1200);
+            }
+          });
         } else {
           // Otherwise fetch latest updates for page 1
           handleFetchFromZoho(false);
@@ -722,24 +818,38 @@ export const Deals = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, quickFilter, statusFilter]);
 
   // Set of deals currently being enriched or already enriched in this session
   const enrichingDealsRef = useRef<Set<string>>(new Set());
 
   // 1. Auto-enrich visible deals on the active page that have ₹0 amounts
   useEffect(() => {
-    // Filter deals based on activeTab and searchQuery to get active page slice
+    // Filter deals based on activeTab, quickFilter, statusFilter and searchQuery to get active page slice
     const filtered = deals.filter(deal => {
-      if (activeTab === 'Manual Deals' && deal.source === 'Zoho CRM') return false;
-      if (activeTab === 'From Quotations' && deal.source !== 'Quotation' && !deal.quotationId) return false;
+      const isFromQt = isDealFromQuotation(deal);
+      if (activeTab === 'Manual Deals' && isFromQt) return false;
+      if (activeTab === 'From Quotations' && !isFromQt) return false;
+      if (quickFilter === 'today' && !isDealToday(deal)) return false;
+      if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
+      if (quickFilter === 'pending' && getDealPending(deal) <= 0) return false;
+      if (statusFilter && statusFilter !== 'all') {
+        const s = String(deal.status || deal.stage || '').toLowerCase();
+        if (!s.includes(statusFilter.toLowerCase())) return false;
+      }
       if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const matchClient = deal.client && (deal.client ?? '').toLowerCase().includes(q);
-        const matchCompany = deal.company && (deal.company ?? '').toLowerCase().includes(q);
-        const matchService = deal.service && (deal.service ?? '').toLowerCase().includes(q);
-        const matchId = deal.id && (deal.id ?? '').toLowerCase().includes(q);
-        if (!matchClient && !matchCompany && !matchService && !matchId) return false;
+        const q = searchQuery.toLowerCase().trim();
+        const matchClient = deal.client && String(deal.client).toLowerCase().includes(q);
+        const matchCompany = deal.company && String(deal.company).toLowerCase().includes(q);
+        const matchService = deal.service && String(deal.service).toLowerCase().includes(q);
+        const matchId = deal.id && String(deal.id).toLowerCase().includes(q);
+        const matchZohoId = deal.zohoId && String(deal.zohoId).toLowerCase().includes(q);
+        const matchOwner = deal.owner && String(deal.owner).toLowerCase().includes(q);
+        const matchEmpName = (deal.employeeName || deal.salesEmployee) && String(deal.employeeName || deal.salesEmployee).toLowerCase().includes(q);
+        const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
+        const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
+        const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
+        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchStatus && !matchAmount && !matchEmpCode) return false;
       }
       return true;
     });
@@ -1128,7 +1238,7 @@ export const Deals = () => {
 
           setToast({
             type: 'success',
-            message: isEditing ? 'Deal Updated & Synced to Zoho CRM!' : 'Deal, Client & Company Synced to Zoho CRM!',
+            message: isEditing ? 'Deal Updated Successfully!' : 'Deal, Client & Company Saved Successfully!',
             submessage: syncSummary
           });
         } else {
@@ -1136,8 +1246,8 @@ export const Deals = () => {
           dealData.zohoError = zohoRes.message;
           setToast({
             type: 'error',
-            message: `Deal Saved Locally (Zoho ${isEditing ? 'Update' : 'Sync'} Failed)`,
-            submessage: zohoRes.message || 'Check Zoho CRM credentials or field requirements'
+            message: `Deal Saved Locally (Sync Failed)`,
+            submessage: zohoRes.message || 'Check field requirements'
           });
         }
       } catch (zErr: any) {
@@ -1146,8 +1256,8 @@ export const Deals = () => {
         dealData.zohoError = zErr?.message || 'Sync failed';
         setToast({
           type: 'error',
-          message: `Deal Saved Locally (Zoho ${isEditing ? 'Update' : 'Sync'} Error)`,
-          submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+          message: `Deal Saved Locally (Sync Error)`,
+          submessage: zErr?.message || 'Failed to communicate with server'
         });
       }
 
@@ -1187,9 +1297,17 @@ export const Deals = () => {
     }
   };
 
-  const handleDeleteDeal = async (deal: any) => {
+  const handleDeleteDeal = (deal: any) => {
+    setDeleteTarget({ isOpen: true, deal, isDeleting: false });
+  };
+
+  const confirmDeleteDeal = async () => {
+    const deal = deleteTarget.deal;
+    if (!deal) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
     const dealName = deal.formData?.clientName || deal.client || deal.id;
-    if (confirm(`Are you sure you want to delete deal "${dealName}"?`)) {
+
+    try {
       const newDealsList = deals.filter((d: any) => d.id !== deal.id);
       setDeals(newDealsList);
       safeSaveDealsToStorage(newDealsList);
@@ -1201,21 +1319,21 @@ export const Deals = () => {
             setToast({
               type: 'success',
               message: `Deal "${dealName}" Deleted`,
-              submessage: `Record has been deleted successfully from Zoho CRM (ID: #${deal.zohoId})`
+              submessage: `Record has been deleted successfully (ID: #${deal.zohoId})`
             });
           } else {
             setToast({
               type: 'error',
-              message: `Deal Deleted Locally (Zoho Delete Failed)`,
-              submessage: zohoRes.message || 'Failed to delete record from Zoho CRM'
+              message: `Deal Deleted Locally (Delete Failed)`,
+              submessage: zohoRes.message || 'Failed to delete record'
             });
           }
         } catch (zErr: any) {
           console.error('[Zoho CRM] Delete error:', zErr);
           setToast({
             type: 'error',
-            message: `Deal Deleted Locally (Zoho Delete Error)`,
-            submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+            message: `Deal Deleted Locally (Delete Error)`,
+            submessage: zErr?.message || 'Failed to communicate with server'
           });
         }
       } else {
@@ -1225,6 +1343,8 @@ export const Deals = () => {
           submessage: 'Record has been deleted successfully'
         });
       }
+    } finally {
+      setDeleteTarget({ isOpen: false, deal: null, isDeleting: false });
     }
   };
 
@@ -1350,8 +1470,8 @@ export const Deals = () => {
         safeSaveDealsToStorage(updatedList);
         setToast({
           type: 'success',
-          message: `Deal Synced to Zoho CRM!`,
-          submessage: `Zoho Record ID: #${zohoRes.zohoId}`
+          message: `Deal Synced Successfully!`,
+          submessage: `Record ID: #${zohoRes.zohoId}`
         });
       } else {
         const updatedList = deals.map((d: any) => 
@@ -1361,15 +1481,15 @@ export const Deals = () => {
         safeSaveDealsToStorage(updatedList);
         setToast({
           type: 'error',
-          message: `Zoho CRM Sync Failed`,
+          message: `Deal Sync Failed`,
           submessage: zohoRes.message || 'Please check field requirements or authentication'
         });
       }
     } catch (err: any) {
       setToast({
         type: 'error',
-        message: `Zoho CRM Sync Error`,
-        submessage: err?.message || 'Failed to communicate with Zoho CRM'
+        message: `Deal Sync Error`,
+        submessage: err?.message || 'Failed to communicate with server'
       });
     } finally {
       setSyncingId(null);
@@ -1736,7 +1856,7 @@ export const Deals = () => {
         salesEmployee: employeeName || (existingIdx >= 0 ? updatedDeals[existingIdx]?.salesEmployee : ''),
         empId: empCode,
         date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (zDeal.Booking_Date ? new Date(zDeal.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingIdx >= 0 ? updatedDeals[existingIdx]?.date : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))),
-        source: (existingIdx >= 0 ? updatedDeals[existingIdx]?.source : 'Zoho CRM') || 'Zoho CRM',
+        source: (existingIdx >= 0 ? updatedDeals[existingIdx]?.source : 'Cloud') || 'Cloud',
         hasPartnerBdm,
         has_partner_bdm: hasPartnerBdm,
         partnerBdmId,
@@ -1812,7 +1932,7 @@ export const Deals = () => {
           doi: '',
           email: contactEmail,
           status: 'Active',
-          source: 'From Deals (Zoho)',
+          source: 'From Deals',
           addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           zohoStatus: 'synced'
         });
@@ -1829,7 +1949,7 @@ export const Deals = () => {
           email: contactEmail,
           phone: contactPhone,
           status: 'Active',
-          source: 'From Deals (Zoho)',
+          source: 'From Deals',
           addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           zohoStatus: 'synced'
         });
@@ -1936,7 +2056,7 @@ export const Deals = () => {
       if (showToast && !cancelSyncRef.current) {
         setToast({
           type: 'success',
-          message: `All Zoho Deals Synced (${currentDeals.length.toLocaleString()} records)`,
+          message: `All Deals Synced (${currentDeals.length.toLocaleString()} records)`,
           submessage: `Total ${currentDeals.length.toLocaleString()} deals are now stored in local IndexedDB with instant search and pagination.`
         });
       }
@@ -1945,7 +2065,7 @@ export const Deals = () => {
         setToast({
           type: 'error',
           message: 'Sync Interrupted',
-          submessage: e?.message || 'Failed to sync all records from Zoho CRM'
+          submessage: e?.message || 'Failed to sync all records'
         });
       }
     } finally {
@@ -1963,8 +2083,8 @@ export const Deals = () => {
           if (showNotification) {
             setToast({
               type: 'info',
-              message: 'No Deals in Zoho CRM',
-              submessage: 'Zoho Deals endpoint returned 0 records'
+              message: 'No Deals Found',
+              submessage: 'Server returned 0 records'
             });
           }
           return;
@@ -1985,15 +2105,15 @@ export const Deals = () => {
         if (showNotification) {
           setToast({
             type: 'success',
-            message: 'Zoho Deals Synchronized',
-            submessage: `Fetched latest ${result.data.length} records from Zoho CRM (Total in portal: ${updatedDeals.length.toLocaleString()})`
+            message: 'Deals Synchronized',
+            submessage: `Fetched latest ${result.data.length} records (Total in portal: ${updatedDeals.length.toLocaleString()})`
           });
         }
       } else if (showNotification) {
         setToast({
           type: 'error',
           message: 'Fetch Error',
-          submessage: result.message || 'Could not communicate with Zoho CRM endpoint'
+          submessage: result.message || 'Could not communicate with server endpoint'
         });
       }
     } catch (err: any) {
@@ -2001,7 +2121,7 @@ export const Deals = () => {
         setToast({
           type: 'error',
           message: 'Fetch Error',
-          submessage: err?.message || 'Could not communicate with Zoho CRM endpoint'
+          submessage: err?.message || 'Could not communicate with server endpoint'
         });
       }
     } finally {
@@ -2050,13 +2170,8 @@ export const Deals = () => {
             <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
               {rbacDeals.length.toLocaleString()} Deals
             </span>
-            {hasMoreZohoRecords && (
-              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-semibold text-xs rounded-full border border-blue-200 animate-pulse">
-                More in Zoho CRM
-              </span>
-            )}
           </div>
-          <p className="text-sm text-gray-500 mt-1">Manage all active deals with live Zoho CRM synchronization and pagination.</p>
+          <p className="text-sm text-gray-500 mt-1">Manage all active deals with live synchronization and pagination.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="relative">
@@ -2073,30 +2188,10 @@ export const Deals = () => {
           <button
             onClick={() => handleFetchFromZoho(true)}
             disabled={isFetchingZoho || isFetchingBatch}
-            className="flex items-center px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm hover:shadow disabled:opacity-60"
-            title="Fetch and sync live deals from Zoho CRM"
+            className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm hover:shadow disabled:opacity-60 shrink-0"
+            title="Refresh & Sync"
           >
-            <RefreshCw size={15} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
-            {isFetchingZoho ? 'Fetching...' : 'Fetch Zoho CRM'}
-          </button>
-
-          <button
-            onClick={() => handleFetchAllBatchesFromZoho(true, true)}
-            disabled={isFetchingBatch || isFetchingZoho}
-            className="flex items-center px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg text-sm font-semibold hover:from-orange-600 hover:to-amber-600 transition-all shadow-sm hover:shadow disabled:opacity-60"
-            title="Sequentially fetch all 10,000+ historical deals from Zoho CRM in batches with real amounts"
-          >
-            {isFetchingBatch ? (
-              <>
-                <Loader2 size={15} className="mr-2 animate-spin" />
-                <span>Syncing ({batchProgress?.loaded.toLocaleString() || 0})...</span>
-              </>
-            ) : (
-              <>
-                <DownloadCloud size={15} className="mr-2" />
-                <span>Sync All Deals</span>
-              </>
-            )}
+            <RefreshCw size={16} className={`text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
           </button>
 
           <button
@@ -2157,11 +2252,15 @@ export const Deals = () => {
         </motion.div>
       )}
 
-      <div className="flex border-b border-gray-200 mb-6">
+      <div className="flex border-b border-gray-200 mb-4">
         {['All Deals', 'Manual Deals', 'From Quotations'].map(tab => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => {
+              setActiveTab(tab);
+              // Clear quick filter if manually switching tabs
+              if (quickFilter !== 'all') setQuickFilter('all');
+            }}
             className={`px-6 py-3 font-medium text-sm transition-colors relative ${activeTab === tab ? 'text-be-orange' : 'text-gray-500 hover:text-gray-700'}`}
           >
             {tab}
@@ -2172,12 +2271,65 @@ export const Deals = () => {
         ))}
       </div>
 
-      
+      {/* Active Filters Bar */}
+      {(activeTab !== 'All Deals' || searchQuery || (quickFilter && quickFilter !== 'all') || (statusFilter && statusFilter !== 'all')) && (
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-orange-50/80 via-amber-50/50 to-orange-50/80 border border-orange-200/80 rounded-2xl mb-4 text-xs shadow-xs">
+          <span className="font-bold text-gray-700 flex items-center mr-1">
+            <Filter size={13} className="text-be-orange mr-1.5" />
+            Active Filter:
+          </span>
+          {activeTab !== 'All Deals' && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-orange-200 text-be-orange font-extrabold shadow-xs">
+              Tab: {activeTab}
+              <button onClick={() => setActiveTab('All Deals')} className="ml-1.5 hover:text-gray-900 transition-colors"><X size={12} /></button>
+            </span>
+          )}
+          {quickFilter && quickFilter !== 'all' && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-amber-300 text-amber-800 font-extrabold shadow-xs">
+              {quickFilter === 'today' ? "📅 Today's Booked Deals" : quickFilter === 'this_month' ? "🗓️ This Month's Deals" : quickFilter === 'pending' ? "⏳ Pending Amount Deals" : quickFilter}
+              <button onClick={() => setQuickFilter('all')} className="ml-1.5 hover:text-gray-900 transition-colors"><X size={12} /></button>
+            </span>
+          )}
+          {statusFilter && statusFilter !== 'all' && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-blue-300 text-blue-800 font-extrabold shadow-xs">
+              Status: {statusFilter}
+              <button onClick={() => setStatusFilter('all')} className="ml-1.5 hover:text-gray-900 transition-colors"><X size={12} /></button>
+            </span>
+          )}
+          {searchQuery && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-purple-300 text-purple-800 font-extrabold shadow-xs">
+              Search: "{searchQuery}"
+              <button onClick={() => setSearchQuery('')} className="ml-1.5 hover:text-gray-900 transition-colors"><X size={12} /></button>
+            </span>
+          )}
+          <button
+            onClick={() => {
+              setActiveTab('All Deals');
+              setSearchQuery('');
+              setQuickFilter('all');
+              setStatusFilter('all');
+              navigate('/crm/deals', { replace: true, state: {} });
+            }}
+            className="ml-auto text-xs font-bold text-gray-500 hover:text-rose-600 underline transition-colors px-2 py-0.5"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      )}
+
       {/* Deals Table */}
       {(() => {
         const filteredDeals = rbacDeals.filter((deal: any) => {
-          if (activeTab === 'Manual Deals' && deal.source === 'Quotation') return false;
-          if (activeTab === 'From Quotations' && deal.source !== 'Quotation') return false;
+          const isFromQt = isDealFromQuotation(deal);
+          if (activeTab === 'Manual Deals' && isFromQt) return false;
+          if (activeTab === 'From Quotations' && !isFromQt) return false;
+          if (quickFilter === 'today' && !isDealToday(deal)) return false;
+          if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
+          if (quickFilter === 'pending' && getDealPending(deal) <= 0) return false;
+          if (statusFilter && statusFilter !== 'all') {
+            const s = String(deal.status || deal.stage || '').toLowerCase();
+            if (!s.includes(statusFilter.toLowerCase())) return false;
+          }
           if (searchQuery) {
             const q = searchQuery.toLowerCase().trim();
             const matchClient = deal.client && String(deal.client).toLowerCase().includes(q);
@@ -2200,10 +2352,10 @@ export const Deals = () => {
         const paginatedDeals = filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
         return (
-          <div className="bg-transparent overflow-hidden mt-6">
-            <div className="overflow-x-auto pb-2">
-              <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-y-3">
-                <thead className="bg-transparent text-gray-500 font-bold uppercase tracking-wider text-xs">
+          <div className="bg-transparent mt-6">
+            <div className="overflow-x-auto overflow-y-auto pb-2 -mx-1 px-1">
+              <table className="min-w-full text-left text-sm whitespace-nowrap border-separate border-spacing-y-3">
+                <thead className="sticky top-0 z-10 bg-white text-gray-500 font-bold uppercase tracking-wider text-xs shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08)]">
                   <tr>
                     <th className="px-6 py-3">Deal ID</th>
                     <th className="px-6 py-3">Client</th>
@@ -2213,7 +2365,6 @@ export const Deals = () => {
                     <th className="px-6 py-3">Received</th>
                     <th className="px-6 py-3">Pending</th>
                     <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3">Zoho Sync</th>
                     <th className="px-6 py-3">Owner</th>
                     <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
@@ -2247,36 +2398,6 @@ export const Deals = () => {
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(deal.status)}`}>
                           {deal.status}
                         </span>
-                      </td>
-                      <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
-                        <div className="flex items-center space-x-2">
-                          {deal.zohoStatus === 'synced' ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              <Cloud className="w-3 h-3 mr-1 text-emerald-600" />
-                              Synced {deal.zohoId ? `#${String(deal.zohoId).slice(-4)}` : ''}
-                            </span>
-                          ) : deal.zohoStatus === 'failed' ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200" title={deal.zohoError}>
-                              <AlertCircle className="w-3 h-3 mr-1 text-rose-600" />
-                              Failed
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                              <Cloud className="w-3 h-3 mr-1 text-amber-600 opacity-60" />
-                              Pending
-                            </span>
-                          )}
-                          {deal.zohoStatus !== 'synced' && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleManualSyncDeal(deal); }}
-                              disabled={syncingId === deal.id}
-                              className="p-1 hover:bg-orange-100 text-orange-600 rounded transition-colors"
-                              title="Retry sync with Zoho CRM"
-                            >
-                              <RefreshCw size={12} className={syncingId === deal.id ? 'animate-spin' : ''} />
-                            </button>
-                          )}
-                        </div>
                       </td>
                       <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">
                         <div className="flex items-center space-x-2">
@@ -2329,12 +2450,12 @@ export const Deals = () => {
                         {isFetchingZoho ? (
                           <div className="flex flex-col items-center justify-center py-4">
                             <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
-                            <p className="text-sm font-semibold text-gray-800">Fetching live deals from Zoho CRM...</p>
+                            <p className="text-sm font-semibold text-gray-800">Fetching live deals...</p>
                           </div>
                         ) : (
                           <>
                             <p className="text-lg font-medium text-gray-900">No deals found</p>
-                            <p className="text-xs text-gray-400 mt-1">Create a new deal or fetch live records from Zoho CRM.</p>
+                            <p className="text-xs text-gray-400 mt-1">Create a new deal or refresh live records.</p>
                           </>
                         )}
                       </td>
@@ -2726,10 +2847,10 @@ export const Deals = () => {
                                     type="button"
                                     onClick={() => loadSalesEmployees()}
                                     className="text-[11px] text-be-orange hover:text-orange-700 flex items-center gap-1 font-semibold transition-colors"
-                                    title="Refresh Sales BDMs from Zoho CRM"
+                                    title="Refresh Sales BDMs"
                                   >
                                     <RefreshCw size={11} className={isLoadingSalesEmployees ? 'animate-spin' : ''} />
-                                    {isLoadingSalesEmployees ? 'Syncing...' : 'Sync Zoho'}
+                                    {isLoadingSalesEmployees ? 'Syncing...' : 'Refresh'}
                                   </button>
                                 </div>
                                 <select
@@ -2743,7 +2864,7 @@ export const Deals = () => {
                                   className={`w-full px-3 py-2 bg-white border rounded-lg text-sm font-medium text-gray-800 outline-none focus:ring-2 focus:ring-be-orange ${formErrors.partnerBdm ? 'border-red-500' : 'border-gray-300'}`}
                                 >
                                   <option value="">
-                                    {isLoadingSalesEmployees ? 'Syncing Sales BDMs from Zoho CRM...' : 'Select Sales Partner BDM...'}
+                                    {isLoadingSalesEmployees ? 'Syncing Sales BDMs...' : 'Select Sales Partner BDM...'}
                                   </option>
                                   {eligiblePartnerBdms.map(emp => (
                                     <option key={emp.id || emp.zohoId || emp.empId} value={emp.id || emp.zohoId || emp.empId}>
@@ -2913,6 +3034,17 @@ export const Deals = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, deal: null, isDeleting: false })}
+        onConfirm={confirmDeleteDeal}
+        title="Delete Deal"
+        itemName={deleteTarget.deal ? (deleteTarget.deal.formData?.clientName || deleteTarget.deal.client || deleteTarget.deal.id) : undefined}
+        message={deleteTarget.deal ? `Are you sure you want to delete deal "${deleteTarget.deal.formData?.clientName || deleteTarget.deal.client || deleteTarget.deal.id}"?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

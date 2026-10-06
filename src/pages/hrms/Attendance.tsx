@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import {
   Search,
   Calendar as CalendarIcon,
@@ -48,6 +49,44 @@ import {
   type ZohoAttendancePayload
 } from '../../services/zohoService';
 
+
+// ── Safe localStorage helper ─────────────────────────────────────────────────
+// Keeps only the latest MAX_STORED_DAYS days of records to prevent QuotaExceededError.
+const MAX_STORED_DAYS = 180;
+function saveAttendanceSafely(records: AttendanceItem[]): void {
+  try {
+    // Trim to most recent MAX_STORED_DAYS unique dates
+    const uniqueDates = [...new Set(records.map(r => r.date).filter(Boolean))]
+      .sort()
+      .reverse()
+      .slice(0, MAX_STORED_DAYS);
+    const dateSet = new Set(uniqueDates);
+    const trimmed = records.filter(r => dateSet.has(r.date));
+    localStorage.setItem('be_attendance', JSON.stringify(trimmed));
+  } catch (err: any) {
+    if (err?.name === 'QuotaExceededError' || err?.code === 22) {
+      console.warn('[Attendance] localStorage quota exceeded — clearing old data and retrying.');
+      try {
+        // Emergency: keep only last 30 days
+        const last30 = [...new Set(records.map(r => r.date).filter(Boolean))]
+          .sort()
+          .reverse()
+          .slice(0, 30);
+        const dateSet30 = new Set(last30);
+        const minimal = records.filter(r => dateSet30.has(r.date));
+        localStorage.setItem('be_attendance', JSON.stringify(minimal));
+      } catch {
+        // If still failing, clear the key entirely to unblock the app
+        console.error('[Attendance] Could not save even minimal data — clearing storage key.');
+        localStorage.removeItem('be_attendance');
+      }
+    } else {
+      console.error('[Attendance] localStorage write error:', err);
+    }
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface AttendanceItem {
   id: string;
   zohoId?: string;
@@ -71,16 +110,29 @@ export interface AttendanceItem {
 }
 
 export const Attendance = () => {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { currentUser, isTM, isSuperAdmin, isHR, isTL, isHOD } = useAuth();
   const [records, setRecords] = useState<AttendanceItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [isAllDates, setIsAllDates] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const s = searchParams.get('status') || location.state?.status;
+    if (s && s !== 'ALL') return s;
+    return 'ALL';
+  });
   const [punchFilter, setPunchFilter] = useState('ALL');
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
+
+  useEffect(() => {
+    const s = searchParams.get('status') || location.state?.status;
+    if (s) setStatusFilter(s);
+    const q = searchParams.get('search') || location.state?.search;
+    if (q) setSearchQuery(q);
+  }, [searchParams, location.state]);
 
   // Edit / Log Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -206,7 +258,7 @@ export const Attendance = () => {
           });
 
           const merged = Array.from(keyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
-          localStorage.setItem('be_attendance', JSON.stringify(merged));
+          saveAttendanceSafely(merged);
           return merged;
         });
 
@@ -222,7 +274,7 @@ export const Attendance = () => {
         if (showNotification) {
           setToast({
             type: 'success',
-            message: `Synced ${res.data.length} Attendance Records from Zoho CRM`,
+            message: `Synced ${res.data.length} Attendance Records`,
             submessage: `Found records across ${uniqueDates.length} dates (Latest: ${uniqueDates[0] || 'N/A'})`
           });
         }
@@ -230,14 +282,14 @@ export const Attendance = () => {
         setToast({
           type: 'info',
           message: 'No Attendance Records Found',
-          submessage: res.message || 'No records returned from Zoho CRM module Daily_Attendance'
+          submessage: res.message || 'No attendance records returned from database'
         });
       }
     } catch (e: any) {
       if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Zoho CRM Sync Error',
+          message: 'Attendance Sync Error',
           submessage: e.message || 'Network communication error'
         });
       }
@@ -502,7 +554,7 @@ export const Attendance = () => {
 
     const updated = records.map(r => (r.id === item.id || (r.empId === item.empId && r.date === item.date)) ? updatedItem : r);
     setRecords(updated);
-    localStorage.setItem('be_attendance', JSON.stringify(updated));
+    saveAttendanceSafely(updated);
 
     // Push to Zoho CRM
     try {
@@ -527,18 +579,18 @@ export const Attendance = () => {
         setToast({
           type: 'success',
           message: `Updated ${item.empName} to ${newStatus}`,
-          submessage: 'Synced directly with Zoho CRM Daily_Attendance'
+          submessage: 'Synced directly with attendance database'
         });
         if (res.zohoId && !item.zohoId) {
           updatedItem.zohoId = res.zohoId;
           const fresh = records.map(r => r.id === item.id ? updatedItem : r);
           setRecords(fresh);
-          localStorage.setItem('be_attendance', JSON.stringify(fresh));
+          saveAttendanceSafely(fresh);
         }
       } else {
         setToast({
           type: 'error',
-          message: 'Saved locally, Zoho CRM update failed',
+          message: 'Saved locally (sync pending)',
           submessage: res.message
         });
       }
@@ -630,7 +682,7 @@ export const Attendance = () => {
         } else {
           updatedList = [savedItem, ...prev];
         }
-        localStorage.setItem('be_attendance', JSON.stringify(updatedList));
+        saveAttendanceSafely(updatedList);
         return updatedList;
       });
 
@@ -640,14 +692,14 @@ export const Attendance = () => {
       if (res.success) {
         setToast({
           type: 'success',
-          message: 'Attendance Saved & Synced with Zoho CRM',
+          message: 'Attendance Saved Successfully',
           submessage: `Record key: ${keyName}`
         });
       } else {
         setToast({
           type: 'info',
           message: 'Attendance Saved Locally',
-          submessage: res.message || 'Zoho CRM sync notice'
+          submessage: res.message || 'Attendance sync notice'
         });
       }
     } catch (err: any) {
@@ -691,7 +743,7 @@ export const Attendance = () => {
       'Late Minutes',
       'Early Out Minutes',
       'Punches Log',
-      'Zoho Record ID'
+      'Record ID'
     ];
 
     const rows = recordsToExport.map(r => [
@@ -811,10 +863,6 @@ export const Attendance = () => {
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">
               {isFullAdmin ? 'Daily Attendance Management' : isTeamLead ? 'Team Daily Attendance' : 'My Daily Attendance'}
             </h1>
-            <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-orange-50 text-be-orange border border-orange-200 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              {records.length} Records in Zoho CRM
-            </span>
           </div>
           <p className="text-gray-500 text-sm mt-1">
             {isFullAdmin
@@ -861,11 +909,10 @@ export const Attendance = () => {
           <button
             onClick={() => handleFetchAttendance(true, true)}
             disabled={isFetchingZoho}
-            className="px-4 py-2 border border-orange-200 bg-orange-50/70 hover:bg-orange-100 text-orange-950 rounded-xl text-xs font-bold flex items-center shadow-sm transition-all disabled:opacity-60"
-            title="Fetch all 450+ records directly from Zoho CRM Daily_Attendance module"
+            className="w-10 h-10 border border-orange-200 bg-orange-50/70 hover:bg-orange-100 text-orange-950 rounded-xl flex items-center justify-center shadow-sm transition-all disabled:opacity-60 shrink-0"
+            title="Refresh & Sync"
           >
-            <RefreshCw size={14} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
-            {isFetchingZoho ? 'Syncing...' : 'Sync Zoho CRM'}
+            <RefreshCw size={16} className={`text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
           </button>
 
           {/* Export CSV Button */}
@@ -1258,7 +1305,7 @@ export const Attendance = () => {
                     {isFetchingZoho ? (
                       <div className="flex flex-col items-center justify-center py-4">
                         <Loader2 className="w-8 h-8 animate-spin text-be-orange mb-3" />
-                        <p className="text-sm font-bold text-gray-900">Synchronizing Daily Attendance with Zoho CRM...</p>
+                        <p className="text-sm font-bold text-gray-900">Synchronizing Daily Attendance...</p>
                         <p className="text-xs text-gray-400 mt-1">Fetching records across all pages</p>
                       </div>
                     ) : (
@@ -1270,7 +1317,7 @@ export const Attendance = () => {
                         <p className="text-xs text-gray-400 mt-1 max-w-sm">
                           {availableDates.length > 0
                             ? `Found ${records.length} records on other dates (e.g. ${availableDates[0]?.date}). Click an available date button above or "All Dates".`
-                            : 'No attendance records stored yet. Click "Sync Zoho CRM" to load live records.'}
+                            : 'No attendance records stored yet. Click refresh to load live records.'}
                         </p>
                         <div className="mt-4 flex items-center space-x-3">
                           <button
@@ -1611,7 +1658,7 @@ export const Attendance = () => {
                       {editingRecord.id ? 'Edit Attendance Record' : 'Log Daily Attendance'}
                     </h3>
                     <p className="text-xs text-gray-500">
-                      Upserts into Zoho CRM module <code className="font-mono text-be-orange">Daily_Attendance</code>
+                      Upserts into attendance system
                     </p>
                   </div>
                 </div>
@@ -1816,7 +1863,7 @@ export const Attendance = () => {
                 <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-xl flex items-start space-x-2 text-xs text-blue-800">
                   <Info size={15} className="mt-0.5 shrink-0 text-blue-500" />
                   <p>
-                    Zoho CRM Key format: <span className="font-mono font-bold">{editingRecord.empId || 'EMP'} - {editingRecord.date || 'YYYY-MM-DD'}</span>. Existing entries will be updated without duplicates.
+                    Record Key format: <span className="font-mono font-bold">{editingRecord.empId || 'EMP'} - {editingRecord.date || 'YYYY-MM-DD'}</span>. Existing entries will be updated without duplicates.
                   </p>
                 </div>
 
@@ -1836,11 +1883,11 @@ export const Attendance = () => {
                   >
                     {isSaving ? (
                       <>
-                        <Loader2 size={14} className="mr-2 animate-spin" /> Saving to Zoho CRM...
+                        <Loader2 size={14} className="mr-2 animate-spin" /> Saving Attendance...
                       </>
                     ) : (
                       <>
-                        <Send size={14} className="mr-2" /> Save & Sync to Zoho
+                        <Send size={14} className="mr-2" /> Save & Sync
                       </>
                     )}
                   </button>

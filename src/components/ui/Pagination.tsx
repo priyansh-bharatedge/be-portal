@@ -68,17 +68,6 @@ export const Pagination: React.FC<PaginationProps> = ({
           <strong className="text-gray-900 font-bold">{endItem}</strong> of{' '}
           <strong className="text-gray-900 font-bold">{totalItems.toLocaleString()}</strong> {itemLabel}
         </span>
-
-        {hasMoreOnServer && onLoadMoreServer && (
-          <button
-            onClick={onLoadMoreServer}
-            disabled={isLoadingMoreServer}
-            className="inline-flex items-center px-2.5 py-1 text-xs font-semibold bg-orange-50 text-be-orange border border-orange-200 rounded-lg hover:bg-orange-100 transition-colors disabled:opacity-60"
-            title="Fetch next 200 records from Zoho CRM"
-          >
-            {isLoadingMoreServer ? 'Fetching next 200...' : '+ Load More from Zoho'}
-          </button>
-        )}
       </div>
 
       {/* Right side: Page navigation & per-page selector */}

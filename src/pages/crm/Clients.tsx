@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, Filter, X, UserCircle, Building2, Phone, Mail, Edit, Trash2, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import { Search, Plus, Filter, X, UserCircle, Building2, Phone, Mail, Edit, Trash2, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, CheckCircle2, Eye, Calendar, User, Shield, Tag } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Pagination } from '../../components/ui/Pagination';
 import { saveOrUpdateZohoClient, deleteZohoClient, insertZohoClient, fetchZohoClients } from '../../services/zohoService';
+import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 export interface Client {
   id: string;
@@ -34,12 +35,18 @@ export const Clients = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('All Clients');
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [viewingClient, setViewingClient] = useState<Client | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; client: Client | null; isDeleting: boolean }>({
+    isOpen: false,
+    client: null,
+    isDeleting: false
+  });
 
   const rbacClients = useMemo(() => {
     return filterRecords ? filterRecords(clients, 'Clients') : clients;
@@ -73,7 +80,7 @@ export const Clients = () => {
       } catch (e) {}
     }
 
-    // Auto-fetch live clients from Zoho CRM on mount
+    // Auto-fetch live clients from server on mount
     handleFetchZohoClients(false);
   }, []);
 
@@ -138,7 +145,7 @@ export const Clients = () => {
         Employee: editingClient?.Employee || (currentUser?.zohoId ? { id: currentUser.zohoId, name: currentUser.name } : undefined),
       };
 
-      // Sync to Zoho CRM Clients Module
+      // Sync to server Clients Module
       try {
         const zohoRes = await saveOrUpdateZohoClient(clientData);
         const finalZohoId = zohoRes.zohoId || clientData.zohoId;
@@ -151,16 +158,16 @@ export const Clients = () => {
 
           setToast({
             type: 'success',
-            message: editingClient ? 'Client Updated & Synced to Zoho CRM!' : 'Client Created & Synced to Zoho CRM!',
-            submessage: `${editingClient ? 'Updated' : 'Inserted'} in Zoho Clients module (ID: #${finalZohoId})`
+            message: editingClient ? 'Client Updated Successfully!' : 'Client Created Successfully!',
+            submessage: `${editingClient ? 'Updated' : 'Inserted'} in Clients module (ID: #${finalZohoId})`
           });
         } else {
           clientData.zohoStatus = 'failed';
           clientData.zohoError = zohoRes.message;
           setToast({
             type: 'error',
-            message: `Client Saved Locally (Zoho ${editingClient ? 'Update' : 'Sync'} Failed)`,
-            submessage: zohoRes.message || 'Check Zoho CRM credentials or module permissions'
+            message: `Client Saved Locally (Sync Failed)`,
+            submessage: zohoRes.message || 'Check network or module permissions'
           });
         }
       } catch (zErr: any) {
@@ -169,8 +176,8 @@ export const Clients = () => {
         clientData.zohoError = zErr?.message || 'Sync failed';
         setToast({
           type: 'error',
-          message: `Client Saved Locally (Zoho ${editingClient ? 'Update' : 'Sync'} Error)`,
-          submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+          message: `Client Saved Locally (Sync Error)`,
+          submessage: zErr?.message || 'Failed to communicate with server'
         });
       }
 
@@ -210,8 +217,8 @@ export const Clients = () => {
         saveToStorage(updatedList);
         setToast({
           type: 'success',
-          message: `Client "${client.name}" Synced to Zoho CRM!`,
-          submessage: `Zoho CRM Record #${res.zohoId}`
+          message: `Client "${client.name}" Synced Successfully!`,
+          submessage: `Record ID: #${res.zohoId}`
         });
       } else {
         const updatedList = clients.map(c => {
@@ -227,14 +234,14 @@ export const Clients = () => {
         saveToStorage(updatedList);
         setToast({
           type: 'error',
-          message: `Zoho Sync Failed for "${client.name}"`,
-          submessage: res.message || 'Check Zoho CRM field requirements'
+          message: `Sync Failed for "${client.name}"`,
+          submessage: res.message || 'Check field requirements'
         });
       }
     } catch (err: any) {
       setToast({
         type: 'error',
-        message: `Zoho Sync Error for "${client.name}"`,
+        message: `Sync Error for "${client.name}"`,
         submessage: err?.message || 'Network communication error'
       });
     } finally {
@@ -251,7 +258,7 @@ export const Clients = () => {
           if (showNotification) {
             setToast({
               type: 'info',
-              message: 'No Live Clients Found in Zoho CRM',
+              message: 'No Live Clients Found',
               submessage: 'Clients module returned 0 records'
             });
           }
@@ -267,7 +274,7 @@ export const Clients = () => {
           phone: r.Mobile_Number || '',
           secondaryEmail: r.Secondary_Email || '',
           status: (r.Status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
-          source: 'Zoho CRM',
+          source: 'Cloud',
           addedOn: r.Created_Time ? new Date(r.Created_Time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB'),
           zohoId: String(r.id),
           zohoStatus: 'synced',
@@ -305,22 +312,22 @@ export const Clients = () => {
         if (showNotification) {
           setToast({
             type: 'success',
-            message: `Fetched ${res.data.length} Clients from Zoho CRM!`,
+            message: `Fetched ${res.data.length} Clients successfully!`,
             submessage: `Live CRM data synchronized successfully`
           });
         }
       } else if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Failed to fetch clients from Zoho CRM',
-          submessage: res.message || 'Check connection or Zoho API rate limits'
+          message: 'Failed to fetch clients from server',
+          submessage: res.message || 'Check network connection or server limits'
         });
       }
     } catch (e: any) {
       if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Error connecting to Zoho CRM',
+          message: 'Error connecting to server',
           submessage: e.message || 'Network communication error'
         });
       }
@@ -329,41 +336,51 @@ export const Clients = () => {
     }
   };
 
-  const handleDelete = async (client: Client) => {
-    if (!confirm(`Are you sure you want to delete client "${client.name}"?`)) return;
+  const handleDelete = (client: Client) => {
+    setDeleteTarget({ isOpen: true, client, isDeleting: false });
+  };
 
-    saveToStorage(clients.filter(c => c.id !== client.id));
+  const confirmDeleteClient = async () => {
+    const client = deleteTarget.client;
+    if (!client) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
 
-    if (client.zohoId) {
-      try {
-        const zohoRes = await deleteZohoClient(client.zohoId);
-        if (zohoRes.success) {
-          setToast({
-            type: 'success',
-            message: `Client "${client.name}" Deleted`,
-            submessage: `Record #${client.zohoId} deleted from Zoho CRM`
-          });
-        } else {
+    try {
+      saveToStorage(clients.filter(c => c.id !== client.id));
+
+      if (client.zohoId) {
+        try {
+          const zohoRes = await deleteZohoClient(client.zohoId);
+          if (zohoRes.success) {
+            setToast({
+              type: 'success',
+              message: `Client "${client.name}" Deleted`,
+              submessage: `Record #${client.zohoId} deleted from server`
+            });
+          } else {
+            setToast({
+              type: 'error',
+              message: `Client Deleted Locally (Delete Failed)`,
+              submessage: zohoRes.message || 'Check record status'
+            });
+          }
+        } catch (zErr: any) {
+          console.error('[Zoho CRM] Client delete exception:', zErr);
           setToast({
             type: 'error',
-            message: `Client Deleted Locally (Zoho Delete Failed)`,
-            submessage: zohoRes.message || 'Check Zoho CRM record status'
+            message: `Client Deleted Locally (Delete Error)`,
+            submessage: zErr?.message || 'Failed to communicate with server'
           });
         }
-      } catch (zErr: any) {
-        console.error('[Zoho CRM] Client delete exception:', zErr);
+      } else {
         setToast({
-          type: 'error',
-          message: `Client Deleted Locally (Zoho Delete Error)`,
-          submessage: zErr?.message || 'Failed to communicate with Zoho CRM API'
+          type: 'success',
+          message: `Client "${client.name}" Deleted`,
+          submessage: 'Record has been removed locally'
         });
       }
-    } else {
-      setToast({
-        type: 'success',
-        message: `Client "${client.name}" Deleted`,
-        submessage: 'Record has been removed locally'
-      });
+    } finally {
+      setDeleteTarget({ isOpen: false, client: null, isDeleting: false });
     }
   };
 
@@ -391,7 +408,7 @@ export const Clients = () => {
     const source = c.source || 'Manual';
     if (activeTab === 'Manual Clients' && source !== 'Manual') return false;
     if (activeTab === 'From Deals' && source !== 'From Deals') return false;
-    if (activeTab === 'Zoho CRM' && source !== 'Zoho CRM') return false;
+    if (activeTab === 'Cloud Records' && source !== 'Cloud Records') return false;
     
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase().trim();
@@ -457,17 +474,16 @@ export const Clients = () => {
               {clients.length} Total
             </span>
           </div>
-          <p className="text-gray-500 text-sm mt-1">Manage customer database, contact information, and Zoho CRM sync.</p>
+          <p className="text-gray-500 text-sm mt-1">Manage customer database and contact information.</p>
         </div>
         <div className="flex items-center space-x-3">
           <button
             onClick={() => handleFetchZohoClients(true)}
             disabled={isFetchingZoho}
-            className="px-3.5 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-semibold flex items-center shadow-sm transition-all disabled:opacity-60"
-            title="Fetch live records from Zoho CRM Clients module"
+            className="w-10 h-10 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg flex items-center justify-center shadow-sm transition-all disabled:opacity-60 shrink-0"
+            title="Refresh & Sync from server"
           >
-            <RefreshCw size={16} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
-            {isFetchingZoho ? 'Fetching Zoho...' : 'Fetch Zoho CRM'}
+            <RefreshCw size={16} className={`text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
           </button>
           <button 
             onClick={() => setIsModalOpen(true)}
@@ -481,7 +497,7 @@ export const Clients = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-        {['All Clients', 'Manual Clients', 'From Deals', 'Zoho CRM'].map(tab => (
+        {['All Clients', 'Manual Clients', 'From Deals', 'Cloud Records'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -523,7 +539,6 @@ export const Clients = () => {
                 <th className="px-6 py-3">Contact Info</th>
                 <th className="px-6 py-3">Company</th>
                 <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Zoho CRM Sync</th>
                 <th className="px-6 py-3">Added On</th>
                 <th className="px-6 py-3 text-right">Actions</th>
               </tr>
@@ -567,40 +582,23 @@ export const Clients = () => {
                       {client.status || 'Active'}
                     </span>
                   </td>
-                  <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
-                    {client.zohoStatus === 'synced' || client.zohoId ? (
-                      <span 
-                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm"
-                        title={`Zoho Record ID: ${client.zohoId}`}
-                      >
-                        <Cloud size={13} className="mr-1.5 text-emerald-600" />
-                        <span>Zoho #{String(client.zohoId || '').slice(-6)}</span>
-                      </span>
-                    ) : client.zohoStatus === 'failed' ? (
-                      <span 
-                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-sm"
-                        title={client.zohoError || 'Sync failed'}
-                      >
-                        <CloudOff size={13} className="mr-1.5 text-rose-600" />
-                        <span>Sync Failed</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-sm">
-                        <CloudOff size={13} className="mr-1.5 text-amber-600" />
-                        <span>Local Only</span>
-                      </span>
-                    )}
-                  </td>
                   <td className="px-6 py-5 text-gray-600 font-medium whitespace-nowrap border-t border-b border-gray-100 group-hover:border-orange-100">
                     {client.addedOn}
                   </td>
                   <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100">
                     <div className="flex items-center justify-end space-x-2">
                       <button
+                        onClick={() => setViewingClient(client)}
+                        className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                        title="View Client Details"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      <button
                         onClick={() => handleSyncToZoho(client)}
                         disabled={syncingId === client.id}
                         className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors disabled:opacity-50"
-                        title={client.zohoId ? 'Re-sync to Zoho CRM' : 'Sync to Zoho CRM Clients Module'}
+                        title={client.zohoId ? 'Re-sync Record' : 'Sync Record'}
                       >
                         {syncingId === client.id ? <Loader2 size={16} className="animate-spin text-be-orange" /> : <RefreshCw size={16} />}
                       </button>
@@ -620,14 +618,14 @@ export const Clients = () => {
                     {isFetchingZoho ? (
                       <div className="flex flex-col items-center justify-center py-6">
                         <Loader2 className="w-8 h-8 animate-spin text-be-orange mb-3" />
-                        <p className="text-sm font-semibold text-gray-800">Fetching live client records from Zoho CRM...</p>
-                        <p className="text-xs text-gray-400 mt-1">Connecting to Zoho CRM API v8</p>
+                        <p className="text-sm font-semibold text-gray-800">Fetching live client records from server...</p>
+                        <p className="text-xs text-gray-400 mt-1">Connecting to server API v8</p>
                       </div>
                     ) : (
                       <>
                         <UserCircle size={48} className="mx-auto text-gray-300 mb-3" />
                         <p className="text-lg font-medium text-gray-900">No clients found</p>
-                        <p className="text-sm">Try adjusting your search query, fetch from Zoho CRM, or add a new client.</p>
+                        <p className="text-sm">Try adjusting your search query, fetch from server, or add a new client.</p>
                       </>
                     )}
                   </td>
@@ -673,7 +671,7 @@ export const Clients = () => {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-gray-900">{editingClient ? 'Edit Client' : 'Add New Client'}</h2>
-                    <p className="text-xs text-gray-500">Synced directly to Zoho CRM Clients module</p>
+                    <p className="text-xs text-gray-500">Synced directly to server Clients module</p>
                   </div>
                 </div>
                 <button onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
@@ -778,17 +776,167 @@ export const Clients = () => {
                   {isSubmitting ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      <span>Syncing to Zoho...</span>
+                      <span>Saving...</span>
                     </>
                   ) : (
-                    <span>{editingClient ? 'Save Changes' : 'Create & Sync to Zoho'}</span>
+                    <span>{editingClient ? 'Save Changes' : 'Create Client'}</span>
                   )}
                 </button>
               </div>
             </motion.div>
           </div>
         )}
+        {/* View Client Details Modal */}
+        {viewingClient && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-gray-100"
+            >
+              {/* Header */}
+              <div className="p-6 bg-gradient-to-r from-orange-50/80 via-amber-50/50 to-white border-b border-gray-100 flex justify-between items-start">
+                <div className="flex items-center space-x-4">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-be-orange to-rose-500 text-white flex items-center justify-center font-bold text-xl shadow-md shadow-orange-500/20">
+                    {(viewingClient.name ?? 'CL').substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <h2 className="text-xl font-bold text-gray-900">{viewingClient.name || 'Unnamed Client'}</h2>
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        viewingClient.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {viewingClient.status || 'Active'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 font-medium">
+                      <span>ID: <strong className="text-gray-700">{viewingClient.id}</strong></span>
+                      {viewingClient.zohoId && (
+                        <>
+                          <span>•</span>
+                          <span>Record ID: <strong className="text-gray-700">#{viewingClient.zohoId}</strong></span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setViewingClient(null)}
+                  className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Content Grid */}
+              <div className="p-6 sm:p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+                {/* Contact Information */}
+                <div>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
+                    <User size={14} className="mr-1.5 text-be-orange" />
+                    Contact Details
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <Mail size={13} className="mr-1.5 text-gray-400" />
+                        Primary Email
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900 break-all">{viewingClient.email || '—'}</div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <Mail size={13} className="mr-1.5 text-gray-400" />
+                        Secondary Email
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900 break-all">{viewingClient.secondaryEmail || '—'}</div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <Phone size={13} className="mr-1.5 text-gray-400" />
+                        Phone Number
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">{viewingClient.phone || '—'}</div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <Building2 size={13} className="mr-1.5 text-gray-400" />
+                        Associated Company
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">{viewingClient.company || '—'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* System & Tracking Info */}
+                <div>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
+                    <Tag size={14} className="mr-1.5 text-be-orange" />
+                    Record & System Information
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium flex items-center mb-1">
+                        <Calendar size={13} className="mr-1.5 text-gray-400" />
+                        Date Added
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">{viewingClient.addedOn || '—'}</div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium mb-1">Source</div>
+                      <div className="text-sm font-semibold text-gray-900">{viewingClient.source || 'Direct'}</div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="text-xs text-gray-500 font-medium mb-1">Assigned Sales BDM</div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        {viewingClient.salesEmployee || viewingClient.employeeName || viewingClient.Employee?.name || 'Admin'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-5 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+                <button 
+                  onClick={() => setViewingClient(null)} 
+                  className="px-5 py-2.5 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-xl font-semibold text-sm transition-colors shadow-sm"
+                >
+                  Close
+                </button>
+                <button 
+                  onClick={() => {
+                    const c = viewingClient;
+                    setViewingClient(null);
+                    openEditModal(c);
+                  }} 
+                  className="px-5 py-2.5 bg-be-orange hover:bg-orange-600 text-white rounded-xl font-semibold text-sm transition-colors shadow-sm flex items-center gap-2"
+                >
+                  <Edit size={15} />
+                  <span>Edit Client</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, client: null, isDeleting: false })}
+        onConfirm={confirmDeleteClient}
+        title="Delete Client"
+        itemName={deleteTarget.client?.name}
+        message={deleteTarget.client ? `Are you sure you want to delete client "${deleteTarget.client.name}"?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

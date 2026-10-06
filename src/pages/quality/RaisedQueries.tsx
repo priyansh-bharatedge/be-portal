@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import {
   Search,
   Filter,
@@ -22,6 +23,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { saveDocument, getDocument, deleteDocument } from "../../lib/db";
 import { fetchZohoQueries, saveOrUpdateZohoQuery, deleteZohoQuery } from "../../services/zohoService";
 import { useAuth } from "../../context/AuthContext";
+import { DeleteConfirmModal } from "../../components/ui/DeleteConfirmModal";
 
 interface Query {
   id: string;
@@ -40,6 +42,9 @@ interface Query {
 }
 
 export const RaisedQueries = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { currentUser, filterRecords } = useAuth();
   const [isRaiseModalOpen, setIsRaiseModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,27 +52,48 @@ export const RaisedQueries = () => {
   const [deals, setDeals] = useState<any[]>([]);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; query: Query | null; isDeleting: boolean }>({
+    isOpen: false,
+    query: null,
+    isDeleting: false
+  });
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || location.state?.status || 'All');
+
+  useEffect(() => {
+    const s = searchParams.get('status') || location.state?.status;
+    if (s) setStatusFilter(s);
+    const q = searchParams.get('search') || location.state?.search;
+    if (q) setSearchQuery(q);
+  }, [searchParams, location.state]);
+
   const rbacQueries = useMemo(() => filterRecords(queries, 'Raised_Queries'), [queries, filterRecords, currentUser]);
 
   const filteredQueries = useMemo(() => {
-    if (!searchQuery) return rbacQueries;
-    const q = searchQuery.toLowerCase().trim();
     return rbacQueries.filter((item: any) => {
-      return (item.id && String(item.id).toLowerCase().includes(q)) ||
-             (item.zohoId && String(item.zohoId).toLowerCase().includes(q)) ||
-             (item.client && String(item.client).toLowerCase().includes(q)) ||
-             (item.company && String(item.company).toLowerCase().includes(q)) ||
-             (item.service && String(item.service).toLowerCase().includes(q)) ||
-             (item.query && String(item.query).toLowerCase().includes(q)) ||
-             (item.description && String(item.description).toLowerCase().includes(q)) ||
-             (item.assignee && String(item.assignee).toLowerCase().includes(q)) ||
-             (item.status && String(item.status).toLowerCase().includes(q)) ||
-             (item.priority && String(item.priority).toLowerCase().includes(q)) ||
-             (item.salesEmployee && String(item.salesEmployee).toLowerCase().includes(q));
+      if (statusFilter && statusFilter !== 'All') {
+        const s = String(item.status || '').toLowerCase();
+        if (!s.includes(statusFilter.toLowerCase())) return false;
+      }
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase().trim();
+        const match = (item.id && String(item.id).toLowerCase().includes(q)) ||
+               (item.zohoId && String(item.zohoId).toLowerCase().includes(q)) ||
+               (item.client && String(item.client).toLowerCase().includes(q)) ||
+               (item.company && String(item.company).toLowerCase().includes(q)) ||
+               (item.service && String(item.service).toLowerCase().includes(q)) ||
+               (item.query && String(item.query).toLowerCase().includes(q)) ||
+               (item.description && String(item.description).toLowerCase().includes(q)) ||
+               (item.assignee && String(item.assignee).toLowerCase().includes(q)) ||
+               (item.status && String(item.status).toLowerCase().includes(q)) ||
+               (item.priority && String(item.priority).toLowerCase().includes(q)) ||
+               (item.salesEmployee && String(item.salesEmployee).toLowerCase().includes(q));
+        if (!match) return false;
+      }
+      return true;
     });
-  }, [rbacQueries, searchQuery]);
+  }, [rbacQueries, searchQuery, statusFilter]);
 
   const [formData, setFormData] = useState({
     salesEmployee: "",
@@ -176,22 +202,22 @@ export const RaisedQueries = () => {
         if (showNotification) {
           setToast({
             type: 'success',
-            message: `Fetched ${res.data.length} Queries from Zoho CRM`,
+            message: `Fetched ${res.data.length} Queries Successfully`,
             submessage: 'Quality queries synchronized with live database'
           });
         }
       } else if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Failed to fetch queries from Zoho CRM',
-          submessage: res.message || 'Check connection or Zoho API status'
+          message: 'Failed to fetch queries',
+          submessage: res.message || 'Check network connection or server status'
         });
       }
     } catch (e: any) {
       if (showNotification) {
         setToast({
           type: 'error',
-          message: 'Error connecting to Zoho CRM',
+          message: 'Error connecting to server',
           submessage: e.message || 'Network communication error'
         });
       }
@@ -298,7 +324,7 @@ export const RaisedQueries = () => {
         newQuery.zohoId = zRes.zohoId;
         setToast({
           type: 'success',
-          message: editingId ? 'Query Updated & Synced to Zoho CRM' : 'Query Raised & Synced to Zoho CRM',
+          message: editingId ? 'Query Updated Successfully' : 'Query Raised Successfully',
           submessage: `Case Record #${zRes.zohoId}`
         });
       }
@@ -331,8 +357,16 @@ export const RaisedQueries = () => {
     setSelectedFile(null);
   };
 
-  const handleDelete = async (query: Query) => {
-    if (confirm("Are you sure you want to delete this query?")) {
+  const handleDelete = (query: Query) => {
+    setDeleteTarget({ isOpen: true, query, isDeleting: false });
+  };
+
+  const confirmDeleteQuery = async () => {
+    const query = deleteTarget.query;
+    if (!query) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
+
+    try {
       if (query.fileId) await deleteDocument(query.fileId);
       saveToStorage(queries.filter((q) => q.id !== query.id));
 
@@ -341,11 +375,19 @@ export const RaisedQueries = () => {
           await deleteZohoQuery(query.zohoId);
           setToast({
             type: 'success',
-            message: 'Query Deleted from Zoho CRM',
+            message: 'Query Deleted Successfully',
             submessage: `Case #${query.zohoId} removed`
           });
         } catch (e) {}
+      } else {
+        setToast({
+          type: 'success',
+          message: 'Query Deleted Successfully',
+          submessage: 'Record removed locally'
+        });
       }
+    } finally {
+      setDeleteTarget({ isOpen: false, query: null, isDeleting: false });
     }
   };
 
@@ -414,7 +456,7 @@ export const RaisedQueries = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Raised Queries</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage and track client issues, quality queries, and Zoho CRM cases.
+            Manage and track client issues, quality queries, and support cases.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -431,11 +473,10 @@ export const RaisedQueries = () => {
           <button
             onClick={() => handleFetchZohoQueries(true)}
             disabled={isFetchingZoho}
-            className="flex items-center px-3.5 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-60"
-            title="Fetch live query cases from Zoho CRM"
+            className="w-10 h-10 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg flex items-center justify-center shadow-sm transition-all disabled:opacity-60 shrink-0"
+            title="Refresh & Sync"
           >
-            <RefreshCw size={15} className={`mr-2 text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
-            {isFetchingZoho ? 'Fetching...' : 'Fetch Zoho CRM'}
+            <RefreshCw size={16} className={`text-be-orange ${isFetchingZoho ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={() => {
@@ -461,8 +502,40 @@ export const RaisedQueries = () => {
         </div>
       </div>
 
+      {/* Active Filters Bar */}
+      {(searchQuery || (statusFilter && statusFilter !== 'All')) && (
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-gradient-to-r from-orange-50/80 via-amber-50/50 to-orange-50/80 border border-orange-200/80 rounded-2xl mt-4 mb-2 text-xs shadow-xs">
+          <span className="font-bold text-gray-700 flex items-center mr-1">
+            <Filter size={13} className="text-be-orange mr-1.5" />
+            Active Filter:
+          </span>
+          {statusFilter && statusFilter !== 'All' && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-blue-300 text-blue-800 font-extrabold shadow-xs">
+              Status: {statusFilter}
+              <button onClick={() => setStatusFilter('All')} className="ml-1.5 hover:text-gray-900 transition-colors"><X size={12} /></button>
+            </span>
+          )}
+          {searchQuery && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-purple-300 text-purple-800 font-extrabold shadow-xs">
+              Search: "{searchQuery}"
+              <button onClick={() => setSearchQuery('')} className="ml-1.5 hover:text-gray-900 transition-colors"><X size={12} /></button>
+            </span>
+          )}
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setStatusFilter('All');
+              navigate('/quality/queries', { replace: true, state: {} });
+            }}
+            className="ml-auto text-xs font-bold text-gray-500 hover:text-rose-600 underline transition-colors px-2 py-0.5"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      )}
+
       {/* Queries Table */}
-      <div className="bg-transparent overflow-hidden mt-6">
+      <div className="bg-transparent overflow-hidden mt-4">
         <div className="overflow-x-auto pb-6">
           <table className="w-full text-left text-sm whitespace-nowrap border-separate border-spacing-y-3">
             <thead className="bg-transparent text-gray-500 font-bold uppercase tracking-wider text-xs">
@@ -574,12 +647,12 @@ export const RaisedQueries = () => {
                     {isFetchingZoho ? (
                       <div className="flex flex-col items-center justify-center py-4">
                         <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
-                        <p className="text-sm font-semibold text-gray-800">Fetching live queries from Zoho CRM...</p>
+                        <p className="text-sm font-semibold text-gray-800">Fetching live queries...</p>
                       </div>
                     ) : (
                       <>
                         <p className="text-lg font-medium text-gray-900">No raised queries</p>
-                        <p className="text-xs text-gray-400 mt-1">Raise a new query or sync live records from Zoho CRM.</p>
+                        <p className="text-xs text-gray-400 mt-1">Raise a new query or refresh live records.</p>
                       </>
                     )}
                   </td>
@@ -853,6 +926,17 @@ export const RaisedQueries = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={deleteTarget.isOpen}
+        onClose={() => !deleteTarget.isDeleting && setDeleteTarget({ isOpen: false, query: null, isDeleting: false })}
+        onConfirm={confirmDeleteQuery}
+        title="Delete Query"
+        itemName={deleteTarget.query ? `${deleteTarget.query.query || deleteTarget.query.client || deleteTarget.query.id}` : undefined}
+        message={deleteTarget.query ? `Are you sure you want to delete query "${deleteTarget.query.query || deleteTarget.query.client || deleteTarget.query.id}"?` : undefined}
+        isDeleting={deleteTarget.isDeleting}
+      />
     </div>
   );
 };

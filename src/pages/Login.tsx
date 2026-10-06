@@ -122,7 +122,7 @@ export const Login: React.FC = () => {
       }
     } catch (err: any) {
       setLoading(false);
-      setEmailError(err.message || 'Error connecting to Zoho CRM Employee service.');
+      setEmailError(err.message || 'Error connecting to Employee directory service.');
     }
   };
 
@@ -304,7 +304,7 @@ export const Login: React.FC = () => {
         navigate('/modules');
       }, 1500);
     } else {
-      setSetupError(result.error || 'Failed to update password in Zoho CRM.');
+      setSetupError(result.error || 'Failed to update password.');
     }
   };
 
@@ -334,14 +334,14 @@ export const Login: React.FC = () => {
               </span>
             </h1>
             <p className="text-gray-600 text-sm mb-8 max-w-md leading-relaxed font-medium">
-              Seamless conditional login integrated directly with Zoho CRM "Employee" database module.
+              Secure login integrated with company employee directory.
             </p>
             
             <div className="space-y-4">
               {[
-                { title: 'Zoho CRM Single Database', desc: 'Queries employee record & checks password status live' },
+                { title: 'Unified Directory', desc: 'Queries employee record & checks password status live' },
                 { title: 'Conditional Setup Flow', desc: 'Auto-triggers OTP verification for first-time employees' },
-                { title: 'Secure Password Update', desc: 'Pushes newly configured credentials via PUT API to Zoho' }
+                { title: 'Secure Password Update', desc: 'Securely updates your portal password credentials' }
               ].map((feat, i) => (
                 <motion.div 
                   key={feat.title}
@@ -691,7 +691,7 @@ export const Login: React.FC = () => {
                     <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
                     <div>
                       <strong>OTP Verified!</strong>
-                      <div className="text-[11px] text-emerald-700">Set password to save to your Zoho CRM Employee record.</div>
+                      <div className="text-[11px] text-emerald-700">Set password for your employee account.</div>
                     </div>
                   </div>
 
@@ -765,7 +765,7 @@ export const Login: React.FC = () => {
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 text-xs mt-2 flex justify-center items-center group disabled:opacity-50"
                   >
                     <span className="relative z-10 flex items-center">
-                      {loading ? 'Executing PUT API to Zoho CRM...' : 'Save Password to Zoho & Login'}
+                      {loading ? 'Saving password...' : 'Save Password & Login'}
                       <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                     </span>
                   </button>
@@ -784,7 +784,7 @@ export const Login: React.FC = () => {
                     <Check size={32} />
                   </div>
                   <div>
-                    <h3 className="text-xl font-extrabold text-gray-900">Zoho Password Updated!</h3>
+                    <h3 className="text-xl font-extrabold text-gray-900">Password Updated!</h3>
                     <p className="text-xs text-gray-500 mt-1">Authenticated successfully. Redirecting to your dashboard...</p>
                   </div>
                   <div className="w-6 h-6 border-2 border-be-orange border-t-transparent rounded-full animate-spin mx-auto" />

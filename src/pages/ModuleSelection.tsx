@@ -8,9 +8,10 @@ import { RoleSwitcherModal } from '../components/RoleSwitcherModal';
 
 const getGreeting = () => {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 21) return 'Good evening';
+  return 'Good night';
 };
 
 const subtitles = [
@@ -69,7 +70,11 @@ export const ModuleSelection = () => {
     show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 260, damping: 22 } }
   };
 
-  const firstName = (currentUser.name ?? '').split(' ')[0] || currentUser.name;
+  const isSuperAdminUser = isSuperAdmin || 
+                           currentRole === 'Super Admin' || 
+                           (currentUser.role as string) === 'Super Admin' || 
+                           currentUser.email?.toLowerCase() === 'superadmin@be.com' ||
+                           currentUser.email === 'md@bharat-edge.com';
 
   const isHREmployee = isHR || 
                        currentRole === 'HR' || 
@@ -84,11 +89,20 @@ export const ModuleSelection = () => {
     currentUser.email?.toLowerCase().includes('mishal@')
   );
 
-  const isSuperAdminUser = isSuperAdmin || 
-                           currentRole === 'Super Admin' || 
-                           (currentUser.role as string) === 'Super Admin' || 
-                           currentUser.email?.toLowerCase() === 'superadmin@be.com' ||
-                           currentUser.email === 'md@bharat-edge.com';
+  const displayName = (() => {
+    const rawName = (currentUser.name ?? '').trim();
+    if (!rawName) return isSuperAdminUser ? 'Super Admin' : (roleInfo.label || 'User');
+    if (rawName.toLowerCase() === 'super admin' || (isSuperAdminUser && rawName.toLowerCase() === 'super')) {
+      return 'Super Admin';
+    }
+    if (rawName.toLowerCase() === 'hr admin' || rawName.toLowerCase() === 'hr') {
+      return 'HR Admin';
+    }
+    if (isSuperAdminUser && rawName.toLowerCase().includes('super')) {
+      return 'Super Admin';
+    }
+    return rawName.split(' ')[0] || rawName;
+  })();
 
   // Module access rules:
   // - HR: HRMS only (CRM & Quality hidden)
@@ -146,7 +160,7 @@ export const ModuleSelection = () => {
             transition={{ delay: 0.15, duration: 0.7 }}
             className="text-3xl sm:text-4xl lg:text-[2.75rem] font-extrabold text-gray-900 tracking-tight mb-3"
           >
-            {greeting}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-be-orange to-rose-500">{firstName}</span> <span className="inline-block animate-[wave_2s_ease-in-out_infinite]">👋</span>
+            {greeting}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-be-orange to-rose-500">{displayName}</span> <span className="inline-block animate-[wave_2s_ease-in-out_infinite]">👋</span>
           </motion.h1>
 
           <motion.p
