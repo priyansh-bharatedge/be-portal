@@ -11,20 +11,33 @@ import { fetchZohoEmployees, fetchZohoAttendance, fetchZohoLeaves } from '../../
 export const HrmsDashboard = () => {
   const navigate = useNavigate();
   const { currentUser, isSuperAdmin, isHR, isTL, isTM } = useAuth();
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [attendance, setAttendance] = useState<any[]>([]);
-  const [leaves, setLeaves] = useState<any[]>([]);
+  
+  // Instant synchronous hydration from localStorage - zero delay
+  const [employees, setEmployees] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_employees');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
+
+  const [attendance, setAttendance] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_attendance');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
+
+  const [leaves, setLeaves] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_leaves');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
 
   useEffect(() => {
-    // Seed from localStorage immediately for instant render
-    try {
-      const savedEmps = localStorage.getItem('be_employees');
-      if (savedEmps) setEmployees(JSON.parse(savedEmps));
-      const savedAtt = localStorage.getItem('be_attendance');
-      if (savedAtt) setAttendance(JSON.parse(savedAtt));
-      const savedLeaves = localStorage.getItem('be_leaves');
-      if (savedLeaves) setLeaves(JSON.parse(savedLeaves));
-    } catch (e) {}
 
     // Then fetch live data from Zoho CRM
     const fetchAll = async () => {

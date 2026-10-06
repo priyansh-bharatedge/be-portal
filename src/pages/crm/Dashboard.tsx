@@ -18,7 +18,8 @@ import {
   enrichDealFromZohoRecord,
   fetchZohoClients,
   fetchZohoQueries,
-  fetchZohoQuotations
+  fetchZohoQuotations,
+  fetchZohoEmployees
 } from '../../services/zohoService';
 import {
   getAllDealsFromIndexedDB,
@@ -30,11 +31,62 @@ export const CrmDashboard = () => {
   const navigate = useNavigate();
   const { currentUser, isSuperAdmin, isHOD, isTL, isHR, currentRole, filterRecords } = useAuth();
 
-  const [deals, setDeals] = useState<any[]>([]);
-  const [quotations, setQuotations] = useState<any[]>([]);
-  const [clients, setClients] = useState<any[]>([]);
-  const [queries, setQueries] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  // Instant synchronous hydration from localStorage - zero delay, no flash of 0
+  const [deals, setDeals] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_deals');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [quotations, setQuotations] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_quotations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [clients, setClients] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_clients');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [queries, setQueries] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_queries');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [employees, setEmployees] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_employees');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [timeframe, setTimeframe] = useState<'today' | 'month' | 'all'>('month');
   const [recentTab, setRecentTab] = useState<'deals' | 'quotations'>('deals');
@@ -97,9 +149,10 @@ export const CrmDashboard = () => {
       d.rawZohoDeal?.Pending
     );
     if (directZoho > 0) return directZoho;
-    const amt = getDealAmount(d);
+
+    const rawAmt = d.rawAmount || parseMoney(d.amount) || parseMoney(d.rawZohoDeal?.Total_deal_amount_inclusive_of_gst || d.rawZohoDeal?.Amount);
     const rec = getDealReceived(d);
-    if (amt > rec && rec > 0) return Number((amt - rec).toFixed(2));
+    if (rawAmt > rec && rec > 0) return Number((rawAmt - rec).toFixed(2));
     return 0;
   };
 
@@ -154,8 +207,7 @@ export const CrmDashboard = () => {
       return Number((Number(d.totals.baseAmount) / 0.82).toFixed(2));
     }
     const rec = getDealReceived(d);
-    const pend = getDealPending(d);
-    if (rec + pend > 0) return rec + pend;
+    if (rec > 0) return rec;
     return 0;
   };
 
@@ -404,11 +456,12 @@ export const CrmDashboard = () => {
 
     // 2. Fetch live updates from Zoho CRM
     try {
-      const [dealsRes, clientsRes, queriesRes, quotationsRes] = await Promise.allSettled([
+      const [dealsRes, clientsRes, queriesRes, quotationsRes, empsRes] = await Promise.allSettled([
         fetchZohoDeals({ per_page: 200 }),
         fetchZohoClients({ per_page: 200 }),
         fetchZohoQueries(),
         fetchZohoQuotations(),
+        fetchZohoEmployees(),
       ]);
 
       if (dealsRes.status === 'fulfilled' && dealsRes.value.success && Array.isArray(dealsRes.value.data) && dealsRes.value.data.length > 0) {
@@ -428,6 +481,7 @@ export const CrmDashboard = () => {
 
         const mergedList = Array.from(dealMap.values());
         setDeals(mergedList);
+        try { localStorage.setItem('be_deals', JSON.stringify(mergedList)); } catch (e) { }
         bulkUpsertDealsToIndexedDB(mappedDeals).catch(() => { });
       }
 
@@ -452,7 +506,7 @@ export const CrmDashboard = () => {
         setQuotations(prev => {
           const seen = new Set(fetchedQuotations.map(f => f.zohoId).filter(Boolean));
           const merged = [...fetchedQuotations, ...prev.filter(p => !p.zohoId || !seen.has(p.zohoId))];
-          localStorage.setItem('be_quotations', JSON.stringify(merged));
+          try { localStorage.setItem('be_quotations', JSON.stringify(merged)); } catch (e) { }
           return merged;
         });
       }
@@ -465,6 +519,11 @@ export const CrmDashboard = () => {
       if (queriesRes.status === 'fulfilled' && queriesRes.value.success && Array.isArray(queriesRes.value.data)) {
         setQueries(queriesRes.value.data);
         try { localStorage.setItem('be_queries', JSON.stringify(queriesRes.value.data.slice(0, 1000))); } catch (e) { }
+      }
+
+      if (empsRes.status === 'fulfilled' && empsRes.value.success && Array.isArray(empsRes.value.data)) {
+        setEmployees(empsRes.value.data);
+        try { localStorage.setItem('be_employees', JSON.stringify(empsRes.value.data)); } catch (e) { }
       }
     } catch (e) {
       console.error('Dashboard Zoho fetch error:', e);
