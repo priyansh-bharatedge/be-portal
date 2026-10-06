@@ -1195,6 +1195,23 @@ export async function fetchZohoDeals(options?: ZohoFetchOptions): Promise<ZohoFe
 }
 
 /**
+ * Fetches the exact total count of Deal records from Zoho CRM actions/count API.
+ */
+export async function fetchZohoDealsCount(): Promise<{ success: boolean; count: number }> {
+  try {
+    const response = await fetch('/api/zoho/actions/count?module=Deals');
+    const result = await safeParseResponse(response);
+    if (response.ok && result.success) {
+      return { success: true, count: Number(result.count) || 0 };
+    }
+    return { success: false, count: 0 };
+  } catch (err) {
+    console.warn('[Zoho Deals] Count fetch error:', err);
+    return { success: false, count: 0 };
+  }
+}
+
+/**
  * Fetches a single live deal record by ID successfully Deals module.
  */
 export async function fetchZohoDealById(dealId: string): Promise<ZohoApiResponse> {

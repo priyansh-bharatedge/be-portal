@@ -8,6 +8,7 @@ import {
   saveOrUpdateZohoDeal,
   deleteZohoDeal,
   fetchZohoDeals,
+  fetchZohoDealsCount,
   fetchZohoDealById,
   enrichDealFromZohoRecord,
   fetchAllZohoRecordsInBatches,
@@ -1994,7 +1995,13 @@ export const Deals = () => {
     let pageNumber = 1;
     let hasMore = true;
     let batchCount = 0;
-    const totalExpected = 10483;
+    let totalExpected = 10483;
+    try {
+      const countRes = await fetchZohoDealsCount();
+      if (countRes.success && countRes.count > 0) {
+        totalExpected = countRes.count;
+      }
+    } catch (e) {}
 
     setBatchProgress({
       loaded: currentDeals.length,
@@ -2029,6 +2036,10 @@ export const Deals = () => {
 
         if (!res || !res.success || !Array.isArray(res.data) || res.data.length === 0) {
           break;
+        }
+
+        if (res.info?.total_records && Number(res.info.total_records) > 0) {
+          totalExpected = Number(res.info.total_records);
         }
 
         const { updatedDeals } = processZohoDealsBatch(res.data, currentDeals);

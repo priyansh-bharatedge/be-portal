@@ -1023,24 +1023,66 @@ async function executeZohoGet(
   try {
     let accessToken = await getAccessToken();
     const criteria = urlObj.searchParams.get('criteria') || (typeof req.query?.criteria === 'string' ? req.query.criteria : '') || (Array.isArray(req.query?.criteria) ? req.query.criteria[0] : '');
+    const pageStr = urlObj.searchParams.get('page') || (typeof req.query?.page === 'string' ? req.query.page : '') || (Array.isArray(req.query?.page) ? req.query.page[0] : '');
+    const pageNum = parseInt(pageStr, 10) || 1;
+    const perPageStr = urlObj.searchParams.get('per_page') || (typeof req.query?.per_page === 'string' ? req.query.per_page : '') || (Array.isArray(req.query?.per_page) ? req.query.per_page[0] : '');
+    const parsedPerPage = Math.min(Math.max(1, parseInt(perPageStr, 10) || 200), 200);
+    const pageToken = urlObj.searchParams.get('page_token') || (typeof req.query?.page_token === 'string' ? req.query.page_token : '') || (Array.isArray(req.query?.page_token) ? req.query.page_token[0] : '');
+
     const paginationQuery = buildZohoPaginationQuery(req, urlObj);
 
     let crmEndpoint = criteria
       ? `${apiBase}/crm/v8/${moduleName}/search?fields=${fields}&${paginationQuery}`
       : `${apiBase}/crm/v8/${moduleName}?fields=${fields}&${paginationQuery}`;
 
-    let crmRes = await fetch(crmEndpoint, {
-      method: 'GET',
-      headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-    });
+    const countUrl = `${apiBase}/crm/v8/${moduleName}/actions/count`;
 
-    if (crmRes.status === 401) {
-      cachedToken = null;
-      accessToken = await getAccessToken();
-      crmRes = await fetch(crmEndpoint, {
+    // Fetch records and total counts concurrently using Promise.all
+    const [crmFetchResult, countFetchResult] = await Promise.all([
+      fetch(crmEndpoint, {
         method: 'GET',
         headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-      });
+      }),
+      !criteria
+        ? fetch(countUrl, {
+            method: 'GET',
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+          }).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    let crmRes = crmFetchResult;
+    let countRes = countFetchResult;
+
+    if (crmRes.status === 401 || (countRes && countRes.status === 401)) {
+      cachedToken = null;
+      accessToken = await getAccessToken();
+      const [retryCrm, retryCount] = await Promise.all([
+        fetch(crmEndpoint, {
+          method: 'GET',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+        }),
+        !criteria
+          ? fetch(countUrl, {
+              method: 'GET',
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      crmRes = retryCrm;
+      countRes = retryCount;
+    }
+
+    let totalRecords: number | null = null;
+    if (countRes && countRes.ok) {
+      try {
+        const countData: any = await countRes.json();
+        if (countData && countData.count !== undefined) {
+          totalRecords = parseInt(String(countData.count), 10);
+        }
+      } catch (err) {
+        console.warn(`[Zoho Count] Parse error for ${moduleName}:`, err);
+      }
     }
 
     // Graceful fallback: If search?criteria failed with 400 or not found, fallback to list endpoint
@@ -1058,18 +1100,60 @@ async function executeZohoGet(
     }
 
     if (crmRes.status === 204) {
-      return sendJson(res, 200, { success: true, data: [] });
+      return sendJson(res, 200, {
+        success: true,
+        data: [],
+        info: {
+          per_page: parsedPerPage,
+          page: pageNum,
+          count: 0,
+          total_records: totalRecords ?? 0,
+          more_records: false,
+          next_page_token: null,
+          previous_page_token: null,
+        }
+      });
     }
 
     let crmData: any = await crmRes.json();
     if (crmData?.code === 'NO_CONTENT' || crmData?.code === 'RECORD_NOT_FOUND') {
-      return sendJson(res, 200, { success: true, data: [] });
+      return sendJson(res, 200, {
+        success: true,
+        data: [],
+        info: {
+          per_page: parsedPerPage,
+          page: pageNum,
+          count: 0,
+          total_records: totalRecords ?? 0,
+          more_records: false,
+          next_page_token: null,
+          previous_page_token: null,
+        }
+      });
     }
 
     if (crmData?.data) {
-      return sendJson(res, 200, { success: true, data: crmData.data, info: crmData.info });
+      const infoObj = {
+        ...(crmData.info || {}),
+        per_page: parsedPerPage,
+        page: pageNum,
+        count: (crmData.data || []).length,
+        total_records: totalRecords ?? crmData.info?.count_total ?? crmData.info?.total ?? (crmData.data || []).length,
+        more_records: crmData.info?.more_records ?? false,
+        next_page_token: crmData.info?.next_page_token || null,
+        previous_page_token: crmData.info?.previous_page_token || null,
+      };
+      return sendJson(res, 200, {
+        success: true,
+        data: crmData.data,
+        info: infoObj
+      });
     } else {
-      return sendJson(res, 400, { success: false, message: crmData?.message || `Failed to fetch ${entityName} from Zoho CRM`, errorDetails: crmData });
+      return sendJson(res, 400, {
+        success: false,
+        message: crmData?.message || `Failed to fetch ${entityName} from Zoho CRM`,
+        errorDetails: crmData
+      });
     }
   } catch (err: any) {
     console.error(`[Zoho CRM API] Error executing GET for ${moduleName}:`, err);
@@ -1320,10 +1404,40 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    if (action === 'get-deals' && method === 'GET') {
+    if ((action === 'get-deals' || action === 'deals') && method === 'GET') {
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
       const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company_name,Client_Name,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Deal_Amount,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Deal_Received_Amount,Total_Pending_Amount,Pending_amount,Deal_Pending_Amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,Partner_BDM_Name,Partner_BDM_Amount,Partner_BDM_ID,Quotation';
       return executeZohoGet(apiBase, moduleName, dealFields, req, res, urlObj, 'deals');
+    }
+
+    // 4b. Actions Count Endpoint
+    if ((action === 'count' || action === 'actions/count' || action === 'deals-count' || action === 'deals/actions/count') && method === 'GET') {
+      try {
+        let accessToken = await getAccessToken();
+        const targetModule = urlObj.searchParams.get('module') || process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
+        const countEndpoint = `${apiBase}/crm/v8/${targetModule}/actions/count`;
+        let countRes = await fetch(countEndpoint, {
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+        });
+        if (countRes.status === 401) {
+          cachedToken = null;
+          accessToken = await getAccessToken();
+          countRes = await fetch(countEndpoint, {
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+          });
+        }
+        if (countRes.ok) {
+          const countData: any = await countRes.json();
+          return sendJson(res, 200, {
+            success: true,
+            count: parseInt(String(countData?.count || 0), 10) || 0,
+            data: countData
+          });
+        }
+        return sendJson(res, 400, { success: false, message: 'Failed to fetch count from Zoho CRM' });
+      } catch (err: any) {
+        return sendJson(res, 500, { success: false, message: err.message });
+      }
     }
 
     // 5. Insert / Update Employee (Includes Password field sync)

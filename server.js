@@ -77,8 +77,13 @@ const server = http.createServer(async (req, res) => {
   };
 
   try {
-    // 1. Zoho API Endpoints (/api/zoho/* or /api/zoho)
+    // 1. Zoho API Endpoints (/api/zoho/* or /api/zoho or /api/deals)
     if (pathname.startsWith('/api/zoho')) {
+      return await zohoHandler(req, res);
+    }
+
+    if (pathname === '/api/deals' || pathname.startsWith('/api/deals')) {
+      req.query.action = 'get-deals';
       return await zohoHandler(req, res);
     }
 
