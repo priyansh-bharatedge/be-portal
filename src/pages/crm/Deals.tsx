@@ -71,6 +71,15 @@ export const Deals = () => {
     if (statusParam) {
       setStatusFilter(statusParam);
     }
+    const perPageParam = searchParams.get('per_page') || location.state?.per_page;
+    if (perPageParam) {
+      const p = parseInt(String(perPageParam), 10);
+      if (!isNaN(p) && p > 0) {
+        setItemsPerPage(p);
+      }
+    } else if ((filterParam && filterParam !== 'all') || searchParam || (tabParam && tabParam !== 'All Deals')) {
+      setItemsPerPage(prev => (prev < 200 ? 200 : prev));
+    }
   }, [searchParams, location.state]);
 
   const isDealToday = (d: any): boolean => {
@@ -280,7 +289,20 @@ export const Deals = () => {
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
   // Pagination & Token History states based on reference code
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(25);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(() => {
+    const tabParam = searchParams.get('tab') || location.state?.tab;
+    const searchParam = searchParams.get('search') || location.state?.search;
+    const filterParam = searchParams.get('filter') || location.state?.filter;
+    const perPageParam = searchParams.get('per_page') || location.state?.per_page;
+    if (perPageParam) {
+      const p = parseInt(String(perPageParam), 10);
+      if (!isNaN(p) && p > 0) return p;
+    }
+    if ((filterParam && filterParam !== 'all') || searchParam || (tabParam && tabParam !== 'All Deals')) {
+      return 200;
+    }
+    return 25;
+  });
   const [currentToken, setCurrentToken] = useState<string | null>(null);
   const [tokenHistory, setTokenHistory] = useState<(string | null)[]>([null]);
   const [paginationInfo, setPaginationInfo] = useState<any>(null);
@@ -1223,7 +1245,17 @@ export const Deals = () => {
         }
 
         const rawList = data.data || [];
-        const { updatedDeals } = processZohoDealsBatch(rawList, []);
+        
+        let existingDeals: any[] = [];
+        try {
+          const saved = localStorage.getItem('be_deals');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) existingDeals = parsed;
+          }
+        } catch (e) {}
+
+        const { updatedDeals } = processZohoDealsBatch(rawList, existingDeals.length > 0 ? existingDeals : deals);
         setDeals(updatedDeals);
 
         const info = data.info || null;
@@ -1932,6 +1964,44 @@ export const Deals = () => {
     }
   };
 
+  const isFiltered = Boolean(
+    (quickFilter && quickFilter !== 'all') ||
+    Boolean(searchQuery) ||
+    (activeTab && activeTab !== 'All Deals') ||
+    (statusFilter && statusFilter !== 'all')
+  );
+
+  const filteredDeals = useMemo(() => {
+    return rbacDeals.filter((deal: any) => {
+      const isFromQt = isDealFromQuotation(deal);
+      if (activeTab === 'Manual Deals' && isFromQt) return false;
+      if (activeTab === 'From Quotations' && !isFromQt) return false;
+      if (quickFilter === 'today' && !isDealToday(deal)) return false;
+      if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
+      if (quickFilter === 'pending' && getDealPending(deal) <= 0) return false;
+      if (statusFilter && statusFilter !== 'all') {
+        const s = String(deal.status || deal.stage || '').toLowerCase();
+        if (!s.includes(statusFilter.toLowerCase())) return false;
+      }
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchClient = deal.client && String(deal.client).toLowerCase().includes(q);
+        const matchCompany = deal.company && String(deal.company).toLowerCase().includes(q);
+        const matchService = deal.service && String(deal.service).toLowerCase().includes(q);
+        const matchId = deal.id && String(deal.id).toLowerCase().includes(q);
+        const matchZohoId = deal.zohoId && String(deal.zohoId).toLowerCase().includes(q);
+        const matchOwner = deal.owner && String(deal.owner).toLowerCase().includes(q);
+        const matchEmpName = (deal.employeeName || deal.salesEmployee) && String(deal.employeeName || deal.salesEmployee).toLowerCase().includes(q);
+        const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
+        const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
+        const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
+
+        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchStatus && !matchAmount && !matchEmpCode) return false;
+      }
+      return true;
+    });
+  }, [rbacDeals, activeTab, quickFilter, statusFilter, searchQuery]);
+
   return (
     <div className="space-y-6 relative">
       {/* Toast Notification */}
@@ -1971,7 +2041,7 @@ export const Deals = () => {
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-bold text-gray-900">Deals</h1>
             <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              {(totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records ?? rbacDeals.length)).toLocaleString()} Deals
+              {(isFiltered ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records ?? rbacDeals.length))).toLocaleString()} Deals
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">Manage all active deals with live synchronization and pagination.</p>
@@ -2063,6 +2133,7 @@ export const Deals = () => {
               setSearchQuery('');
               setQuickFilter('all');
               setStatusFilter('all');
+              setItemsPerPage(25);
               navigate('/crm/deals', { replace: true, state: {} });
             }}
             className="ml-auto text-xs font-bold text-gray-500 hover:text-rose-600 underline transition-colors px-2 py-0.5"
@@ -2074,37 +2145,8 @@ export const Deals = () => {
 
       {/* Deals Table */}
       {(() => {
-        const filteredDeals = rbacDeals.filter((deal: any) => {
-          const isFromQt = isDealFromQuotation(deal);
-          if (activeTab === 'Manual Deals' && isFromQt) return false;
-          if (activeTab === 'From Quotations' && !isFromQt) return false;
-          if (quickFilter === 'today' && !isDealToday(deal)) return false;
-          if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
-          if (quickFilter === 'pending' && getDealPending(deal) <= 0) return false;
-          if (statusFilter && statusFilter !== 'all') {
-            const s = String(deal.status || deal.stage || '').toLowerCase();
-            if (!s.includes(statusFilter.toLowerCase())) return false;
-          }
-          if (searchQuery) {
-            const q = searchQuery.toLowerCase().trim();
-            const matchClient = deal.client && String(deal.client).toLowerCase().includes(q);
-            const matchCompany = deal.company && String(deal.company).toLowerCase().includes(q);
-            const matchService = deal.service && String(deal.service).toLowerCase().includes(q);
-            const matchId = deal.id && String(deal.id).toLowerCase().includes(q);
-            const matchZohoId = deal.zohoId && String(deal.zohoId).toLowerCase().includes(q);
-            const matchOwner = deal.owner && String(deal.owner).toLowerCase().includes(q);
-            const matchEmpName = (deal.employeeName || deal.salesEmployee) && String(deal.employeeName || deal.salesEmployee).toLowerCase().includes(q);
-            const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
-            const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
-            const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
-
-            if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchStatus && !matchAmount && !matchEmpCode) return false;
-          }
-          return true;
-        });
-
-        const totalDealsCount = totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length);
-        const paginatedDeals = filteredDeals;
+        const totalDealsCount = isFiltered ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
+        const paginatedDeals = isFiltered ? filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : filteredDeals;
 
         return (
           <div className="bg-transparent mt-6">
@@ -2229,7 +2271,7 @@ export const Deals = () => {
                 onPageChange={handlePageChange}
                 onItemsPerPageChange={handleItemsPerPageChange}
                 itemLabel="deals"
-                hasMoreOnServer={Boolean(paginationInfo?.more_records)}
+                hasMoreOnServer={Boolean(!isFiltered && paginationInfo?.more_records)}
                 onLoadMoreServer={() => {
                   if (paginationInfo?.more_records && paginationInfo?.next_page_token) {
                     handlePageChange(currentPage + 1);
