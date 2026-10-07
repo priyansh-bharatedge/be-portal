@@ -1045,7 +1045,10 @@ export const Deals = () => {
         : (zDeal.id ? String(zDeal.id) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
 
       // Resolve Partner BDM details from Zoho CRM Deal
+      const partnerBdmLookup = typeof zDeal.Partner_BDM === 'object' && zDeal.Partner_BDM !== null ? zDeal.Partner_BDM : null;
+
       const hasPartnerBdm = Boolean(
+        partnerBdmLookup?.id ||
         zDeal.Has_Partner_BDM || 
         zDeal.has_partner_bdm || 
         zDeal.Partner_BDM || 
@@ -1057,6 +1060,7 @@ export const Deals = () => {
       );
 
       const partnerBdmName = 
+        partnerBdmLookup?.name ||
         zDeal.Partner_BDM_Name || 
         zDeal.Partner_BDM_name || 
         zDeal.Partner_BDM_Names || 
@@ -1067,10 +1071,12 @@ export const Deals = () => {
         '';
 
       const partnerBdmId = 
+        partnerBdmLookup?.id ? String(partnerBdmLookup.id) : (
         zDeal.Partner_BDM_ID || 
         zDeal.partner_bdm_id || 
+        (typeof zDeal.Partner_BDM === 'string' && /^\d+$/.test(zDeal.Partner_BDM) ? zDeal.Partner_BDM : '') ||
         (existingIdx >= 0 ? updatedDeals[existingIdx]?.partnerBdmId : '') || 
-        '';
+        '');
 
       let partnerBdmAmount = Number(zDeal.Partner_BDM_Amount || zDeal.Partner_BDM_amount || zDeal.partner_bdm_amount || 0);
       if (hasPartnerBdm && (!partnerBdmAmount || partnerBdmAmount === 0) && receivedAmountNum > 0) {
@@ -1115,6 +1121,10 @@ export const Deals = () => {
         empId: empCode,
         date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (zDeal.Booking_Date ? new Date(zDeal.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingIdx >= 0 ? updatedDeals[existingIdx]?.date : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))),
         source: (existingIdx >= 0 ? updatedDeals[existingIdx]?.source : 'Cloud') || 'Cloud',
+        Partner_BDM: zDeal.Partner_BDM || (partnerBdmId ? { id: partnerBdmId, name: partnerBdmName } : undefined),
+        Partner_BDM_ID: partnerBdmId,
+        Partner_BDM_Name: partnerBdmName,
+        Partner_BDM_Names: partnerBdmName,
         hasPartnerBdm,
         has_partner_bdm: hasPartnerBdm,
         partnerBdmId,
@@ -1141,6 +1151,9 @@ export const Deals = () => {
           employeeZohoId,
           salesEmployee: employeeName || (existingIdx >= 0 ? updatedDeals[existingIdx]?.salesEmployee : ''),
           empId: empCode,
+          Partner_BDM: zDeal.Partner_BDM || (partnerBdmId ? { id: partnerBdmId, name: partnerBdmName } : undefined),
+          Partner_BDM_ID: partnerBdmId,
+          Partner_BDM_Name: partnerBdmName,
           hasPartnerBdm,
           has_partner_bdm: hasPartnerBdm,
           partnerBdmId,

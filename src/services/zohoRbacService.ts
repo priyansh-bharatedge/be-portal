@@ -419,32 +419,38 @@ export function filterRecordsByRbac<T = any>(
     if (id && id.trim()) idSet.add(id.trim().toLowerCase());
   });
 
+  if (user.zohoId) idSet.add(String(user.zohoId).trim().toLowerCase());
+  if (user.id) idSet.add(String(user.id).trim().toLowerCase());
+  if (user.empId) idSet.add(String(user.empId).trim().toLowerCase());
+
   const userName = (user.name || '').trim().toLowerCase();
   const userEmail = (user.email || '').trim().toLowerCase();
   const userDept = (user.department || '').trim().toLowerCase();
 
   return records.filter((rec: any) => {
     // 1. Check direct Employee lookup object
-    if (rec.Employee && typeof rec.Employee === 'object') {
-      const empId = String(rec.Employee.id || '').trim().toLowerCase();
-      const empName = String(rec.Employee.name || '').trim().toLowerCase();
+    const empLookup = rec.Employee || rec.rawZohoDeal?.Employee;
+    if (empLookup && typeof empLookup === 'object') {
+      const empId = String(empLookup.id || '').trim().toLowerCase();
+      const empName = String(empLookup.name || '').trim().toLowerCase();
       if (empId && idSet.has(empId)) return true;
       if (empName && userName && (empName === userName || (empName.length >= 3 && userName.includes(empName)) || (userName.length >= 3 && empName.includes(userName)) || idSet.has(empName))) return true;
     }
 
     // 2. Check string Employee ID fields
-    const directEmpId = String(rec.Employee || rec.employeeId || rec.empId || rec.Employment_ID || rec.Employee_Code || rec.Employee_ID || '').trim().toLowerCase();
+    const directEmpId = String(rec.Employee || rec.employeeId || rec.empId || rec.Employment_ID || rec.Employee_Code || rec.Employee_ID || rec.rawZohoDeal?.Employment_ID || rec.rawZohoDeal?.Employee_Code || '').trim().toLowerCase();
     if (directEmpId && idSet.has(directEmpId)) return true;
 
     // 3. Check Owner / BDM / Creator fields
-    if (rec.Owner && typeof rec.Owner === 'object') {
-      const ownerId = String(rec.Owner.id || '').trim().toLowerCase();
-      const ownerName = String(rec.Owner.name || '').trim().toLowerCase();
+    const ownerLookup = rec.Owner || rec.rawZohoDeal?.Owner;
+    if (ownerLookup && typeof ownerLookup === 'object') {
+      const ownerId = String(ownerLookup.id || '').trim().toLowerCase();
+      const ownerName = String(ownerLookup.name || '').trim().toLowerCase();
       if (ownerId && idSet.has(ownerId)) return true;
       if (ownerName && userName && (ownerName === userName || (ownerName.length >= 3 && userName.includes(ownerName)) || (userName.length >= 3 && ownerName.includes(userName)) || idSet.has(ownerName))) return true;
     }
 
-    const ownerStr = String(rec.owner || rec.Owner || rec.Created_By || rec.salesEmployee || rec.BDM_names || '').trim().toLowerCase();
+    const ownerStr = String(rec.owner || rec.Owner || rec.Created_By || rec.salesEmployee || rec.BDM_names || rec.rawZohoDeal?.Owner?.name || rec.rawZohoDeal?.salesEmployee || '').trim().toLowerCase();
     if (ownerStr && userName && (ownerStr === userName || (ownerStr.length >= 3 && userName.includes(ownerStr)) || (userName.length >= 3 && ownerStr.includes(userName)) || idSet.has(ownerStr))) {
       return true;
     }
@@ -453,16 +459,17 @@ export function filterRecordsByRbac<T = any>(
     }
 
     // 4. Check Partner BDM (Lookup object, ID, Name, or Form Data)
-    if (rec.Partner_BDM && typeof rec.Partner_BDM === 'object') {
-      const pId = String(rec.Partner_BDM.id || '').trim().toLowerCase();
-      const pName = String(rec.Partner_BDM.name || '').trim().toLowerCase();
+    const partnerLookup = rec.Partner_BDM || rec.rawZohoDeal?.Partner_BDM;
+    if (partnerLookup && typeof partnerLookup === 'object') {
+      const pId = String(partnerLookup.id || '').trim().toLowerCase();
+      const pName = String(partnerLookup.name || '').trim().toLowerCase();
       if (pId && idSet.has(pId)) return true;
       if (pName && userName && (pName === userName || (pName.length >= 3 && userName.includes(pName)) || (userName.length >= 3 && pName.includes(userName)) || idSet.has(pName))) return true;
     }
 
-    const bdmId = String(rec.partnerBdmId || rec.partner_bdm_id || rec.Partner_BDM_ID || rec.formData?.partnerBdmId || rec.formData?.partner_bdm_id || (typeof rec.Partner_BDM === 'string' ? rec.Partner_BDM : '') || '').trim().toLowerCase();
+    const bdmId = String(rec.partnerBdmId || rec.partner_bdm_id || rec.Partner_BDM_ID || rec.rawZohoDeal?.Partner_BDM_ID || rec.rawZohoDeal?.partner_bdm_id || rec.formData?.partnerBdmId || rec.formData?.partner_bdm_id || (typeof partnerLookup === 'string' ? partnerLookup : '') || '').trim().toLowerCase();
     if (bdmId && idSet.has(bdmId)) return true;
-    const bdmName = String(rec.partnerBdmName || rec.partner_bdm_name || rec.Partner_BDM_Name || rec.formData?.partnerBdmName || rec.formData?.partner_bdm_name || '').trim().toLowerCase();
+    const bdmName = String(rec.partnerBdmName || rec.partner_bdm_name || rec.Partner_BDM_Name || rec.rawZohoDeal?.Partner_BDM_Name || rec.rawZohoDeal?.Partner_BDM_name || rec.rawZohoDeal?.Partner_BDM_Names || rec.rawZohoDeal?.Partner_BDM_Names_bp || rec.rawZohoDeal?.Partner_BDM_Names_st || rec.formData?.partnerBdmName || rec.formData?.partner_bdm_name || '').trim().toLowerCase();
     if (bdmName && userName && (bdmName === userName || (bdmName.length >= 3 && userName.includes(bdmName)) || (userName.length >= 3 && bdmName.includes(userName)) || idSet.has(bdmName))) return true;
 
     // 5. For HOD role, check if record's department matches HOD's department
