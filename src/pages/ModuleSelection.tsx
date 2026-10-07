@@ -120,8 +120,13 @@ export const ModuleSelection = () => {
         
         <div className="flex items-center space-x-4">
           <div 
-            onClick={() => setIsRoleModalOpen(true)}
-            className="flex items-center space-x-3 cursor-pointer p-1 rounded-xl hover:bg-gray-50 transition-colors"
+            onClick={() => {
+              if (isSuperAdminUser) setIsRoleModalOpen(true);
+            }}
+            className={`flex items-center space-x-3 p-1 rounded-xl transition-colors ${
+              isSuperAdminUser ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default'
+            }`}
+            title={isSuperAdminUser ? 'Click to Switch System Role & User' : undefined}
           >
             <div className="text-right hidden sm:block">
               <div className="text-sm font-bold text-gray-900 leading-tight">{currentUser.name}</div>
@@ -222,10 +227,12 @@ export const ModuleSelection = () => {
         </motion.div>
       </main>
 
-      <RoleSwitcherModal 
-        isOpen={isRoleModalOpen} 
-        onClose={() => setIsRoleModalOpen(false)} 
-      />
+      {isSuperAdminUser && (
+        <RoleSwitcherModal 
+          isOpen={isRoleModalOpen} 
+          onClose={() => setIsRoleModalOpen(false)} 
+        />
+      )}
 
       {/* Wave animation keyframes */}
       <style>{`

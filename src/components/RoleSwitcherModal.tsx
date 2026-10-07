@@ -11,7 +11,17 @@ interface RoleSwitcherModalProps {
 }
 
 export const RoleSwitcherModal: React.FC<RoleSwitcherModalProps> = ({ isOpen, onClose }) => {
-  const { currentRole, switchRole, availableUsers, switchUser, currentUser } = useAuth();
+  const { currentRole, switchRole, availableUsers, switchUser, currentUser, isSuperAdmin } = useAuth();
+
+  const isSuperAdminUser = isSuperAdmin || 
+                           currentRole === 'Super Admin' || 
+                           (currentUser.role as string) === 'Super Admin' || 
+                           currentUser.email?.toLowerCase() === 'superadmin@be.com' ||
+                           currentUser.email === 'md@bharat-edge.com';
+
+  if (!isSuperAdminUser) {
+    return null;
+  }
 
   const roleIcons: Record<SystemRole, React.ReactNode> = {
     'Super Admin': <Crown className="w-5 h-5 text-purple-600" />,

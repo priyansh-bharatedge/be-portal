@@ -349,11 +349,13 @@ export const AppLayout = () => {
         </main>
       </div>
 
-      {/* Role & User Switcher Modal */}
-      <RoleSwitcherModal 
-        isOpen={isRoleModalOpen} 
-        onClose={() => setIsRoleModalOpen(false)} 
-      />
+      {/* Role & User Switcher Modal (Super Admin only) */}
+      {isSuperAdminUser && (
+        <RoleSwitcherModal 
+          isOpen={isRoleModalOpen} 
+          onClose={() => setIsRoleModalOpen(false)} 
+        />
+      )}
     </div>
   );
 };
