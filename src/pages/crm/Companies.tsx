@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Plus, Filter, Edit, Trash2, Building2, FileText, Calendar, CheckCircle2, X, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, Mail, Eye, Phone, Tag, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -30,22 +31,51 @@ export interface Company {
 }
 
 export const Companies = () => {
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { currentUser, filterRecords } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('All Companies');
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || location.state?.tab || 'All Companies');
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
   const [viewingCompany, setViewingCompany] = useState<Company | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(() => {
+    const perPageParam = searchParams.get('per_page') || location.state?.per_page;
+    if (perPageParam) {
+      const p = parseInt(String(perPageParam), 10);
+      if (!isNaN(p) && p > 0) return p;
+    }
+    const searchParam = searchParams.get('search') || location.state?.search;
+    const tabParam = searchParams.get('tab') || location.state?.tab;
+    if (searchParam || (tabParam && tabParam !== 'All Companies')) return 200;
+    return 25;
+  });
   const [deleteTarget, setDeleteTarget] = useState<{ isOpen: boolean; company: Company | null; isDeleting: boolean }>({
     isOpen: false,
     company: null,
     isDeleting: false
   });
+
+  // Sync state with URL search params
+  useEffect(() => {
+    const searchParam = searchParams.get('search') || location.state?.search;
+    if (searchParam !== null && searchParam !== undefined) setSearchQuery(searchParam);
+    const tabParam = searchParams.get('tab') || location.state?.tab;
+    if (tabParam) setActiveTab(tabParam);
+    const perPageParam = searchParams.get('per_page') || location.state?.per_page;
+    if (perPageParam) {
+      const p = parseInt(String(perPageParam), 10);
+      if (!isNaN(p) && p > 0) setItemsPerPage(p);
+    } else if (searchParam || (tabParam && tabParam !== 'All Companies')) {
+      setItemsPerPage(prev => (prev < 200 ? 200 : prev));
+    }
+  }, [searchParams, location.state]);
 
   const rbacCompanies = useMemo(() => {
     return filterRecords ? filterRecords(companies, 'Companies') : companies;
@@ -71,7 +101,9 @@ export const Companies = () => {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setCompanies(parsed);
+          // Keep only live Zoho records or active manual entries, discarding phantom 'From Deals' records
+          const validCompanies = parsed.filter((c: any) => c.source !== 'From Deals' && (c.zohoId || c.source === 'Manual'));
+          setCompanies(validCompanies);
         }
       } catch (e) {}
     }
@@ -250,17 +282,6 @@ export const Companies = () => {
     try {
       const res = await fetchZohoCompanies();
       if (res.success && Array.isArray(res.data)) {
-        if (res.data.length === 0) {
-          if (showNotification) {
-            setToast({
-              type: 'info',
-              message: 'No Live Companies Found',
-              submessage: 'Companies module returned 0 records'
-            });
-          }
-          return;
-        }
-
         // Map live Zoho records into our company interface
         const fetchedCompanies: Company[] = res.data.map((r: any) => ({
           id: `CMP-${r.id ? String(r.id).slice(-4) : Math.floor(1000 + Math.random() * 9000)}`,
@@ -271,7 +292,7 @@ export const Companies = () => {
           email: r.Email || '',
           secondaryEmail: r.Secondary_Email || '',
           status: (r.Status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
-          source: 'Cloud',
+          source: 'Live Zoho',
           addedOn: r.Created_Time ? new Date(r.Created_Time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB'),
           zohoId: String(r.id),
           zohoStatus: 'synced',
@@ -282,24 +303,10 @@ export const Companies = () => {
         }));
 
         setCompanies(prev => {
-          const seenZohoIds = new Set<string>();
-          const seenIds = new Set<string>();
-          const merged: Company[] = [];
-
-          for (const fc of fetchedCompanies) {
-            if (fc.zohoId) seenZohoIds.add(fc.zohoId);
-            if (fc.id) seenIds.add(fc.id.toLowerCase());
-            merged.push(fc);
-          }
-
-          for (const pc of prev) {
-            if (pc.zohoId && seenZohoIds.has(pc.zohoId)) continue;
-            if (pc.id && seenIds.has(pc.id.toLowerCase())) continue;
-            if (pc.id) seenIds.add(pc.id.toLowerCase());
-            if (pc.zohoId) seenZohoIds.add(pc.zohoId);
-            merged.push(pc);
-          }
-
+          // Keep only live Zoho records + active local drafts pending sync
+          const localPending = prev.filter(p => p.source === 'Manual' && p.zohoStatus !== 'synced');
+          const seenZohoIds = new Set(fetchedCompanies.map(f => f.zohoId));
+          const merged = [...fetchedCompanies, ...localPending.filter(p => !p.zohoId || !seenZohoIds.has(p.zohoId))];
           localStorage.setItem('be_companies', JSON.stringify(merged));
           return merged;
         });
@@ -308,7 +315,7 @@ export const Companies = () => {
           setToast({
             type: 'success',
             message: `Fetched ${res.data.length} Companies successfully!`,
-            submessage: 'Live CRM data synchronized successfully'
+            submessage: 'Live CRM data synchronized directly from Zoho'
           });
         }
       } else if (showNotification) {
@@ -400,38 +407,30 @@ export const Companies = () => {
     setFormErrors({});
   };
 
-  // Pagination States
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, activeTab]);
-
-  const filteredCompanies = rbacCompanies.filter(c => {
-    const source = c.source || 'Manual';
-    if (activeTab === 'Manual Companies' && source !== 'Manual') return false;
-    if (activeTab === 'From Deals' && source !== 'From Deals') return false;
-    if (activeTab === 'Cloud Records' && source !== 'Cloud Records') return false;
-    
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase().trim();
-    return (c.name && String(c.name).toLowerCase().includes(q)) || 
-           (c.gstNumber && String(c.gstNumber).toLowerCase().includes(q)) ||
-           (c.type && String(c.type).toLowerCase().includes(q)) ||
-           (c.email && String(c.email).toLowerCase().includes(q)) ||
-           (c.secondaryEmail && String(c.secondaryEmail).toLowerCase().includes(q)) ||
-           (c.id && String(c.id).toLowerCase().includes(q)) ||
-           (c.zohoId && String(c.zohoId).toLowerCase().includes(q)) ||
-           (c.status && String(c.status).toLowerCase().includes(q)) ||
-           ((c.employeeName || c.salesEmployee) && String(c.employeeName || c.salesEmployee).toLowerCase().includes(q));
-  });
+  const filteredCompanies = useMemo(() => {
+    return rbacCompanies.filter(c => {
+      const source = c.source || 'Live Zoho';
+      if (activeTab === 'Manual Companies' && source !== 'Manual') return false;
+      if (activeTab === 'Live Zoho Companies' && source !== 'Live Zoho' && source !== 'Cloud') return false;
+      
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (c.name && String(c.name).toLowerCase().includes(q)) || 
+             (c.gstNumber && String(c.gstNumber).toLowerCase().includes(q)) ||
+             (c.type && String(c.type).toLowerCase().includes(q)) ||
+             (c.email && String(c.email).toLowerCase().includes(q)) ||
+             (c.secondaryEmail && String(c.secondaryEmail).toLowerCase().includes(q)) ||
+             (c.id && String(c.id).toLowerCase().includes(q)) ||
+             (c.zohoId && String(c.zohoId).toLowerCase().includes(q)) ||
+             (c.status && String(c.status).toLowerCase().includes(q)) ||
+             ((c.employeeName || c.salesEmployee) && String(c.employeeName || c.salesEmployee).toLowerCase().includes(q));
+    });
+  }, [rbacCompanies, activeTab, searchQuery]);
 
   const totalCompaniesCount = filteredCompanies.length;
-  const paginatedCompanies = filteredCompanies.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const paginatedCompanies = useMemo(() => {
+    return filteredCompanies.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredCompanies, currentPage, itemsPerPage]);
 
   return (
     <div className="space-y-6">
@@ -478,10 +477,10 @@ export const Companies = () => {
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-bold text-gray-900">Companies</h1>
             <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              {companies.length} Total
+              {totalCompaniesCount} Total
             </span>
           </div>
-          <p className="text-gray-500 text-sm mt-1">Manage corporate entities, GST, and company records.</p>
+          <p className="text-gray-500 text-sm mt-1">Manage corporate entities, GST, and company records directly from live Zoho CRM.</p>
         </div>
         <div className="flex items-center space-x-3">
           <button
@@ -504,7 +503,7 @@ export const Companies = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-        {['All Companies', 'Manual Companies', 'From Deals', 'Cloud Records'].map(tab => (
+        {['All Companies', 'Live Zoho Companies', 'Manual Companies'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}

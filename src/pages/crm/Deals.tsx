@@ -784,23 +784,6 @@ export const Deals = () => {
       }
     });
 
-    // Batch cache for companies and clients
-    let localCompanies: any[] = [];
-    let localClients: any[] = [];
-    try {
-      const rawComp = localStorage.getItem('be_companies');
-      if (rawComp) localCompanies = JSON.parse(rawComp);
-    } catch (e) {}
-    try {
-      const rawCl = localStorage.getItem('be_clients');
-      if (rawCl) localClients = JSON.parse(rawCl);
-    } catch (e) {}
-
-    const knownCompanyNames = new Set(localCompanies.map((c: any) => (c.name || '').toLowerCase().trim()));
-    const knownClientNames = new Set(localClients.map((c: any) => (c.name || '').toLowerCase().trim()));
-    let companiesChanged = false;
-    let clientsChanged = false;
-
     rawDeals.forEach((zDeal: any) => {
       const zIdStr = String(zDeal.id || '');
       let existingIdx = -1;
@@ -1171,55 +1154,7 @@ export const Deals = () => {
         if (dealObj.id) dealIndexById.set(String(dealObj.id), newIdx);
         newCount++;
       }
-
-      // Auto-populate companies and clients in batch memory
-      const compKey = (dealObj.company || '').toLowerCase().trim();
-      if (dealObj.company && dealObj.company !== 'N/A' && !knownCompanyNames.has(compKey)) {
-        knownCompanyNames.add(compKey);
-        localCompanies.unshift({
-          id: `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: dealObj.company,
-          type: 'Private Limited',
-          gstNumber: zDeal.Gst_number || '',
-          doi: '',
-          email: contactEmail,
-          status: 'Active',
-          source: 'From Deals',
-          addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          zohoStatus: 'synced'
-        });
-        companiesChanged = true;
-      }
-
-      const clientKey = (dealObj.client || '').toLowerCase().trim();
-      if (dealObj.client && dealObj.client !== 'Client' && !knownClientNames.has(clientKey)) {
-        knownClientNames.add(clientKey);
-        localClients.unshift({
-          id: `CL-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: dealObj.client,
-          company: dealObj.company || 'Individual',
-          email: contactEmail,
-          phone: contactPhone,
-          status: 'Active',
-          source: 'From Deals',
-          addedOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          zohoStatus: 'synced'
-        });
-        clientsChanged = true;
-      }
     });
-
-    // Save companies & clients to localStorage once per batch
-    if (companiesChanged) {
-      try {
-        localStorage.setItem('be_companies', JSON.stringify(localCompanies.slice(0, 2000)));
-      } catch (e) {}
-    }
-    if (clientsChanged) {
-      try {
-        localStorage.setItem('be_clients', JSON.stringify(localClients.slice(0, 2000)));
-      } catch (e) {}
-    }
 
     return { updatedDeals, newCount, updatedCount };
   };
@@ -1501,7 +1436,7 @@ export const Deals = () => {
             doi: formData.doi || existingComp?.doi || '',
             email: formData.email || existingComp?.email || '',
             status: 'Active',
-            source: existingComp?.source || 'From Deals',
+            source: existingComp?.source || 'Manual',
             addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             zohoId: existingComp?.zohoId,
             zohoStatus: existingComp?.zohoStatus || 'pending',
@@ -1563,7 +1498,7 @@ export const Deals = () => {
             email: formData.email ? (formData.email ?? '').trim() : (existingClient?.email || ''),
             phone: formData.mobile ? formData.mobile.replace(/[^0-9]/g, '') : (existingClient?.phone || ''),
             status: 'Active',
-            source: existingClient?.source || 'From Deals',
+            source: existingClient?.source || 'Manual',
             addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             zohoId: existingClient?.zohoId,
             zohoStatus: existingClient?.zohoStatus || 'pending',
@@ -1834,7 +1769,7 @@ export const Deals = () => {
           doi: deal.formData?.doi || existingComp?.doi || '',
           email: deal.formData?.email || existingComp?.email || '',
           status: 'Active',
-          source: existingComp?.source || 'From Deals',
+          source: existingComp?.source || 'Manual',
           addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           zohoId: existingComp?.zohoId,
           zohoStatus: existingComp?.zohoStatus || 'pending',
@@ -1880,7 +1815,7 @@ export const Deals = () => {
           email: deal.formData?.email ? deal.formData.email.trim() : (existingClient?.email || ''),
           phone: deal.formData?.mobile ? deal.formData.mobile.replace(/[^0-9]/g, '') : (existingClient?.phone || ''),
           status: 'Active',
-          source: existingClient?.source || 'From Deals',
+          source: existingClient?.source || 'Manual',
           addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           zohoId: existingClient?.zohoId,
           zohoStatus: existingClient?.zohoStatus || 'pending',

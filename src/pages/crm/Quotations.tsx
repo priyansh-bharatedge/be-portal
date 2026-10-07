@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, Download, Send, Cloud, CloudOff, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Loader2, Printer } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
@@ -18,16 +18,28 @@ interface DealService {
 
 export const Quotations = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { currentUser, filterRecords } = useAuth();
-  const [activeTab, setActiveTab] = useState('All Quotations');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || location.state?.tab || 'All Quotations');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
   const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(() => {
+    const perPageParam = searchParams.get('per_page') || location.state?.per_page;
+    if (perPageParam) {
+      const p = parseInt(String(perPageParam), 10);
+      if (!isNaN(p) && p > 0) return p;
+    }
+    const searchParam = searchParams.get('search') || location.state?.search;
+    const tabParam = searchParams.get('tab') || location.state?.tab;
+    if (searchParam || (tabParam && tabParam !== 'All Quotations')) return 200;
+    return 25;
+  });
 
   // Zoho & Submission States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -416,12 +428,41 @@ export const Quotations = () => {
     }
   }, [currentUser]);
 
+  // Sync state with URL search params
+  useEffect(() => {
+    const searchParam = searchParams.get('search') || location.state?.search;
+    if (searchParam !== null && searchParam !== undefined) setSearchQuery(searchParam);
+    const tabParam = searchParams.get('tab') || location.state?.tab;
+    if (tabParam) setActiveTab(tabParam);
+    const perPageParam = searchParams.get('per_page') || location.state?.per_page;
+    if (perPageParam) {
+      const p = parseInt(String(perPageParam), 10);
+      if (!isNaN(p) && p > 0) setItemsPerPage(p);
+    } else if (searchParam || (tabParam && tabParam !== 'All Quotations')) {
+      setItemsPerPage(prev => (prev < 200 ? 200 : prev));
+    }
+  }, [searchParams, location.state]);
+
   const rbacQuotations = useMemo(() => {
     return filterRecords ? filterRecords(quotations, 'Quotations') : quotations;
   }, [quotations, filterRecords, currentUser]);
 
+  const tabCounts = useMemo(() => {
+    return {
+      all: rbacQuotations.length,
+      sent: rbacQuotations.filter((q: any) => q.status === 'Sent').length,
+      draft: rbacQuotations.filter((q: any) => q.status === 'Draft').length,
+    };
+  }, [rbacQuotations]);
+
+  const isFiltered = !!(searchQuery || (activeTab && activeTab !== 'All Quotations'));
+
   const filteredQuotations = useMemo(() => {
     return rbacQuotations.filter((deal: any) => {
+      // Tab filter
+      if (activeTab === 'Sent' && deal.status !== 'Sent') return false;
+      if (activeTab === 'Draft' && deal.status !== 'Draft') return false;
+
       if (searchQuery) {
         const q = searchQuery.toLowerCase().trim();
         const matchClient = deal.client && String(deal.client).toLowerCase().includes(q);
@@ -439,7 +480,7 @@ export const Quotations = () => {
       }
       return true;
     });
-  }, [rbacQuotations, searchQuery]);
+  }, [rbacQuotations, searchQuery, activeTab]);
 
   const totalQuotationsCount = filteredQuotations.length;
   const paginatedQuotations = useMemo(() => {
@@ -978,7 +1019,7 @@ export const Quotations = () => {
             doi: qToConvert.formData?.doi || existingComp?.doi || '',
             email: qToConvert.formData?.email || existingComp?.email || '',
             status: 'Active',
-            source: existingComp?.source || 'From Deals',
+            source: existingComp?.source || 'Manual',
             addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             zohoId: existingComp?.zohoId,
             zohoStatus: existingComp?.zohoStatus || 'pending',
@@ -1036,7 +1077,7 @@ export const Quotations = () => {
             email: email,
             phone: phone,
             status: 'Active',
-            source: existingClient?.source || 'From Deals',
+            source: existingClient?.source || 'Manual',
             addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             zohoId: existingClient?.zohoId,
             zohoStatus: existingClient?.zohoStatus || 'pending',
@@ -1215,6 +1256,69 @@ export const Quotations = () => {
           </button>
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 space-x-8">
+        {(['All Quotations', 'Sent', 'Draft'] as const).map((tab) => {
+          const count = tab === 'All Quotations' ? tabCounts.all : tab === 'Sent' ? tabCounts.sent : tabCounts.draft;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-4 text-sm font-bold flex items-center transition-all relative ${
+                activeTab === tab
+                  ? 'text-be-orange border-b-2 border-be-orange'
+                  : 'text-gray-500 hover:text-gray-900 border-b-2 border-transparent'
+              }`}
+            >
+              {tab}
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                activeTab === tab ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
+              }`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Active Filter Notification Banner */}
+      {isFiltered && (
+        <div className="flex items-center flex-wrap gap-2 px-4 py-2.5 bg-orange-50/70 border border-orange-200/80 rounded-xl text-xs text-orange-950 animate-fadeIn">
+          <span className="font-bold flex items-center text-be-orange mr-1">
+            <Filter size={13} className="mr-1.5" />
+            Filtered View:
+          </span>
+          {activeTab !== 'All Quotations' && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-orange-200 text-be-orange font-extrabold shadow-xs">
+              Tab: {activeTab}
+              <button onClick={() => setActiveTab('All Quotations')} className="ml-1.5 hover:text-gray-900 transition-colors"><X size={12} /></button>
+            </span>
+          )}
+          {searchQuery && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-purple-300 text-purple-800 font-extrabold shadow-xs">
+              Search: "{searchQuery}"
+              <button onClick={() => setSearchQuery('')} className="ml-1.5 hover:text-gray-900 transition-colors"><X size={12} /></button>
+            </span>
+          )}
+          {itemsPerPage === 200 && (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 font-semibold">
+              ⚡ 200 Records per Page Active
+            </span>
+          )}
+          <button
+            onClick={() => {
+              setActiveTab('All Quotations');
+              setSearchQuery('');
+              setItemsPerPage(25);
+              navigate('/crm/quotations', { replace: true, state: {} });
+            }}
+            className="ml-auto text-xs font-bold text-gray-500 hover:text-rose-600 underline transition-colors px-2 py-0.5"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      )}
 
       <div className="bg-transparent overflow-hidden mt-6">
         <div className="overflow-x-auto pb-6">

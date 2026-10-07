@@ -50,8 +50,8 @@ export function resolveAccessibleEmployeeIds(
   const userName = (user.name || '').trim().toLowerCase();
   const userEmail = (user.email || '').trim().toLowerCase();
 
-  // 1. Super Admin / Admin has full organizational visibility
-  if (role === 'Super Admin' || userEmail === 'superadmin@be.com' || userEmail === 'md@bharat-edge.com') {
+  // 1. Super Admin & Head of Department (HOD) have full organizational visibility across all modules
+  if (role === 'Super Admin' || role === 'HOD' || userEmail === 'superadmin@be.com' || userEmail === 'md@bharat-edge.com') {
     return { employeeIds: [], zohoIds: [], isAll: true };
   }
 
@@ -60,57 +60,7 @@ export function resolveAccessibleEmployeeIds(
     return { employeeIds: [], zohoIds: [], isAll: true };
   }
 
-  // 3. Head of Department (HOD) - Global visibility for Deals (identical to Super Admin)
-  const normModule = (moduleName || '').toLowerCase().replace(/_/g, '-');
-  const isDealsModule = normModule === 'deals' || normModule === 'deal' || normModule === 'crm';
-  if (role === 'HOD' && isDealsModule) {
-    return { employeeIds: [], zohoIds: [], isAll: true };
-  }
-
-  // 4. Head of Department (HOD) - Department-wide + Team (Combines with TL logic for direct reports)
-  // In departments like Marketing, the HOD and Team Leader are often the exact same person.
-  // Therefore, the HOD logic dynamically combines with TL logic to ensure both department-wide
-  // records AND direct reports via Reporting_Manager are accessible.
-  if (role === 'HOD') {
-    const userDept = (user.department || '').trim().toLowerCase();
-    const empIds = new Set<string>();
-    const zIds = new Set<string>();
-
-    if (userEmpId) empIds.add(userEmpId);
-    if (userZohoId) zIds.add(userZohoId);
-    if (user.id) empIds.add(String(user.id).toLowerCase());
-
-    allEmployees.forEach((e: any) => {
-      const eDept = (e.dept || e.department || e.formData?.dept || '').trim().toLowerCase();
-      const tlId = (e.teamLeaderId || e.formData?.teamLeaderId || '').trim().toLowerCase();
-      const tlName = (e.teamLeaderName || e.Who_is_the_Team_Leader_TL || e.formData?.teamLeaderName || '').trim().toLowerCase();
-      const rmId = (e.reportingManagerId || e.formData?.reportingManagerId || '').trim().toLowerCase();
-      const rmName = (e.reportingManagerName || e.Reporting_Manager || e.formData?.reportingManagerName || '').trim().toLowerCase();
-
-      const inDept = eDept === userDept || (userDept === 'management') || (userDept === 'sales' && (eDept.includes('sale') || eDept.includes('bdm'))) || (userDept === 'operations' && eDept.includes('operat'));
-      const isDirectReport = (
-        (tlId && (tlId === userEmpId || tlId === userZohoId.toLowerCase())) ||
-        (rmId && (rmId === userEmpId || rmId === userZohoId.toLowerCase())) ||
-        (tlName && userName && (tlName === userName || userName.includes(tlName))) ||
-        (rmName && userName && (rmName === userName || userName.includes(rmName)))
-      );
-
-      if (inDept || isDirectReport) {
-        if (e.id) empIds.add(String(e.id).toLowerCase());
-        if (e.empId) empIds.add(String(e.empId).toLowerCase());
-        if (e.zohoId) zIds.add(String(e.zohoId));
-        if (e.Employment_ID) empIds.add(String(e.Employment_ID).toLowerCase());
-      }
-    });
-
-    return {
-      employeeIds: Array.from(empIds),
-      zohoIds: Array.from(zIds),
-      isAll: false
-    };
-  }
-
-  // 4. Team Leader (TL) - Self + Team (direct reports via Reporting_Manager or Team Leader)
+  // 3. Team Leader (TL) - Self + Team (direct reports via Reporting_Manager or Team Leader)
   if (role === 'TL') {
     const empIds = new Set<string>();
     const zIds = new Set<string>();
@@ -340,26 +290,22 @@ export function buildZohoRbacCriteria(
 ): RbacCriteriaResult {
   const config = ZOHO_MODULE_LOOKUP_MAP[moduleName];
 
-  // Exempt modules have no role filters
-  if (config?.isLookupExempt || !user) {
+  // Exempt modules and full-visibility roles (Super Admin, HOD, HR) have no role filters
+  if (
+    config?.isLookupExempt || 
+    !user || 
+    user.role === 'Super Admin' || 
+    user.role === 'HOD' || 
+    user.role === 'HR' ||
+    user.email === 'superadmin@be.com' || 
+    user.email === 'md@bharat-edge.com'
+  ) {
     return {
       criteria: '',
       coqlWhereClause: '',
       accessibleEmployeeIds: [],
       isUnfiltered: true,
-      role: user?.role || 'TM'
-    };
-  }
-
-  const normModule = (moduleName || '').toLowerCase().replace(/_/g, '-');
-  const isDealsModule = normModule === 'deals' || normModule === 'deal' || normModule === 'crm';
-  if (user.role === 'HOD' && isDealsModule) {
-    return {
-      criteria: '',
-      coqlWhereClause: '',
-      accessibleEmployeeIds: [],
-      isUnfiltered: true,
-      role: user.role
+      role: user?.role || 'Super Admin'
     };
   }
 
@@ -419,16 +365,19 @@ export function filterRecordsByRbac<T = any>(
   allEmployees: any[] = getAllEmployeesList()
 ): T[] {
   if (!Array.isArray(records) || records.length === 0) return [];
-  if (!user) return records;
-
-  const config = ZOHO_MODULE_LOOKUP_MAP[moduleName];
-  if (config?.isLookupExempt || moduleName === 'Company_Calendar' || moduleName === 'Company_Policies' || moduleName === 'Calendar' || moduleName === 'Policies') {
+  if (
+    !user || 
+    user.role === 'Super Admin' || 
+    user.role === 'HOD' || 
+    user.role === 'HR' ||
+    user.email === 'superadmin@be.com' || 
+    user.email === 'md@bharat-edge.com'
+  ) {
     return records;
   }
 
-  const normModule = (moduleName || '').toLowerCase().replace(/_/g, '-');
-  const isDealsModule = normModule === 'deals' || normModule === 'deal' || normModule === 'crm';
-  if (user.role === 'HOD' && isDealsModule) {
+  const config = ZOHO_MODULE_LOOKUP_MAP[moduleName];
+  if (config?.isLookupExempt || moduleName === 'Company_Calendar' || moduleName === 'Company_Policies' || moduleName === 'Calendar' || moduleName === 'Policies') {
     return records;
   }
 
