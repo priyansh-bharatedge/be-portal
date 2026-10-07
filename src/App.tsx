@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PageLoader } from './components/ui/PageLoader';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 // ── Always eagerly loaded (tiny, needed immediately) ─────────────────────────
 import { Login } from './pages/Login';
@@ -52,10 +53,23 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/modules" element={<ModuleSelection />} />
+          <Route 
+            path="/modules" 
+            element={
+              <ProtectedRoute>
+                <ModuleSelection />
+              </ProtectedRoute>
+            } 
+          />
 
           {/* Main Application Layout wrapper */}
-          <Route element={<AppLayout />}>
+          <Route 
+            element={
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
             {/* CRM Routes */}
             <Route path="/crm/dashboard"      element={<Lazy><CrmDashboard /></Lazy>} />
             <Route path="/crm/quotations"     element={<Lazy><Quotations /></Lazy>} />

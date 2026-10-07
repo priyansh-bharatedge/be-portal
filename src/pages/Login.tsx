@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
 import { 
   CheckCircle2, Crown, Shield, ArrowRight, UserCheck, 
   KeyRound, Mail, Lock, Eye, EyeOff, RefreshCw, Sparkles,
-  ArrowLeft, Check, AlertCircle, HelpCircle
+  ArrowLeft, Check, AlertCircle, HelpCircle, Clock, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,7 @@ type AuthStep = 'EMAIL' | 'PASSWORD' | 'OTP' | 'SETUP_PASSWORD' | 'SUCCESS';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { 
     searchEmployeeInZoho, 
     login, 
@@ -25,12 +26,27 @@ export const Login: React.FC = () => {
 
   // Current Step in Conditional Auth Flow
   const [step, setStep] = useState<AuthStep>('EMAIL');
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
 
   // Core Form State
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState<any>(null);
+
+  // Check for session expiry from URL params or sessionStorage
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const isExpired = searchParams.get('expired') === 'true';
+    const savedReason = sessionStorage.getItem('be_logout_reason');
+
+    if (isExpired || savedReason) {
+      setSessionExpiredNotice(
+        savedReason || 'Your session has expired after 24 hours. For security, please log in again.'
+      );
+      sessionStorage.removeItem('be_logout_reason');
+    }
+  }, [location.search]);
 
   // Scenario 3: Returning User (Password Step State)
   const [password, setPassword] = useState('');
@@ -376,6 +392,29 @@ export const Login: React.FC = () => {
             transition={{ duration: 0.5 }}
             className="w-full max-w-md mx-auto"
           >
+            {/* Session Expired (24h) Alert Notification */}
+            {sessionExpiredNotice && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-5 p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs shadow-sm flex items-start gap-2.5 relative"
+              >
+                <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-bold text-amber-950">24-Hour Session Expired</div>
+                  <div className="text-[11px] text-amber-800 mt-0.5 leading-snug">{sessionExpiredNotice}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSessionExpiredNotice(null)}
+                  className="text-amber-500 hover:text-amber-800 transition-colors p-0.5 rounded-md"
+                  title="Dismiss notice"
+                >
+                  <X size={14} />
+                </button>
+              </motion.div>
+            )}
+
             {/* Header Header Info */}
             <div className="mb-6 text-center lg:text-left">
               <div className="lg:hidden flex justify-center mb-3">

@@ -1,10 +1,20 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { ROLE_DEFINITIONS } from '../types/roles';
 import type { AuthUser, SystemRole, RbacCriteriaResult } from '../types/roles';
 import { DEMO_USERS, INITIAL_EMPLOYEES, INITIAL_DSR_REPORTS } from '../utils/initialData';
 import { sendOtpEmail } from '../services/emailService';
 import { saveOrUpdateZohoEmployee, updateZohoEmployeePassword, fetchZohoEmployees, searchZohoEmployeeByEmail } from '../services/zohoService';
 import type { ZohoApiResponse, ZohoFetchOptions, ZohoFetchResult } from '../services/zohoService';
+import {
+  generateJwtToken,
+  verifyJwtToken,
+  getStoredJwtToken,
+  setStoredJwtToken,
+  clearStoredJwtToken,
+  JWT_EXPIRY_SECONDS,
+  JWT_EXPIRY_MS,
+  type JwtPayload
+} from '../utils/jwt';
 import {
   injectEmployeeLookup,
   buildZohoRbacCriteria,
@@ -32,11 +42,18 @@ interface AuthContextType {
   isTM: boolean;
   can: (permission: string) => boolean;
   searchEmployeeInZoho: (email: string) => Promise<{ success: boolean; exists: boolean; hasPassword?: boolean; employee?: any; error?: string }>;
-  login: (email: string, password?: string, role?: SystemRole) => { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser };
+  login: (email: string, password?: string, role?: SystemRole) => { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser; token?: string };
   requestOtp: (emailOrId: string) => Promise<{ success: boolean; error?: string; maskedEmail?: string; otp?: string; empName?: string; targetEmail?: string }>;
   verifyOtp: (emailOrId: string, otp: string) => { success: boolean; error?: string };
-  setPasswordAndActivate: (emailOrId: string, otp: string, newPassword: string) => Promise<{ success: boolean; error?: string; user?: AuthUser }>;
-  logout: () => void;
+  setPasswordAndActivate: (emailOrId: string, otp: string, newPassword: string) => Promise<{ success: boolean; error?: string; user?: AuthUser; token?: string }>;
+  logout: (reason?: string) => void;
+
+  // JWT Authentication & 24-Hour Session State
+  jwtToken: string | null;
+  isAuthenticated: boolean;
+  isTokenExpired: boolean;
+  sessionRemainingTime: string;
+  validateSession: () => boolean;
   
   // RBAC & Relationship Mapping Deliverables
   getTeamMemberIds: (includeSelf?: boolean) => string[];
@@ -52,18 +69,48 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // 1. JWT & Session State Initialization
+  const [jwtToken, setJwtToken] = useState<string | null>(() => {
+    const token = getStoredJwtToken();
+    if (token) {
+      const verify = verifyJwtToken(token);
+      if (verify.isValid && !verify.isExpired) {
+        return token;
+      }
+    }
+    return null;
+  });
+
+  const [isTokenExpired, setIsTokenExpired] = useState<boolean>(() => {
+    const token = getStoredJwtToken();
+    if (token) {
+      const verify = verifyJwtToken(token);
+      return !verify.isValid || verify.isExpired;
+    }
+    // If no token exists, not expired, just unauthenticated
+    return false;
+  });
+
+  const [sessionRemainingTime, setSessionRemainingTime] = useState<string>(() => {
+    const token = getStoredJwtToken();
+    if (token) {
+      const verify = verifyJwtToken(token);
+      return verify.remainingFormatted || '24h 0m';
+    }
+    return '24h 0m';
+  });
+
   // Initialize storage and clean up dummy data
   useEffect(() => {
-    const CLEARED_KEY = 'be_superadmin_auth_v4';
+    const CLEARED_KEY = 'be_superadmin_auth_v5';
     const isCleaned = localStorage.getItem(CLEARED_KEY);
 
     if (!isCleaned) {
-      // Set active super admin to new credentials
       const saved = localStorage.getItem('be_active_user');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (parsed.email === 'md@bharat-edge.com' || parsed.email === 'admin@bharatedge.com' || parsed.role === 'Super Admin') {
+          if (parsed.email === 'md@bharat-edge.com' || parsed.email === 'admin@bharatedge.com') {
             localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
             setCurrentUser(DEMO_USERS[0]);
           }
@@ -71,15 +118,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
           setCurrentUser(DEMO_USERS[0]);
         }
-      } else {
-        localStorage.setItem('be_active_user', JSON.stringify(DEMO_USERS[0]));
-        setCurrentUser(DEMO_USERS[0]);
       }
       localStorage.setItem(CLEARED_KEY, 'true');
     }
   }, []);
 
   const [currentUser, setCurrentUser] = useState<AuthUser>(() => {
+    // Verify token validity on initial state creation
+    const token = getStoredJwtToken();
+    if (token) {
+      const verify = verifyJwtToken(token);
+      if (!verify.isValid || verify.isExpired) {
+        clearStoredJwtToken();
+        localStorage.removeItem('be_active_user');
+        return DEMO_USERS[0];
+      }
+      // If token payload contains user info, prioritize it
+      if (verify.payload) {
+        const saved = localStorage.getItem('be_active_user');
+        if (saved) {
+          try {
+            return JSON.parse(saved);
+          } catch (e) {}
+        }
+      }
+    }
+
     const saved = localStorage.getItem('be_active_user');
     if (saved) {
       try {
@@ -166,12 +230,102 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const switchUser = (user: AuthUser) => {
+  const logout = useCallback((reason?: string) => {
+    clearStoredJwtToken();
+    localStorage.removeItem('be_active_user');
+    if (reason) {
+      sessionStorage.setItem('be_logout_reason', reason);
+    }
+    setJwtToken(null);
+    setIsTokenExpired(true);
+    setSessionRemainingTime('0m');
+    setCurrentUser(DEMO_USERS[0]);
+    window.dispatchEvent(new Event('be_auth_logged_out'));
+  }, []);
+
+  const validateSession = useCallback((): boolean => {
+    const token = getStoredJwtToken();
+    if (!token) return false;
+    const result = verifyJwtToken(token);
+    if (!result.isValid || result.isExpired) {
+      setIsTokenExpired(true);
+      setSessionRemainingTime('0m');
+      return false;
+    }
+    setIsTokenExpired(false);
+    if (result.remainingFormatted) {
+      setSessionRemainingTime(result.remainingFormatted);
+    }
+    return true;
+  }, []);
+
+  // 2. Continuous 24-Hour Session Expiration Checker
+  useEffect(() => {
+    const checkSession = () => {
+      const token = getStoredJwtToken();
+      if (token) {
+        const result = verifyJwtToken(token);
+        if (!result.isValid || result.isExpired) {
+          console.warn('[JWT Auth] Session expired after 24 hours. Triggering auto-logout.');
+          setIsTokenExpired(true);
+          setSessionRemainingTime('0m');
+          logout('Your session has expired after 24 hours. Please log in again.');
+        } else if (result.remainingFormatted) {
+          setIsTokenExpired(false);
+          setSessionRemainingTime(result.remainingFormatted);
+        }
+      } else {
+        setIsTokenExpired(false);
+      }
+    };
+
+    // Check immediately on mount
+    checkSession();
+
+    // Check periodically every 30 seconds
+    const interval = setInterval(checkSession, 30000);
+
+    // Check whenever tab is focused or device wakes up
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        checkSession();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    // Multi-tab logout sync
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'be_auth_token' && !e.newValue) {
+        logout();
+      }
+    };
+    window.addEventListener('storage', handleStorageEvent);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('storage', handleStorageEvent);
+    };
+  }, [logout]);
+
+  const switchUser = useCallback((user: AuthUser) => {
+    const token = generateJwtToken(user, JWT_EXPIRY_SECONDS);
+    setStoredJwtToken(token);
+    setJwtToken(token);
+    setIsTokenExpired(false);
     setCurrentUser(user);
     localStorage.setItem('be_active_user', JSON.stringify(user));
-  };
+    sessionStorage.removeItem('be_logout_reason');
+    const verify = verifyJwtToken(token);
+    if (verify.remainingFormatted) {
+      setSessionRemainingTime(verify.remainingFormatted);
+    }
+  }, []);
 
-  const switchRole = (role: SystemRole) => {
+  const switchRole = useCallback((role: SystemRole) => {
     const usersList = getAllUsersFromStorage();
     const userForRole = usersList.find(u => u.role === role) || {
       id: `USER-${role.replace(/\s+/g, '-').toUpperCase()}`,
@@ -186,7 +340,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       passwordSet: true
     };
     switchUser(userForRole);
-  };
+  }, [switchUser]);
 
   const searchEmployeeInZoho = async (email: string): Promise<{ success: boolean; exists: boolean; hasPassword?: boolean; employee?: any; error?: string }> => {
     const cleanEmail = (email || '').trim().toLowerCase();
@@ -487,7 +641,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const setPasswordAndActivate = async (emailOrId: string, inputOtp: string, newPassword: string): Promise<{ success: boolean; error?: string; user?: AuthUser }> => {
+  const setPasswordAndActivate = async (emailOrId: string, inputOtp: string, newPassword: string): Promise<{ success: boolean; error?: string; user?: AuthUser; token?: string }> => {
     const otpResult = verifyOtp(emailOrId, inputOtp);
     if (!otpResult.success) {
       return { success: false, error: otpResult.error };
@@ -613,14 +767,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 2. Sync updated employee record to Zoho CRM in background
-    saveOrUpdateZohoEmployee(updatedEmp).catch((err: any) => console.warn('[Zoho CRM] Background sync of updated employee password failed:', err));
-
+    const token = generateJwtToken(authUser, JWT_EXPIRY_SECONDS);
+    setStoredJwtToken(token);
+    setJwtToken(token);
+    setIsTokenExpired(false);
     switchUser(authUser);
-    return { success: true, user: authUser };
+    return { success: true, user: authUser, token };
   };
 
-  const login = (email: string, password?: string, role?: SystemRole): { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser } => {
+  const login = (email: string, password?: string, role?: SystemRole): { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser; token?: string } => {
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanPassword = (password || '').trim();
     const usersList = getAllUsersFromStorage();
@@ -634,11 +789,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         (role === 'HOD' && (u.email === 'mishal@bharat-edge.com' || u.role === 'HOD'))
       );
       if (foundByRole) {
+        const token = generateJwtToken(foundByRole, JWT_EXPIRY_SECONDS);
+        setStoredJwtToken(token);
+        setJwtToken(token);
+        setIsTokenExpired(false);
         switchUser(foundByRole);
-        return { success: true, user: foundByRole };
+        return { success: true, user: foundByRole, token };
       }
       switchRole(role);
-      return { success: true };
+      const token = getStoredJwtToken();
+      return { success: true, token: token || undefined };
     }
 
     // 2. Validate non-empty credentials
@@ -730,13 +890,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
+    const token = generateJwtToken(found, JWT_EXPIRY_SECONDS);
+    setStoredJwtToken(token);
+    setJwtToken(token);
+    setIsTokenExpired(false);
     switchUser(found);
-    return { success: true, user: found };
-  };
-
-  const logout = () => {
-    localStorage.removeItem('be_active_user');
-    setCurrentUser(DEMO_USERS[0]);
+    return { success: true, user: found, token };
   };
 
   const isSuperAdmin = currentUser.role === 'Super Admin' || 
@@ -834,6 +993,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return buildZohoRbacCriteria(moduleName, currentUser, availableUsers);
   };
 
+  const isAuthenticated = Boolean(
+    jwtToken && 
+    !isTokenExpired && 
+    currentUser && 
+    (currentUser.email || currentUser.id) &&
+    localStorage.getItem('be_auth_token')
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -858,6 +1025,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         verifyOtp,
         setPasswordAndActivate,
         logout,
+        jwtToken,
+        isAuthenticated,
+        isTokenExpired,
+        sessionRemainingTime,
+        validateSession,
         getTeamMemberIds,
         getDepartmentMemberIds,
         injectLookup,
