@@ -18,6 +18,7 @@ import {
   fetchZohoEmployees,
   fetchSalesEmployees
 } from '../../services/zohoService';
+import { buildZohoRbacCriteria } from '../../services/zohoRbacService';
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 import { Layers, DownloadCloud } from 'lucide-react';
@@ -33,7 +34,7 @@ export const Deals = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, filterRecords } = useAuth();
+  const { currentUser, availableUsers, filterRecords } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
@@ -1194,6 +1195,14 @@ export const Deals = () => {
           queryParams.set('page_token', pageTokenToFetch);
         }
 
+        // Apply RBAC criteria for role-scoped visibility
+        if (currentUser && currentUser.role !== 'Super Admin' && currentUser.role !== 'HOD' && currentUser.role !== 'HR' && currentUser.email !== 'superadmin@be.com' && currentUser.email !== 'md@bharat-edge.com') {
+          const { criteria, isUnfiltered } = buildZohoRbacCriteria('Deals', currentUser, availableUsers);
+          if (!isUnfiltered && criteria) {
+            queryParams.set('criteria', criteria);
+          }
+        }
+
         const res = await fetch(`/api/deals?${queryParams.toString()}`);
         const data = await res.json();
 
@@ -1212,16 +1221,33 @@ export const Deals = () => {
           }
         } catch (e) {}
 
-        const { updatedDeals } = processZohoDealsBatch(rawList, existingDeals.length > 0 ? existingDeals : deals);
-        setDeals(updatedDeals);
+        const baseDeals = existingDeals.length > 0 ? existingDeals : deals;
+        const { updatedDeals } = processZohoDealsBatch(rawList, baseDeals);
+
+        // Retain local manual/pending deals that are not yet in Zoho or recently created drafts
+        const localPending = baseDeals.filter(
+          (d: any) => d.id?.startsWith('DL-') && (!d.zohoId || d.zohoStatus !== 'synced')
+        );
+        const existingIds = new Set(updatedDeals.map((d: any) => d.id));
+        const finalDeals = [...updatedDeals];
+        localPending.forEach((lp: any) => {
+          if (!existingIds.has(lp.id)) {
+            finalDeals.unshift(lp);
+            existingIds.add(lp.id);
+          }
+        });
+
+        setDeals(finalDeals);
 
         const info = data.info || null;
         setPaginationInfo(info);
         if (info?.total_records !== undefined && info.total_records !== null) {
           setTotalRecordsCount(Number(info.total_records));
+        } else if (rawList.length > 0) {
+          setTotalRecordsCount(rawList.length);
         }
 
-        safeSaveDealsToStorage(updatedDeals);
+        safeSaveDealsToStorage(finalDeals);
 
         if (showToast) {
           setToast({

@@ -188,9 +188,14 @@ export default async function dealsHandler(req: any, res: any) {
     }
 
     const apiBase = getZohoApiBaseUrl(datacenterUrl);
+    const criteria = searchParams.get('criteria') || req.query?.criteria || '';
 
-    // 2. Build Zoho CRM Deals API URL with Pagination & Fields
-    const zohoApiUrl = new URL(`${apiBase}/crm/v8/Deals`);
+    // 2. Build Zoho CRM Deals API URL with Pagination & Fields (Search vs Standard List)
+    let zohoApiUrl = new URL(criteria ? `${apiBase}/crm/v8/Deals/search` : `${apiBase}/crm/v8/Deals`);
+
+    if (criteria) {
+      zohoApiUrl.searchParams.set('criteria', String(criteria));
+    }
 
     if (pageToken) {
       zohoApiUrl.searchParams.set('page_token', String(pageToken));
@@ -204,10 +209,10 @@ export default async function dealsHandler(req: any, res: any) {
       zohoApiUrl.searchParams.set('fields', fields);
     }
 
-    // 3. Fetch Total Record Count from Zoho CRM API (actions/count) in parallel
+    // 3. Fetch Total Record Count from Zoho CRM API (actions/count) in parallel if unfiltered
     const countUrl = `${apiBase}/crm/v8/Deals/actions/count`;
 
-    const [crmResponse, countResponse] = await Promise.all([
+    const [crmFetchResult, countFetchResult] = await Promise.all([
       fetch(zohoApiUrl.toString(), {
         method: 'GET',
         headers: {
@@ -215,17 +220,84 @@ export default async function dealsHandler(req: any, res: any) {
           'Content-Type': 'application/json',
         },
       }),
-      fetch(countUrl, {
-        method: 'GET',
-        headers: {
-          Authorization: `Zoho-oauthtoken ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }).catch((err) => {
-        console.warn('Actions count fetch error:', err);
-        return null;
-      }),
+      !criteria
+        ? fetch(countUrl, {
+            method: 'GET',
+            headers: {
+              Authorization: `Zoho-oauthtoken ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }).catch((err) => {
+            console.warn('Actions count fetch error:', err);
+            return null;
+          })
+        : Promise.resolve(null),
     ]);
+
+    let crmResponse = crmFetchResult;
+    let countResponse = countFetchResult;
+
+    // Retry once if token expired
+    if (crmResponse.status === 401 || (countResponse && countResponse.status === 401)) {
+      cachedToken = null;
+      accessToken = null;
+      // Re-fetch token and retry
+      const authDomain = datacenterUrl.replace(/\/$/, '');
+      const tokenEndpoint = `${authDomain}/oauth/v2/token`;
+      const tokenParams = new URLSearchParams({
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'refresh_token',
+      });
+      const retryTokenRes = await fetch(tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenParams.toString(),
+      });
+      const retryTokenData: any = await retryTokenRes.json();
+      if (retryTokenRes.ok && retryTokenData.access_token) {
+        accessToken = retryTokenData.access_token;
+        cachedToken = accessToken;
+        tokenExpiry = now + (Number(retryTokenData.expires_in) || 3600) * 1000;
+        const [retryCrm, retryCount] = await Promise.all([
+          fetch(zohoApiUrl.toString(), {
+            method: 'GET',
+            headers: {
+              Authorization: `Zoho-oauthtoken ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }),
+          !criteria
+            ? fetch(countUrl, {
+                method: 'GET',
+                headers: {
+                  Authorization: `Zoho-oauthtoken ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+              }).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        crmResponse = retryCrm;
+        countResponse = retryCount;
+      }
+    }
+
+    // Fallback: If search endpoint failed with 400 or 404, fallback to standard Deals list
+    if (!crmResponse.ok && criteria && (crmResponse.status === 400 || crmResponse.status === 404)) {
+      console.warn(`[Zoho Deals] Search endpoint failed (${crmResponse.status}), falling back to standard list`);
+      const fallbackUrl = new URL(`${apiBase}/crm/v8/Deals`);
+      if (pageToken) fallbackUrl.searchParams.set('page_token', String(pageToken));
+      else fallbackUrl.searchParams.set('page', page.toString());
+      fallbackUrl.searchParams.set('per_page', perPage.toString());
+      if (fields) fallbackUrl.searchParams.set('fields', fields);
+      const fallbackRes = await fetch(fallbackUrl.toString(), {
+        headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+      });
+      if (fallbackRes.ok || fallbackRes.status === 204) {
+        crmResponse = fallbackRes;
+      }
+    }
 
     let totalRecords: number | null = null;
     if (countResponse && countResponse.ok) {
