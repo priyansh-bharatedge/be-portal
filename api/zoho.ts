@@ -425,7 +425,11 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
 
   payload.Has_Partner_BDM = hasPartnerBdm;
   payload.has_partner_bdm = hasPartnerBdm;
-  payload.Partner_BDM = hasPartnerBdm;
+  if (hasPartnerBdm && partnerBdmId) {
+    payload.Partner_BDM = { id: String(partnerBdmId) };
+  } else if (!hasPartnerBdm) {
+    payload.Partner_BDM = null;
+  }
   payload.Partner_BDM_Name = partnerBdmName;
   payload.partner_bdm_name = partnerBdmName;
   payload.Partner_BDM_Names = partnerBdmName;
@@ -1406,7 +1410,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     if ((action === 'get-deals' || action === 'deals') && method === 'GET') {
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
-      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company_name,Client_Name,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Deal_Amount,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Deal_Received_Amount,Total_Pending_Amount,Pending_amount,Deal_Pending_Amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,Partner_BDM_Name,Partner_BDM_Amount,Partner_BDM_ID,Quotation';
+      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company_name,Client_Name,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Deal_Amount,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Deal_Received_Amount,Total_Pending_Amount,Pending_amount,Deal_Pending_Amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Partner_BDM,Has_Partner_BDM,Partner_BDM_Name,Partner_BDM_Amount,Partner_BDM_ID,Quotation';
       return executeZohoGet(apiBase, moduleName, dealFields, req, res, urlObj, 'deals');
     }
 

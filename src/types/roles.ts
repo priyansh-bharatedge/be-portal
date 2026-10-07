@@ -112,7 +112,7 @@ export interface ZohoModuleConfig {
 export const ZOHO_MODULE_LOOKUP_MAP: Record<string, ZohoModuleConfig> = {
   // 1. CRM Section
   Quotations: { section: 'CRM', moduleName: 'Quotations', lookupField: 'Employee', secondaryLookupFields: ['Created_By_Employee', 'Sales_Representative'] },
-  Deals: { section: 'CRM', moduleName: 'Deals', lookupField: 'Employee', secondaryLookupFields: ['BDM_names', 'Owner', 'Partner_BDM_ID'] },
+  Deals: { section: 'CRM', moduleName: 'Deals', lookupField: 'Employee', secondaryLookupFields: ['BDM_names', 'Owner', 'Partner_BDM', 'Partner_BDM_ID'] },
   Clients: { section: 'CRM', moduleName: 'Clients', lookupField: 'Employee', secondaryLookupFields: ['Owner', 'Created_By'] },
   Companies: { section: 'CRM', moduleName: 'Companies', lookupField: 'Employee', secondaryLookupFields: ['Owner', 'Created_By'] },
 

@@ -334,6 +334,30 @@ export function buildZohoRbacCriteria(
     };
   }
 
+  if (moduleName === 'Deals' || moduleName === 'Deal') {
+    // Include both primary Employee and Partner_BDM lookup in criteria & COQL
+    let empCriteria = `(Employee.id:equals:${targetIds[0]})`;
+    let partnerCriteria = `(Partner_BDM.id:equals:${targetIds[0]})`;
+    for (let i = 1; i < targetIds.length; i++) {
+      empCriteria = `(${empCriteria}or(Employee.id:equals:${targetIds[i]}))`;
+      partnerCriteria = `(${partnerCriteria}or(Partner_BDM.id:equals:${targetIds[i]}))`;
+    }
+    const combinedCriteria = `(${empCriteria}or${partnerCriteria})`;
+
+    const formattedCoqlIds = targetIds.map(id => `'${id}'`).join(', ');
+    const coqlWhereClause = targetIds.length === 1 
+      ? `(Employee.id = '${targetIds[0]}' or Partner_BDM.id = '${targetIds[0]}')` 
+      : `(Employee.id in (${formattedCoqlIds}) or Partner_BDM.id in (${formattedCoqlIds}))`;
+
+    return {
+      criteria: combinedCriteria,
+      coqlWhereClause,
+      accessibleEmployeeIds: targetIds,
+      isUnfiltered: false,
+      role: user.role
+    };
+  }
+
   const searchFieldName = lookupField === 'id' ? 'id' : `${lookupField}.id`;
   let criteria = `(${searchFieldName}:equals:${targetIds[0]})`;
   for (let i = 1; i < targetIds.length; i++) {
@@ -370,8 +394,9 @@ export function filterRecordsByRbac<T = any>(
     user.role === 'Super Admin' || 
     user.role === 'HOD' || 
     user.role === 'HR' ||
-    user.email === 'superadmin@be.com' || 
-    user.email === 'md@bharat-edge.com'
+    user.email === 'superadmin@be.com' ||
+    user.email === 'md@bharat-edge.com' ||
+    user.email === 'hrmshr@be.com'
   ) {
     return records;
   }
@@ -425,11 +450,18 @@ export function filterRecordsByRbac<T = any>(
       return true;
     }
 
-    // 4. Check Partner BDM
-    const bdmId = String(rec.partnerBdmId || rec.partner_bdm_id || rec.Partner_BDM_ID || '').trim().toLowerCase();
+    // 4. Check Partner BDM (Lookup object, ID, Name, or Form Data)
+    if (rec.Partner_BDM && typeof rec.Partner_BDM === 'object') {
+      const pId = String(rec.Partner_BDM.id || '').trim().toLowerCase();
+      const pName = String(rec.Partner_BDM.name || '').trim().toLowerCase();
+      if (pId && idSet.has(pId)) return true;
+      if (pName && userName && (pName === userName || (pName.length >= 3 && userName.includes(pName)) || (userName.length >= 3 && pName.includes(userName)) || idSet.has(pName))) return true;
+    }
+
+    const bdmId = String(rec.partnerBdmId || rec.partner_bdm_id || rec.Partner_BDM_ID || rec.formData?.partnerBdmId || rec.formData?.partner_bdm_id || (typeof rec.Partner_BDM === 'string' ? rec.Partner_BDM : '') || '').trim().toLowerCase();
     if (bdmId && idSet.has(bdmId)) return true;
-    const bdmName = String(rec.partnerBdmName || rec.partner_bdm_name || rec.Partner_BDM_Name || '').trim().toLowerCase();
-    if (bdmName && userName && (bdmName === userName || (bdmName.length >= 3 && userName.includes(bdmName)) || (userName.length >= 3 && bdmName.includes(userName)))) return true;
+    const bdmName = String(rec.partnerBdmName || rec.partner_bdm_name || rec.Partner_BDM_Name || rec.formData?.partnerBdmName || rec.formData?.partner_bdm_name || '').trim().toLowerCase();
+    if (bdmName && userName && (bdmName === userName || (bdmName.length >= 3 && userName.includes(bdmName)) || (userName.length >= 3 && bdmName.includes(userName)) || idSet.has(bdmName))) return true;
 
     // 5. For HOD role, check if record's department matches HOD's department
     if (user.role === 'HOD') {

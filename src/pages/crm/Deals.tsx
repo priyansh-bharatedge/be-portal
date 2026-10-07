@@ -135,6 +135,28 @@ export const Deals = () => {
     );
   };
 
+  const isDealPartnerBdm = (d: any): boolean => {
+    if (!d) return false;
+    return Boolean(
+      d.hasPartnerBdm ||
+      d.has_partner_bdm ||
+      d.partnerBdmId ||
+      d.partner_bdm_id ||
+      d.partnerBdmName ||
+      d.partner_bdm_name ||
+      d.Partner_BDM ||
+      d.Partner_BDM_ID ||
+      d.Partner_BDM_Name ||
+      d.rawZohoDeal?.Has_Partner_BDM ||
+      d.rawZohoDeal?.Partner_BDM ||
+      d.rawZohoDeal?.Partner_BDM_Name ||
+      d.formData?.hasPartnerBdm ||
+      d.formData?.has_partner_bdm ||
+      d.formData?.partnerBdmId ||
+      d.formData?.partnerBdmName
+    );
+  };
+
   // Zoho CRM states
   const [deals, setDeals] = useState<any[]>(() => {
     try {
@@ -1563,7 +1585,8 @@ export const Deals = () => {
         salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
         date: existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         source: existingDeal?.source || 'Manual',
-        // Partner BDM split details
+        // Partner BDM split details & Employee Lookup
+        Partner_BDM: (hasPartnerBdm && partnerBdmId) ? { id: partnerBdmId, name: partnerBdmName } : null,
         hasPartnerBdm: hasPartnerBdm,
         has_partner_bdm: hasPartnerBdm,
         partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
@@ -1582,6 +1605,7 @@ export const Deals = () => {
           employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
           empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
           salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
+          Partner_BDM: (hasPartnerBdm && partnerBdmId) ? { id: partnerBdmId, name: partnerBdmName } : null,
           hasPartnerBdm,
           has_partner_bdm: hasPartnerBdm,
           partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
@@ -1854,6 +1878,9 @@ export const Deals = () => {
         employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
         empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
         salesEmployee: deal.salesEmployee || deal.employeeName || currentUser?.name,
+        Partner_BDM: (deal.hasPartnerBdm || deal.partnerBdmId) && (deal.partnerBdmId || deal.partner_bdm_id)
+          ? { id: String(deal.partnerBdmId || deal.partner_bdm_id), name: deal.partnerBdmName || deal.partner_bdm_name }
+          : null,
       };
 
       const zohoRes = await saveOrUpdateZohoDeal(dealWithLookups);
@@ -1909,8 +1936,10 @@ export const Deals = () => {
   const filteredDeals = useMemo(() => {
     return rbacDeals.filter((deal: any) => {
       const isFromQt = isDealFromQuotation(deal);
+      const isPartner = isDealPartnerBdm(deal);
       if (activeTab === 'Manual Deals' && isFromQt) return false;
       if (activeTab === 'From Quotations' && !isFromQt) return false;
+      if (activeTab === 'Partner BDM Deals' && !isPartner) return false;
       if (quickFilter === 'today' && !isDealToday(deal)) return false;
       if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
       if (quickFilter === 'pending' && getDealPending(deal) <= 0) return false;
@@ -1927,11 +1956,12 @@ export const Deals = () => {
         const matchZohoId = deal.zohoId && String(deal.zohoId).toLowerCase().includes(q);
         const matchOwner = deal.owner && String(deal.owner).toLowerCase().includes(q);
         const matchEmpName = (deal.employeeName || deal.salesEmployee) && String(deal.employeeName || deal.salesEmployee).toLowerCase().includes(q);
+        const matchPartnerBdm = (deal.partnerBdmName || deal.partner_bdm_name || deal.Partner_BDM_Name || deal.formData?.partnerBdmName) && String(deal.partnerBdmName || deal.partner_bdm_name || deal.Partner_BDM_Name || deal.formData?.partnerBdmName).toLowerCase().includes(q);
         const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
         const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
         const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
 
-        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchStatus && !matchAmount && !matchEmpCode) return false;
+        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchPartnerBdm && !matchStatus && !matchAmount && !matchEmpCode) return false;
       }
       return true;
     });
@@ -2012,8 +2042,8 @@ export const Deals = () => {
         </div>
       </div>
 
-      <div className="flex border-b border-gray-200 mb-4">
-        {['All Deals', 'Manual Deals', 'From Quotations'].map(tab => (
+      <div className="flex border-b border-gray-200 mb-4 overflow-x-auto">
+        {['All Deals', 'Manual Deals', 'From Quotations', 'Partner BDM Deals'].map(tab => (
           <button
             key={tab}
             onClick={() => {
@@ -2021,7 +2051,7 @@ export const Deals = () => {
               // Clear quick filter if manually switching tabs
               if (quickFilter !== 'all') setQuickFilter('all');
             }}
-            className={`px-6 py-3 font-medium text-sm transition-colors relative ${activeTab === tab ? 'text-be-orange' : 'text-gray-500 hover:text-gray-700'}`}
+            className={`px-6 py-3 font-medium text-sm transition-colors relative whitespace-nowrap ${activeTab === tab ? 'text-be-orange font-bold' : 'text-gray-500 hover:text-gray-700'}`}
           >
             {tab}
             {activeTab === tab && (

@@ -1424,19 +1424,10 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   const panVal = rawZoho.Pan_number || rawZoho.PAN_Number || rawZoho.PAN_Card || rawZoho.PAN || existingDeal?.formData?.panCard || '';
   const aadhVal = rawZoho.Aadhaar_Card || rawZoho.Aadhaar_number || rawZoho.Aadhaar_Number || rawZoho.Aadhar_Card || rawZoho.Aadhaar || existingDeal?.formData?.aadhaarCard || '';
   
-  const hasPartnerBdm = Boolean(
-    rawZoho.Has_Partner_BDM || 
-    rawZoho.has_partner_bdm || 
-    rawZoho.Partner_BDM || 
-    rawZoho.Partner_BDM_Name || 
-    rawZoho.Partner_BDM_name || 
-    rawZoho.Partner_BDM_Names || 
-    rawZoho.Partner_BDM_amount ||
-    existingDeal?.hasPartnerBdm ||
-    existingDeal?.formData?.hasPartnerBdm
-  );
+  const partnerBdmLookup = typeof rawZoho.Partner_BDM === 'object' && rawZoho.Partner_BDM !== null ? rawZoho.Partner_BDM : null;
 
   const partnerBdmName = 
+    partnerBdmLookup?.name ||
     rawZoho.Partner_BDM_Name || 
     rawZoho.Partner_BDM_name || 
     rawZoho.Partner_BDM_Names || 
@@ -1448,11 +1439,25 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     '';
 
   const partnerBdmId = 
+    partnerBdmLookup?.id ? String(partnerBdmLookup.id) : (
     rawZoho.Partner_BDM_ID || 
     rawZoho.partner_bdm_id || 
+    (typeof rawZoho.Partner_BDM === 'string' && /^\d+$/.test(rawZoho.Partner_BDM) ? rawZoho.Partner_BDM : '') ||
     existingDeal?.partnerBdmId ||
     existingDeal?.formData?.partnerBdmId ||
-    '';
+    '');
+
+  const hasPartnerBdm = Boolean(
+    partnerBdmLookup?.id ||
+    partnerBdmName ||
+    partnerBdmId ||
+    rawZoho.Has_Partner_BDM || 
+    rawZoho.has_partner_bdm || 
+    (rawZoho.Partner_BDM && rawZoho.Partner_BDM !== 'false') || 
+    rawZoho.Partner_BDM_amount ||
+    existingDeal?.hasPartnerBdm ||
+    existingDeal?.formData?.hasPartnerBdm
+  );
 
   let partnerBdmAmount = Number(rawZoho.Partner_BDM_Amount || rawZoho.Partner_BDM_amount || rawZoho.partner_bdm_amount || existingDeal?.partnerBdmAmount || existingDeal?.formData?.partnerBdmAmount || 0);
   if (hasPartnerBdm && (!partnerBdmAmount || partnerBdmAmount === 0) && recNum > 0) {
