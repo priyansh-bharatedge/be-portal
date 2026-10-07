@@ -37,7 +37,8 @@ export function getAllEmployeesList(): any[] {
  */
 export function resolveAccessibleEmployeeIds(
   user: AuthUser | null,
-  allEmployees: any[] = getAllEmployeesList()
+  allEmployees: any[] = getAllEmployeesList(),
+  moduleName?: string
 ): { employeeIds: string[]; zohoIds: string[]; isAll: boolean } {
   if (!user) {
     return { employeeIds: [], zohoIds: [], isAll: false };
@@ -59,7 +60,14 @@ export function resolveAccessibleEmployeeIds(
     return { employeeIds: [], zohoIds: [], isAll: true };
   }
 
-  // 3. Head of Department (HOD) - Department-wide + Team (Combines with TL logic for direct reports)
+  // 3. Head of Department (HOD) - Global visibility for Deals (identical to Super Admin)
+  const normModule = (moduleName || '').toLowerCase().replace(/_/g, '-');
+  const isDealsModule = normModule === 'deals' || normModule === 'deal' || normModule === 'crm';
+  if (role === 'HOD' && isDealsModule) {
+    return { employeeIds: [], zohoIds: [], isAll: true };
+  }
+
+  // 4. Head of Department (HOD) - Department-wide + Team (Combines with TL logic for direct reports)
   // In departments like Marketing, the HOD and Team Leader are often the exact same person.
   // Therefore, the HOD logic dynamically combines with TL logic to ensure both department-wide
   // records AND direct reports via Reporting_Manager are accessible.
@@ -343,7 +351,19 @@ export function buildZohoRbacCriteria(
     };
   }
 
-  const { employeeIds, zohoIds, isAll } = resolveAccessibleEmployeeIds(user, allEmployees);
+  const normModule = (moduleName || '').toLowerCase().replace(/_/g, '-');
+  const isDealsModule = normModule === 'deals' || normModule === 'deal' || normModule === 'crm';
+  if (user.role === 'HOD' && isDealsModule) {
+    return {
+      criteria: '',
+      coqlWhereClause: '',
+      accessibleEmployeeIds: [],
+      isUnfiltered: true,
+      role: user.role
+    };
+  }
+
+  const { employeeIds, zohoIds, isAll } = resolveAccessibleEmployeeIds(user, allEmployees, moduleName);
 
   if (isAll) {
     return {
@@ -406,7 +426,13 @@ export function filterRecordsByRbac<T = any>(
     return records;
   }
 
-  const { employeeIds, zohoIds, isAll } = resolveAccessibleEmployeeIds(user, allEmployees);
+  const normModule = (moduleName || '').toLowerCase().replace(/_/g, '-');
+  const isDealsModule = normModule === 'deals' || normModule === 'deal' || normModule === 'crm';
+  if (user.role === 'HOD' && isDealsModule) {
+    return records;
+  }
+
+  const { employeeIds, zohoIds, isAll } = resolveAccessibleEmployeeIds(user, allEmployees, moduleName);
   if (isAll) return records;
 
   const idSet = new Set<string>();

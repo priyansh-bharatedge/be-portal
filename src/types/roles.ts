@@ -40,7 +40,7 @@ export const ROLE_DEFINITIONS: Record<SystemRole, RoleInfo> = {
     label: 'Admin (HOD)',
     shortLabel: 'Admin (HOD)',
     level: 3,
-    description: 'Admin level operations management, oversees TLs & TMs across CRM & Quality modules',
+    description: 'Admin level operations management, global visibility across all Deals, oversees TLs & TMs across CRM & Quality modules',
     badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
     borderClass: 'border-blue-500',
     bgClass: 'bg-blue-50',
