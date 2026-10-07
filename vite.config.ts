@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import nodemailer from 'nodemailer'
+import dealsHandler from './api/deals.ts'
 
 function zohoApiPlugin(): Plugin {
 
@@ -979,11 +980,26 @@ function zohoApiPlugin(): Plugin {
       server.middlewares.use(async (req, res, next) => {
         const urlObj = new URL(req.url || '', 'http://localhost');
         const pathname = urlObj.pathname;
-        if (!pathname.startsWith('/api/zoho/') && pathname !== '/api/send-otp') {
+        if (!pathname.startsWith('/api/zoho/') && pathname !== '/api/send-otp' && pathname !== '/api/deals' && !pathname.startsWith('/api/deals')) {
           return next();
         }
 
         const env = loadEnv('development', process.cwd(), '');
+
+        // Reference Deals API Handler
+        if (pathname === '/api/deals' || pathname.startsWith('/api/deals')) {
+          (res as any).status = (code: number) => {
+            res.statusCode = code;
+            return res;
+          };
+          (res as any).json = (data: any) => {
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify(data));
+          };
+          const queryObj = Object.fromEntries(urlObj.searchParams.entries());
+          (req as any).query = queryObj;
+          return await dealsHandler(req, res);
+        }
 
         // Test connection endpoint
         if (pathname === '/api/zoho/test-connection') {

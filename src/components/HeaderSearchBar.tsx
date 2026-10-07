@@ -16,7 +16,6 @@ import {
   Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { getAllDealsFromIndexedDB } from '../lib/db';
 
 interface SearchResultItem {
   id: string;
@@ -52,21 +51,10 @@ export const HeaderSearchBar: React.FC = () => {
   // Load datasets into memory on mount
   useEffect(() => {
     // 1. Deals
-    getAllDealsFromIndexedDB().then(deals => {
-      if (Array.isArray(deals) && deals.length > 0) {
-        setAllDeals(deals);
-      } else {
-        try {
-          const raw = localStorage.getItem('be_deals');
-          if (raw) setAllDeals(JSON.parse(raw));
-        } catch (e) {}
-      }
-    }).catch(() => {
-      try {
-        const raw = localStorage.getItem('be_deals');
-        if (raw) setAllDeals(JSON.parse(raw));
-      } catch (e) {}
-    });
+    try {
+      const raw = localStorage.getItem('be_deals');
+      if (raw) setAllDeals(JSON.parse(raw));
+    } catch (e) {}
 
     // 2. Quotations
     try {

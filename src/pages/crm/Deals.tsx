@@ -3,7 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink, Users, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { saveDocument, saveAllDealsToIndexedDB, saveDealToIndexedDB, getAllDealsFromIndexedDB, bulkUpsertDealsToIndexedDB } from '../../lib/db';
+import { saveDocument } from '../../lib/db';
 import {
   saveOrUpdateZohoDeal,
   deleteZohoDeal,
@@ -11,7 +11,6 @@ import {
   fetchZohoDealsCount,
   fetchZohoDealById,
   enrichDealFromZohoRecord,
-  fetchAllZohoRecordsInBatches,
   uploadZohoAttachment,
   saveOrUpdateZohoCompany,
   saveOrUpdateZohoClient,
@@ -279,13 +278,13 @@ export const Deals = () => {
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [isFetchingZoho, setIsFetchingZoho] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
-  // Pagination & Batch Sync states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const [hasMoreZohoRecords, setHasMoreZohoRecords] = useState(false);
-  const [isFetchingBatch, setIsFetchingBatch] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{ loaded: number; batch: number; percent?: number } | null>(null);
+  // Pagination & Token History states based on reference code
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(25);
+  const [currentToken, setCurrentToken] = useState<string | null>(null);
+  const [tokenHistory, setTokenHistory] = useState<(string | null)[]>([null]);
+  const [paginationInfo, setPaginationInfo] = useState<any>(null);
+  const [totalRecordsCount, setTotalRecordsCount] = useState<number | null>(null);
 
   // Sales Employees & Partner BDM states
   const [salesEmployees, setSalesEmployees] = useState<any[]>([]);
@@ -732,247 +731,7 @@ export const Deals = () => {
     window.open(url, '_blank');
   };
 
-
-  // Load complete 10,000+ dataset from IndexedDB on mount, then fetch latest or auto-stream
-  useEffect(() => {
-    let isMounted = true;
-    const loadDeals = async () => {
-      let count = 0;
-      let hasZeroAmounts = false;
-      try {
-        const idbDeals = await getAllDealsFromIndexedDB();
-        if (isMounted && Array.isArray(idbDeals) && idbDeals.length > 0) {
-          const hydrated = idbDeals.map((d: any) => {
-            const a = getDealAmount(d);
-            const r = getDealReceived(d);
-            const p = getDealPending(d);
-            return {
-              ...d,
-              amount: a > 0 ? `₹${a.toLocaleString('en-IN')}` : (d.amount || '₹0'),
-              received: r > 0 ? `₹${r.toLocaleString('en-IN')}` : (d.received || '₹0'),
-              pending: p > 0 ? `₹${p.toLocaleString('en-IN')}` : (d.pending || '₹0'),
-              rawAmount: a,
-              rawReceived: r,
-              rawPending: p,
-            };
-          });
-          setDeals(hydrated);
-          count = hydrated.length;
-          // Check if cached deals have old ₹0 amounts
-          const sample = hydrated.slice(0, 30);
-          hasZeroAmounts = sample.length > 0 && sample.some((d: any) => d.amount === '₹0' || !d.amount || d.amount === 0);
-        }
-      } catch (err) {
-        console.warn('IndexedDB initial load error:', err);
-      }
-      if (isMounted) {
-        if (currentUser?.role && currentUser.role !== 'Super Admin' && currentUser.role !== 'HR') {
-          // For Team Member, Team Leader, HOD: immediately fetch live scoped deals from Zoho CRM using RBAC lookup criteria
-          handleFetchFromZoho(false);
-        } else if (count < 10480 || hasZeroAmounts) {
-          // 1. Fetch first batch immediately (< 1s) so table appears instantly
-          handleFetchFromZoho(false).then(() => {
-            if (isMounted) {
-              // 2. Silently stream remaining batches in the background without blocking the UI
-              setTimeout(() => {
-                if (isMounted) {
-                  handleFetchAllBatchesFromZoho(false, false);
-                }
-              }, 1200);
-            }
-          });
-        } else {
-          // Otherwise fetch latest updates for page 1
-          handleFetchFromZoho(false);
-        }
-      }
-    };
-    loadDeals();
-    return () => { isMounted = false; };
-  }, [currentUser?.role, currentUser?.zohoId, currentUser?.id]);
-
-  // Listen for real-time live deal updates from DealDetails view
-  useEffect(() => {
-    const handleDealUpdate = (e: any) => {
-      const updated = e.detail;
-      if (!updated) return;
-      setDeals(prevDeals => {
-        const idx = prevDeals.findIndex(d => 
-          d.id === updated.id || 
-          d.zohoId === updated.zohoId || 
-          d.id === updated.zohoId || 
-          d.zohoId === updated.id ||
-          (d.id && updated.id && String(d.id).includes(String(updated.id))) ||
-          (d.id && updated.zohoId && String(d.id).includes(String(updated.zohoId)))
-        );
-        if (idx >= 0) {
-          const copy = [...prevDeals];
-          copy[idx] = { ...copy[idx], ...updated };
-          return copy;
-        }
-        return [updated, ...prevDeals];
-      });
-    };
-    window.addEventListener('be_deals_updated', handleDealUpdate);
-    return () => window.removeEventListener('be_deals_updated', handleDealUpdate);
-  }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTab, searchQuery, quickFilter, statusFilter]);
-
-  // Set of deals currently being enriched or already enriched in this session
-  const enrichingDealsRef = useRef<Set<string>>(new Set());
-
-  // 1. Auto-enrich visible deals on the active page that have ₹0 amounts
-  useEffect(() => {
-    // Filter deals based on activeTab, quickFilter, statusFilter and searchQuery to get active page slice
-    const filtered = deals.filter(deal => {
-      const isFromQt = isDealFromQuotation(deal);
-      if (activeTab === 'Manual Deals' && isFromQt) return false;
-      if (activeTab === 'From Quotations' && !isFromQt) return false;
-      if (quickFilter === 'today' && !isDealToday(deal)) return false;
-      if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
-      if (quickFilter === 'pending' && getDealPending(deal) <= 0) return false;
-      if (statusFilter && statusFilter !== 'all') {
-        const s = String(deal.status || deal.stage || '').toLowerCase();
-        if (!s.includes(statusFilter.toLowerCase())) return false;
-      }
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchClient = deal.client && String(deal.client).toLowerCase().includes(q);
-        const matchCompany = deal.company && String(deal.company).toLowerCase().includes(q);
-        const matchService = deal.service && String(deal.service).toLowerCase().includes(q);
-        const matchId = deal.id && String(deal.id).toLowerCase().includes(q);
-        const matchZohoId = deal.zohoId && String(deal.zohoId).toLowerCase().includes(q);
-        const matchOwner = deal.owner && String(deal.owner).toLowerCase().includes(q);
-        const matchEmpName = (deal.employeeName || deal.salesEmployee) && String(deal.employeeName || deal.salesEmployee).toLowerCase().includes(q);
-        const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
-        const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
-        const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
-        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchStatus && !matchAmount && !matchEmpCode) return false;
-      }
-      return true;
-    });
-
-    const pageSlice = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    const dealsToEnrich = pageSlice.filter(
-      (d: any) => (getDealAmount(d) === 0 || !d.servicesData || d.servicesData.length === 0) &&
-                  (d.zohoId || (d.id && String(d.id).length > 8)) &&
-                  !enrichingDealsRef.current.has(String(d.zohoId || d.id))
-    );
-
-    if (dealsToEnrich.length === 0) return;
-
-    let isCancelled = false;
-
-    dealsToEnrich.forEach((d: any) => {
-      const targetId = String(d.zohoId || d.id);
-      enrichingDealsRef.current.add(targetId);
-
-      fetchZohoDealById(targetId).then(res => {
-        if (isCancelled) return;
-        if (res.success && res.data) {
-          const enriched = enrichDealFromZohoRecord(res.data, d);
-          if (enriched) {
-            setDeals(prevDeals => {
-              const idx = prevDeals.findIndex(p => p.id === d.id || p.zohoId === d.zohoId || p.id === d.zohoId || p.zohoId === d.id);
-              if (idx >= 0) {
-                const copy = [...prevDeals];
-                copy[idx] = { ...copy[idx], ...enriched };
-                return copy;
-              }
-              return prevDeals;
-            });
-            saveDealToIndexedDB(enriched).catch(() => {});
-          }
-        }
-      }).catch(() => {});
-    });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [deals, currentPage, itemsPerPage, activeTab, searchQuery]);
-
-  // 2. Progressive background repair worker for historical deals in IndexedDB
-  useEffect(() => {
-    let isCancelled = false;
-    const runBackgroundRepair = async () => {
-      // Delay to let main UI finish initial rendering
-      await new Promise(r => setTimeout(r, 2500));
-      if (isCancelled) return;
-
-      try {
-        const allDeals = await getAllDealsFromIndexedDB();
-        const unEnriched = allDeals.filter(
-          (d: any) => (getDealAmount(d) === 0 || !d.servicesData || d.servicesData.length === 0) &&
-                      (d.zohoId || (d.id && String(d.id).length > 8)) &&
-                      !enrichingDealsRef.current.has(String(d.zohoId || d.id))
-        );
-
-        if (unEnriched.length === 0) return;
-
-        console.log(`[Deal Repair Worker] Starting background repair for ${unEnriched.length} deals`);
-
-        // Process in chunks of 10 concurrent requests
-        const chunkSize = 10;
-        for (let i = 0; i < unEnriched.length; i += chunkSize) {
-          if (isCancelled) break;
-          const chunk = unEnriched.slice(i, i + chunkSize);
-          
-          await Promise.allSettled(chunk.map(async (d: any) => {
-            const targetId = String(d.zohoId || d.id);
-            enrichingDealsRef.current.add(targetId);
-            try {
-              const res = await fetchZohoDealById(targetId);
-              if (res.success && res.data) {
-                const enriched = enrichDealFromZohoRecord(res.data, d);
-                if (enriched) {
-                  await saveDealToIndexedDB(enriched);
-                  setDeals(prevDeals => {
-                    const idx = prevDeals.findIndex(p => p.id === d.id || p.zohoId === d.zohoId || p.id === d.zohoId || p.zohoId === d.id);
-                    if (idx >= 0) {
-                      const copy = [...prevDeals];
-                      copy[idx] = { ...copy[idx], ...enriched };
-                      return copy;
-                    }
-                    return prevDeals;
-                  });
-                }
-              }
-            } catch (err) {}
-          }));
-
-          // Responsive breathing pause between batches
-          await new Promise(r => setTimeout(r, 400));
-        }
-      } catch (err) {
-        console.warn('Background repair error:', err);
-      }
-    };
-
-    runBackgroundRepair();
-    return () => { isCancelled = true; };
-  }, []);
-
-
-  const getStatusColor = (status: string) => {
-    const s = (status || '').toLowerCase();
-    if (s.includes('won') || s.includes('execut')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    if (s.includes('lost')) return 'bg-rose-100 text-rose-700 border-rose-200';
-    if (s.includes('negotiat') || s.includes('allocat')) return 'bg-blue-100 text-blue-700 border-blue-200';
-    if (s.includes('propos') || s.includes('legal')) return 'bg-orange-100 text-orange-700 border-orange-200';
-    if (s.includes('qualif') || s.includes('account')) return 'bg-purple-100 text-purple-700 border-purple-200';
-    if (s.includes('sale')) return 'bg-amber-100 text-amber-700 border-amber-200';
-    return 'bg-gray-100 text-gray-700 border-gray-200';
-  };
-
   const safeSaveDealsToStorage = (dealsList: any[]) => {
-    // 1. Save complete 10,000+ dataset to IndexedDB
-    saveAllDealsToIndexedDB(dealsList).catch(err => console.warn('IndexedDB save warning:', err));
-
-    // 2. Save 2,000 deals to localStorage as sync cache fallback
     try {
       const trimmed = dealsList.slice(0, 2000);
       localStorage.setItem('be_deals', JSON.stringify(trimmed));
@@ -985,519 +744,6 @@ export const Deals = () => {
       }
     }
   };
-
-  const handleCreateDeal = async () => {
-    setIsSubmitting(true);
-    try {
-      const dealId = editingDealId || `DL-${Math.floor(1000 + Math.random() * 9000)}`;
-      const isEditing = Boolean(editingDealId);
-      const existingDeal = deals.find((d: any) => d.id === editingDealId);
-
-      // 1. Save actual files to IndexedDB
-      const docsToSave: any[] = existingDeal?.documentsData ? [...existingDeal.documentsData] : [];
-
-      if (paymentScreenshotFile) {
-        const docId = `${dealId || 'ID'}_payment_${paymentScreenshotFile.name}`;
-        try {
-          await saveDocument(docId, paymentScreenshotFile);
-        } catch (e) {
-          console.error('Failed to save payment screenshot', e);
-        }
-      }
-      for (const d of documents) {
-        const docId = `${dealId}_${d.name}`;
-        try {
-          await saveDocument(docId, d);
-          docsToSave.push({ id: docId, name: d.name, size: d.size, type: d.type });
-        } catch (e) {
-          console.error('Failed to save document to IndexedDB', e);
-          docsToSave.push({ id: docId, name: d.name, size: d.size, type: d.type });
-        }
-      }
-
-      // 2. Automatically Create/Sync Company in local CRM and Zoho CRM
-      let companyZohoId: string | undefined = existingDeal?.companyZohoId;
-      let companySavedLocally: any = null;
-
-      if (formData.companyName && formData.companyName.trim()) {
-        try {
-          const rawCompanies = localStorage.getItem('be_companies');
-          const existingCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
-          const existingComp = existingCompanies.find((c: any) => c.name?.toLowerCase() === formData.companyName.trim().toLowerCase());
-
-          companySavedLocally = {
-            id: existingComp?.id || `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
-            name: formData.companyName.trim(),
-            type: formData.businessType || existingComp?.type || 'Private Limited',
-            gstNumber: formData.gstNumber ? formData.gstNumber.toUpperCase() : (existingComp?.gstNumber || ''),
-            doi: formData.doi || existingComp?.doi || '',
-            email: formData.email || existingComp?.email || '',
-            status: 'Active',
-            source: existingComp?.source || 'From Deals',
-            addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-            zohoId: existingComp?.zohoId,
-            zohoStatus: existingComp?.zohoStatus || 'pending',
-            employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
-            employeeName: existingDeal?.employeeName || currentUser?.name,
-            employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
-            empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
-            salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
-          };
-
-          // Sync to Zoho CRM if not synced yet
-          if (!companySavedLocally.zohoId) {
-            try {
-              const compZohoRes = await saveOrUpdateZohoCompany(companySavedLocally);
-              if (compZohoRes.success && compZohoRes.zohoId) {
-                companySavedLocally.zohoId = compZohoRes.zohoId;
-                companySavedLocally.zohoStatus = 'synced';
-                companySavedLocally.zohoSyncedAt = new Date().toISOString();
-              }
-            } catch (cErr) {
-              console.warn('[Zoho CRM] Company sync during deal creation failed:', cErr);
-            }
-          }
-
-          companyZohoId = companySavedLocally.zohoId;
-
-          // Save to be_companies in localStorage safely
-          const updatedCompaniesList = existingComp 
-            ? existingCompanies.map((c: any) => c.id === existingComp.id ? { ...c, ...companySavedLocally } : c)
-            : [companySavedLocally, ...existingCompanies];
-          try {
-            localStorage.setItem('be_companies', JSON.stringify(updatedCompaniesList));
-          } catch (e) {
-            console.warn('LocalStorage save error for companies:', e);
-          }
-        } catch (compErr) {
-          console.warn('Auto-saving company failed:', compErr);
-        }
-      }
-
-      // 3. Automatically Create/Sync Client in local CRM and Zoho CRM
-      let clientZohoId: string | undefined = existingDeal?.clientZohoId;
-      let clientSavedLocally: any = null;
-
-      if (formData.clientName && formData.clientName.trim()) {
-        try {
-          const rawClients = localStorage.getItem('be_clients');
-          const existingClients = rawClients ? JSON.parse(rawClients) : [];
-          const existingClient = existingClients.find((cl: any) => 
-            (cl.email && formData.email && (cl.email ?? '').toLowerCase() === (formData.email ?? '').trim().toLowerCase()) ||
-            (cl.phone && formData.mobile && cl.phone === formData.mobile.replace(/[^0-9]/g, '')) ||
-            (cl.name?.toLowerCase() === formData.clientName.trim().toLowerCase())
-          );
-
-          clientSavedLocally = {
-            id: existingClient?.id || `CL-${Math.floor(1000 + Math.random() * 9000)}`,
-            name: formData.clientName.trim(),
-            company: formData.companyName ? formData.companyName.trim() : (existingClient?.company || 'Individual'),
-            email: formData.email ? (formData.email ?? '').trim() : (existingClient?.email || ''),
-            phone: formData.mobile ? formData.mobile.replace(/[^0-9]/g, '') : (existingClient?.phone || ''),
-            status: 'Active',
-            source: existingClient?.source || 'From Deals',
-            addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-            zohoId: existingClient?.zohoId,
-            zohoStatus: existingClient?.zohoStatus || 'pending',
-            employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
-            employeeName: existingDeal?.employeeName || currentUser?.name,
-            employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
-            empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
-            salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
-          };
-
-          // Sync to Zoho CRM if not synced yet
-          if (!clientSavedLocally.zohoId) {
-            try {
-              const clientZohoRes = await saveOrUpdateZohoClient(clientSavedLocally);
-              if (clientZohoRes.success && clientZohoRes.zohoId) {
-                clientSavedLocally.zohoId = clientZohoRes.zohoId;
-                clientSavedLocally.zohoStatus = 'synced';
-                clientSavedLocally.zohoSyncedAt = new Date().toISOString();
-              }
-            } catch (clErr) {
-              console.warn('[Zoho CRM] Client sync during deal creation failed:', clErr);
-            }
-          }
-
-          clientZohoId = clientSavedLocally.zohoId;
-
-          // Save to be_clients in localStorage safely
-          const updatedClientsList = existingClient
-            ? existingClients.map((cl: any) => cl.id === existingClient.id ? { ...cl, ...clientSavedLocally } : cl)
-            : [clientSavedLocally, ...existingClients];
-          try {
-            localStorage.setItem('be_clients', JSON.stringify(updatedClientsList));
-          } catch (e) {
-            console.warn('LocalStorage save error for clients:', e);
-          }
-        } catch (clErr) {
-          console.warn('Auto-saving client failed:', clErr);
-        }
-      }
-
-      // 4. Build Deal Object with Linked Company, Client, and Partner BDM details
-      const dealData: any = {
-        id: dealId,
-        client: formData.clientName,
-        company: formData.companyName,
-        companyZohoId: companyZohoId,
-        clientZohoId: clientZohoId,
-        service: dealServices.length === 1 ? dealServices[0].name : dealServices.length > 1 ? `${dealServices.length} Services` : 'Custom Services',
-        amount: `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
-        received: `₹${(Number(amountReceived) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
-        pending: `₹${pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
-        status: existingDeal?.status || 'New',
-        stage: existingDeal?.stage || 'Sales',
-        owner: existingDeal?.owner || currentUser?.name || 'Admin',
-        Employee: (existingDeal?.employeeZohoId || currentUser?.zohoId)
-          ? { id: existingDeal?.employeeZohoId || currentUser?.zohoId, name: existingDeal?.employeeName || currentUser?.name }
-          : undefined,
-        employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
-        employeeName: existingDeal?.employeeName || currentUser?.name,
-        employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
-        empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
-        salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
-        date: existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-        source: existingDeal?.source || 'Manual',
-        // Partner BDM split details
-        hasPartnerBdm: hasPartnerBdm,
-        has_partner_bdm: hasPartnerBdm,
-        partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
-        partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
-        partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
-        partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
-        partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
-        partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
-        // Full details
-        formData: {
-          ...formData,
-          companyZohoId,
-          clientZohoId,
-          employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
-          employeeName: existingDeal?.employeeName || currentUser?.name,
-          employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
-          empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
-          salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
-          hasPartnerBdm,
-          has_partner_bdm: hasPartnerBdm,
-          partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
-          partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
-          partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
-          partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
-          partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
-          partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
-        },
-        servicesData: dealServices.map(s => {
-          const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
-          const gstVal = t > 0 ? Number((t * 0.18).toFixed(2)) : 0;
-          const b = t > 0 ? Number((t - gstVal).toFixed(2)) : (Number(s.baseAmount) || 0);
-          return {
-            ...s,
-            totalAmount: String(t || s.totalAmount || ''),
-            baseAmount: String(b || s.baseAmount || '')
-          };
-        }),
-        totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount },
-        paymentScreenshotName: paymentScreenshotName,
-        documentsData: docsToSave,
-        zohoId: existingDeal?.zohoId || undefined,
-        zohoStatus: existingDeal?.zohoStatus || 'pending',
-      };
-
-      // 5. Call Zoho CRM REST API to insert or update record in Deals module
-      try {
-        const zohoRes = await saveOrUpdateZohoDeal(dealData);
-        const finalZohoId = zohoRes.zohoId || dealData.zohoId;
-
-        if (zohoRes.success && finalZohoId) {
-          dealData.zohoId = finalZohoId;
-          dealData.zohoStatus = 'synced';
-          dealData.zohoSyncedAt = new Date().toISOString();
-
-          // Upload attached payment screenshot & documents to Zoho CRM record if any
-          if (paymentScreenshotFile) {
-            try {
-              await uploadZohoAttachment(finalZohoId, paymentScreenshotFile, paymentScreenshotFile.name, 'Deals');
-            } catch (attErr) {
-              console.warn('[Zoho CRM] Payment screenshot attachment failed:', attErr);
-            }
-          }
-          for (const docFile of documents) {
-            try {
-              await uploadZohoAttachment(finalZohoId, docFile, docFile.name, 'Deals');
-            } catch (attErr) {
-              console.warn('[Zoho CRM] Document attachment failed:', attErr);
-            }
-          }
-
-          const syncSummary = [
-            `Deal #${finalZohoId}`,
-            companyZohoId ? `Company #${companyZohoId}` : null,
-            clientZohoId ? `Client #${clientZohoId}` : null
-          ].filter(Boolean).join(' • ');
-
-          setToast({
-            type: 'success',
-            message: isEditing ? 'Deal Updated Successfully!' : 'Deal, Client & Company Saved Successfully!',
-            submessage: syncSummary
-          });
-        } else {
-          dealData.zohoStatus = 'failed';
-          dealData.zohoError = zohoRes.message;
-          setToast({
-            type: 'error',
-            message: `Deal Saved Locally (Sync Failed)`,
-            submessage: zohoRes.message || 'Check field requirements'
-          });
-        }
-      } catch (zErr: any) {
-        console.error('Zoho CRM sync error:', zErr);
-        dealData.zohoStatus = 'failed';
-        dealData.zohoError = zErr?.message || 'Sync failed';
-        setToast({
-          type: 'error',
-          message: `Deal Saved Locally (Sync Error)`,
-          submessage: zErr?.message || 'Failed to communicate with server'
-        });
-      }
-
-      let newDealsList;
-      if (editingDealId) {
-        // Retain old status/date/owner if editing
-        newDealsList = deals.map((d: any) => {
-          if (d.id === editingDealId) {
-            return {
-              ...dealData,
-              status: d.status,
-              owner: d.owner,
-              date: d.date,
-              zohoId: dealData.zohoId || d.zohoId,
-              zohoStatus: dealData.zohoStatus || d.zohoStatus
-            };
-          }
-          return d;
-        });
-      } else {
-        newDealsList = [dealData, ...deals];
-      }
-
-      setDeals(newDealsList);
-      saveDealToIndexedDB(dealData).catch(e => console.warn('Single deal IDB save error:', e));
-      safeSaveDealsToStorage(newDealsList);
-    } catch (createErr: any) {
-      console.error('Deal creation error:', createErr);
-      setToast({
-        type: 'error',
-        message: 'Failed to complete deal creation',
-        submessage: createErr?.message || 'An unexpected error occurred'
-      });
-    } finally {
-      setIsSubmitting(false);
-      handleCloseModal();
-    }
-  };
-
-  const handleDeleteDeal = (deal: any) => {
-    setDeleteTarget({ isOpen: true, deal, isDeleting: false });
-  };
-
-  const confirmDeleteDeal = async () => {
-    const deal = deleteTarget.deal;
-    if (!deal) return;
-    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
-    const dealName = deal.formData?.clientName || deal.client || deal.id;
-
-    try {
-      const newDealsList = deals.filter((d: any) => d.id !== deal.id);
-      setDeals(newDealsList);
-      safeSaveDealsToStorage(newDealsList);
-
-      if (deal.zohoId) {
-        try {
-          const zohoRes = await deleteZohoDeal(deal.zohoId);
-          if (zohoRes.success) {
-            setToast({
-              type: 'success',
-              message: `Deal "${dealName}" Deleted`,
-              submessage: `Record has been deleted successfully (ID: #${deal.zohoId})`
-            });
-          } else {
-            setToast({
-              type: 'error',
-              message: `Deal Deleted Locally (Delete Failed)`,
-              submessage: zohoRes.message || 'Failed to delete record'
-            });
-          }
-        } catch (zErr: any) {
-          console.error('[Zoho CRM] Delete error:', zErr);
-          setToast({
-            type: 'error',
-            message: `Deal Deleted Locally (Delete Error)`,
-            submessage: zErr?.message || 'Failed to communicate with server'
-          });
-        }
-      } else {
-        setToast({
-          type: 'success',
-          message: `Deal "${dealName}" Deleted`,
-          submessage: 'Record has been deleted successfully'
-        });
-      }
-    } finally {
-      setDeleteTarget({ isOpen: false, deal: null, isDeleting: false });
-    }
-  };
-
-  const handleManualSyncDeal = async (deal: any) => {
-    setSyncingId(deal.id);
-    try {
-      // 1. Ensure Company is created and synced if present
-      let companyZohoId = deal.companyZohoId || deal.formData?.companyZohoId;
-      const compName = deal.company || deal.formData?.companyName;
-      if (compName && compName !== 'N/A' && !companyZohoId) {
-        const rawCompanies = localStorage.getItem('be_companies');
-        const existingCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
-        const existingComp = existingCompanies.find((c: any) => c.name?.toLowerCase() === compName.trim().toLowerCase());
-        const companyToSave: any = {
-          id: existingComp?.id || `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: compName.trim(),
-          type: deal.formData?.businessType || existingComp?.type || 'Private Limited',
-          gstNumber: deal.formData?.gstNumber ? deal.formData.gstNumber.toUpperCase() : (existingComp?.gstNumber || ''),
-          doi: deal.formData?.doi || existingComp?.doi || '',
-          email: deal.formData?.email || existingComp?.email || '',
-          status: 'Active',
-          source: existingComp?.source || 'From Deals',
-          addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          zohoId: existingComp?.zohoId,
-          zohoStatus: existingComp?.zohoStatus || 'pending',
-          employeeZohoId: deal.employeeZohoId || deal.formData?.employeeZohoId || currentUser?.zohoId,
-          employeeName: deal.employeeName || deal.formData?.employeeName || currentUser?.name,
-          employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
-          empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
-          salesEmployee: deal.salesEmployee || currentUser?.name,
-        };
-        try {
-          const cRes = await saveOrUpdateZohoCompany(companyToSave);
-          if (cRes.success && cRes.zohoId) {
-            companyToSave.zohoId = cRes.zohoId;
-            companyToSave.zohoStatus = 'synced';
-            companyToSave.zohoSyncedAt = new Date().toISOString();
-            companyZohoId = cRes.zohoId;
-          }
-        } catch (e) {
-          console.warn('Company sync during deal manual sync failed:', e);
-        }
-        const updatedCompaniesList = existingComp 
-          ? existingCompanies.map((c: any) => c.id === existingComp.id ? { ...c, ...companyToSave } : c)
-          : [companyToSave, ...existingCompanies];
-        try {
-          localStorage.setItem('be_companies', JSON.stringify(updatedCompaniesList));
-        } catch (e) {}
-      }
-
-      // 2. Ensure Client is created and synced if present
-      let clientZohoId = deal.clientZohoId || deal.formData?.clientZohoId;
-      const clientName = deal.client || deal.formData?.clientName;
-      if (clientName && clientName !== 'Client' && !clientZohoId) {
-        const rawClients = localStorage.getItem('be_clients');
-        const existingClients = rawClients ? JSON.parse(rawClients) : [];
-        const existingClient = existingClients.find((cl: any) => 
-          (cl.name?.toLowerCase() === clientName.trim().toLowerCase()) ||
-          (cl.email && deal.formData?.email && (cl.email ?? '').toLowerCase() === deal.formData.email.trim().toLowerCase())
-        );
-        const clientToSave: any = {
-          id: existingClient?.id || `CL-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: clientName.trim(),
-          company: compName ? compName.trim() : (existingClient?.company || 'Individual'),
-          email: deal.formData?.email ? deal.formData.email.trim() : (existingClient?.email || ''),
-          phone: deal.formData?.mobile ? deal.formData.mobile.replace(/[^0-9]/g, '') : (existingClient?.phone || ''),
-          status: 'Active',
-          source: existingClient?.source || 'From Deals',
-          addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          zohoId: existingClient?.zohoId,
-          zohoStatus: existingClient?.zohoStatus || 'pending',
-          employeeZohoId: deal.employeeZohoId || deal.formData?.employeeZohoId || currentUser?.zohoId,
-          employeeName: deal.employeeName || deal.formData?.employeeName || currentUser?.name,
-          employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
-          empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
-          salesEmployee: deal.salesEmployee || currentUser?.name,
-        };
-        try {
-          const clRes = await saveOrUpdateZohoClient(clientToSave);
-          if (clRes.success && clRes.zohoId) {
-            clientToSave.zohoId = clRes.zohoId;
-            clientToSave.zohoStatus = 'synced';
-            clientToSave.zohoSyncedAt = new Date().toISOString();
-            clientZohoId = clRes.zohoId;
-          }
-        } catch (e) {
-          console.warn('Client sync during deal manual sync failed:', e);
-        }
-        const updatedClientsList = existingClient
-          ? existingClients.map((cl: any) => cl.id === existingClient.id ? { ...cl, ...clientToSave } : cl)
-          : [clientToSave, ...existingClients];
-        try {
-          localStorage.setItem('be_clients', JSON.stringify(updatedClientsList));
-        } catch (e) {}
-      }
-
-      // 3. Save or update the deal in Zoho CRM
-      const dealWithLookups = {
-        ...deal,
-        companyZohoId: companyZohoId || deal.companyZohoId,
-        clientZohoId: clientZohoId || deal.clientZohoId,
-        employeeZohoId: deal.employeeZohoId || deal.formData?.employeeZohoId || currentUser?.zohoId,
-        employeeName: deal.employeeName || deal.formData?.employeeName || deal.salesEmployee || deal.owner || currentUser?.name,
-        employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
-        empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
-        salesEmployee: deal.salesEmployee || deal.employeeName || currentUser?.name,
-      };
-
-      const zohoRes = await saveOrUpdateZohoDeal(dealWithLookups);
-      if (zohoRes.success && zohoRes.zohoId) {
-        const updatedList = deals.map((d: any) => 
-          d.id === deal.id ? {
-            ...d,
-            zohoId: zohoRes.zohoId,
-            companyZohoId: companyZohoId || d.companyZohoId,
-            clientZohoId: clientZohoId || d.clientZohoId,
-            zohoStatus: 'synced',
-            zohoSyncedAt: new Date().toISOString(),
-            zohoError: undefined
-          } : d
-        );
-        setDeals(updatedList);
-        safeSaveDealsToStorage(updatedList);
-        setToast({
-          type: 'success',
-          message: `Deal Synced Successfully!`,
-          submessage: `Record ID: #${zohoRes.zohoId}`
-        });
-      } else {
-        const updatedList = deals.map((d: any) => 
-          d.id === deal.id ? { ...d, zohoStatus: 'failed', zohoError: zohoRes.message } : d
-        );
-        setDeals(updatedList);
-        safeSaveDealsToStorage(updatedList);
-        setToast({
-          type: 'error',
-          message: `Deal Sync Failed`,
-          submessage: zohoRes.message || 'Please check field requirements or authentication'
-        });
-      }
-    } catch (err: any) {
-      setToast({
-        type: 'error',
-        message: `Deal Sync Error`,
-        submessage: err?.message || 'Failed to communicate with server'
-      });
-    } finally {
-      setSyncingId(null);
-    }
-  };
-
-  const cancelSyncRef = useRef(false);
 
   const processZohoDealsBatch = (rawDeals: any[], currentDeals: any[]) => {
     const updatedDeals = [...currentDeals];
@@ -1577,26 +823,9 @@ export const Deals = () => {
         (resolvedClientName && resolvedClientName !== 'Client' ? resolvedClientName : 'Individual');
 
       // 2. Financials
-      const parseZohoNum = (val: any): number => {
-        if (val === null || val === undefined || val === '') return 0;
-        if (typeof val === 'number') return isNaN(val) ? 0 : val;
-        const cleaned = String(val).replace(/,/g, '').replace(/[^0-9.-]/g, '').trim();
-        const parsed = parseFloat(cleaned);
-        return isNaN(parsed) ? 0 : parsed;
-      };
-
       const formatRupee = (val: number): string => {
         if (!val || isNaN(val) || val <= 0) return '₹0';
         return `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-      };
-
-      const findFirstPositive = (...vals: any[]): number => {
-        for (const v of vals) {
-          if (v === null || v === undefined) continue;
-          const num = parseZohoNum(v);
-          if (num > 0) return num;
-        }
-        return 0;
       };
 
       // Sum Subform_1 service line items if available
@@ -1973,170 +1202,733 @@ export const Deals = () => {
     return { updatedDeals, newCount, updatedCount };
   };
 
-  const handleStopSync = () => {
-    cancelSyncRef.current = true;
-    setIsFetchingBatch(false);
-    setIsFetchingZoho(false);
-    setToast({
-      type: 'info',
-      message: 'Sync Paused',
-      submessage: `Stopped sync with ${deals.length.toLocaleString()} deals loaded in portal.`
-    });
-  };
+  // Fetch Deals based on reference folder implementation
+  const fetchDeals = useCallback(
+    async (pageToFetch: number, pageTokenToFetch: string | null = null, sizePerPage: number = itemsPerPage, showToast = false) => {
+      setIsFetchingZoho(true);
+      try {
+        const queryParams = new URLSearchParams();
+        queryParams.set('page', pageToFetch.toString());
+        queryParams.set('per_page', sizePerPage.toString());
 
-  const handleFetchAllBatchesFromZoho = async (showToast = true, startFresh = false) => {
-    setIsFetchingBatch(true);
-    cancelSyncRef.current = false;
-
-    // Load full IndexedDB dataset first so nothing is lost
-    const existingIdb = await getAllDealsFromIndexedDB();
-    let currentDeals = startFresh ? [] : (existingIdb.length >= deals.length ? existingIdb : [...deals]);
-    let pageToken: string | undefined = undefined;
-    let pageNumber = 1;
-    let hasMore = true;
-    let batchCount = 0;
-    let totalExpected = 10483;
-    try {
-      const countRes = await fetchZohoDealsCount();
-      if (countRes.success && countRes.count > 0) {
-        totalExpected = countRes.count;
-      }
-    } catch (e) {}
-
-    setBatchProgress({
-      loaded: currentDeals.length,
-      batch: 0,
-      percent: Math.min(100, Math.round((currentDeals.length / totalExpected) * 100))
-    });
-
-    try {
-      while (hasMore && !cancelSyncRef.current && currentDeals.length < 50000) {
-        batchCount++;
-        let res: any = null;
-        let retries = 3;
-
-        while (retries > 0 && !cancelSyncRef.current) {
-          try {
-            res = await fetchZohoDeals({
-              per_page: 200,
-              page_token: pageToken,
-              page: pageToken ? undefined : pageNumber
-            });
-            if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-              break;
-            }
-          } catch (fetchErr) {
-            console.warn(`[Zoho Sync] Retry ${4 - retries}/3 for batch ${batchCount}:`, fetchErr);
-          }
-          retries--;
-          if (retries > 0 && !cancelSyncRef.current) {
-            await new Promise(r => setTimeout(r, 1000));
-          }
+        if (pageTokenToFetch) {
+          queryParams.set('page_token', pageTokenToFetch);
         }
 
-        if (!res || !res.success || !Array.isArray(res.data) || res.data.length === 0) {
-          break;
+        const res = await fetch(`/api/deals?${queryParams.toString()}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.details || data.error || 'Failed to fetch deals');
         }
 
-        if (res.info?.total_records && Number(res.info.total_records) > 0) {
-          totalExpected = Number(res.info.total_records);
-        }
-
-        const { updatedDeals } = processZohoDealsBatch(res.data, currentDeals);
-        currentDeals = updatedDeals;
-
-        // Real-time UI stream update
-        setDeals([...currentDeals]);
-        const percent = Math.min(100, Math.round((currentDeals.length / totalExpected) * 100));
-        setBatchProgress({ loaded: currentDeals.length, batch: batchCount, percent });
-
-        hasMore = Boolean(res.info?.more_records && res.info?.next_page_token);
-        pageToken = res.info?.next_page_token || undefined;
-        pageNumber++;
-
-        // Save progress every 2 batches or when finished
-        if (batchCount % 2 === 0 || !hasMore) {
-          safeSaveDealsToStorage(currentDeals);
-        }
-
-        if (!hasMore || cancelSyncRef.current) break;
-      }
-
-      safeSaveDealsToStorage(currentDeals);
-      setHasMoreZohoRecords(false);
-      if (showToast && !cancelSyncRef.current) {
-        setToast({
-          type: 'success',
-          message: `All Deals Synced (${currentDeals.length.toLocaleString()} records)`,
-          submessage: `Total ${currentDeals.length.toLocaleString()} deals are now stored in local IndexedDB with instant search and pagination.`
-        });
-      }
-    } catch (e: any) {
-      if (showToast) {
-        setToast({
-          type: 'error',
-          message: 'Sync Interrupted',
-          submessage: e?.message || 'Failed to sync all records'
-        });
-      }
-    } finally {
-      setIsFetchingBatch(false);
-      setBatchProgress(null);
-    }
-  };
-
-  const handleFetchFromZoho = async (showNotification = true, tokenToFetch?: string) => {
-    setIsFetchingZoho(true);
-    try {
-      const result = await fetchZohoDeals({ per_page: 200, page_token: tokenToFetch });
-      if (result.success && Array.isArray(result.data)) {
-        if (result.data.length === 0) {
-          if (showNotification) {
-            setToast({
-              type: 'info',
-              message: 'No Deals Found',
-              submessage: 'Server returned 0 records'
-            });
-          }
-          return;
-        }
-
-        // Always read current IndexedDB to merge into full 10,000+ dataset
-        const idbDeals = await getAllDealsFromIndexedDB();
-        const baseDeals = idbDeals.length >= deals.length ? idbDeals : deals;
-
-        const { updatedDeals } = processZohoDealsBatch(result.data, baseDeals);
+        const rawList = data.data || [];
+        const { updatedDeals } = processZohoDealsBatch(rawList, []);
         setDeals(updatedDeals);
+
+        const info = data.info || null;
+        setPaginationInfo(info);
+        if (info?.total_records !== undefined && info.total_records !== null) {
+          setTotalRecordsCount(Number(info.total_records));
+        }
+
         safeSaveDealsToStorage(updatedDeals);
 
-        const hasMore = Boolean(result.info?.more_records && result.info?.next_page_token);
-        setHasMoreZohoRecords(hasMore);
-        setNextPageToken(result.info?.next_page_token || null);
-
-        if (showNotification) {
+        if (showToast) {
           setToast({
             type: 'success',
             message: 'Deals Synchronized',
-            submessage: `Fetched latest ${result.data.length} records (Total in portal: ${updatedDeals.length.toLocaleString()})`
+            submessage: `Page ${pageToFetch} loaded (${rawList.length} deals on this page, Total: ${(info?.total_records || rawList.length).toLocaleString()})`
           });
         }
-      } else if (showNotification) {
+      } catch (err: any) {
+        const msg = err instanceof Error ? err.message : 'An unexpected error occurred';
+        console.error('[Deals Fetch Error]:', msg);
+        if (showToast) {
+          setToast({
+            type: 'error',
+            message: 'Fetch Error',
+            submessage: msg
+          });
+        }
+      } finally {
+        setIsFetchingZoho(false);
+      }
+    },
+    [itemsPerPage]
+  );
+
+  // Navigation handlers based on reference code
+  const handlePageChange = (targetPage: number) => {
+    if (isFetchingZoho || targetPage === currentPage) return;
+
+    if (targetPage === currentPage + 1) {
+      // Next Page
+      const nextToken = paginationInfo?.next_page_token || null;
+      setTokenHistory(prev => {
+        const updated = [...prev];
+        updated[targetPage - 1] = nextToken;
+        return updated;
+      });
+      setCurrentPage(targetPage);
+      setCurrentToken(nextToken);
+      fetchDeals(targetPage, nextToken, itemsPerPage);
+    } else if (targetPage === currentPage - 1) {
+      // Prev Page
+      const prevToken = tokenHistory[targetPage - 1] || null;
+      setCurrentPage(targetPage);
+      setCurrentToken(prevToken);
+      fetchDeals(targetPage, prevToken, itemsPerPage);
+    } else {
+      // Direct jump (e.g. page 1 or specific page)
+      const token = tokenHistory[targetPage - 1] || null;
+      setCurrentPage(targetPage);
+      setCurrentToken(token);
+      fetchDeals(targetPage, token, itemsPerPage);
+    }
+  };
+
+  const handleItemsPerPageChange = (newPerPage: number) => {
+    setItemsPerPage(newPerPage);
+    setCurrentPage(1);
+    setCurrentToken(null);
+    setTokenHistory([null]);
+    fetchDeals(1, null, newPerPage);
+  };
+
+  const handleRefresh = () => {
+    fetchDeals(currentPage, currentToken, itemsPerPage, true);
+  };
+
+  // Initial load and perPage change based on reference code
+  useEffect(() => {
+    setCurrentPage(1);
+    setCurrentToken(null);
+    setTokenHistory([null]);
+    fetchDeals(1, null, itemsPerPage);
+  }, [itemsPerPage, fetchDeals]);
+
+  // Listen for real-time live deal updates from DealDetails view
+  useEffect(() => {
+    const handleDealUpdate = (e: any) => {
+      const updated = e.detail;
+      if (!updated) return;
+      setDeals(prevDeals => {
+        const idx = prevDeals.findIndex(d => 
+          d.id === updated.id || 
+          d.zohoId === updated.zohoId || 
+          d.id === updated.zohoId || 
+          d.zohoId === updated.id ||
+          (d.id && updated.id && String(d.id).includes(String(updated.id))) ||
+          (d.id && updated.zohoId && String(d.id).includes(String(updated.zohoId)))
+        );
+        if (idx >= 0) {
+          const copy = [...prevDeals];
+          copy[idx] = { ...copy[idx], ...updated };
+          return copy;
+        }
+        return [updated, ...prevDeals];
+      });
+    };
+    window.addEventListener('be_deals_updated', handleDealUpdate);
+    return () => window.removeEventListener('be_deals_updated', handleDealUpdate);
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery, quickFilter, statusFilter]);
+
+  // Set of deals currently being enriched or already enriched in this session
+  const enrichingDealsRef = useRef<Set<string>>(new Set());
+
+  // 1. Auto-enrich visible deals on the active page that have ₹0 amounts
+  useEffect(() => {
+    // Filter deals based on activeTab, quickFilter, statusFilter and searchQuery to get active page slice
+    const filtered = deals.filter(deal => {
+      const isFromQt = isDealFromQuotation(deal);
+      if (activeTab === 'Manual Deals' && isFromQt) return false;
+      if (activeTab === 'From Quotations' && !isFromQt) return false;
+      if (quickFilter === 'today' && !isDealToday(deal)) return false;
+      if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
+      if (quickFilter === 'pending' && getDealPending(deal) <= 0) return false;
+      if (statusFilter && statusFilter !== 'all') {
+        const s = String(deal.status || deal.stage || '').toLowerCase();
+        if (!s.includes(statusFilter.toLowerCase())) return false;
+      }
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchClient = deal.client && String(deal.client).toLowerCase().includes(q);
+        const matchCompany = deal.company && String(deal.company).toLowerCase().includes(q);
+        const matchService = deal.service && String(deal.service).toLowerCase().includes(q);
+        const matchId = deal.id && String(deal.id).toLowerCase().includes(q);
+        const matchZohoId = deal.zohoId && String(deal.zohoId).toLowerCase().includes(q);
+        const matchOwner = deal.owner && String(deal.owner).toLowerCase().includes(q);
+        const matchEmpName = (deal.employeeName || deal.salesEmployee) && String(deal.employeeName || deal.salesEmployee).toLowerCase().includes(q);
+        const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
+        const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
+        const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
+        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchStatus && !matchAmount && !matchEmpCode) return false;
+      }
+      return true;
+    });
+
+    const pageSlice = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const dealsToEnrich = pageSlice.filter(
+      (d: any) => (getDealAmount(d) === 0 || !d.servicesData || d.servicesData.length === 0) &&
+                  (d.zohoId || (d.id && String(d.id).length > 8)) &&
+                  !enrichingDealsRef.current.has(String(d.zohoId || d.id))
+    );
+
+    if (dealsToEnrich.length === 0) return;
+
+    let isCancelled = false;
+
+    dealsToEnrich.forEach((d: any) => {
+      const targetId = String(d.zohoId || d.id);
+      enrichingDealsRef.current.add(targetId);
+
+      fetchZohoDealById(targetId).then(res => {
+        if (isCancelled) return;
+        if (res.success && res.data) {
+          const enriched = enrichDealFromZohoRecord(res.data, d);
+          if (enriched) {
+            setDeals(prevDeals => {
+              const idx = prevDeals.findIndex(p => p.id === d.id || p.zohoId === d.zohoId || p.id === d.zohoId || p.zohoId === d.id);
+              if (idx >= 0) {
+                const copy = [...prevDeals];
+                copy[idx] = { ...copy[idx], ...enriched };
+                return copy;
+              }
+              return prevDeals;
+            });
+          }
+        }
+      }).catch(() => {});
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [deals, currentPage, itemsPerPage, activeTab, searchQuery]);
+
+  const getStatusColor = (status: string) => {
+    const s = (status || '').toLowerCase();
+    if (s.includes('won') || s.includes('execut')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (s.includes('lost')) return 'bg-rose-100 text-rose-700 border-rose-200';
+    if (s.includes('negotiat') || s.includes('allocat')) return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (s.includes('propos') || s.includes('legal')) return 'bg-orange-100 text-orange-700 border-orange-200';
+    if (s.includes('qualif') || s.includes('account')) return 'bg-purple-100 text-purple-700 border-purple-200';
+    if (s.includes('sale')) return 'bg-amber-100 text-amber-700 border-amber-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  const handleCreateDeal = async () => {
+    setIsSubmitting(true);
+    try {
+      const dealId = editingDealId || `DL-${Math.floor(1000 + Math.random() * 9000)}`;
+      const isEditing = Boolean(editingDealId);
+      const existingDeal = deals.find((d: any) => d.id === editingDealId);
+
+      // 1. Save actual files to IndexedDB
+      const docsToSave: any[] = existingDeal?.documentsData ? [...existingDeal.documentsData] : [];
+
+      if (paymentScreenshotFile) {
+        const docId = `${dealId || 'ID'}_payment_${paymentScreenshotFile.name}`;
+        try {
+          await saveDocument(docId, paymentScreenshotFile);
+        } catch (e) {
+          console.error('Failed to save payment screenshot', e);
+        }
+      }
+      for (const d of documents) {
+        const docId = `${dealId}_${d.name}`;
+        try {
+          await saveDocument(docId, d);
+          docsToSave.push({ id: docId, name: d.name, size: d.size, type: d.type });
+        } catch (e) {
+          console.error('Failed to save document to IndexedDB', e);
+          docsToSave.push({ id: docId, name: d.name, size: d.size, type: d.type });
+        }
+      }
+
+      // 2. Automatically Create/Sync Company in local CRM and Zoho CRM
+      let companyZohoId: string | undefined = existingDeal?.companyZohoId;
+      let companySavedLocally: any = null;
+
+      if (formData.companyName && formData.companyName.trim()) {
+        try {
+          const rawCompanies = localStorage.getItem('be_companies');
+          const existingCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
+          const existingComp = existingCompanies.find((c: any) => c.name?.toLowerCase() === formData.companyName.trim().toLowerCase());
+
+          companySavedLocally = {
+            id: existingComp?.id || `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
+            name: formData.companyName.trim(),
+            type: formData.businessType || existingComp?.type || 'Private Limited',
+            gstNumber: formData.gstNumber ? formData.gstNumber.toUpperCase() : (existingComp?.gstNumber || ''),
+            doi: formData.doi || existingComp?.doi || '',
+            email: formData.email || existingComp?.email || '',
+            status: 'Active',
+            source: existingComp?.source || 'From Deals',
+            addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+            zohoId: existingComp?.zohoId,
+            zohoStatus: existingComp?.zohoStatus || 'pending',
+            employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
+            employeeName: existingDeal?.employeeName || currentUser?.name,
+            employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
+            empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
+            salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
+          };
+
+          // Sync to Zoho CRM if not synced yet
+          if (!companySavedLocally.zohoId) {
+            try {
+              const compZohoRes = await saveOrUpdateZohoCompany(companySavedLocally);
+              if (compZohoRes.success && compZohoRes.zohoId) {
+                companySavedLocally.zohoId = compZohoRes.zohoId;
+                companySavedLocally.zohoStatus = 'synced';
+                companySavedLocally.zohoSyncedAt = new Date().toISOString();
+              }
+            } catch (cErr) {
+              console.warn('[Zoho CRM] Company sync during deal creation failed:', cErr);
+            }
+          }
+
+          companyZohoId = companySavedLocally.zohoId;
+
+          // Save to be_companies in localStorage safely
+          const updatedCompaniesList = existingComp 
+            ? existingCompanies.map((c: any) => c.id === existingComp.id ? { ...c, ...companySavedLocally } : c)
+            : [companySavedLocally, ...existingCompanies];
+          try {
+            localStorage.setItem('be_companies', JSON.stringify(updatedCompaniesList));
+          } catch (e) {
+            console.warn('LocalStorage save error for companies:', e);
+          }
+        } catch (compErr) {
+          console.warn('Auto-saving company failed:', compErr);
+        }
+      }
+
+      // 3. Automatically Create/Sync Client in local CRM and Zoho CRM
+      let clientZohoId: string | undefined = existingDeal?.clientZohoId;
+      let clientSavedLocally: any = null;
+
+      if (formData.clientName && formData.clientName.trim()) {
+        try {
+          const rawClients = localStorage.getItem('be_clients');
+          const existingClients = rawClients ? JSON.parse(rawClients) : [];
+          const existingClient = existingClients.find((cl: any) => 
+            (cl.email && formData.email && (cl.email ?? '').toLowerCase() === (formData.email ?? '').trim().toLowerCase()) ||
+            (cl.phone && formData.mobile && cl.phone === formData.mobile.replace(/[^0-9]/g, '')) ||
+            (cl.name?.toLowerCase() === formData.clientName.trim().toLowerCase())
+          );
+
+          clientSavedLocally = {
+            id: existingClient?.id || `CL-${Math.floor(1000 + Math.random() * 9000)}`,
+            name: formData.clientName.trim(),
+            company: formData.companyName ? formData.companyName.trim() : (existingClient?.company || 'Individual'),
+            email: formData.email ? (formData.email ?? '').trim() : (existingClient?.email || ''),
+            phone: formData.mobile ? formData.mobile.replace(/[^0-9]/g, '') : (existingClient?.phone || ''),
+            status: 'Active',
+            source: existingClient?.source || 'From Deals',
+            addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+            zohoId: existingClient?.zohoId,
+            zohoStatus: existingClient?.zohoStatus || 'pending',
+            employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
+            employeeName: existingDeal?.employeeName || currentUser?.name,
+            employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
+            empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
+            salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
+          };
+
+          // Sync to Zoho CRM if not synced yet
+          if (!clientSavedLocally.zohoId) {
+            try {
+              const clientZohoRes = await saveOrUpdateZohoClient(clientSavedLocally);
+              if (clientZohoRes.success && clientZohoRes.zohoId) {
+                clientSavedLocally.zohoId = clientZohoRes.zohoId;
+                clientSavedLocally.zohoStatus = 'synced';
+                clientSavedLocally.zohoSyncedAt = new Date().toISOString();
+              }
+            } catch (clErr) {
+              console.warn('[Zoho CRM] Client sync during deal creation failed:', clErr);
+            }
+          }
+
+          clientZohoId = clientSavedLocally.zohoId;
+
+          // Save to be_clients in localStorage safely
+          const updatedClientsList = existingClient
+            ? existingClients.map((cl: any) => cl.id === existingClient.id ? { ...cl, ...clientSavedLocally } : cl)
+            : [clientSavedLocally, ...existingClients];
+          try {
+            localStorage.setItem('be_clients', JSON.stringify(updatedClientsList));
+          } catch (e) {
+            console.warn('LocalStorage save error for clients:', e);
+          }
+        } catch (clErr) {
+          console.warn('Auto-saving client failed:', clErr);
+        }
+      }
+
+      // 4. Build Deal Object with Linked Company, Client, and Partner BDM details
+      const dealData: any = {
+        id: dealId,
+        client: formData.clientName,
+        company: formData.companyName,
+        companyZohoId: companyZohoId,
+        clientZohoId: clientZohoId,
+        service: dealServices.length === 1 ? dealServices[0].name : dealServices.length > 1 ? `${dealServices.length} Services` : 'Custom Services',
+        amount: `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
+        received: `₹${(Number(amountReceived) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
+        pending: `₹${pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
+        status: existingDeal?.status || 'New',
+        stage: existingDeal?.stage || 'Sales',
+        owner: existingDeal?.owner || currentUser?.name || 'Admin',
+        Employee: (existingDeal?.employeeZohoId || currentUser?.zohoId)
+          ? { id: existingDeal?.employeeZohoId || currentUser?.zohoId, name: existingDeal?.employeeName || currentUser?.name }
+          : undefined,
+        employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
+        employeeName: existingDeal?.employeeName || currentUser?.name,
+        employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
+        empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
+        salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
+        date: existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        source: existingDeal?.source || 'Manual',
+        // Partner BDM split details
+        hasPartnerBdm: hasPartnerBdm,
+        has_partner_bdm: hasPartnerBdm,
+        partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
+        partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
+        partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
+        partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
+        partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
+        partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
+        // Full details
+        formData: {
+          ...formData,
+          companyZohoId,
+          clientZohoId,
+          employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
+          employeeName: existingDeal?.employeeName || currentUser?.name,
+          employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
+          empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
+          salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
+          hasPartnerBdm,
+          has_partner_bdm: hasPartnerBdm,
+          partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
+          partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
+          partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
+          partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
+          partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
+          partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
+        },
+        servicesData: dealServices.map(s => {
+          const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
+          const gstVal = t > 0 ? Number((t * 0.18).toFixed(2)) : 0;
+          const b = t > 0 ? Number((t - gstVal).toFixed(2)) : (Number(s.baseAmount) || 0);
+          return {
+            ...s,
+            totalAmount: String(t || s.totalAmount || ''),
+            baseAmount: String(b || s.baseAmount || '')
+          };
+        }),
+        totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount },
+        paymentScreenshotName: paymentScreenshotName,
+        documentsData: docsToSave,
+        zohoId: existingDeal?.zohoId || undefined,
+        zohoStatus: existingDeal?.zohoStatus || 'pending',
+      };
+
+      // 5. Call Zoho CRM REST API to insert or update record in Deals module
+      try {
+        const zohoRes = await saveOrUpdateZohoDeal(dealData);
+        const finalZohoId = zohoRes.zohoId || dealData.zohoId;
+
+        if (zohoRes.success && finalZohoId) {
+          dealData.zohoId = finalZohoId;
+          dealData.zohoStatus = 'synced';
+          dealData.zohoSyncedAt = new Date().toISOString();
+
+          // Upload attached payment screenshot & documents to Zoho CRM record if any
+          if (paymentScreenshotFile) {
+            try {
+              await uploadZohoAttachment(finalZohoId, paymentScreenshotFile, paymentScreenshotFile.name, 'Deals');
+            } catch (attErr) {
+              console.warn('[Zoho CRM] Payment screenshot attachment failed:', attErr);
+            }
+          }
+          for (const docFile of documents) {
+            try {
+              await uploadZohoAttachment(finalZohoId, docFile, docFile.name, 'Deals');
+            } catch (attErr) {
+              console.warn('[Zoho CRM] Document attachment failed:', attErr);
+            }
+          }
+
+          const syncSummary = [
+            `Deal #${finalZohoId}`,
+            companyZohoId ? `Company #${companyZohoId}` : null,
+            clientZohoId ? `Client #${clientZohoId}` : null
+          ].filter(Boolean).join(' • ');
+
+          setToast({
+            type: 'success',
+            message: isEditing ? 'Deal Updated Successfully!' : 'Deal, Client & Company Saved Successfully!',
+            submessage: syncSummary
+          });
+        } else {
+          dealData.zohoStatus = 'failed';
+          dealData.zohoError = zohoRes.message;
+          setToast({
+            type: 'error',
+            message: `Deal Saved Locally (Sync Failed)`,
+            submessage: zohoRes.message || 'Check field requirements'
+          });
+        }
+      } catch (zErr: any) {
+        console.error('Zoho CRM sync error:', zErr);
+        dealData.zohoStatus = 'failed';
+        dealData.zohoError = zErr?.message || 'Sync failed';
         setToast({
           type: 'error',
-          message: 'Fetch Error',
-          submessage: result.message || 'Could not communicate with server endpoint'
+          message: `Deal Saved Locally (Sync Error)`,
+          submessage: zErr?.message || 'Failed to communicate with server'
         });
       }
-    } catch (err: any) {
-      if (showNotification) {
+
+      let newDealsList;
+      if (editingDealId) {
+        // Retain old status/date/owner if editing
+        newDealsList = deals.map((d: any) => {
+          if (d.id === editingDealId) {
+            return {
+              ...dealData,
+              status: d.status,
+              owner: d.owner,
+              date: d.date,
+              zohoId: dealData.zohoId || d.zohoId,
+              zohoStatus: dealData.zohoStatus || d.zohoStatus
+            };
+          }
+          return d;
+        });
+      } else {
+        newDealsList = [dealData, ...deals];
+      }
+
+      setDeals(newDealsList);
+      safeSaveDealsToStorage(newDealsList);
+    } catch (createErr: any) {
+      console.error('Deal creation error:', createErr);
+      setToast({
+        type: 'error',
+        message: 'Failed to complete deal creation',
+        submessage: createErr?.message || 'An unexpected error occurred'
+      });
+    } finally {
+      setIsSubmitting(false);
+      handleCloseModal();
+    }
+  };
+
+  const handleDeleteDeal = (deal: any) => {
+    setDeleteTarget({ isOpen: true, deal, isDeleting: false });
+  };
+
+  const confirmDeleteDeal = async () => {
+    const deal = deleteTarget.deal;
+    if (!deal) return;
+    setDeleteTarget(prev => ({ ...prev, isDeleting: true }));
+    const dealName = deal.formData?.clientName || deal.client || deal.id;
+
+    try {
+      const newDealsList = deals.filter((d: any) => d.id !== deal.id);
+      setDeals(newDealsList);
+      safeSaveDealsToStorage(newDealsList);
+
+      if (deal.zohoId) {
+        try {
+          const zohoRes = await deleteZohoDeal(deal.zohoId);
+          if (zohoRes.success) {
+            setToast({
+              type: 'success',
+              message: `Deal "${dealName}" Deleted`,
+              submessage: `Record has been deleted successfully (ID: #${deal.zohoId})`
+            });
+          } else {
+            setToast({
+              type: 'error',
+              message: `Deal Deleted Locally (Delete Failed)`,
+              submessage: zohoRes.message || 'Failed to delete record'
+            });
+          }
+        } catch (zErr: any) {
+          console.error('[Zoho CRM] Delete error:', zErr);
+          setToast({
+            type: 'error',
+            message: `Deal Deleted Locally (Delete Error)`,
+            submessage: zErr?.message || 'Failed to communicate with server'
+          });
+        }
+      } else {
         setToast({
-          type: 'error',
-          message: 'Fetch Error',
-          submessage: err?.message || 'Could not communicate with server endpoint'
+          type: 'success',
+          message: `Deal "${dealName}" Deleted`,
+          submessage: 'Record has been deleted successfully'
         });
       }
     } finally {
-      setIsFetchingZoho(false);
+      setDeleteTarget({ isOpen: false, deal: null, isDeleting: false });
+    }
+  };
+
+  const handleManualSyncDeal = async (deal: any) => {
+    setSyncingId(deal.id);
+    try {
+      // 1. Ensure Company is created and synced if present
+      let companyZohoId = deal.companyZohoId || deal.formData?.companyZohoId;
+      const compName = deal.company || deal.formData?.companyName;
+      if (compName && compName !== 'N/A' && !companyZohoId) {
+        const rawCompanies = localStorage.getItem('be_companies');
+        const existingCompanies = rawCompanies ? JSON.parse(rawCompanies) : [];
+        const existingComp = existingCompanies.find((c: any) => c.name?.toLowerCase() === compName.trim().toLowerCase());
+        const companyToSave: any = {
+          id: existingComp?.id || `CMP-${Math.floor(1000 + Math.random() * 9000)}`,
+          name: compName.trim(),
+          type: deal.formData?.businessType || existingComp?.type || 'Private Limited',
+          gstNumber: deal.formData?.gstNumber ? deal.formData.gstNumber.toUpperCase() : (existingComp?.gstNumber || ''),
+          doi: deal.formData?.doi || existingComp?.doi || '',
+          email: deal.formData?.email || existingComp?.email || '',
+          status: 'Active',
+          source: existingComp?.source || 'From Deals',
+          addedOn: existingComp?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          zohoId: existingComp?.zohoId,
+          zohoStatus: existingComp?.zohoStatus || 'pending',
+          employeeZohoId: deal.employeeZohoId || deal.formData?.employeeZohoId || currentUser?.zohoId,
+          employeeName: deal.employeeName || deal.formData?.employeeName || currentUser?.name,
+          employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
+          empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
+          salesEmployee: deal.salesEmployee || currentUser?.name,
+        };
+        try {
+          const cRes = await saveOrUpdateZohoCompany(companyToSave);
+          if (cRes.success && cRes.zohoId) {
+            companyToSave.zohoId = cRes.zohoId;
+            companyToSave.zohoStatus = 'synced';
+            companyToSave.zohoSyncedAt = new Date().toISOString();
+            companyZohoId = cRes.zohoId;
+          }
+        } catch (e) {
+          console.warn('Company sync during deal manual sync failed:', e);
+        }
+        const updatedCompaniesList = existingComp 
+          ? existingCompanies.map((c: any) => c.id === existingComp.id ? { ...c, ...companyToSave } : c)
+          : [companyToSave, ...existingCompanies];
+        try {
+          localStorage.setItem('be_companies', JSON.stringify(updatedCompaniesList));
+        } catch (e) {}
+      }
+
+      // 2. Ensure Client is created and synced if present
+      let clientZohoId = deal.clientZohoId || deal.formData?.clientZohoId;
+      const clientName = deal.client || deal.formData?.clientName;
+      if (clientName && clientName !== 'Client' && !clientZohoId) {
+        const rawClients = localStorage.getItem('be_clients');
+        const existingClients = rawClients ? JSON.parse(rawClients) : [];
+        const existingClient = existingClients.find((cl: any) => 
+          (cl.name?.toLowerCase() === clientName.trim().toLowerCase()) ||
+          (cl.email && deal.formData?.email && (cl.email ?? '').toLowerCase() === deal.formData.email.trim().toLowerCase())
+        );
+        const clientToSave: any = {
+          id: existingClient?.id || `CL-${Math.floor(1000 + Math.random() * 9000)}`,
+          name: clientName.trim(),
+          company: compName ? compName.trim() : (existingClient?.company || 'Individual'),
+          email: deal.formData?.email ? deal.formData.email.trim() : (existingClient?.email || ''),
+          phone: deal.formData?.mobile ? deal.formData.mobile.replace(/[^0-9]/g, '') : (existingClient?.phone || ''),
+          status: 'Active',
+          source: existingClient?.source || 'From Deals',
+          addedOn: existingClient?.addedOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          zohoId: existingClient?.zohoId,
+          zohoStatus: existingClient?.zohoStatus || 'pending',
+          employeeZohoId: deal.employeeZohoId || deal.formData?.employeeZohoId || currentUser?.zohoId,
+          employeeName: deal.employeeName || deal.formData?.employeeName || currentUser?.name,
+          employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
+          empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
+          salesEmployee: deal.salesEmployee || currentUser?.name,
+        };
+        try {
+          const clRes = await saveOrUpdateZohoClient(clientToSave);
+          if (clRes.success && clRes.zohoId) {
+            clientToSave.zohoId = clRes.zohoId;
+            clientToSave.zohoStatus = 'synced';
+            clientToSave.zohoSyncedAt = new Date().toISOString();
+            clientZohoId = clRes.zohoId;
+          }
+        } catch (e) {
+          console.warn('Client sync during deal manual sync failed:', e);
+        }
+        const updatedClientsList = existingClient
+          ? existingClients.map((cl: any) => cl.id === existingClient.id ? { ...cl, ...clientToSave } : cl)
+          : [clientToSave, ...existingClients];
+        try {
+          localStorage.setItem('be_clients', JSON.stringify(updatedClientsList));
+        } catch (e) {}
+      }
+
+      // 3. Save or update the deal in Zoho CRM
+      const dealWithLookups = {
+        ...deal,
+        companyZohoId: companyZohoId || deal.companyZohoId,
+        clientZohoId: clientZohoId || deal.clientZohoId,
+        employeeZohoId: deal.employeeZohoId || deal.formData?.employeeZohoId || currentUser?.zohoId,
+        employeeName: deal.employeeName || deal.formData?.employeeName || deal.salesEmployee || deal.owner || currentUser?.name,
+        employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
+        empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
+        salesEmployee: deal.salesEmployee || deal.employeeName || currentUser?.name,
+      };
+
+      const zohoRes = await saveOrUpdateZohoDeal(dealWithLookups);
+      if (zohoRes.success && zohoRes.zohoId) {
+        const updatedList = deals.map((d: any) => 
+          d.id === deal.id ? {
+            ...d,
+            zohoId: zohoRes.zohoId,
+            companyZohoId: companyZohoId || d.companyZohoId,
+            clientZohoId: clientZohoId || d.clientZohoId,
+            zohoStatus: 'synced',
+            zohoSyncedAt: new Date().toISOString(),
+            zohoError: undefined
+          } : d
+        );
+        setDeals(updatedList);
+        safeSaveDealsToStorage(updatedList);
+        setToast({
+          type: 'success',
+          message: `Deal Synced Successfully!`,
+          submessage: `Record ID: #${zohoRes.zohoId}`
+        });
+      } else {
+        const updatedList = deals.map((d: any) => 
+          d.id === deal.id ? { ...d, zohoStatus: 'failed', zohoError: zohoRes.message } : d
+        );
+        setDeals(updatedList);
+        safeSaveDealsToStorage(updatedList);
+        setToast({
+          type: 'error',
+          message: `Deal Sync Failed`,
+          submessage: zohoRes.message || 'Please check field requirements or authentication'
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: 'error',
+        message: `Deal Sync Error`,
+        submessage: err?.message || 'Failed to communicate with server'
+      });
+    } finally {
+      setSyncingId(null);
     }
   };
 
@@ -2179,7 +1971,7 @@ export const Deals = () => {
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-bold text-gray-900">Deals</h1>
             <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              {rbacDeals.length.toLocaleString()} Deals
+              {(totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records ?? rbacDeals.length)).toLocaleString()} Deals
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">Manage all active deals with live synchronization and pagination.</p>
@@ -2197,8 +1989,8 @@ export const Deals = () => {
           </div>
 
           <button
-            onClick={() => handleFetchFromZoho(true)}
-            disabled={isFetchingZoho || isFetchingBatch}
+            onClick={handleRefresh}
+            disabled={isFetchingZoho}
             className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm hover:shadow disabled:opacity-60 shrink-0"
             title="Refresh & Sync"
           >
@@ -2214,54 +2006,6 @@ export const Deals = () => {
           </button>
         </div>
       </div>
-
-      {/* Live Sync Progress Banner */}
-      {isFetchingBatch && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-100/70 border border-orange-200/80 rounded-2xl p-4 shadow-sm flex flex-col gap-3"
-        >
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center space-x-3.5">
-              <div className="w-10 h-10 rounded-xl bg-be-orange/10 border border-be-orange/20 flex items-center justify-center text-be-orange shrink-0">
-                <Loader2 className="w-5 h-5 animate-spin" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h4 className="text-sm font-bold text-gray-900">
-                    Syncing All Deals from Zoho CRM
-                  </h4>
-                  <span className="px-2.5 py-0.5 bg-be-orange text-white text-xs font-bold rounded-full shadow-xs">
-                    {(batchProgress?.loaded || deals.length).toLocaleString()} / 10,483 Loaded ({batchProgress?.percent || Math.min(100, Math.round(((batchProgress?.loaded || deals.length) / 10483) * 100))}%)
-                  </span>
-                  <span className="text-xs text-gray-500 font-medium">
-                    Batch #{batchProgress?.batch || 1} of 53
-                  </span>
-                </div>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  Downloading all 10,483 live records into local IndexedDB storage. You can search, filter, and view deals while sync is in progress.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleStopSync}
-              className="px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl shadow-xs hover:shadow transition-all shrink-0"
-            >
-              Pause Sync
-            </button>
-          </div>
-          
-          {/* Visual Progress Bar */}
-          <div className="w-full bg-orange-200/60 rounded-full h-2 overflow-hidden">
-            <div 
-              className="bg-gradient-to-r from-be-orange to-amber-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${batchProgress?.percent || Math.min(100, Math.max(3, (((batchProgress?.loaded || deals.length) || 0) / 10483) * 100))}%` }}
-            />
-          </div>
-        </motion.div>
-      )}
 
       <div className="flex border-b border-gray-200 mb-4">
         {['All Deals', 'Manual Deals', 'From Quotations'].map(tab => (
@@ -2359,8 +2103,8 @@ export const Deals = () => {
           return true;
         });
 
-        const totalDealsCount = filteredDeals.length;
-        const paginatedDeals = filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+        const totalDealsCount = totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length);
+        const paginatedDeals = filteredDeals;
 
         return (
           <div className="bg-transparent mt-6">
@@ -2482,11 +2226,15 @@ export const Deals = () => {
                 currentPage={currentPage}
                 totalItems={totalDealsCount}
                 itemsPerPage={itemsPerPage}
-                onPageChange={setCurrentPage}
-                onItemsPerPageChange={setItemsPerPage}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleItemsPerPageChange}
                 itemLabel="deals"
-                hasMoreOnServer={hasMoreZohoRecords}
-                onLoadMoreServer={() => nextPageToken && handleFetchFromZoho(true, nextPageToken)}
+                hasMoreOnServer={Boolean(paginationInfo?.more_records)}
+                onLoadMoreServer={() => {
+                  if (paginationInfo?.more_records && paginationInfo?.next_page_token) {
+                    handlePageChange(currentPage + 1);
+                  }
+                }}
                 isLoadingMoreServer={isFetchingZoho}
               />
             )}

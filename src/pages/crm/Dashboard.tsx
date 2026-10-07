@@ -21,11 +21,6 @@ import {
   fetchZohoQuotations,
   fetchZohoEmployees
 } from '../../services/zohoService';
-import {
-  getAllDealsFromIndexedDB,
-  saveDealToIndexedDB,
-  bulkUpsertDealsToIndexedDB
-} from '../../lib/db';
 
 export const CrmDashboard = () => {
   const navigate = useNavigate();
@@ -396,48 +391,28 @@ export const CrmDashboard = () => {
     setIsRefreshing(true);
     let currentDealsList: any[] = [];
 
-    // 1. Instant load from IndexedDB & LocalStorage
+    // 1. Instant load from LocalStorage
     try {
-      const idbDeals = await getAllDealsFromIndexedDB();
-      if (Array.isArray(idbDeals) && idbDeals.length > 0) {
-        const hydrated = idbDeals.map((d: any) => {
-          const a = getDealAmount(d);
-          const r = getDealReceived(d);
-          const p = getDealPending(d);
-          return {
-            ...d,
-            amount: a > 0 ? `₹${a.toLocaleString('en-IN')}` : (d.amount || '₹0'),
-            received: r > 0 ? `₹${r.toLocaleString('en-IN')}` : (d.received || '₹0'),
-            pending: p > 0 ? `₹${p.toLocaleString('en-IN')}` : (d.pending || '₹0'),
-            rawAmount: a,
-            rawReceived: r,
-            rawPending: p,
-          };
-        });
-        currentDealsList = hydrated;
-        setDeals(hydrated);
-      } else {
-        const savedDeals = localStorage.getItem('be_deals');
-        if (savedDeals) {
-          const parsed = JSON.parse(savedDeals);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const hydrated = parsed.map((d: any) => {
-              const a = getDealAmount(d);
-              const r = getDealReceived(d);
-              const p = getDealPending(d);
-              return {
-                ...d,
-                amount: a > 0 ? `₹${a.toLocaleString('en-IN')}` : (d.amount || '₹0'),
-                received: r > 0 ? `₹${r.toLocaleString('en-IN')}` : (d.received || '₹0'),
-                pending: p > 0 ? `₹${p.toLocaleString('en-IN')}` : (d.pending || '₹0'),
-                rawAmount: a,
-                rawReceived: r,
-                rawPending: p,
-              };
-            });
-            currentDealsList = hydrated;
-            setDeals(hydrated);
-          }
+      const savedDeals = localStorage.getItem('be_deals');
+      if (savedDeals) {
+        const parsed = JSON.parse(savedDeals);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const hydrated = parsed.map((d: any) => {
+            const a = getDealAmount(d);
+            const r = getDealReceived(d);
+            const p = getDealPending(d);
+            return {
+              ...d,
+              amount: a > 0 ? `₹${a.toLocaleString('en-IN')}` : (d.amount || '₹0'),
+              received: r > 0 ? `₹${r.toLocaleString('en-IN')}` : (d.received || '₹0'),
+              pending: p > 0 ? `₹${p.toLocaleString('en-IN')}` : (d.pending || '₹0'),
+              rawAmount: a,
+              rawReceived: r,
+              rawPending: p,
+            };
+          });
+          currentDealsList = hydrated;
+          setDeals(hydrated);
         }
       }
 
@@ -482,7 +457,6 @@ export const CrmDashboard = () => {
         const mergedList = Array.from(dealMap.values());
         setDeals(mergedList);
         try { localStorage.setItem('be_deals', JSON.stringify(mergedList)); } catch (e) { }
-        bulkUpsertDealsToIndexedDB(mappedDeals).catch(() => { });
       }
 
       if (quotationsRes.status === 'fulfilled' && quotationsRes.value.success && Array.isArray(quotationsRes.value.data)) {
@@ -602,7 +576,6 @@ export const CrmDashboard = () => {
               }
               return prevDeals;
             });
-            saveDealToIndexedDB(enriched).catch(() => { });
           }
         }
       }).catch(() => { });

@@ -8,7 +8,7 @@ import {
   AlertTriangle, Bell, Eye, Upload, Paperclip, X, FileSpreadsheet, Image as ImageIcon,
   Check, Maximize2, Minimize2, FileCode, HardDrive, CheckCircle, Users, Percent, Calculator, Info
 } from 'lucide-react';
-import { getDocument, getAllDealsFromIndexedDB, saveDealToIndexedDB, saveDocument } from '../../lib/db';
+import { getDocument, saveDocument } from '../../lib/db';
 import { 
   fetchZohoDealById, 
   enrichDealFromZohoRecord,
@@ -92,7 +92,6 @@ export const DealDetails = () => {
         }
 
         setDeal(updatedObj);
-        saveDealToIndexedDB(updatedObj).catch(() => {});
 
         // Dispatch window event so Deals list & Dashboard update in real-time
         try {
@@ -130,30 +129,16 @@ export const DealDetails = () => {
       setLoading(true);
       let foundDeal: any = null;
 
-      // 1. Check IndexedDB first (10,000+ deals storage)
+      // 1. Check localStorage first
       try {
-        const idbDeals = await getAllDealsFromIndexedDB();
-        foundDeal = idbDeals.find((d: any) => 
+        const saved = localStorage.getItem('be_deals');
+        const allDeals = saved ? JSON.parse(saved) : [];
+        foundDeal = allDeals.find((d: any) => 
           String(d.id) === String(id) || 
           String(d.zohoId) === String(id) ||
           (d.id && id && String(d.id).toLowerCase() === String(id).toLowerCase())
         );
-      } catch (e) {
-        console.warn('IndexedDB read error in DealDetails:', e);
-      }
-
-      // 2. Check localStorage fallback
-      if (!foundDeal) {
-        try {
-          const saved = localStorage.getItem('be_deals');
-          const allDeals = saved ? JSON.parse(saved) : [];
-          foundDeal = allDeals.find((d: any) => 
-            String(d.id) === String(id) || 
-            String(d.zohoId) === String(id) ||
-            (d.id && id && String(d.id).toLowerCase() === String(id).toLowerCase())
-          );
-        } catch (e) {}
-      }
+      } catch (e) {}
 
       if (foundDeal && isMounted) {
         setDeal(foundDeal);
@@ -680,7 +665,6 @@ export const DealDetails = () => {
         const updatedDocs = [...(deal?.documentsData || []), newDoc];
         const updatedDeal = { ...deal, documentsData: updatedDocs };
         setDeal(updatedDeal);
-        await saveDealToIndexedDB(updatedDeal);
         setUploadToast({ type: 'success', message: `"${file.name}" saved locally!` });
       }
     } catch (err: any) {

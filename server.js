@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import zohoHandler from './api/zoho.ts';
 import sendOtpHandler from './api/send-otp.ts';
+import dealsHandler from './api/deals.ts';
 
 // Load .env if present
 if (fs.existsSync('.env')) {
@@ -83,8 +84,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/api/deals' || pathname.startsWith('/api/deals')) {
-      req.query.action = 'get-deals';
-      return await zohoHandler(req, res);
+      return await dealsHandler(req, res);
     }
 
     // 2. Send OTP Endpoint
