@@ -464,12 +464,20 @@ function zohoApiPlugin(): Plugin {
 
     payload.Has_Partner_BDM = hasPartnerBdm;
     payload.has_partner_bdm = hasPartnerBdm;
-    payload.Partner_BDM = hasPartnerBdm;
-    payload.Partner_BDM_Name = partnerBdmName;
-    payload.partner_bdm_name = partnerBdmName;
-    payload.Partner_BDM_Names = partnerBdmName;
-    payload.Partner_BDM_Amount = partnerBdmAmount;
-    payload.partner_bdm_amount = partnerBdmAmount;
+    if (hasPartnerBdm && partnerBdmId && /^\d{15,}$/.test(String(partnerBdmId).trim())) {
+      payload.Partner_BDM = { id: String(partnerBdmId).trim() };
+    } else {
+      delete payload.Partner_BDM;
+    }
+    if (partnerBdmName) {
+      payload.Partner_BDM_Name = partnerBdmName;
+      payload.partner_bdm_name = partnerBdmName;
+      payload.Partner_BDM_Names = partnerBdmName;
+    }
+    if (hasPartnerBdm) {
+      payload.Partner_BDM_Amount = partnerBdmAmount;
+      payload.partner_bdm_amount = partnerBdmAmount;
+    }
     if (partnerBdmId) {
       payload.Partner_BDM_ID = String(partnerBdmId);
       payload.partner_bdm_id = String(partnerBdmId);
@@ -1206,6 +1214,27 @@ function zohoApiPlugin(): Plugin {
                 } else {
                   delete payload.Employee;
                 }
+              }
+
+              // Dynamically resolve Partner_BDM lookup to valid Zoho numeric record ID
+              const hasPartnerBdm = Boolean(deal.hasPartnerBdm || deal.has_partner_bdm || deal.formData?.hasPartnerBdm || deal.formData?.has_partner_bdm);
+              if (hasPartnerBdm) {
+                if (!payload.Partner_BDM?.id || !/^\d{15,}$/.test(String(payload.Partner_BDM.id))) {
+                  const partnerLookupInfo = {
+                    id: deal.partnerBdmId || deal.partner_bdm_id || deal.formData?.partnerBdmId || deal.formData?.partner_bdm_id || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.id : null),
+                    name: deal.partnerBdmName || deal.partner_bdm_name || deal.formData?.partnerBdmName || deal.formData?.partner_bdm_name || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.name : null),
+                    email: deal.partnerBdmEmail || deal.formData?.partnerBdmEmail,
+                    empId: deal.partnerBdmId || deal.partner_bdm_id,
+                  };
+                  const resolvedPartnerId = await resolveZohoEmployeeId(partnerLookupInfo, accessToken, apiBase);
+                  if (resolvedPartnerId) {
+                    payload.Partner_BDM = { id: resolvedPartnerId };
+                  } else {
+                    delete payload.Partner_BDM;
+                  }
+                }
+              } else {
+                delete payload.Partner_BDM;
               }
 
               console.log(`[Vite Zoho Plugin] ${isUpdate ? 'Updating' : 'Inserting'} Deal in Zoho CRM:`, payload.Name || payload.Deal_Name, deal.zohoId ? `(ID: ${deal.zohoId})` : '');
@@ -2070,16 +2099,25 @@ function zohoApiPlugin(): Plugin {
                 if (!seenKeys.has(uniqueKey) && !seenKeys.has(nameKey)) {
                   seenKeys.add(uniqueKey);
                   seenKeys.add(nameKey);
+
+                  const matchedEmp = rawEmps.find((e: any) => {
+                    const eEmail = (e.Email || e.Personal_Email_Address || '').trim().toLowerCase();
+                    const eFullName = [e.Name, e.Middle_Name, e.Last_Name].filter(Boolean).join(' ').trim().toLowerCase();
+                    return (email && eEmail === email) || (nameKey && (eFullName === nameKey || eFullName.includes(nameKey) || nameKey.includes(eFullName)));
+                  });
+
+                  const resolvedZohoId = matchedEmp?.id ? String(matchedEmp.id) : String(u.id);
+
                   salesList.push({
-                    id: String(u.id),
-                    zohoId: String(u.id),
+                    id: resolvedZohoId,
+                    zohoId: resolvedZohoId,
                     name: fullName,
                     email: u.email || '',
                     dept: 'Sales',
                     role: u.profile?.name || u.role?.name || 'Business Development Manager',
-                    empId: String(u.id),
+                    empId: matchedEmp?.Employment_ID || String(u.id),
                     status: 'Active',
-                    source: 'Zoho CRM User'
+                    source: matchedEmp ? 'Employee Module' : 'Zoho CRM User'
                   });
                 }
               }

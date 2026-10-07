@@ -1586,7 +1586,9 @@ export const Deals = () => {
         date: existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         source: existingDeal?.source || 'Manual',
         // Partner BDM split details & Employee Lookup
-        Partner_BDM: (hasPartnerBdm && partnerBdmId) ? { id: partnerBdmId, name: partnerBdmName } : null,
+        Partner_BDM: (hasPartnerBdm && partnerBdmId && /^\d{15,}$/.test(String(partnerBdmId).trim()))
+          ? { id: String(partnerBdmId).trim(), name: partnerBdmName }
+          : undefined,
         hasPartnerBdm: hasPartnerBdm,
         has_partner_bdm: hasPartnerBdm,
         partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
@@ -1605,7 +1607,9 @@ export const Deals = () => {
           employeeEmail: existingDeal?.employeeEmail || currentUser?.email,
           empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
           salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
-          Partner_BDM: (hasPartnerBdm && partnerBdmId) ? { id: partnerBdmId, name: partnerBdmName } : null,
+          Partner_BDM: (hasPartnerBdm && partnerBdmId && /^\d{15,}$/.test(String(partnerBdmId).trim()))
+            ? { id: String(partnerBdmId).trim(), name: partnerBdmName }
+            : undefined,
           hasPartnerBdm,
           has_partner_bdm: hasPartnerBdm,
           partnerBdmId: hasPartnerBdm ? partnerBdmId : '',
@@ -1878,9 +1882,9 @@ export const Deals = () => {
         employeeEmail: deal.employeeEmail || deal.formData?.employeeEmail || currentUser?.email,
         empId: deal.empId || deal.formData?.empId || currentUser?.empId || currentUser?.id,
         salesEmployee: deal.salesEmployee || deal.employeeName || currentUser?.name,
-        Partner_BDM: (deal.hasPartnerBdm || deal.partnerBdmId) && (deal.partnerBdmId || deal.partner_bdm_id)
-          ? { id: String(deal.partnerBdmId || deal.partner_bdm_id), name: deal.partnerBdmName || deal.partner_bdm_name }
-          : null,
+        Partner_BDM: (deal.hasPartnerBdm || deal.partnerBdmId) && (deal.partnerBdmId || deal.partner_bdm_id) && /^\d{15,}$/.test(String(deal.partnerBdmId || deal.partner_bdm_id).trim())
+          ? { id: String(deal.partnerBdmId || deal.partner_bdm_id).trim(), name: deal.partnerBdmName || deal.partner_bdm_name }
+          : undefined,
       };
 
       const zohoRes = await saveOrUpdateZohoDeal(dealWithLookups);
@@ -2633,7 +2637,7 @@ export const Deals = () => {
                                     {isLoadingSalesEmployees ? 'Syncing Sales BDMs...' : 'Select Sales Partner BDM...'}
                                   </option>
                                   {eligiblePartnerBdms.map(emp => (
-                                    <option key={emp.id || emp.zohoId || emp.empId} value={emp.id || emp.zohoId || emp.empId}>
+                                    <option key={emp.zohoId || emp.id || emp.empId} value={emp.zohoId || emp.id || emp.empId}>
                                       {emp.name} ({emp.role || emp.dept || 'Sales'})
                                     </option>
                                   ))}
