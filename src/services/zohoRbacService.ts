@@ -249,6 +249,8 @@ export function injectEmployeeLookup(
   // 3. Populate secondary lookup / owner fields for complete cross-module layout compatibility
   if (config?.secondaryLookupFields && user) {
     config.secondaryLookupFields.forEach(field => {
+      // Do not auto-inject current user into Partner BDM fields
+      if (field.startsWith('Partner_BDM') || field.startsWith('partner_bdm')) return;
       if (!updatedPayload[field]) {
         if (field.toLowerCase().includes('name')) {
           updatedPayload[field] = employeeName || user.name;

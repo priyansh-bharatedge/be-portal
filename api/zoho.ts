@@ -56,50 +56,64 @@ const employeeLookupCache = new Map<string, string>();
 async function resolveZohoEmployeeId(empInfo: any, token: string, apiBase: string): Promise<string | null> {
   if (!empInfo) return null;
 
-  // 1. Direct valid 15+ digit numeric Zoho ID
   const directId = typeof empInfo === 'object' ? empInfo.id || empInfo.zohoId : empInfo;
-  if (directId && /^\d{15,}$/.test(String(directId).trim())) {
-    return String(directId).trim();
-  }
-
-  // 2. Extract potential identifiers
   const name = (typeof empInfo === 'object' ? (empInfo.name || empInfo.employeeName || empInfo.salesEmployee) : (typeof empInfo === 'string' && !/^\d+$/.test(empInfo) ? empInfo : '')) || '';
   const email = (typeof empInfo === 'object' ? (empInfo.email || empInfo.employeeEmail || empInfo.workEmail || empInfo.personalEmail || empInfo.userEmail) : '') || '';
   const empCode = (typeof empInfo === 'object' ? (empInfo.empId || empInfo.employeeId || empInfo.Employment_ID) : '') || '';
 
+  const cleanDirectId = String(directId || '').trim();
   const cleanName = String(name || '').trim();
   const cleanEmail = String(email || '').trim().toLowerCase();
   const cleanCode = String(empCode || '').trim().toLowerCase();
 
-  if (!cleanName && !cleanEmail && !cleanCode) {
+  if (!cleanDirectId && !cleanName && !cleanEmail && !cleanCode) {
     return null;
   }
 
-  const cacheKey = `${cleanName}|${cleanEmail}|${cleanCode}`;
+  const cacheKey = `${cleanDirectId}|${cleanName}|${cleanEmail}|${cleanCode}`;
   if (employeeLookupCache.has(cacheKey)) {
     return employeeLookupCache.get(cacheKey)!;
   }
 
-  // 3. Query Zoho CRM Employee module
+  // Query Zoho CRM Employee module to find the verified record in the custom Employee module
   try {
-    const empRes = await fetch(`${apiBase}/crm/v8/Employee?fields=id,Name,Email,Personal_Email_Address,Employment_ID`, {
+    const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
+    const empRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200&fields=id,Name,Email,Personal_Email_Address,Employment_ID,Middle_Name,Last_Name`, {
       headers: { Authorization: `Zoho-oauthtoken ${token}` },
     });
     if (empRes.status === 200) {
       const empData: any = await empRes.json();
       const list: any[] = empData.data || [];
+
+      // 1. Check if directId matches an existing Employee record id
+      if (cleanDirectId && /^\d{15,}$/.test(cleanDirectId)) {
+        const directMatch = list.find((e: any) => String(e.id) === cleanDirectId);
+        if (directMatch?.id) {
+          const foundId = String(directMatch.id);
+          employeeLookupCache.set(cacheKey, foundId);
+          return foundId;
+        }
+      }
+
+      // 2. Match by email, employment code, or full name
       const match = list.find((e: any) => {
         const eEmail = (e.Email || e.Personal_Email_Address || '').trim().toLowerCase();
         const eCode = (e.Employment_ID || '').trim().toLowerCase();
+        const eFullName = [e.Name, e.Middle_Name, e.Last_Name].filter(Boolean).join(' ').trim().toLowerCase();
         const eName = (e.Name || '').trim().toLowerCase();
         return (
           (cleanEmail && eEmail === cleanEmail) ||
           (cleanCode && eCode === cleanCode) ||
-          (cleanName && eName === cleanName.toLowerCase()) ||
-          (cleanName && eName.includes(cleanName.toLowerCase())) ||
-          (cleanName && cleanName.toLowerCase().includes(eName))
+          (cleanName && (
+            eName === cleanName.toLowerCase() ||
+            eFullName === cleanName.toLowerCase() ||
+            eFullName.includes(cleanName.toLowerCase()) ||
+            cleanName.toLowerCase().includes(eFullName) ||
+            cleanName.toLowerCase().includes(eName)
+          ))
         );
       });
+
       if (match?.id) {
         const foundId = String(match.id);
         employeeLookupCache.set(cacheKey, foundId);
@@ -1310,38 +1324,34 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
       const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
 
-      // Dynamically resolve Employee lookup to valid Zoho numeric record ID
-      if (!payload.Employee?.id || !/^\d{15,}$/.test(String(payload.Employee.id))) {
-        const empLookupInfo = {
-          id: deal.employeeZohoId || deal.formData?.employeeZohoId || deal.empZohoId || deal.formData?.empZohoId || (typeof deal.Employee === 'object' ? deal.Employee?.id : deal.Employee),
-          name: deal.employeeName || deal.formData?.employeeName || deal.empName || deal.salesEmployee || deal.owner || (typeof deal.Employee === 'object' ? deal.Employee?.name : null),
-          email: deal.employeeEmail || deal.formData?.employeeEmail || deal.userEmail || deal.formData?.userEmail,
-          empId: deal.empId || deal.formData?.empId || deal.employeeId || deal.formData?.employeeId,
-        };
-        const resolvedEmpId = await resolveZohoEmployeeId(empLookupInfo, accessToken, apiBase);
-        if (resolvedEmpId) {
-          payload.Employee = { id: resolvedEmpId };
-        } else {
-          delete payload.Employee;
-        }
+      // Dynamically resolve Employee lookup to valid Zoho numeric record ID in custom Employee module
+      const empLookupInfo = {
+        id: deal.employeeZohoId || deal.formData?.employeeZohoId || deal.empZohoId || deal.formData?.empZohoId || (typeof deal.Employee === 'object' ? deal.Employee?.id : (typeof payload.Employee === 'object' ? payload.Employee?.id : deal.Employee)),
+        name: deal.employeeName || deal.formData?.employeeName || deal.empName || deal.salesEmployee || deal.owner || (typeof deal.Employee === 'object' ? deal.Employee?.name : null),
+        email: deal.employeeEmail || deal.formData?.employeeEmail || deal.userEmail || deal.formData?.userEmail,
+        empId: deal.empId || deal.formData?.empId || deal.employeeId || deal.formData?.employeeId,
+      };
+      const resolvedEmpId = await resolveZohoEmployeeId(empLookupInfo, accessToken, apiBase);
+      if (resolvedEmpId) {
+        payload.Employee = { id: resolvedEmpId };
+      } else {
+        delete payload.Employee;
       }
 
-      // Dynamically resolve Partner_BDM lookup to valid Zoho numeric record ID
+      // Dynamically resolve Partner_BDM lookup to valid Zoho numeric record ID in custom Employee module
       const hasPartnerBdm = Boolean(deal.hasPartnerBdm || deal.has_partner_bdm || deal.formData?.hasPartnerBdm || deal.formData?.has_partner_bdm);
       if (hasPartnerBdm) {
-        if (!payload.Partner_BDM?.id || !/^\d{15,}$/.test(String(payload.Partner_BDM.id))) {
-          const partnerLookupInfo = {
-            id: deal.partnerBdmId || deal.partner_bdm_id || deal.formData?.partnerBdmId || deal.formData?.partner_bdm_id || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.id : null),
-            name: deal.partnerBdmName || deal.partner_bdm_name || deal.formData?.partnerBdmName || deal.formData?.partner_bdm_name || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.name : null),
-            email: deal.partnerBdmEmail || deal.formData?.partnerBdmEmail,
-            empId: deal.partnerBdmId || deal.partner_bdm_id,
-          };
-          const resolvedPartnerId = await resolveZohoEmployeeId(partnerLookupInfo, accessToken, apiBase);
-          if (resolvedPartnerId) {
-            payload.Partner_BDM = { id: resolvedPartnerId };
-          } else {
-            delete payload.Partner_BDM;
-          }
+        const partnerLookupInfo = {
+          id: deal.partnerBdmId || deal.partner_bdm_id || deal.formData?.partnerBdmId || deal.formData?.partner_bdm_id || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.id : (typeof payload.Partner_BDM === 'object' ? payload.Partner_BDM?.id : null)),
+          name: deal.partnerBdmName || deal.partner_bdm_name || deal.formData?.partnerBdmName || deal.formData?.partner_bdm_name || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.name : null),
+          email: deal.partnerBdmEmail || deal.formData?.partnerBdmEmail,
+          empId: deal.partnerBdmId || deal.partner_bdm_id,
+        };
+        const resolvedPartnerId = await resolveZohoEmployeeId(partnerLookupInfo, accessToken, apiBase);
+        if (resolvedPartnerId) {
+          payload.Partner_BDM = { id: resolvedPartnerId };
+        } else {
+          delete payload.Partner_BDM;
         }
       } else {
         delete payload.Partner_BDM;
