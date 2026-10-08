@@ -28,6 +28,10 @@ if (fs.existsSync('.env')) {
 const PORT = process.env.PORT || 5000;
 
 function parseJsonBody(req) {
+  const contentType = (req.headers && req.headers['content-type']) || '';
+  if (contentType.includes('multipart/form-data')) {
+    return Promise.resolve({});
+  }
   return new Promise((resolve) => {
     let body = '';
     req.on('data', chunk => { body += chunk; });

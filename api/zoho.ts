@@ -2968,8 +2968,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         }
 
         let accessToken = await getAccessToken();
-        const attFields = 'id,File_Name,Size,Created_Time,Modified_Time,Created_By,$type,$attachment_type,$file_id,$link_url,Parent_Id';
-        const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=${attFields}`;
+        const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments`;
 
         let crmRes = await fetch(crmEndpoint, {
           method: 'GET',
@@ -3069,11 +3068,18 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     // 20. Upload Attachment
     if (action === 'upload-attachment' && method === 'POST') {
       try {
-        const chunks: Buffer[] = [];
-        for await (const chunk of req) {
-          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        let buffer: Buffer;
+        if (Buffer.isBuffer((req as any).body)) {
+          buffer = (req as any).body;
+        } else if (Buffer.isBuffer((req as any).rawBody)) {
+          buffer = (req as any).rawBody;
+        } else {
+          const chunks: Buffer[] = [];
+          for await (const chunk of (req as any)) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+          buffer = Buffer.concat(chunks);
         }
-        const buffer = Buffer.concat(chunks);
         const contentType = (req.headers && req.headers['content-type']) || '';
 
         const webReq = new Request('http://localhost' + (req.url || '/'), {

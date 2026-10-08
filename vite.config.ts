@@ -3634,8 +3634,7 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const domain = env.VITE_ZOHO_DOMAIN || 'in';
             const apiBase = env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
-            const attFields = 'id,File_Name,Size,Created_Time,Modified_Time,Created_By,$type,$attachment_type,$file_id,$link_url,Parent_Id';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=${attFields}`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments`;
 
             console.log(`[Vite Zoho Plugin] Fetching attachments for ${moduleName} ID: ${recordId}`);
 
