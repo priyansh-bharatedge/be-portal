@@ -2968,7 +2968,8 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         }
 
         let accessToken = await getAccessToken();
-        const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments`;
+        const fieldsParam = urlObj.searchParams.get('fields') || 'id,File_Name,Size,Created_Time,Created_By,Modified_Time,$file_id,$type';
+        const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=${fieldsParam}`;
 
         let crmRes = await fetch(crmEndpoint, {
           method: 'GET',

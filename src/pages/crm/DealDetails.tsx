@@ -8,7 +8,7 @@ import {
   AlertTriangle, Bell, Eye, Upload, Paperclip, X, FileSpreadsheet, Image as ImageIcon,
   Check, Maximize2, Minimize2, FileCode, HardDrive, CheckCircle, Users, Percent, Calculator, Info
 } from 'lucide-react';
-import { getDocument, saveDocument } from '../../lib/db';
+import { getDocument, saveDocument, getAllDocuments } from '../../lib/db';
 import { 
   fetchZohoDealById, 
   enrichDealFromZohoRecord,
@@ -19,6 +19,59 @@ import {
 } from '../../services/zohoService';
 import { useAuth } from '../../context/AuthContext';
 import { getDealSplitBreakdown, isDealPartnerBdm } from '../../utils/dealSplitUtils';
+
+// Helper to scan IndexedDB for all documents matching this deal
+const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promise<any[]> => {
+  try {
+    const allDbDocs = await getAllDocuments();
+    const dealDlId = (dealObj?.id?.startsWith('DL-') ? dealObj.id : '') ||
+      (currentParamId?.startsWith('DL-') ? currentParamId : '') ||
+      (dealObj?.rawZohoDeal?.Deal_Name ? (String(dealObj.rawZohoDeal.Deal_Name).match(/\b(DL-\d+)\b/i)?.[1]?.toUpperCase() || '') : '') ||
+      '';
+    const dealZohoId = dealObj?.zohoId ? String(dealObj.zohoId) : (currentParamId && /^\d+$/.test(currentParamId) ? currentParamId : '');
+
+    const matchedLocal: any[] = [];
+    const seenKeys = new Set<string>();
+
+    // 1. Add existing documentsData from deal object
+    if (Array.isArray(dealObj?.documentsData)) {
+      for (const d of dealObj.documentsData) {
+        if (d && d.name) {
+          matchedLocal.push(d);
+          seenKeys.add((d.id || d.name).toLowerCase());
+        }
+      }
+    }
+
+    // 2. Scan IndexedDB for keys starting with dealDlId, dealZohoId, or dealObj.id
+    for (const item of allDbDocs) {
+      const key = item.id;
+      const file = item.file;
+      const fileName = file?.name || key.split('_').slice(1).join('_') || key;
+
+      const isMatch = 
+        (dealDlId && (key.startsWith(`${dealDlId}_`) || key.toLowerCase().includes(dealDlId.toLowerCase()))) ||
+        (dealZohoId && (key.startsWith(`${dealZohoId}_`) || key.includes(dealZohoId))) ||
+        (dealObj?.id && key.startsWith(`${dealObj.id}_`));
+
+      if (isMatch && !seenKeys.has(key.toLowerCase()) && !seenKeys.has(fileName.toLowerCase())) {
+        matchedLocal.push({
+          id: key,
+          name: fileName,
+          size: file?.size || 0,
+          type: file?.type || 'application/octet-stream',
+        });
+        seenKeys.add(key.toLowerCase());
+        seenKeys.add(fileName.toLowerCase());
+      }
+    }
+
+    return matchedLocal;
+  } catch (e) {
+    console.warn('Error scanning local documents from IndexedDB:', e);
+    return dealObj?.documentsData || [];
+  }
+};
 
 export const DealDetails = () => {
   const { id } = useParams();
@@ -62,10 +115,25 @@ export const DealDetails = () => {
     }
   }, []);
 
-  const loadLiveDeal = useCallback(async (dealIdToFetch: string) => {
+  const loadLiveDeal = useCallback(async (dealIdToFetch: string, baseDeal?: any) => {
     if (!dealIdToFetch) return;
     setIsRefreshing(true);
     try {
+      // Find current existing deal from arguments, state, or localStorage
+      let existingDeal = baseDeal || deal;
+      if (!existingDeal) {
+        try {
+          const saved = localStorage.getItem('be_deals');
+          const allDeals = saved ? JSON.parse(saved) : [];
+          existingDeal = allDeals.find((d: any) => 
+            String(d.id) === String(dealIdToFetch) || 
+            String(d.zohoId) === String(dealIdToFetch) ||
+            String(d.id) === String(id) || 
+            String(d.zohoId) === String(id)
+          );
+        } catch (e) {}
+      }
+
       const res = await fetchZohoDealById(dealIdToFetch);
       if (res.success && res.data) {
         const rawZoho = Array.isArray(res.data) ? res.data[0] : (res.data || {});
@@ -89,9 +157,15 @@ export const DealDetails = () => {
           }
         }
 
-        const updatedObj = enrichDealFromZohoRecord(rawZoho, deal);
+        const updatedObj = enrichDealFromZohoRecord(rawZoho, existingDeal);
         if (id && id.startsWith('DL-')) {
           updatedObj.id = id;
+        }
+
+        // Scan and match local IndexedDB documents for this deal
+        const localDocs = await scanLocalDocuments(updatedObj, id);
+        if (localDocs.length > 0) {
+          updatedObj.documentsData = localDocs;
         }
 
         setDeal(updatedObj);
@@ -143,18 +217,24 @@ export const DealDetails = () => {
         );
       } catch (e) {}
 
-      if (foundDeal && isMounted) {
-        setDeal(foundDeal);
-        setLoading(false);
+      if (foundDeal) {
+        const localDocs = await scanLocalDocuments(foundDeal, id);
+        if (localDocs.length > 0) {
+          foundDeal.documentsData = localDocs;
+        }
+        if (isMounted) {
+          setDeal(foundDeal);
+          setLoading(false);
+        }
       }
 
       // 3. Fetch latest live record & attachments from Zoho CRM
       const targetZohoId = foundDeal?.zohoId || (id && /^\d+$/.test(id) ? id : null);
       if (targetZohoId) {
         loadAttachments(targetZohoId);
-        await loadLiveDeal(targetZohoId);
-      } else if (!foundDeal && id) {
-        await loadLiveDeal(id);
+        await loadLiveDeal(targetZohoId, foundDeal);
+      } else if (id) {
+        await loadLiveDeal(id, foundDeal);
       }
 
       if (isMounted) {
@@ -611,23 +691,27 @@ export const DealDetails = () => {
     setUploadToast(null);
 
     try {
+      // 1. Always save to local IndexedDB
+      const docId = `${deal?.id || id || 'deal'}_${file.name}`;
+      await saveDocument(docId, file);
+
+      // 2. Upload to Zoho CRM if zohoId is available
       if (targetZohoId) {
         const res = await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
         if (res.success) {
-          setUploadToast({ type: 'success', message: `"${file.name}" uploaded successfully!` });
+          setUploadToast({ type: 'success', message: `"${file.name}" uploaded to Zoho CRM successfully!` });
           await loadAttachments(targetZohoId);
         } else {
-          setUploadToast({ type: 'error', message: res.message || 'Failed to upload document.' });
+          setUploadToast({ type: 'error', message: res.message || 'Saved locally, but Zoho upload failed.' });
         }
       } else {
-        const docId = `${deal?.id || id || 'deal'}_${Date.now()}_${file.name}`;
-        await saveDocument(docId, file);
-        const newDoc = { id: docId, name: file.name, size: file.size, type: file.type };
-        const updatedDocs = [...(deal?.documentsData || []), newDoc];
-        const updatedDeal = { ...deal, documentsData: updatedDocs };
-        setDeal(updatedDeal);
         setUploadToast({ type: 'success', message: `"${file.name}" saved locally!` });
       }
+
+      // 3. Update deal documents in state
+      const localDocs = await scanLocalDocuments(deal, id);
+      const updatedDeal = { ...deal, documentsData: localDocs };
+      setDeal(updatedDeal);
     } catch (err: any) {
       console.error('Error uploading document:', err);
       setUploadToast({ type: 'error', message: err?.message || 'Error uploading file.' });

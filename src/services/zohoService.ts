@@ -1499,7 +1499,13 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     existingDeal?.employeeZohoId ||
     '';
 
-  const resolvedId = existingDeal?.id || (rawZoho.id ? String(rawZoho.id) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
+  let embeddedDlId = '';
+  if (rawZoho.Deal_Name) {
+    const match = String(rawZoho.Deal_Name).match(/\b(DL-\d+)\b/i);
+    if (match) embeddedDlId = match[1].toUpperCase();
+  }
+
+  const resolvedId = existingDeal?.id || embeddedDlId || (rawZoho.id ? String(rawZoho.id) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
 
   return {
     ...existingDeal,
@@ -1533,6 +1539,9 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     partner_bdm_amount: partnerBdmAmount,
     zohoStatus: 'synced',
     zohoSyncedAt: new Date().toISOString(),
+    documentsData: existingDeal?.documentsData || [],
+    paymentScreenshotName: existingDeal?.paymentScreenshotName || rawZoho.Payment_Screenshot_Name || '',
+    paymentScreenshotUrl: existingDeal?.paymentScreenshotUrl || '',
     formData: {
       clientName: resolvedClient,
       companyName: resolvedCompany,
