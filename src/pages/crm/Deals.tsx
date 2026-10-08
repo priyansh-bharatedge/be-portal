@@ -22,6 +22,13 @@ import { buildZohoRbacCriteria } from '../../services/zohoRbacService';
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 import { Layers, DownloadCloud } from 'lucide-react';
+import {
+  getDealSplitBreakdown,
+  isDealPartnerBdm,
+  getDealTotalAmount,
+  getDealReceivedAmount,
+  getDealPendingAmount
+} from '../../utils/dealSplitUtils';
 
 interface DealService {
   id: string;
@@ -34,7 +41,7 @@ export const Deals = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, availableUsers, filterRecords } = useAuth();
+  const { currentUser, isSuperAdmin, isHOD, availableUsers, filterRecords } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
@@ -2176,13 +2183,10 @@ export const Deals = () => {
                 </thead>
                 <tbody className="text-gray-700">
                   {paginatedDeals.map((deal: any) => {
-                    const parsedAmt = getDealAmount(deal);
-                    const parsedRec = getDealReceived(deal);
-                    const parsedPend = getDealPending(deal);
-
-                    const displayAmount = parsedAmt > 0 ? `₹${parsedAmt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : (deal.amount && deal.amount !== '₹0' ? deal.amount : '₹0');
-                    const displayReceived = parsedRec > 0 ? `₹${parsedRec.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : (deal.received && deal.received !== '₹0' ? deal.received : '₹0');
-                    const displayPending = parsedPend > 0 ? `₹${parsedPend.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : (deal.pending && deal.pending !== '₹0' ? deal.pending : '₹0');
+                    const breakdown = getDealSplitBreakdown(deal, currentUser, isSuperAdmin || isHOD);
+                    const displayAmount = `₹${breakdown.displayAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+                    const displayReceived = `₹${breakdown.displayReceived.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+                    const displayPending = `₹${breakdown.displayPending.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
                     return (
                       <tr 
@@ -2196,8 +2200,20 @@ export const Deals = () => {
                           <span className="bg-gray-50 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200 group-hover:bg-white transition-colors">{deal.company}</span>
                         </td>
                         <td className="px-6 py-5 font-medium text-gray-800 border-t border-b border-gray-100 group-hover:border-orange-100">{deal.service}</td>
-                        <td className="px-6 py-5 font-bold text-gray-900 border-t border-b border-gray-100 group-hover:border-orange-100">{displayAmount}</td>
-                        <td className="px-6 py-5 font-bold text-emerald-600 border-t border-b border-gray-100 group-hover:border-orange-100">{displayReceived}</td>
+                        <td className="px-6 py-5 font-bold text-gray-900 border-t border-b border-gray-100 group-hover:border-orange-100">
+                          <div>{displayAmount}</div>
+                          {breakdown.splitBadgeText && (
+                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                              {breakdown.splitBadgeText}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-5 font-bold text-emerald-600 border-t border-b border-gray-100 group-hover:border-orange-100">
+                          <div>{displayReceived}</div>
+                          {breakdown.hasPartnerBdm && !isSuperAdmin && !isHOD && (
+                            <div className="text-[10px] text-gray-400 font-normal">Pre-GST 50%</div>
+                          )}
+                        </td>
                         <td className="px-6 py-5 font-bold text-orange-600 border-t border-b border-gray-100 group-hover:border-orange-100">{displayPending}</td>
                       <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(deal.status)}`}>
@@ -2207,14 +2223,28 @@ export const Deals = () => {
                       <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">
                         <div className="flex items-center space-x-2">
                           <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">
-                            {deal.owner ? deal.owner.charAt(0) : '?'}
+                            {breakdown.primaryName ? breakdown.primaryName.charAt(0) : '?'}
                           </div>
-                          <span className="font-semibold text-gray-900">{deal.owner || 'Admin'}</span>
+                          <span className="font-semibold text-gray-900">{breakdown.primaryName || 'Admin'}</span>
                         </div>
-                        {(deal.hasPartnerBdm || deal.has_partner_bdm || deal.partnerBdmName || deal.formData?.hasPartnerBdm || deal.formData?.partnerBdmName) && (
-                          <div className="mt-1 flex items-center text-[11px] text-orange-600 font-medium">
-                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5"></span>
-                            Partner: {deal.partnerBdmName || deal.partner_bdm_name || deal.formData?.partnerBdmName} (₹{Number(deal.partnerBdmAmount || deal.partner_bdm_amount || deal.formData?.partnerBdmAmount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })})
+                        {breakdown.hasPartnerBdm && (
+                          <div className="mt-1 text-[11px]">
+                            {breakdown.isUserPartner ? (
+                              <div className="flex items-center text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100 w-fit">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5"></span>
+                                You: Partner BDM (₹{breakdown.partnerAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })})
+                              </div>
+                            ) : breakdown.isUserPrimary ? (
+                              <div className="flex items-center text-orange-700 font-medium">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5"></span>
+                                Partner: {breakdown.partnerName} (50% Split: ₹{breakdown.partnerAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })})
+                              </div>
+                            ) : (
+                              <div className="flex items-center text-purple-700 font-medium">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5"></span>
+                                Partner: {breakdown.partnerName} (50/50 Split: ₹{breakdown.partnerAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} each)
+                              </div>
+                            )}
                           </div>
                         )}
                       </td>

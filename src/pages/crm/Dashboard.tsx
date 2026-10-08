@@ -21,6 +21,13 @@ import {
   fetchZohoQuotations,
   fetchZohoEmployees
 } from '../../services/zohoService';
+import {
+  getDealSplitBreakdown,
+  isDealPartnerBdm,
+  getDealTotalAmount,
+  getDealReceivedAmount,
+  getDealPendingAmount
+} from '../../utils/dealSplitUtils';
 
 export const CrmDashboard = () => {
   const navigate = useNavigate();
@@ -95,115 +102,31 @@ export const CrmDashboard = () => {
   };
 
   const getDealReceived = (d: any): number => {
-    if (!d) return 0;
-    if (d.rawReceived && d.rawReceived > 0) return d.rawReceived;
-    if (d.totals?.receivedAmount && Number(d.totals.receivedAmount) > 0) return Number(d.totals.receivedAmount);
-    if (d.received && d.received !== '₹0') {
-      const parsed = parseMoney(d.received);
-      if (parsed > 0) return parsed;
-    }
-    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
-      const sum = d.servicesData.reduce((s: number, sf: any) => s + parseMoney(sf.receivedAmount || sf.Received_amount || sf.Received), 0);
-      if (sum > 0) return sum;
-    }
-    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
-      const sum = d.rawZohoDeal.Subform_1.reduce((s: number, sf: any) => s + parseMoney(sf.Received_amount || sf.Received), 0);
-      if (sum > 0) return sum;
-    }
-    return parseMoney(
-      d.rawZohoDeal?.Total_Received_Amount ||
-      d.rawZohoDeal?.Deal_Received_Amount ||
-      d.rawZohoDeal?.Received_amount ||
-      d.rawZohoDeal?.Received_Amount ||
-      d.rawZohoDeal?.Received ||
-      d.rawZohoDeal?.Amount_After_disbursement
-    );
+    return getDealReceivedAmount(d);
   };
 
   const getDealPending = (d: any): number => {
-    if (!d) return 0;
-    if (d.rawPending && d.rawPending > 0) return d.rawPending;
-    if (d.totals?.pendingAmount && Number(d.totals.pendingAmount) > 0) return Number(d.totals.pendingAmount);
-    if (d.pending && d.pending !== '₹0') {
-      const parsed = parseMoney(d.pending);
-      if (parsed > 0) return parsed;
-    }
-    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
-      const sum = d.servicesData.reduce((s: number, sf: any) => s + parseMoney(sf.pendingAmount || sf.Pending_amount || sf.Pending), 0);
-      if (sum > 0) return sum;
-    }
-    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
-      const sum = d.rawZohoDeal.Subform_1.reduce((s: number, sf: any) => s + parseMoney(sf.Pending_amount || sf.Pending), 0);
-      if (sum > 0) return sum;
-    }
-    const directZoho = parseMoney(
-      d.rawZohoDeal?.Total_Pending_Amount ||
-      d.rawZohoDeal?.Deal_Pending_Amount ||
-      d.rawZohoDeal?.Pending_amount ||
-      d.rawZohoDeal?.Pending_Amount ||
-      d.rawZohoDeal?.Pending
-    );
-    if (directZoho > 0) return directZoho;
-
-    const rawAmt = d.rawAmount || parseMoney(d.amount) || parseMoney(d.rawZohoDeal?.Total_deal_amount_inclusive_of_gst || d.rawZohoDeal?.Amount);
-    const rec = getDealReceived(d);
-    if (rawAmt > rec && rec > 0) return Number((rawAmt - rec).toFixed(2));
-    return 0;
+    return getDealPendingAmount(d);
   };
 
   const getDealAmount = (d: any): number => {
-    if (!d) return 0;
-    if (d.rawAmount && d.rawAmount > 0) return d.rawAmount;
-    if (d.totals?.grandTotal && Number(d.totals.grandTotal) > 0) return Number(d.totals.grandTotal);
-    if (d.amount && d.amount !== '₹0') {
-      const parsed = parseMoney(d.amount);
-      if (parsed > 0) return parsed;
-    }
-    if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
-      const sum = d.servicesData.reduce((s: number, sf: any) => {
-        const a = parseMoney(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount);
-        const b = parseMoney(sf.baseAmount || sf.Without_GST || sf.Base);
-        const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
-        return s + itemTotal;
-      }, 0);
-      if (sum > 0) return sum;
-    }
-    if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
-      const sum = d.rawZohoDeal.Subform_1.reduce((s: number, sf: any) => {
-        const a = parseMoney(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
-        const b = parseMoney(sf.Without_GST || sf.baseAmount || sf.Base);
-        const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
-        return s + itemTotal;
-      }, 0);
-      if (sum > 0) return sum;
-    }
-    if (d.rawZohoDeal) {
-      const directZoho = parseMoney(
-        d.rawZohoDeal.Total_deal_amount_inclusive_of_gst ||
-        d.rawZohoDeal.Amount ||
-        d.rawZohoDeal.Deal_Amount ||
-        d.rawZohoDeal.Grand_Total ||
-        d.rawZohoDeal.Grand_total ||
-        d.rawZohoDeal.GrandTotal ||
-        d.rawZohoDeal.Total_amount ||
-        d.rawZohoDeal.Total_Amount ||
-        d.rawZohoDeal.total_amount ||
-        d.rawZohoDeal.Agreement_amount ||
-        d.rawZohoDeal.Agreement_Amount ||
-        (d.rawZohoDeal.Amount_Without_GST ? parseMoney(d.rawZohoDeal.Amount_Without_GST) / 0.82 : 0) ||
-        (d.rawZohoDeal.Deal_Amount_Without_GST ? parseMoney(d.rawZohoDeal.Deal_Amount_Without_GST) / 0.82 : 0) ||
-        (d.rawZohoDeal.Subtotal ? parseMoney(d.rawZohoDeal.Subtotal) * 1.18 : 0) ||
-        d.rawZohoDeal.Amount_After_disbursement ||
-        d.rawZohoDeal.amount_if_you_have_kindly_put_0
-      );
-      if (directZoho > 0) return directZoho;
-    }
-    if (d.totals?.baseAmount && Number(d.totals.baseAmount) > 0) {
-      return Number((Number(d.totals.baseAmount) / 0.82).toFixed(2));
-    }
-    const rec = getDealReceived(d);
-    if (rec > 0) return rec;
-    return 0;
+    return getDealTotalAmount(d);
+  };
+
+  // User-scoped deal amounts (handles 50/50 Partner BDM split for individual BDMs)
+  const getUserDealReceived = (d: any): number => {
+    const breakdown = getDealSplitBreakdown(d, currentUser, isSuperAdmin || isHOD);
+    return breakdown.displayReceived;
+  };
+
+  const getUserDealPending = (d: any): number => {
+    const breakdown = getDealSplitBreakdown(d, currentUser, isSuperAdmin || isHOD);
+    return breakdown.displayPending;
+  };
+
+  const getUserDealAmount = (d: any): number => {
+    const breakdown = getDealSplitBreakdown(d, currentUser, isSuperAdmin || isHOD);
+    return breakdown.displayAmount;
   };
 
   const formatCurrencyShort = (amount: number) => {
@@ -662,16 +585,16 @@ export const CrmDashboard = () => {
 
   // 2. REVENUE CALCULATIONS (TODAY, MONTH, ALL-TIME)
   const todayDealsList = useMemo(() => rbacDeals.filter(isDealToday), [rbacDeals]);
-  const todayRevenueReceived = useMemo(() => todayDealsList.reduce((sum, d) => sum + getDealReceived(d), 0), [todayDealsList]);
-  const todayRevenueBooked = useMemo(() => todayDealsList.reduce((sum, d) => sum + getDealAmount(d), 0), [todayDealsList]);
+  const todayRevenueReceived = useMemo(() => todayDealsList.reduce((sum, d) => sum + getUserDealReceived(d), 0), [todayDealsList, currentUser, isSuperAdmin, isHOD]);
+  const todayRevenueBooked = useMemo(() => todayDealsList.reduce((sum, d) => sum + getUserDealAmount(d), 0), [todayDealsList, currentUser, isSuperAdmin, isHOD]);
 
   const monthDealsList = useMemo(() => rbacDeals.filter(isDealThisMonth), [rbacDeals]);
-  const monthRevenueReceived = useMemo(() => monthDealsList.reduce((sum, d) => sum + getDealReceived(d), 0), [monthDealsList]);
-  const monthRevenueBooked = useMemo(() => monthDealsList.reduce((sum, d) => sum + getDealAmount(d), 0), [monthDealsList]);
+  const monthRevenueReceived = useMemo(() => monthDealsList.reduce((sum, d) => sum + getUserDealReceived(d), 0), [monthDealsList, currentUser, isSuperAdmin, isHOD]);
+  const monthRevenueBooked = useMemo(() => monthDealsList.reduce((sum, d) => sum + getUserDealAmount(d), 0), [monthDealsList, currentUser, isSuperAdmin, isHOD]);
 
-  const totalDealValue = useMemo(() => rbacDeals.reduce((sum, d) => sum + getDealAmount(d), 0), [rbacDeals]);
-  const totalReceivedValue = useMemo(() => rbacDeals.reduce((sum, d) => sum + getDealReceived(d), 0), [rbacDeals]);
-  const totalPendingValue = useMemo(() => rbacDeals.reduce((sum, d) => sum + getDealPending(d), 0), [rbacDeals]);
+  const totalDealValue = useMemo(() => rbacDeals.reduce((sum, d) => sum + getUserDealAmount(d), 0), [rbacDeals, currentUser, isSuperAdmin, isHOD]);
+  const totalReceivedValue = useMemo(() => rbacDeals.reduce((sum, d) => sum + getUserDealReceived(d), 0), [rbacDeals, currentUser, isSuperAdmin, isHOD]);
+  const totalPendingValue = useMemo(() => rbacDeals.reduce((sum, d) => sum + getUserDealPending(d), 0), [rbacDeals, currentUser, isSuperAdmin, isHOD]);
 
   // 3. TARGET VS ACHIEVEMENT FOR HOD & SUPER ADMIN
   const targetScopeEmployees = useMemo(() => {
@@ -711,8 +634,8 @@ export const CrmDashboard = () => {
         latestDate: d.date || ''
       };
 
-      const amt = getDealAmount(d);
-      const rec = getDealReceived(d);
+      const amt = getUserDealAmount(d);
+      const rec = getUserDealReceived(d);
 
       servicesMap.set(sName, {
         service: sName,
@@ -735,9 +658,9 @@ export const CrmDashboard = () => {
       sharePercent: totalDealValue > 0 ? Math.round((item.totalRevenue / totalDealValue) * 100) : 0,
       relativePercent: Math.round((item.totalRevenue / maxRevenue) * 100)
     }));
-  }, [rbacDeals, totalDealValue]);
+  }, [rbacDeals, totalDealValue, currentUser, isSuperAdmin, isHOD]);
 
-  // 5. TOP 5 PERFORMER EMPLOYEES
+  // 5. TOP 5 PERFORMER EMPLOYEES (Fair 50/50 split credited to both Primary and Partner BDMs)
   const top5PerformerEmployees = useMemo(() => {
     const perfMap = new Map<string, {
       id: string;
@@ -774,17 +697,23 @@ export const CrmDashboard = () => {
 
     // 2. Aggregate deals data by primary owner and Partner BDM
     rbacDeals.forEach(deal => {
-      const amt = getDealAmount(deal);
-      const rec = getDealReceived(deal);
+      const splitBreakdown = getDealSplitBreakdown(deal, null, true);
+      const isSplit = splitBreakdown.hasPartnerBdm;
+      const fullAmt = splitBreakdown.fullAmount;
+      const fullRec = splitBreakdown.fullReceived;
+      const pAmt = splitBreakdown.partnerAmount;
+      const primaryAmt = isSplit ? Math.round(fullAmt / 2) : fullAmt;
+      const primaryRec = isSplit ? pAmt : fullRec;
+
       const isWon = deal.status === 'Won' || deal.stage?.includes('Won') || deal.stage === 'Operations executors';
 
-      const rawOwnerName = (deal.owner || deal.Deal_Owner || deal.bdm || deal.createdBy || 'Managing Director').trim();
+      const rawOwnerName = (splitBreakdown.primaryName || deal.owner || deal.Deal_Owner || deal.bdm || deal.createdBy || 'Managing Director').trim();
       const ownerKey = rawOwnerName.toLowerCase();
 
       let ownerEntry = perfMap.get(ownerKey);
       if (!ownerEntry) {
         ownerEntry = {
-          id: `EMP-${Math.floor(100 + Math.random() * 900)}`,
+          id: splitBreakdown.primaryId || `EMP-${Math.floor(100 + Math.random() * 900)}`,
           name: rawOwnerName,
           role: 'Sales Representative',
           dept: 'Sales',
@@ -800,17 +729,17 @@ export const CrmDashboard = () => {
 
       ownerEntry.dealsCount += 1;
       if (isWon) ownerEntry.wonCount += 1;
-      ownerEntry.totalRevenue += amt;
-      ownerEntry.receivedRevenue += rec;
+      ownerEntry.totalRevenue += primaryAmt;
+      ownerEntry.receivedRevenue += primaryRec;
 
-      // Also track Partner BDM contribution if split
-      if (deal.hasPartnerBdm && deal.partnerBdmName) {
-        const pKey = deal.partnerBdmName.trim().toLowerCase();
+      // Also track Partner BDM contribution (50/50 Split)
+      if (isSplit && splitBreakdown.partnerName) {
+        const pKey = splitBreakdown.partnerName.trim().toLowerCase();
         let pEntry = perfMap.get(pKey);
         if (!pEntry) {
           pEntry = {
-            id: deal.partnerBdmId || `EMP-${Math.floor(100 + Math.random() * 900)}`,
-            name: deal.partnerBdmName,
+            id: splitBreakdown.partnerId || `EMP-${Math.floor(100 + Math.random() * 900)}`,
+            name: splitBreakdown.partnerName,
             role: 'Partner BDM',
             dept: 'Sales',
             dealsCount: 0,
@@ -818,14 +747,14 @@ export const CrmDashboard = () => {
             totalRevenue: 0,
             receivedRevenue: 0,
             monthlyTarget: 0,
-            avatarInitials: (deal.partnerBdmName || 'PB').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
+            avatarInitials: (splitBreakdown.partnerName || 'PB').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
           };
           perfMap.set(pKey, pEntry);
         }
         pEntry.dealsCount += 1;
         if (isWon) pEntry.wonCount += 1;
-        const pAmt = Number(deal.partnerBdmAmount) || Math.round(amt / 2);
-        pEntry.totalRevenue += pAmt;
+        pEntry.totalRevenue += Math.round(fullAmt / 2);
+        pEntry.receivedRevenue += pAmt;
       }
     });
 
@@ -910,8 +839,9 @@ export const CrmDashboard = () => {
 
     // 2. Link deals to team
     rbacDeals.forEach(deal => {
-      const amt = getDealAmount(deal);
-      const rec = getDealReceived(deal);
+      const splitBreakdown = getDealSplitBreakdown(deal, currentUser, isSuperAdmin || isHOD);
+      const amt = splitBreakdown.displayAmount;
+      const rec = splitBreakdown.displayReceived;
       const isWon = deal.status === 'Won' || deal.stage?.includes('Won');
 
       const ownerName = (deal.owner || deal.Deal_Owner || deal.bdm || '').trim().toLowerCase();
@@ -970,7 +900,7 @@ export const CrmDashboard = () => {
       sharePercent: totalDealValue > 0 ? Math.round((item.totalRevenue / totalDealValue) * 100) : 0,
       relativePercent: Math.round((item.totalRevenue / maxRev) * 100)
     }));
-  }, [rbacDeals, employees, totalDealValue]);
+  }, [rbacDeals, employees, totalDealValue, currentUser, isSuperAdmin, isHOD]);
 
   // 7. PIPELINE & CHART DATA
   const pipelineCategories = [
@@ -1008,9 +938,9 @@ export const CrmDashboard = () => {
     if (!monthLabel) monthLabel = currentMonthName;
 
     const current = monthlyRevenueMap.get(monthLabel) || { received: 0, pending: 0, total: 0 };
-    const rec = getDealReceived(d);
-    const tot = getDealAmount(d);
-    const pend = getDealPending(d);
+    const rec = getUserDealReceived(d);
+    const tot = getUserDealAmount(d);
+    const pend = getUserDealPending(d);
     monthlyRevenueMap.set(monthLabel, {
       received: current.received + rec,
       pending: current.pending + pend,
@@ -1780,10 +1710,9 @@ export const CrmDashboard = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
                   {recentDeals.map((deal) => {
-                    const amtNum = getDealAmount(deal);
-                    const recNum = getDealReceived(deal);
-                    const dispAmt = deal.amount && deal.amount !== '₹0' ? deal.amount : (amtNum > 0 ? `₹${amtNum.toLocaleString('en-IN')}` : '₹0');
-                    const dispRec = deal.received && deal.received !== '₹0' ? deal.received : (recNum > 0 ? `₹${recNum.toLocaleString('en-IN')}` : '₹0');
+                    const breakdown = getDealSplitBreakdown(deal, currentUser, isSuperAdmin || isHOD);
+                    const dispAmt = `₹${breakdown.displayAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+                    const dispRec = `₹${breakdown.displayReceived.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
                     return (
                       <tr
@@ -1794,8 +1723,20 @@ export const CrmDashboard = () => {
                         <td className="px-6 py-4 font-bold text-gray-900 font-mono text-xs">{deal.id}</td>
                         <td className="px-6 py-4">{deal.client || deal.company || 'Client'}</td>
                         <td className="px-6 py-4 text-gray-800">{deal.service || 'Service'}</td>
-                        <td className="px-6 py-4 font-bold text-gray-900">{dispAmt}</td>
-                        <td className="px-6 py-4 font-bold text-emerald-600">{dispRec}</td>
+                        <td className="px-6 py-4 font-bold text-gray-900">
+                          <div>{dispAmt}</div>
+                          {breakdown.splitBadgeText && (
+                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                              {breakdown.splitBadgeText}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-emerald-600">
+                          <div>{dispRec}</div>
+                          {breakdown.hasPartnerBdm && !isSuperAdmin && !isHOD && (
+                            <div className="text-[10px] text-gray-400 font-normal">Pre-GST 50%</div>
+                          )}
+                        </td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(deal.status)}`}>
                             {deal.status}
