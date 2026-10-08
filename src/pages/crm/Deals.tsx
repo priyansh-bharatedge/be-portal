@@ -269,7 +269,7 @@ export const Deals = () => {
       const sTotal = d.servicesData.reduce((sum: number, sf: any) => {
         const a = parseZohoNum(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount);
         const b = parseZohoNum(sf.baseAmount || sf.Without_GST || sf.Base);
-        const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
+        const itemTotal = a || (b > 0 ? Number((b * 1.18).toFixed(2)) : 0);
         return sum + itemTotal;
       }, 0);
       if (sTotal > 0) return sTotal;
@@ -278,7 +278,7 @@ export const Deals = () => {
       const sTotal = d.rawZohoDeal.Subform_1.reduce((sum: number, sf: any) => {
         const a = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
         const b = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base);
-        const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
+        const itemTotal = a || (b > 0 ? Number((b * 1.18).toFixed(2)) : 0);
         return sum + itemTotal;
       }, 0);
       if (sTotal > 0) return sTotal;
@@ -296,8 +296,8 @@ export const Deals = () => {
         d.rawZohoDeal.total_amount,
         d.rawZohoDeal.Agreement_amount,
         d.rawZohoDeal.Agreement_Amount,
-        d.rawZohoDeal.Amount_Without_GST ? parseZohoNum(d.rawZohoDeal.Amount_Without_GST) / 0.82 : 0,
-        d.rawZohoDeal.Deal_Amount_Without_GST ? parseZohoNum(d.rawZohoDeal.Deal_Amount_Without_GST) / 0.82 : 0,
+        d.rawZohoDeal.Amount_Without_GST ? parseZohoNum(d.rawZohoDeal.Amount_Without_GST) * 1.18 : 0,
+        d.rawZohoDeal.Deal_Amount_Without_GST ? parseZohoNum(d.rawZohoDeal.Deal_Amount_Without_GST) * 1.18 : 0,
         d.rawZohoDeal.Subtotal ? parseZohoNum(d.rawZohoDeal.Subtotal) * 1.18 : 0,
         d.rawZohoDeal.Amount_After_disbursement,
         d.rawZohoDeal.amount_if_you_have_kindly_put_0
@@ -305,7 +305,7 @@ export const Deals = () => {
       if (zAmt > 0) return zAmt;
     }
     if (d.totals?.baseAmount && Number(d.totals.baseAmount) > 0) {
-      return Number((Number(d.totals.baseAmount) / 0.82).toFixed(2));
+      return Number((Number(d.totals.baseAmount) * 1.18).toFixed(2));
     }
     const rec = getDealReceived(d);
     const pend = getDealPending(d);
@@ -702,10 +702,10 @@ export const Deals = () => {
       setDealServices((deal.servicesData || []).map((s: any) => {
         const t = s.totalAmount !== undefined 
           ? String(s.totalAmount) 
-          : (s.baseAmount ? String(Number((Number(s.baseAmount) / 0.82).toFixed(2))) : '');
+          : (s.baseAmount ? String(Number((Number(s.baseAmount) * 1.18).toFixed(2))) : '');
         const b = s.baseAmount !== undefined 
           ? String(s.baseAmount) 
-          : (t ? String(Number((Number(t) * 0.82).toFixed(2))) : '');
+          : (t ? String(Number((Number(t) / 1.18).toFixed(2))) : '');
         return {
           id: s.id || Math.random().toString(),
           name: s.name || '',
@@ -850,8 +850,8 @@ export const Deals = () => {
         const updated = { ...s, [field]: value };
         if (field === 'totalAmount') {
           const tNum = Number(value) || 0;
-          const gstVal = Number((tNum * 0.18).toFixed(2));
-          updated.baseAmount = tNum > 0 ? String(Number((tNum - gstVal).toFixed(2))) : '';
+          const baseVal = tNum > 0 ? Number((tNum / 1.18).toFixed(2)) : 0;
+          updated.baseAmount = tNum > 0 ? String(baseVal) : '';
         }
         return updated;
       }
@@ -871,13 +871,14 @@ export const Deals = () => {
   };
 
   const grandTotal = Number(dealServices.reduce((sum, s) => {
-    const total = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
+    const total = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) * 1.18).toFixed(2)) : 0);
     return sum + total;
   }, 0).toFixed(2));
 
   const totalGst = Number(dealServices.reduce((sum, s) => {
-    const total = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
-    const gst = total > 0 ? Number((total * 0.18).toFixed(2)) : 0;
+    const total = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) * 1.18).toFixed(2)) : 0);
+    const base = Number(s.baseAmount) || (total > 0 ? Number((total / 1.18).toFixed(2)) : 0);
+    const gst = total > 0 ? Number((total - base).toFixed(2)) : 0;
     return sum + gst;
   }, 0).toFixed(2));
 
@@ -1065,8 +1066,8 @@ export const Deals = () => {
           const bg = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base);
           const r = parseZohoNum(sf.Received_amount || sf.Received);
           const p = parseZohoNum(sf.Pending_amount || sf.Pending);
-          subformTotal += a || (bg > 0 ? Number((bg / 0.82).toFixed(2)) : 0);
-          subformWithoutGst += bg || (a > 0 ? Number((a * 0.82).toFixed(2)) : 0);
+          subformTotal += a || (bg > 0 ? Number((bg * 1.18).toFixed(2)) : 0);
+          subformWithoutGst += bg || (a > 0 ? Number((a / 1.18).toFixed(2)) : 0);
           subformReceived += r;
           subformPending += p;
         });
@@ -1084,8 +1085,8 @@ export const Deals = () => {
         zDeal.total_amount,
         zDeal.Agreement_amount,
         zDeal.Agreement_Amount,
-        zDeal.Amount_Without_GST ? parseZohoNum(zDeal.Amount_Without_GST) / 0.82 : 0,
-        zDeal.Deal_Amount_Without_GST ? parseZohoNum(zDeal.Deal_Amount_Without_GST) / 0.82 : 0,
+        zDeal.Amount_Without_GST ? parseZohoNum(zDeal.Amount_Without_GST) * 1.18 : 0,
+        zDeal.Deal_Amount_Without_GST ? parseZohoNum(zDeal.Deal_Amount_Without_GST) * 1.18 : 0,
         zDeal.Subtotal ? parseZohoNum(zDeal.Subtotal) * 1.18 : 0,
         zDeal.Amount_After_disbursement,
         subformTotal,
@@ -1101,7 +1102,7 @@ export const Deals = () => {
         zDeal.Amount_Without_GST,
         zDeal.Deal_Amount_Without_GST,
         subformWithoutGst,
-        totalAmountNum > 0 ? Number((totalAmountNum * 0.82).toFixed(2)) : 0
+        totalAmountNum > 0 ? Number((totalAmountNum / 1.18).toFixed(2)) : 0
       );
 
       const gstAmountNum = findFirstPositive(
@@ -1146,8 +1147,8 @@ export const Deals = () => {
       if (Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0) {
         servicesFromSubform = zDeal.Subform_1.map((sf: any, i: number) => {
           const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || 0);
-          const withoutGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0));
-          const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
+          const withoutGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
+          const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
           return {
             id: String(sf.id || i + 1),
             name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service',
@@ -1857,9 +1858,8 @@ export const Deals = () => {
           partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
         },
         servicesData: dealServices.map(s => {
-          const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
-          const gstVal = t > 0 ? Number((t * 0.18).toFixed(2)) : 0;
-          const b = t > 0 ? Number((t - gstVal).toFixed(2)) : (Number(s.baseAmount) || 0);
+          const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) * 1.18).toFixed(2)) : 0);
+          const b = Number(s.baseAmount) || (t > 0 ? Number((t / 1.18).toFixed(2)) : 0);
           return {
             ...s,
             totalAmount: String(t || s.totalAmount || ''),
@@ -2691,9 +2691,9 @@ export const Deals = () => {
                             </tr>
                           )}
                           {dealServices.map((service) => {
-                            const totalNum = Number(service.totalAmount) || (Number(service.baseAmount) ? Number((Number(service.baseAmount) / 0.82).toFixed(2)) : 0);
-                            const gst = totalNum > 0 ? Number((totalNum * 0.18).toFixed(2)) : 0;
-                            const base = totalNum > 0 ? Number((totalNum - gst).toFixed(2)) : 0;
+                            const totalNum = Number(service.totalAmount) || (Number(service.baseAmount) ? Number((Number(service.baseAmount) * 1.18).toFixed(2)) : 0);
+                            const base = Number(service.baseAmount) || (totalNum > 0 ? Number((totalNum / 1.18).toFixed(2)) : 0);
+                            const gst = totalNum > 0 ? Number((totalNum - base).toFixed(2)) : 0;
 
                             return (
                               <tr key={service.id}>

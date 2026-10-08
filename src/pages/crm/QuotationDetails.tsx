@@ -115,8 +115,8 @@ export const QuotationDetails = () => {
                   {services.length > 0 ? services.map((s: any, idx: number) => {
                     const qty = s.qty || s.quantity || 1;
                     const totalNum = s.totalAmount ? (Number(s.totalAmount) * qty) : 0;
-                    const gst = totalNum > 0 ? Number((totalNum * 0.18).toFixed(2)) : Number(((Number(s.baseAmount) || 0) * qty * 0.18 / 0.82).toFixed(2));
-                    const base = totalNum > 0 ? Number((totalNum - gst).toFixed(2)) : ((Number(s.baseAmount) || 0) * qty);
+                    const base = Number(s.baseAmount) ? (Number(s.baseAmount) * qty) : (totalNum > 0 ? Number((totalNum / 1.18).toFixed(2)) : 0);
+                    const gst = totalNum > 0 ? Number((totalNum - base).toFixed(2)) : Number((base * 0.18).toFixed(2));
                     const finalTotal = totalNum > 0 ? totalNum : Number((base + gst).toFixed(2));
                     return (
                       <tr key={idx}>

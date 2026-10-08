@@ -116,10 +116,10 @@ export const Quotations = () => {
       setQuotationServices((deal.servicesData || []).map((s: any) => {
         const t = s.totalAmount !== undefined 
           ? String(s.totalAmount) 
-          : (s.baseAmount ? String(Number((Number(s.baseAmount) / 0.82).toFixed(2))) : '');
+          : (s.baseAmount ? String(Number((Number(s.baseAmount) * 1.18).toFixed(2))) : '');
         const b = s.baseAmount !== undefined 
           ? String(s.baseAmount) 
-          : (t ? String(Number((Number(t) * 0.82).toFixed(2))) : '');
+          : (t ? String(Number((Number(t) / 1.18).toFixed(2))) : '');
         return {
           id: s.id || Math.random().toString(),
           name: s.name || '',
@@ -252,8 +252,8 @@ export const Quotations = () => {
         const updated = { ...s, [field]: value };
         if (field === 'totalAmount') {
           const tNum = Number(value) || 0;
-          const gstVal = Number((tNum * 0.18).toFixed(2));
-          updated.baseAmount = tNum > 0 ? String(Number((tNum - gstVal).toFixed(2))) : '';
+          const baseVal = tNum > 0 ? Number((tNum / 1.18).toFixed(2)) : 0;
+          updated.baseAmount = tNum > 0 ? String(baseVal) : '';
         }
         return updated;
       }
@@ -273,13 +273,14 @@ export const Quotations = () => {
   };
 
   const grandTotal = Number(quotationServices.reduce((sum, s) => {
-    const total = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
+    const total = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) * 1.18).toFixed(2)) : 0);
     return sum + total;
   }, 0).toFixed(2));
 
   const totalGst = Number(quotationServices.reduce((sum, s) => {
-    const total = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
-    const gst = total > 0 ? Number((total * 0.18).toFixed(2)) : 0;
+    const total = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) * 1.18).toFixed(2)) : 0);
+    const base = Number(s.baseAmount) || (total > 0 ? Number((total / 1.18).toFixed(2)) : 0);
+    const gst = total > 0 ? Number((total - base).toFixed(2)) : 0;
     return sum + gst;
   }, 0).toFixed(2));
 
@@ -781,9 +782,8 @@ export const Quotations = () => {
           employeeZohoId: existingQuotation?.formData?.employeeZohoId || currentUser?.zohoId
         },
         servicesData: quotationServices.map(s => {
-          const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) / 0.82).toFixed(2)) : 0);
-          const gstVal = t > 0 ? Number((t * 0.18).toFixed(2)) : 0;
-          const b = t > 0 ? Number((t - gstVal).toFixed(2)) : (Number(s.baseAmount) || 0);
+          const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) * 1.18).toFixed(2)) : 0);
+          const b = Number(s.baseAmount) || (t > 0 ? Number((t / 1.18).toFixed(2)) : 0);
           return {
             ...s,
             totalAmount: String(t || s.totalAmount || ''),
@@ -1629,9 +1629,9 @@ export const Quotations = () => {
                             </tr>
                           )}
                           {quotationServices.map((service) => {
-                            const totalNum = Number(service.totalAmount) || (Number(service.baseAmount) ? Number((Number(service.baseAmount) / 0.82).toFixed(2)) : 0);
-                            const gst = totalNum > 0 ? Number((totalNum * 0.18).toFixed(2)) : 0;
-                            const base = totalNum > 0 ? Number((totalNum - gst).toFixed(2)) : 0;
+                            const totalNum = Number(service.totalAmount) || (Number(service.baseAmount) ? Number((Number(service.baseAmount) * 1.18).toFixed(2)) : 0);
+                            const base = Number(service.baseAmount) || (totalNum > 0 ? Number((totalNum / 1.18).toFixed(2)) : 0);
+                            const gst = totalNum > 0 ? Number((totalNum - base).toFixed(2)) : 0;
 
                             return (
                               <tr key={service.id}>

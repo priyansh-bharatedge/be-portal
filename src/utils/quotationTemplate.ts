@@ -120,7 +120,7 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
     const qty = item.quantity || 1;
     const totalNum = item.totalAmount ? Number(item.totalAmount) : 0;
     const unitPrice = totalNum > 0 
-      ? Number(((totalNum * 0.82) / qty).toFixed(2)) 
+      ? Number(((totalNum / 1.18) / qty).toFixed(2)) 
       : (typeof item.baseAmount === 'number' ? item.baseAmount : Number(item.baseAmount) || 0);
     const totalPrice = unitPrice * qty;
     calculatedSubtotal += totalPrice;

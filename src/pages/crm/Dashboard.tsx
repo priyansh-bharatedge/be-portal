@@ -191,7 +191,7 @@ export const CrmDashboard = () => {
           const bg = parseMoney(sf.Without_GST || sf.baseAmount || sf.Base);
           const r = parseMoney(sf.Received_amount || sf.Received);
           const p = parseMoney(sf.Pending_amount || sf.Pending);
-          subformTotal += a || (bg > 0 ? Number((bg / 0.82).toFixed(2)) : 0);
+          subformTotal += a || (bg > 0 ? Number((bg * 1.18).toFixed(2)) : 0);
           subformReceived += r;
           subformPending += p;
         });
@@ -209,8 +209,8 @@ export const CrmDashboard = () => {
         zDeal.total_amount,
         zDeal.Agreement_amount,
         zDeal.Agreement_Amount,
-        zDeal.Amount_Without_GST ? parseMoney(zDeal.Amount_Without_GST) / 0.82 : 0,
-        zDeal.Deal_Amount_Without_GST ? parseMoney(zDeal.Deal_Amount_Without_GST) / 0.82 : 0,
+        zDeal.Amount_Without_GST ? parseMoney(zDeal.Amount_Without_GST) * 1.18 : 0,
+        zDeal.Deal_Amount_Without_GST ? parseMoney(zDeal.Deal_Amount_Without_GST) * 1.18 : 0,
         zDeal.Subtotal ? parseMoney(zDeal.Subtotal) * 1.18 : 0,
         zDeal.Amount_After_disbursement,
         subformTotal,

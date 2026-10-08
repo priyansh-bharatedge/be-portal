@@ -137,7 +137,7 @@ export const getDealTotalAmount = (d: any): number => {
     const sTotal = d.servicesData.reduce((sum: number, sf: any) => {
       const a = parseNum(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount);
       const b = parseNum(sf.baseAmount || sf.Without_GST || sf.Base);
-      const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
+      const itemTotal = a || (b > 0 ? Number((b * 1.18).toFixed(2)) : 0);
       return sum + itemTotal;
     }, 0);
     if (sTotal > 0) return sTotal;
@@ -146,7 +146,7 @@ export const getDealTotalAmount = (d: any): number => {
     const sTotal = d.rawZohoDeal.Subform_1.reduce((sum: number, sf: any) => {
       const a = parseNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
       const b = parseNum(sf.Without_GST || sf.baseAmount || sf.Base);
-      const itemTotal = a || (b > 0 ? Number((b / 0.82).toFixed(2)) : 0);
+      const itemTotal = a || (b > 0 ? Number((b * 1.18).toFixed(2)) : 0);
       return sum + itemTotal;
     }, 0);
     if (sTotal > 0) return sTotal;
@@ -164,8 +164,8 @@ export const getDealTotalAmount = (d: any): number => {
       d.rawZohoDeal.total_amount,
       d.rawZohoDeal.Agreement_amount,
       d.rawZohoDeal.Agreement_Amount,
-      d.rawZohoDeal.Amount_Without_GST ? parseNum(d.rawZohoDeal.Amount_Without_GST) / 0.82 : 0,
-      d.rawZohoDeal.Deal_Amount_Without_GST ? parseNum(d.rawZohoDeal.Deal_Amount_Without_GST) / 0.82 : 0,
+      d.rawZohoDeal.Amount_Without_GST ? parseNum(d.rawZohoDeal.Amount_Without_GST) * 1.18 : 0,
+      d.rawZohoDeal.Deal_Amount_Without_GST ? parseNum(d.rawZohoDeal.Deal_Amount_Without_GST) * 1.18 : 0,
       d.rawZohoDeal.Subtotal ? parseNum(d.rawZohoDeal.Subtotal) * 1.18 : 0,
       d.rawZohoDeal.Amount_After_disbursement,
       d.rawZohoDeal.amount_if_you_have_kindly_put_0
@@ -173,7 +173,7 @@ export const getDealTotalAmount = (d: any): number => {
     if (zAmt > 0) return zAmt;
   }
   if (d.totals?.baseAmount && Number(d.totals.baseAmount) > 0) {
-    return Number((Number(d.totals.baseAmount) / 0.82).toFixed(2));
+    return Number((Number(d.totals.baseAmount) * 1.18).toFixed(2));
   }
   const rec = getDealReceivedAmount(d);
   const pend = getDealPendingAmount(d);

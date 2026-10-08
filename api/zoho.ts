@@ -166,9 +166,10 @@ function buildQuotationZohoPayload(quotation: any): Record<string, any> {
     quotationName = `Quotation ${quotationId || Date.now()}`;
   }
 
-  const subtotalNum = Number(totals.subtotal) || servicesData.reduce((sum: number, s: any) => sum + (Number(s.baseAmount) || 0), 0);
-  const totalGstNum = Number(totals.totalGst) || (subtotalNum * 0.18);
-  const grandTotalNum = Number(totals.grandTotal) || (subtotalNum + totalGstNum);
+  const to2Dec = (n: any) => Math.round((Number(n) || 0) * 100) / 100;
+  const subtotalNum = to2Dec(Number(totals.subtotal) || servicesData.reduce((sum: number, s: any) => sum + (Number(s.baseAmount) || 0), 0));
+  const totalGstNum = to2Dec(Number(totals.totalGst) || (subtotalNum * 0.18));
+  const grandTotalNum = to2Dec(Number(totals.grandTotal) || (subtotalNum + totalGstNum));
 
   const payload: Record<string, any> = {
     Name: quotationName,
@@ -202,9 +203,10 @@ function buildQuotationZohoPayload(quotation: any): Record<string, any> {
 
   if (servicesData.length > 0) {
     payload.Services_And_Pricing = servicesData.map((s: any) => {
-      const base = Number(s.baseAmount) || 0;
-      const gst = base * 0.18;
-      const total = base + gst;
+      const itemTotalFromSvc = Number(s.totalAmount) || 0;
+      const base = Number(s.baseAmount) || (itemTotalFromSvc > 0 ? to2Dec(itemTotalFromSvc / 1.18) : 0);
+      const gst = itemTotalFromSvc > 0 ? to2Dec(itemTotalFromSvc - base) : to2Dec(base * 0.18);
+      const total = itemTotalFromSvc > 0 ? to2Dec(itemTotalFromSvc) : to2Dec(base + gst);
       return {
         Service: s.name || 'Service',
         Base: `₹${base.toLocaleString('en-IN')}`,
@@ -347,12 +349,12 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
     payload.Service_Name = servicesData.length === 1 ? servicesData[0].name : `${servicesData.length} Services`;
     payload.Subform_1 = servicesData.map((svc: any, idx: number) => {
       const itemTotalFromSvc = Number(svc.totalAmount) || 0;
-      const itemGst = itemTotalFromSvc > 0 
-        ? to2Dec(itemTotalFromSvc * 0.18) 
-        : to2Dec((Number(svc.baseAmount) || 0) * 0.18);
       const itemBase = itemTotalFromSvc > 0 
-        ? to2Dec(itemTotalFromSvc - itemGst) 
+        ? to2Dec(itemTotalFromSvc / 1.18) 
         : to2Dec(Number(svc.baseAmount) || 0);
+      const itemGst = itemTotalFromSvc > 0 
+        ? to2Dec(itemTotalFromSvc - itemBase) 
+        : to2Dec(itemBase * 0.18);
       const itemTotal = itemTotalFromSvc > 0 ? to2Dec(itemTotalFromSvc) : to2Dec(itemBase + itemGst);
 
       let itemReceived = 0;

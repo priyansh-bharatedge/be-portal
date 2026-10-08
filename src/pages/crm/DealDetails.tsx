@@ -332,8 +332,8 @@ export const DealDetails = () => {
   if (Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0) {
     services = raw.Subform_1.map((sf: any, i: number) => {
       const agreementAmount = parseNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount || 0);
-      const withoutGst = parseNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0));
-      const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst / 0.82).toFixed(2)) : 0);
+      const withoutGst = parseNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
+      const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
       const recAmt = parseNum(sf.Received_amount || sf.Received || 0);
       const pendAmt = parseNum(sf.Pending_amount || sf.Pending || (totalAmt > recAmt ? totalAmt - recAmt : 0));
 
@@ -359,7 +359,7 @@ export const DealDetails = () => {
   } else if (services.length > 0) {
     services.forEach((s: any) => {
       const t = parseNum(s.totalAmount);
-      const b = parseNum(s.baseAmount || (t > 0 ? t * 0.82 : 0));
+      const b = parseNum(s.baseAmount || (t > 0 ? t / 1.18 : 0));
       const r = parseNum(s.receivedAmount);
       const p = parseNum(s.pendingAmount || (t > r ? t - r : 0));
       servicesSumTotal += t;
@@ -382,8 +382,8 @@ export const DealDetails = () => {
     raw.total_amount,
     raw.Agreement_amount,
     raw.Agreement_Amount,
-    raw.Amount_Without_GST ? parseNum(raw.Amount_Without_GST) / 0.82 : 0,
-    raw.Deal_Amount_Without_GST ? parseNum(raw.Deal_Amount_Without_GST) / 0.82 : 0,
+    raw.Amount_Without_GST ? parseNum(raw.Amount_Without_GST) * 1.18 : 0,
+    raw.Deal_Amount_Without_GST ? parseNum(raw.Deal_Amount_Without_GST) * 1.18 : 0,
     raw.Subtotal ? parseNum(raw.Subtotal) * 1.18 : 0,
     raw.Amount_After_disbursement,
     servicesSumTotal,
@@ -401,7 +401,7 @@ export const DealDetails = () => {
     raw.Deal_Amount_Without_GST,
     servicesSumBase,
     deal.totals?.baseAmount,
-    totalAmountNum > 0 ? Number((totalAmountNum * 0.82).toFixed(2)) : 0
+    totalAmountNum > 0 ? Number((totalAmountNum / 1.18).toFixed(2)) : 0
   );
 
   const gstAmountNum = findFirstPos(
@@ -846,7 +846,7 @@ export const DealDetails = () => {
                   <tbody className="divide-y divide-gray-100 text-gray-800">
                     {services.map((s: any, idx: number) => {
                       const totalNum = Number(s.totalAmount || 0);
-                      const baseNum = Number(s.baseAmount || (totalNum > 0 ? (totalNum * 0.82).toFixed(2) : 0));
+                      const baseNum = Number(s.baseAmount || (totalNum > 0 ? (totalNum / 1.18).toFixed(2) : 0));
                       const gstNum = totalNum > baseNum ? Number((totalNum - baseNum).toFixed(2)) : Number((baseNum * 0.18).toFixed(2));
                       const recNum = s.receivedAmount ? Number(s.receivedAmount) : 0;
                       const pendNum = s.pendingAmount ? Number(s.pendingAmount) : (totalNum > recNum ? totalNum - recNum : 0);

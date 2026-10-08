@@ -1311,8 +1311,8 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   if (Array.isArray(rawZoho.Subform_1) && rawZoho.Subform_1.length > 0) {
     servicesSubform = rawZoho.Subform_1.map((sf: any, i: number) => {
       const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount || 0);
-      const wGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount * 0.82).toFixed(2)) : 0));
-      const tAmt = agreementAmount || (wGst > 0 ? Number((wGst / 0.82).toFixed(2)) : 0);
+      const wGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
+      const tAmt = agreementAmount || (wGst > 0 ? Number((wGst * 1.18).toFixed(2)) : 0);
       const recAmt = parseZohoNum(sf.Received_amount || sf.Received || 0);
       const pendAmt = parseZohoNum(sf.Pending_amount || sf.Pending || (tAmt > recAmt ? tAmt - recAmt : 0));
 
@@ -1342,8 +1342,8 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       const bg = parseZohoNum(sf.baseAmount || sf.Without_GST || sf.Base);
       const r = parseZohoNum(sf.receivedAmount || sf.Received_amount || sf.Received);
       const p = parseZohoNum(sf.pendingAmount || sf.Pending_amount || sf.Pending);
-      subformTotal += a || (bg > 0 ? Number((bg / 0.82).toFixed(2)) : 0);
-      subformWithoutGst += bg || (a > 0 ? Number((a * 0.82).toFixed(2)) : 0);
+      subformTotal += a || (bg > 0 ? Number((bg * 1.18).toFixed(2)) : 0);
+      subformWithoutGst += bg || (a > 0 ? Number((a / 1.18).toFixed(2)) : 0);
       subformReceived += r;
       subformPending += p;
     });
@@ -1362,8 +1362,8 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     rawZoho.total_amount,
     rawZoho.Agreement_amount,
     rawZoho.Agreement_Amount,
-    rawZoho.Amount_Without_GST ? parseZohoNum(rawZoho.Amount_Without_GST) / 0.82 : 0,
-    rawZoho.Deal_Amount_Without_GST ? parseZohoNum(rawZoho.Deal_Amount_Without_GST) / 0.82 : 0,
+    rawZoho.Amount_Without_GST ? parseZohoNum(rawZoho.Amount_Without_GST) * 1.18 : 0,
+    rawZoho.Deal_Amount_Without_GST ? parseZohoNum(rawZoho.Deal_Amount_Without_GST) * 1.18 : 0,
     rawZoho.Subtotal ? parseZohoNum(rawZoho.Subtotal) * 1.18 : 0,
     rawZoho.Amount_After_disbursement,
     subformTotal,
@@ -1382,7 +1382,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     rawZoho.Deal_Amount_Without_GST,
     subformWithoutGst,
     existingDeal?.totals?.baseAmount,
-    totalNum > 0 ? Number((totalNum * 0.82).toFixed(2)) : 0
+    totalNum > 0 ? Number((totalNum / 1.18).toFixed(2)) : 0
   );
 
   const gstNum = findFirstPositive(
