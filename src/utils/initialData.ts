@@ -59,6 +59,3 @@ export const DEMO_USERS: AuthUser[] = [
 ];
 
 export const INITIAL_DSR_REPORTS: any[] = [];
-
-
-

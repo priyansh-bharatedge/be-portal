@@ -41,7 +41,7 @@ export const Deals = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, isSuperAdmin, isHOD, availableUsers, filterRecords } = useAuth();
+  const { currentUser, isSuperAdmin, isHR, isHOD, availableUsers, filterRecords } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
@@ -348,87 +348,263 @@ export const Deals = () => {
   const loadSalesEmployees = useCallback(async () => {
     setIsLoadingSalesEmployees(true);
     try {
-      // 1. Fetch live sales employees & BDMs directly from Zoho CRM
-      const res = await fetchSalesEmployees();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setSalesEmployees(res.data);
-        localStorage.setItem('be_sales_employees', JSON.stringify(res.data));
-        return;
-      }
+      const mergedMap = new Map<string, any>();
 
-      // Fallback 1: check cached sales employees
-      const cached = localStorage.getItem('be_sales_employees');
-      if (cached) {
-        setSalesEmployees(JSON.parse(cached));
-        return;
-      }
+      // Comprehensive helper to detect if an employee belongs to the Sales department or holds a sales/BDM role
+      const isSalesDeptEmployee = (emp: any): boolean => {
+        if (!emp) return false;
+        const status = String(emp.status || emp.Status || emp.formData?.status || 'Active').toLowerCase().trim();
+        if (status === 'inactive' || status === 'terminated' || status === 'deleted') return false;
 
-      // Fallback 2: check Zoho Employees endpoint
-      const empRes = await fetchZohoEmployees();
-      if (empRes.success && Array.isArray(empRes.data) && empRes.data.length > 0) {
-        const mapped = empRes.data.map((z: any) => ({
-          id: String(z.id || z.Employment_ID),
-          zohoId: String(z.id),
-          name: [z.Name, z.Middle_Name, z.Last_Name].filter(Boolean).join(' ') || z.Name || 'Sales Employee',
-          email: z.Email || z.Personal_Email_Address || '',
-          dept: z.Department || 'Sales',
-          role: z.Designation_Job_Title || z.System_Role || 'Sales',
-          empId: z.Employment_ID || String(z.id),
-          status: 'Active'
-        }));
-        setSalesEmployees(mapped);
-        return;
-      }
+        const dept = String(
+          emp.dept ||
+          emp.department ||
+          emp.Department ||
+          emp.formData?.dept ||
+          emp.formData?.department ||
+          emp.formData?.Department ||
+          ''
+        ).toLowerCase().trim();
 
-      // Fallback 3: check be_employees in localStorage
-      const local = localStorage.getItem('be_employees');
-      const emps = local ? JSON.parse(local) : [];
-      if (Array.isArray(emps) && emps.length > 0) {
-        const filtered = emps.filter((e: any) => {
-          const dept = (e.dept || e.Department || '').toLowerCase();
-          const role = (e.role || e.Designation || '').toLowerCase();
-          return dept.includes('sales') || dept.includes('bdm') || role.includes('sales') || role.includes('bdm') || role.includes('business development');
-        });
-        if (filtered.length > 0) {
-          setSalesEmployees(filtered);
+        const role = String(
+          emp.role ||
+          emp.designation ||
+          emp.Designation ||
+          emp.Designation_Job_Title ||
+          emp.formData?.role ||
+          emp.formData?.designation ||
+          emp.System_Role ||
+          emp.systemRole ||
+          ''
+        ).toLowerCase().trim();
+
+        const salesKeywords = [
+          'sales',
+          'bdm',
+          'bde',
+          'business dev',
+          'business development',
+          'cluster',
+          'national sales',
+          'commercial',
+          'growth',
+          'revenue',
+          'nsm',
+          'cdm',
+          'account executive'
+        ];
+
+        const hasSalesDept = salesKeywords.some(kw => dept.includes(kw));
+        const hasSalesRole = salesKeywords.some(kw => role.includes(kw));
+
+        return hasSalesDept || hasSalesRole || dept === 'sales';
+      };
+
+      // Helper to extract clean employee name
+      const extractName = (emp: any): string => {
+        if (emp.name && String(emp.name).trim() && String(emp.name).trim().toLowerCase() !== 'undefined') {
+          return String(emp.name).trim();
         }
+        if (emp.Name && String(emp.Name).trim()) {
+          return String(emp.Name).trim();
+        }
+        const fName = emp.formData?.firstName || emp.firstName || '';
+        const mName = emp.formData?.middleName || emp.middleName || '';
+        const lName = emp.formData?.lastName || emp.lastName || '';
+        const combined = [fName, mName, lName].filter(Boolean).join(' ').trim();
+        if (combined) return combined;
+        if (emp.fullName && String(emp.fullName).trim()) return String(emp.fullName).trim();
+        if (emp.email) return String(emp.email).split('@')[0];
+        return 'Sales Employee';
+      };
+
+      const addEmpIfSales = (emp: any, defaultSource = 'Directory') => {
+        if (!emp || !isSalesDeptEmployee(emp)) return;
+
+        const name = extractName(emp);
+        if (!name || name.toLowerCase() === 'sales employee') {
+          if (!emp.id && !emp.zohoId && !emp.empId) return;
+        }
+
+        const id = String(emp.id || emp.empId || emp.Employment_ID || emp.zohoId || '').trim();
+        const zohoId = emp.zohoId ? String(emp.zohoId).trim() : (id && /^\d{15,}$/.test(id) ? id : '');
+        const email = String(emp.email || emp.Email || emp.workEmail || emp.formData?.email || emp.formData?.workEmail || emp.Personal_Email_Address || '').toLowerCase().trim();
+        const empId = String(emp.empId || emp.Employment_ID || id || '').trim();
+        const displayRole = emp.role || emp.designation || emp.Designation || emp.formData?.role || emp.Designation_Job_Title || emp.systemRole || 'Sales';
+        const displayDept = emp.dept || emp.department || emp.Department || emp.formData?.dept || 'Sales';
+
+        const record = {
+          id: id || zohoId || empId || name,
+          zohoId: zohoId || id,
+          empId: empId || id,
+          name: name,
+          email: email,
+          dept: displayDept,
+          role: displayRole,
+          status: 'Active',
+          source: emp.source || defaultSource
+        };
+
+        // Key resolution with priority for zohoId, email, empId, and normalized name
+        const key = (zohoId && `zoho_${zohoId}`) || (email && `email_${email}`) || (empId && `empid_${empId.toLowerCase()}`) || `name_${name.toLowerCase()}`;
+
+        if (!mergedMap.has(key)) {
+          mergedMap.set(key, record);
+        } else {
+          const prev = mergedMap.get(key);
+          mergedMap.set(key, {
+            ...prev,
+            ...record,
+            zohoId: record.zohoId || prev.zohoId,
+            id: record.id || prev.id,
+            email: record.email || prev.email,
+            role: record.role || prev.role
+          });
+        }
+      };
+
+      // 1. Load from be_employees (Local HRMS Employee Directory)
+      try {
+        const local = localStorage.getItem('be_employees');
+        if (local) {
+          const emps = JSON.parse(local);
+          if (Array.isArray(emps)) {
+            emps.forEach(e => addEmpIfSales(e, 'HRMS Directory'));
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading be_employees for Partner BDM dropdown:', e);
       }
+
+      // 2. Load from availableUsers in Auth context (if any)
+      if (Array.isArray(availableUsers)) {
+        availableUsers.forEach(u => addEmpIfSales(u, 'Auth User'));
+      }
+
+      // 3. Load from cached sales employees
+      try {
+        const cached = localStorage.getItem('be_sales_employees');
+        if (cached) {
+          const cList = JSON.parse(cached);
+          if (Array.isArray(cList)) {
+            cList.forEach(c => addEmpIfSales(c, 'Cached Sales'));
+          }
+        }
+      } catch (e) { }
+
+      // Update state immediately from local stores so dropdown is instantly responsive
+      const currentList = Array.from(mergedMap.values());
+      if (currentList.length > 0) {
+        setSalesEmployees(currentList);
+      }
+
+      // 4. Fetch live sales employees from backend / Zoho API
+      try {
+        const res = await fetchSalesEmployees();
+        if (res.success && Array.isArray(res.data)) {
+          res.data.forEach((z: any) => addEmpIfSales(z, 'Zoho CRM'));
+        }
+      } catch (apiErr) {
+        console.warn('fetchSalesEmployees API error:', apiErr);
+      }
+
+      // 5. Fetch all Zoho employees to ensure comprehensive directory coverage
+      try {
+        const empRes = await fetchZohoEmployees();
+        if (empRes.success && Array.isArray(empRes.data)) {
+          empRes.data.forEach((z: any) => {
+            const fullName = [z.Name, z.Middle_Name, z.Last_Name].filter(Boolean).join(' ') || z.Name || '';
+            addEmpIfSales({
+              id: String(z.id || z.Employment_ID),
+              zohoId: String(z.id),
+              name: fullName,
+              email: z.Email || z.Personal_Email_Address || '',
+              dept: z.Department || 'Sales',
+              role: z.Designation_Job_Title || z.System_Role || 'Sales',
+              empId: z.Employment_ID || String(z.id),
+              status: 'Active'
+            }, 'Zoho Employee');
+          });
+        }
+      } catch (empErr) {
+        console.warn('fetchZohoEmployees API error:', empErr);
+      }
+
+      const finalList = Array.from(mergedMap.values());
+      setSalesEmployees(finalList);
+      try {
+        localStorage.setItem('be_sales_employees', JSON.stringify(finalList));
+      } catch (e) { }
     } catch (e) {
       console.warn('Failed to load sales employees for Partner BDM dropdown:', e);
     } finally {
       setIsLoadingSalesEmployees(false);
     }
-  }, []);
+  }, [availableUsers]);
 
   useEffect(() => {
     loadSalesEmployees();
+    const handleEmployeeUpdate = () => {
+      loadSalesEmployees();
+    };
+    window.addEventListener('be_employees_updated', handleEmployeeUpdate);
+    window.addEventListener('storage', handleEmployeeUpdate);
+    return () => {
+      window.removeEventListener('be_employees_updated', handleEmployeeUpdate);
+      window.removeEventListener('storage', handleEmployeeUpdate);
+    };
   }, [loadSalesEmployees]);
 
-  // Filter only active employees from the Sales department, excluding primary BDM
+  // Filter all active employees from the Sales department
   const eligiblePartnerBdms = useMemo(() => {
     return salesEmployees.filter((emp: any) => {
-      // 1. Status must be Active (if present)
-      const status = (emp.status || emp.Status || emp.formData?.status || 'Active').toLowerCase();
-      if (status === 'inactive') return false;
+      // 1. Status must not be inactive
+      const status = String(emp.status || emp.Status || emp.formData?.status || 'Active').toLowerCase().trim();
+      if (status === 'inactive' || status === 'terminated' || status === 'deleted') return false;
 
-      // 2. Exclude primary BDM (deal owner or current user if multiple sales employees exist)
+      // 2. Exclude primary BDM of the deal to prevent choosing oneself as partner BDM
       const empId = String(emp.id || emp.zohoId || emp.empId || '').toLowerCase().trim();
       const empName = String(emp.name || emp.Name || '').toLowerCase().trim();
       const empEmail = String(emp.email || emp.Email || emp.workEmail || '').toLowerCase().trim();
 
       if (editingDealId) {
         const editingDeal = deals.find(d => d.id === editingDealId || d.zohoId === editingDealId);
-        const ownerName = String(editingDeal?.owner || editingDeal?.bdmName || '').toLowerCase().trim();
-        if (ownerName && empName === ownerName) return false;
-      } else if (currentUser && salesEmployees.length > 1) {
-        if (currentUser.id && empId && empId === currentUser.id.toLowerCase()) return false;
-        if (currentUser.name && empName === currentUser.name.toLowerCase().trim()) return false;
-        if (currentUser.email && empEmail && empEmail === currentUser.email.toLowerCase().trim()) return false;
+        const ownerName = String(editingDeal?.owner || editingDeal?.bdmName || editingDeal?.employeeName || '').toLowerCase().trim();
+        const ownerId = String(editingDeal?.employeeZohoId || editingDeal?.empId || '').toLowerCase().trim();
+        if (ownerName && empName && empName === ownerName) return false;
+        if (ownerId && empId && (empId === ownerId || (emp.zohoId && String(emp.zohoId).toLowerCase() === ownerId))) return false;
+      } else if (currentUser && !isSuperAdmin && !isHR && !isHOD && salesEmployees.length > 1) {
+        // For individual BDM creating their own deal, exclude themselves from partner dropdown
+        if (currentUser.id && empId && empId === String(currentUser.id).toLowerCase()) return false;
+        if (currentUser.empId && empId && empId === String(currentUser.empId).toLowerCase()) return false;
+        if (currentUser.zohoId && emp.zohoId && String(emp.zohoId).toLowerCase() === String(currentUser.zohoId).toLowerCase()) return false;
+        if (currentUser.name && empName && empName === String(currentUser.name).toLowerCase().trim()) return false;
+        if (currentUser.email && empEmail && empEmail === String(currentUser.email).toLowerCase().trim()) return false;
       }
 
       return true;
     });
-  }, [salesEmployees, currentUser, editingDealId, deals]);
+  }, [salesEmployees, currentUser, isSuperAdmin, isHR, isHOD, editingDealId, deals]);
+
+  // Resolves the exact dropdown select value matching the current deal's partner BDM
+  const selectedPartnerDropdownVal = useMemo(() => {
+    if (!partnerBdmId && !partnerBdmName) return '';
+    const match = eligiblePartnerBdms.find(emp =>
+      (partnerBdmId && (
+        String(emp.id || '').toLowerCase() === String(partnerBdmId).toLowerCase() ||
+        String(emp.zohoId || '').toLowerCase() === String(partnerBdmId).toLowerCase() ||
+        String(emp.empId || '').toLowerCase() === String(partnerBdmId).toLowerCase()
+      )) ||
+      (partnerBdmName && (
+        String(emp.name || '').toLowerCase().trim() === String(partnerBdmName).toLowerCase().trim() ||
+        (partnerBdmName.length >= 3 && String(emp.name || '').toLowerCase().includes(partnerBdmName.toLowerCase()))
+      ))
+    );
+    if (match) {
+      return match.zohoId || match.id || match.empId || match.name;
+    }
+    return partnerBdmId;
+  }, [partnerBdmId, partnerBdmName, eligiblePartnerBdms]);
 
   useEffect(() => {
     if (toast) {
@@ -2693,27 +2869,40 @@ export const Deals = () => {
                                   </button>
                                 </div>
                                 <select
-                                  value={partnerBdmId}
+                                  value={selectedPartnerDropdownVal}
                                   onChange={(e) => {
-                                    const selectedId = e.target.value;
-                                    setPartnerBdmId(selectedId);
-                                    const found = eligiblePartnerBdms.find(emp => (String(emp.id) === selectedId || String(emp.zohoId) === selectedId || String(emp.empId) === selectedId));
-                                    setPartnerBdmName(found ? found.name : '');
+                                    const selectedVal = e.target.value;
+                                    const found = eligiblePartnerBdms.find(emp => 
+                                      String(emp.id) === selectedVal || 
+                                      String(emp.zohoId) === selectedVal || 
+                                      String(emp.empId) === selectedVal ||
+                                      String(emp.name).toLowerCase() === selectedVal.toLowerCase()
+                                    );
+                                    if (found) {
+                                      setPartnerBdmId(found.zohoId || found.id || found.empId || selectedVal);
+                                      setPartnerBdmName(found.name);
+                                    } else {
+                                      setPartnerBdmId(selectedVal);
+                                      setPartnerBdmName('');
+                                    }
                                   }}
                                   className={`w-full px-3 py-2 bg-white border rounded-lg text-sm font-medium text-gray-800 outline-none focus:ring-2 focus:ring-be-orange ${formErrors.partnerBdm ? 'border-red-500' : 'border-gray-300'}`}
                                 >
                                   <option value="">
                                     {isLoadingSalesEmployees ? 'Syncing Sales BDMs...' : 'Select Sales Partner BDM...'}
                                   </option>
-                                  {eligiblePartnerBdms.map(emp => (
-                                    <option key={emp.zohoId || emp.id || emp.empId} value={emp.zohoId || emp.id || emp.empId}>
-                                      {emp.name} ({emp.role || emp.dept || 'Sales'})
-                                    </option>
-                                  ))}
+                                  {eligiblePartnerBdms.map(emp => {
+                                    const empVal = emp.zohoId || emp.id || emp.empId || emp.name;
+                                    return (
+                                      <option key={`${empVal}-${emp.name}`} value={empVal}>
+                                        {emp.name} ({emp.role || emp.dept || 'Sales'})
+                                      </option>
+                                    );
+                                  })}
                                 </select>
                                 {formErrors.partnerBdm && <p className="text-red-500 text-xs mt-1">{formErrors.partnerBdm}</p>}
                                 {!isLoadingSalesEmployees && eligiblePartnerBdms.length === 0 && (
-                                  <p className="text-gray-400 text-[11px] mt-1">No active Sales employees found.</p>
+                                  <p className="text-gray-400 text-[11px] mt-1">No active Sales department employees found.</p>
                                 )}
                               </div>
 
