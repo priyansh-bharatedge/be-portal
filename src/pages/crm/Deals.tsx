@@ -378,6 +378,11 @@ export const Deals = () => {
           ''
         ).toLowerCase().trim();
 
+        // Check if explicitly developer or marketing or human resources
+        if (dept.includes('developer') || role.includes('developer') || dept.includes('human resources') || role.includes('human resources')) {
+          return false;
+        }
+
         const salesKeywords = [
           'sales',
           'bdm',
@@ -385,19 +390,28 @@ export const Deals = () => {
           'business dev',
           'business development',
           'cluster',
+          'cluster dev',
+          'cluster development',
           'national sales',
+          'sales head',
+          'sales manager',
+          'sales executive',
           'commercial',
           'growth',
           'revenue',
           'nsm',
           'cdm',
-          'account executive'
+          'account executive',
+          'client relationship',
+          'tm',
+          'tl',
+          'hod'
         ];
 
         const hasSalesDept = salesKeywords.some(kw => dept.includes(kw));
         const hasSalesRole = salesKeywords.some(kw => role.includes(kw));
 
-        return hasSalesDept || hasSalesRole || dept === 'sales';
+        return hasSalesDept || hasSalesRole || dept === 'sales' || dept === '';
       };
 
       // Helper to extract clean employee name
@@ -405,12 +419,9 @@ export const Deals = () => {
         if (emp.name && String(emp.name).trim() && String(emp.name).trim().toLowerCase() !== 'undefined') {
           return String(emp.name).trim();
         }
-        if (emp.Name && String(emp.Name).trim()) {
-          return String(emp.Name).trim();
-        }
-        const fName = emp.formData?.firstName || emp.firstName || '';
-        const mName = emp.formData?.middleName || emp.middleName || '';
-        const lName = emp.formData?.lastName || emp.lastName || '';
+        const fName = emp.Name || emp.formData?.firstName || emp.firstName || '';
+        const mName = emp.Middle_Name || emp.formData?.middleName || emp.middleName || '';
+        const lName = emp.Last_Name || emp.formData?.lastName || emp.lastName || '';
         const combined = [fName, mName, lName].filter(Boolean).join(' ').trim();
         if (combined) return combined;
         if (emp.fullName && String(emp.fullName).trim()) return String(emp.fullName).trim();
@@ -495,6 +506,7 @@ export const Deals = () => {
       // Update state immediately from local stores so dropdown is instantly responsive
       const currentList = Array.from(mergedMap.values());
       if (currentList.length > 0) {
+        currentList.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         setSalesEmployees(currentList);
       }
 
@@ -531,6 +543,7 @@ export const Deals = () => {
       }
 
       const finalList = Array.from(mergedMap.values());
+      finalList.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       setSalesEmployees(finalList);
       try {
         localStorage.setItem('be_sales_employees', JSON.stringify(finalList));
@@ -557,7 +570,7 @@ export const Deals = () => {
 
   // Filter all active employees from the Sales department
   const eligiblePartnerBdms = useMemo(() => {
-    return salesEmployees.filter((emp: any) => {
+    const filtered = salesEmployees.filter((emp: any) => {
       // 1. Status must not be inactive
       const status = String(emp.status || emp.Status || emp.formData?.status || 'Active').toLowerCase().trim();
       if (status === 'inactive' || status === 'terminated' || status === 'deleted') return false;
@@ -584,6 +597,8 @@ export const Deals = () => {
 
       return true;
     });
+
+    return filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [salesEmployees, currentUser, isSuperAdmin, isHR, isHOD, editingDealId, deals]);
 
   // Resolves the exact dropdown select value matching the current deal's partner BDM
