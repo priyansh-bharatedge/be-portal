@@ -2056,14 +2056,39 @@ function zohoApiPlugin(): Plugin {
             const salesList: any[] = [];
             const seenKeys = new Set<string>();
 
+            const salesKeywords = [
+              'sales',
+              'bdm',
+              'bde',
+              'business dev',
+              'business development',
+              'cluster',
+              'cluster dev',
+              'cluster development',
+              'national sales',
+              'sales head',
+              'sales manager',
+              'sales executive',
+              'commercial',
+              'growth',
+              'revenue',
+              'nsm',
+              'cdm',
+              'account executive',
+              'client relationship',
+              'bde'
+            ];
+
             // Process Employee module records (Department === 'Sales' or BDM/sales designation)
             for (const z of rawEmps) {
               const dept = (z.Department || '').toLowerCase();
               const designation = (z.Designation_Job_Title || '').toLowerCase();
               const role = (z.System_Role || '').toLowerCase();
-              const isSales = dept.includes('sales') || dept.includes('bdm') || designation.includes('sales') || designation.includes('bdm') || role.includes('sales');
+              const hasSalesDept = salesKeywords.some(kw => dept.includes(kw));
+              const hasSalesRole = salesKeywords.some(kw => designation.includes(kw) || role.includes(kw));
+              const isSales = hasSalesDept || hasSalesRole || dept === 'sales' || dept === '' || !dept;
 
-              if (isSales || dept === 'sales') {
+              if (isSales) {
                 const fullName = [z.Name, z.Middle_Name, z.Last_Name].filter(Boolean).join(' ') || z.Name || 'Sales Employee';
                 const email = (z.Email || z.Personal_Email_Address || '').toLowerCase().trim();
                 const nameKey = fullName.toLowerCase().trim();
@@ -2087,18 +2112,12 @@ function zohoApiPlugin(): Plugin {
               }
             }
 
-            // Process Zoho CRM Active Users (BDMs, Sales team, NSMs, CDMs)
+            // Process Zoho CRM Active Users (BDMs, Sales team, NSMs, CDMs, Cluster Managers)
             for (const u of rawUsers) {
               const profileName = (u.profile?.name || '').toLowerCase();
               const roleName = (u.role?.name || '').toLowerCase();
-              const isSales = profileName.includes('business development') || 
-                              profileName.includes('bdm') || 
-                              profileName.includes('sales') || 
-                              profileName.includes('nsm') || 
-                              profileName.includes('cdm') || 
-                              roleName.includes('bdm') || 
-                              roleName.includes('sales') || 
-                              roleName.includes('business development');
+              const isExcluded = profileName.includes('developer') || roleName.includes('developer') || profileName.includes('human resources') || roleName.includes('human resources');
+              const isSales = !isExcluded || salesKeywords.some(kw => profileName.includes(kw) || roleName.includes(kw));
 
               if (isSales) {
                 const fullName = (u.full_name || u.name || '').trim();
