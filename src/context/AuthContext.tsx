@@ -40,6 +40,7 @@ interface AuthContextType {
   isHOD: boolean;
   isTL: boolean;
   isTM: boolean;
+  isAccounts: boolean;
   can: (permission: string) => boolean;
   searchEmployeeInZoho: (email: string) => Promise<{ success: boolean; exists: boolean; hasPassword?: boolean; employee?: any; error?: string }>;
   login: (email: string, password?: string, role?: SystemRole) => { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser; token?: string };
@@ -908,6 +909,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isHOD = !isSuperAdmin && !isHR && (currentUser.role === 'HOD');
   const isTL = !isSuperAdmin && !isHR && !isHOD && (currentUser.role === 'TL');
   const isTM = !isSuperAdmin && !isHR && !isHOD && !isTL;
+  const deptLower = (currentUser.department || '').toLowerCase();
+  const isAccounts = deptLower.includes('account') || deptLower.includes('finance');
 
   const activeRole: SystemRole = isSuperAdmin ? 'Super Admin' : isHR ? 'HR' : isHOD ? 'HOD' : isTL ? 'TL' : 'TM';
   const roleInfo = ROLE_DEFINITIONS[activeRole] || ROLE_DEFINITIONS['TM'];
@@ -933,7 +936,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'manage_policies':
         return isSuperAdmin || isHR;
       case 'manage_all_deals':
-        return isSuperAdmin || isHOD || isTL;
+        return isSuperAdmin || isHOD || isTL || isAccounts;
+      case 'verify_deal_payment':
+        return isSuperAdmin || isAccounts;
       default:
         return true;
     }
@@ -1018,6 +1023,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isHOD,
         isTL,
         isTM,
+        isAccounts,
         can,
         searchEmployeeInZoho,
         login,

@@ -50,8 +50,11 @@ export function resolveAccessibleEmployeeIds(
   const userName = (user.name || '').trim().toLowerCase();
   const userEmail = (user.email || '').trim().toLowerCase();
 
-  // 1. Super Admin & Head of Department (HOD) have full organizational visibility across all modules
-  if (role === 'Super Admin' || role === 'HOD' || userEmail === 'superadmin@be.com' || userEmail === 'md@bharat-edge.com') {
+  const dept = (user.department || '').trim().toLowerCase();
+  const isAccounts = dept.includes('account') || dept.includes('finance');
+
+  // 1. Super Admin, Head of Department (HOD), & Accounts Department have full organizational visibility across all modules
+  if (role === 'Super Admin' || role === 'HOD' || isAccounts || userEmail === 'superadmin@be.com' || userEmail === 'md@bharat-edge.com') {
     return { employeeIds: [], zohoIds: [], isAll: true };
   }
 
@@ -292,13 +295,17 @@ export function buildZohoRbacCriteria(
 ): RbacCriteriaResult {
   const config = ZOHO_MODULE_LOOKUP_MAP[moduleName];
 
-  // Exempt modules and full-visibility roles (Super Admin, HOD, HR) have no role filters
+  const userDept = (user?.department || '').trim().toLowerCase();
+  const isAccounts = userDept.includes('account') || userDept.includes('finance');
+
+  // Exempt modules and full-visibility roles (Super Admin, HOD, HR, Accounts) have no role filters
   if (
     config?.isLookupExempt || 
     !user || 
     user.role === 'Super Admin' || 
     user.role === 'HOD' || 
     user.role === 'HR' ||
+    isAccounts ||
     user.email === 'superadmin@be.com' || 
     user.email === 'md@bharat-edge.com'
   ) {
@@ -391,11 +398,15 @@ export function filterRecordsByRbac<T = any>(
   allEmployees: any[] = getAllEmployeesList()
 ): T[] {
   if (!Array.isArray(records) || records.length === 0) return [];
+  const userDept = (user?.department || '').trim().toLowerCase();
+  const isAccounts = userDept.includes('account') || userDept.includes('finance');
+
   if (
     !user || 
     user.role === 'Super Admin' || 
     user.role === 'HOD' || 
     user.role === 'HR' ||
+    isAccounts ||
     user.email === 'superadmin@be.com' ||
     user.email === 'md@bharat-edge.com' ||
     user.email === 'hrmshr@be.com'
@@ -425,7 +436,6 @@ export function filterRecordsByRbac<T = any>(
 
   const userName = (user.name || '').trim().toLowerCase();
   const userEmail = (user.email || '').trim().toLowerCase();
-  const userDept = (user.department || '').trim().toLowerCase();
 
   return records.filter((rec: any) => {
     // 1. Check direct Employee lookup object

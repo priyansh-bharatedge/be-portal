@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Edit, Download, MoreHorizontal, FileText, 
+  ArrowLeft, ArrowRight, Edit, Download, MoreHorizontal, FileText, 
   CheckCircle2, Clock, MapPin, Building2, Phone, Mail, 
   IndianRupee, CreditCard, Receipt, Cloud, ShieldCheck, 
   Briefcase, Calendar, Layers, Tag, ExternalLink, User, RefreshCw, Loader2,
@@ -15,10 +15,17 @@ import {
   fetchZohoAttachments, 
   getZohoAttachmentDownloadUrl, 
   downloadZohoAttachment, 
-  uploadZohoAttachmentToDeal 
+  uploadZohoAttachmentToDeal,
+  saveOrUpdateZohoDeal,
+  transitionZohoDealBlueprint,
+  moveDealToAccounts,
+  moveDealToLegal,
+  moveDealToOperationsAllocator,
+  moveDealToOperationsExecutors,
+  ZOHO_DEAL_BLUEPRINT_TRANSITIONS
 } from '../../services/zohoService';
 import { useAuth } from '../../context/AuthContext';
-import { getDealSplitBreakdown, isDealPartnerBdm } from '../../utils/dealSplitUtils';
+import { getDealSplitBreakdown, isDealPartnerBdm, isDealPaymentVerified } from '../../utils/dealSplitUtils';
 
 // Helper to scan IndexedDB for all documents matching this deal
 const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promise<any[]> => {
@@ -76,10 +83,12 @@ const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promis
 export const DealDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentUser, isSuperAdmin, isHOD } = useAuth();
+  const { currentUser, isSuperAdmin, isHOD, isAccounts } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deal, setDeal] = useState<any>(null);
+  const [isActionInProgress, setIsActionInProgress] = useState(false);
+  const [workflowToast, setWorkflowToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Zoho & Local Attachments State
   const [zohoAttachments, setZohoAttachments] = useState<any[]>([]);
@@ -199,6 +208,203 @@ export const DealDetails = () => {
       setIsRefreshing(false);
     }
   }, [id, deal, loadAttachments]);
+
+  const handleSendToAccounts = async () => {
+    if (!deal) return;
+    setIsActionInProgress(true);
+    try {
+      const updatedDeal = {
+        ...deal,
+        stage: 'Accounts',
+        Stage: 'Accounts',
+        status: 'Accounts',
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Stage: 'Accounts'
+        }
+      };
+      setDeal(updatedDeal);
+
+      try {
+        const saved = localStorage.getItem('be_deals');
+        if (saved) {
+          const allDeals = JSON.parse(saved);
+          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
+        }
+      } catch (e) {}
+
+      // Execute Zoho CRM Blueprint Transition: Sales to Account ("1078476000000489153")
+      const zohoRes = await moveDealToAccounts(deal.zohoId || deal.id || id || '');
+      if (zohoRes.success) {
+        setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Accounts via Zoho Blueprint.' });
+      } else {
+        await saveOrUpdateZohoDeal(updatedDeal);
+        setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to execute Blueprint transition in Zoho CRM' });
+      }
+    } catch (e: any) {
+      setWorkflowToast({ type: 'error', message: e?.message || 'Failed to update deal stage' });
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
+
+  const handleVerifyPayment = async () => {
+    if (!deal) return;
+    setIsActionInProgress(true);
+    try {
+      const updatedDeal = {
+        ...deal,
+        Payment_verifications: true,
+        paymentVerified: true,
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Payment_verifications: true
+        }
+      };
+      setDeal(updatedDeal);
+
+      try {
+        const saved = localStorage.getItem('be_deals');
+        if (saved) {
+          const allDeals = JSON.parse(saved);
+          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
+        }
+      } catch (e) {}
+
+      const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
+      if (zohoRes.success) {
+        setWorkflowToast({ type: 'success', message: 'Payment successfully marked as verified in Zoho CRM.' });
+      } else {
+        setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to sync verification with Zoho CRM' });
+      }
+    } catch (e: any) {
+      setWorkflowToast({ type: 'error', message: e?.message || 'Failed to verify payment' });
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
+
+  const handleSendToLegal = async () => {
+    if (!deal) return;
+    setIsActionInProgress(true);
+    try {
+      const updatedDeal = {
+        ...deal,
+        stage: 'Legal',
+        Stage: 'Legal',
+        status: 'Legal',
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Stage: 'Legal'
+        }
+      };
+      setDeal(updatedDeal);
+
+      try {
+        const saved = localStorage.getItem('be_deals');
+        if (saved) {
+          const allDeals = JSON.parse(saved);
+          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
+        }
+      } catch (e) {}
+
+      // Execute Zoho CRM Blueprint Transition: Account to Legal ("1078476000000492001")
+      const zohoRes = await moveDealToLegal(deal.zohoId || deal.id || id || '');
+      if (zohoRes.success) {
+        setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Legal department via Zoho Blueprint.' });
+      } else {
+        await saveOrUpdateZohoDeal(updatedDeal);
+        setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to execute Blueprint transition in Zoho CRM' });
+      }
+    } catch (e: any) {
+      setWorkflowToast({ type: 'error', message: e?.message || 'Failed to update deal stage' });
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
+
+  const handleSendToOperationsAllocator = async () => {
+    if (!deal) return;
+    setIsActionInProgress(true);
+    try {
+      const updatedDeal = {
+        ...deal,
+        stage: 'Operations Allocator',
+        Stage: 'Operations Allocator',
+        status: 'Operations Allocator',
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Stage: 'Operations Allocator'
+        }
+      };
+      setDeal(updatedDeal);
+
+      try {
+        const saved = localStorage.getItem('be_deals');
+        if (saved) {
+          const allDeals = JSON.parse(saved);
+          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
+        }
+      } catch (e) {}
+
+      // Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
+      const zohoRes = await moveDealToOperationsAllocator(deal.zohoId || deal.id || id || '');
+      if (zohoRes.success) {
+        setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Operations Allocator via Zoho Blueprint.' });
+      } else {
+        await saveOrUpdateZohoDeal(updatedDeal);
+        setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to execute Blueprint transition in Zoho CRM' });
+      }
+    } catch (e: any) {
+      setWorkflowToast({ type: 'error', message: e?.message || 'Failed to update deal stage' });
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
+
+  const handleSendToOperationsExecutors = async () => {
+    if (!deal) return;
+    setIsActionInProgress(true);
+    try {
+      const updatedDeal = {
+        ...deal,
+        stage: 'Operations Executors',
+        Stage: 'Operations Executors',
+        status: 'Operations Executors',
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Stage: 'Operations Executors'
+        }
+      };
+      setDeal(updatedDeal);
+
+      try {
+        const saved = localStorage.getItem('be_deals');
+        if (saved) {
+          const allDeals = JSON.parse(saved);
+          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
+        }
+      } catch (e) {}
+
+      // Execute Zoho CRM Blueprint Transition: Operations Allocator to Operations Executors ("1078476000001938757")
+      const zohoRes = await moveDealToOperationsExecutors(deal.zohoId || deal.id || id || '');
+      if (zohoRes.success) {
+        setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Operations Executors via Zoho Blueprint.' });
+      } else {
+        await saveOrUpdateZohoDeal(updatedDeal);
+        setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to execute Blueprint transition in Zoho CRM' });
+      }
+    } catch (e: any) {
+      setWorkflowToast({ type: 'error', message: e?.message || 'Failed to update deal stage' });
+    } finally {
+      setIsActionInProgress(false);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -756,7 +962,86 @@ export const DealDetails = () => {
             </p>
           </div>
         </div>
-        <div className="flex items-center space-x-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Action Workflow Buttons in Header */}
+          {(() => {
+            const rawStage = (deal.stage || raw.Stage || 'Sales').toLowerCase().trim();
+            const isAccountsStage = rawStage.includes('account');
+            const isLegalStage = rawStage.includes('legal');
+            const isAllocatorStage = rawStage.includes('allocat') && !rawStage.includes('execut');
+            const isExecutorsStage = rawStage.includes('execut');
+            const isSalesOrDraft = !isAccountsStage && !isLegalStage && !isAllocatorStage && !isExecutorsStage;
+
+            return (
+              <>
+                {/* 1. Send to Accounts (Sales to Account: 1078476000000489153) */}
+                {isSalesOrDraft && !splitBreakdown.isPaymentVerified && (
+                  <button
+                    onClick={handleSendToAccounts}
+                    disabled={isActionInProgress}
+                    className="flex items-center px-3.5 py-2 text-sm font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 rounded-xl transition-all shadow-xs disabled:opacity-50"
+                    title="Send Deal to Accounts department for payment verification (Zoho Blueprint)"
+                  >
+                    {isActionInProgress ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <Building2 size={15} className="mr-1.5" />}
+                    Send to Accounts
+                  </button>
+                )}
+
+                {/* 2. Verify Payment (Accounts action) */}
+                {!splitBreakdown.isPaymentVerified && (isAccountsStage || isAccounts || isSuperAdmin) && (
+                  <button
+                    onClick={handleVerifyPayment}
+                    disabled={isActionInProgress}
+                    className="flex items-center px-3.5 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-xs disabled:opacity-50"
+                    title="Verify Payment in Zoho CRM"
+                  >
+                    {isActionInProgress ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <CheckCircle2 size={15} className="mr-1.5" />}
+                    Verify Payment
+                  </button>
+                )}
+
+                {/* 3. Send to Legal (Account to Legal: 1078476000000492001) */}
+                {splitBreakdown.isPaymentVerified && isAccountsStage && (
+                  <button
+                    onClick={handleSendToLegal}
+                    disabled={isActionInProgress}
+                    className="flex items-center px-3.5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-xs disabled:opacity-50"
+                    title="Send Verified Deal to Legal Department (Zoho Blueprint)"
+                  >
+                    {isActionInProgress ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <ShieldCheck size={15} className="mr-1.5" />}
+                    Send to Legal
+                  </button>
+                )}
+
+                {/* 4. Send to Operations Allocator (Legal to Operations Allocator: 1078476000000492099) */}
+                {isLegalStage && (
+                  <button
+                    onClick={handleSendToOperationsAllocator}
+                    disabled={isActionInProgress}
+                    className="flex items-center px-3.5 py-2 text-sm font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-all shadow-xs disabled:opacity-50"
+                    title="Send deal from Legal to Operations Allocator (Zoho Blueprint)"
+                  >
+                    {isActionInProgress ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <Users size={15} className="mr-1.5" />}
+                    To Allocator
+                  </button>
+                )}
+
+                {/* 5. Send to Operations Executors (Operations Allocator to Operations Executors: 1078476000001938757) */}
+                {isAllocatorStage && (
+                  <button
+                    onClick={handleSendToOperationsExecutors}
+                    disabled={isActionInProgress}
+                    className="flex items-center px-3.5 py-2 text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-all shadow-xs disabled:opacity-50"
+                    title="Send deal from Allocator to Operations Executors (Zoho Blueprint)"
+                  >
+                    {isActionInProgress ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <ArrowRight size={15} className="mr-1.5" />}
+                    To Executors
+                  </button>
+                )}
+              </>
+            );
+          })()}
+
           <button 
             onClick={() => loadLiveDeal(deal?.zohoId || id || '')}
             disabled={isRefreshing}
@@ -781,6 +1066,19 @@ export const DealDetails = () => {
           </button>
         </div>
       </div>
+
+      {/* Workflow Notification Toast */}
+      {workflowToast && (
+        <div className={`p-4 rounded-xl flex items-center justify-between text-sm font-medium ${workflowToast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+          <div className="flex items-center">
+            {workflowToast.type === 'success' ? <CheckCircle2 className="w-5 h-5 mr-2 text-emerald-600" /> : <AlertTriangle className="w-5 h-5 mr-2 text-rose-600" />}
+            <span>{workflowToast.message}</span>
+          </div>
+          <button onClick={() => setWorkflowToast(null)} className="text-gray-400 hover:text-gray-600">
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* 50/50 Partner BDM Split Banner */}
       {hasPartnerBdm && (
@@ -1666,13 +1964,20 @@ export const DealDetails = () => {
 
             {/* Received & Pending Widgets */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3.5 bg-emerald-50/80 rounded-xl border border-emerald-100 text-emerald-800 space-y-1">
-                <div className="flex items-center text-xs font-semibold text-emerald-700">
-                  <CheckCircle2 size={13} className="mr-1.5" />
-                  Received
+              <div className={`p-3.5 rounded-xl border space-y-1 ${splitBreakdown.isPaymentVerified ? 'bg-emerald-50/80 border-emerald-100 text-emerald-800' : 'bg-rose-50/80 border-rose-100 text-rose-800'}`}>
+                <div className={`flex items-center text-xs font-semibold ${splitBreakdown.isPaymentVerified ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {splitBreakdown.isPaymentVerified ? <CheckCircle2 size={13} className="mr-1.5 text-emerald-600" /> : <AlertTriangle size={13} className="mr-1.5 text-rose-500" />}
+                  Received Payment
                 </div>
-                <div className="text-base font-bold">
+                <div className={`text-base font-bold ${splitBreakdown.isPaymentVerified ? 'text-emerald-700' : 'text-rose-600'}`}>
                   ₹{receivedAmountNum.toLocaleString('en-IN')}
+                </div>
+                <div className="text-[10px] font-bold">
+                  {splitBreakdown.isPaymentVerified ? (
+                    <span className="text-emerald-700 flex items-center"><CheckCircle2 size={10} className="mr-0.5" /> Verified by Accounts</span>
+                  ) : (
+                    <span className="text-rose-600 flex items-center"><Clock size={10} className="mr-0.5" /> Pending Verification</span>
+                  )}
                 </div>
               </div>
 
@@ -1707,18 +2012,20 @@ export const DealDetails = () => {
 
             {/* Payment Details (Method, Date, Verification) */}
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Deal Stage:</span>
+                <span className="font-bold text-gray-900 px-2 py-0.5 bg-orange-50 text-be-orange rounded-md border border-orange-100">{deal.stage || raw.Stage || 'Sales'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Payment Verification:</span>
+                <span className={`font-bold px-2 py-0.5 rounded-md ${splitBreakdown.isPaymentVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {splitBreakdown.isPaymentVerified ? 'Verified' : 'Pending Verification'}
+                </span>
+              </div>
               {(raw.Payment_Type || raw.Payment_status || raw.Payment_stages) && (
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Payment Status:</span>
                   <span className="font-semibold text-gray-800">{raw.Payment_status || raw.Payment_stages || raw.Payment_Type}</span>
-                </div>
-              )}
-              {raw.Payment_verifications !== undefined && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Verified:</span>
-                  <span className={`font-semibold ${raw.Payment_verifications ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {raw.Payment_verifications ? 'Yes (Verified)' : 'Pending'}
-                  </span>
                 </div>
               )}
               {(raw.Payment_received_date || raw.Payment_Date) && (
@@ -1737,8 +2044,81 @@ export const DealDetails = () => {
               )}
             </div>
 
-            {/* Quick Actions */}
+            {/* Workflow Actions */}
             <div className="pt-2 border-t border-gray-100 space-y-2">
+              {(() => {
+                const rawStage = (deal.stage || raw.Stage || 'Sales').toLowerCase().trim();
+                const isAccountsStage = rawStage.includes('account');
+                const isLegalStage = rawStage.includes('legal');
+                const isAllocatorStage = rawStage.includes('allocat') && !rawStage.includes('execut');
+                const isExecutorsStage = rawStage.includes('execut');
+                const isSalesOrDraft = !isAccountsStage && !isLegalStage && !isAllocatorStage && !isExecutorsStage;
+
+                return (
+                  <>
+                    {/* 1. Send to Accounts (Sales to Account: 1078476000000489153) */}
+                    {isSalesOrDraft && !splitBreakdown.isPaymentVerified && (
+                      <button
+                        onClick={handleSendToAccounts}
+                        disabled={isActionInProgress}
+                        className="w-full flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+                      >
+                        {isActionInProgress ? <Loader2 size={14} className="animate-spin mr-2" /> : <Building2 size={14} className="mr-2" />}
+                        Send to Accounts
+                      </button>
+                    )}
+
+                    {/* 2. Verify Payment (Accounts action) */}
+                    {!splitBreakdown.isPaymentVerified && (isAccountsStage || isAccounts || isSuperAdmin) && (
+                      <button
+                        onClick={handleVerifyPayment}
+                        disabled={isActionInProgress}
+                        className="w-full flex items-center justify-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+                      >
+                        {isActionInProgress ? <Loader2 size={14} className="animate-spin mr-2" /> : <CheckCircle2 size={14} className="mr-2" />}
+                        Verify Payment (Accounts)
+                      </button>
+                    )}
+
+                    {/* 3. Send to Legal (Account to Legal: 1078476000000492001) */}
+                    {splitBreakdown.isPaymentVerified && isAccountsStage && (
+                      <button
+                        onClick={handleSendToLegal}
+                        disabled={isActionInProgress}
+                        className="w-full flex items-center justify-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+                      >
+                        {isActionInProgress ? <Loader2 size={14} className="animate-spin mr-2" /> : <ShieldCheck size={14} className="mr-2" />}
+                        Send to Legal Department
+                      </button>
+                    )}
+
+                    {/* 4. Send to Operations Allocator (Legal to Operations Allocator: 1078476000000492099) */}
+                    {isLegalStage && (
+                      <button
+                        onClick={handleSendToOperationsAllocator}
+                        disabled={isActionInProgress}
+                        className="w-full flex items-center justify-center px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+                      >
+                        {isActionInProgress ? <Loader2 size={14} className="animate-spin mr-2" /> : <Users size={14} className="mr-2" />}
+                        Send to Operations Allocator
+                      </button>
+                    )}
+
+                    {/* 5. Send to Operations Executors (Operations Allocator to Operations Executors: 1078476000001938757) */}
+                    {isAllocatorStage && (
+                      <button
+                        onClick={handleSendToOperationsExecutors}
+                        disabled={isActionInProgress}
+                        className="w-full flex items-center justify-center px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+                      >
+                        {isActionInProgress ? <Loader2 size={14} className="animate-spin mr-2" /> : <ArrowRight size={14} className="mr-2" />}
+                        Send to Operations Executors
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+
               <button 
                 onClick={() => navigate('/crm/deals')} 
                 className="w-full flex items-center justify-center px-4 py-2.5 bg-be-orange text-white rounded-xl text-xs font-bold hover:bg-be-orangeHover transition-all shadow-sm"

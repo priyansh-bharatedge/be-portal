@@ -8,6 +8,7 @@ export interface DealSplitBreakdown {
   isUserPartner: boolean;
   isUserPrimary: boolean;
   isUserSplitParticipant: boolean;
+  isPaymentVerified: boolean;
   partnerName: string;
   partnerId: string;
   primaryName: string;
@@ -22,6 +23,11 @@ export interface DealSplitBreakdown {
   displayReceived: number;
   displayPending: number;
   splitBadgeText: string | null;
+  // Accounts Payment Verification metrics
+  verifiedReceived: number;
+  verifiedDisplayReceived: number;
+  verifiedPartnerAmount: number;
+  verifiedPrimaryAmount: number;
 }
 
 const parseNum = (val: any): number => {
@@ -61,6 +67,28 @@ export const isDealPartnerBdm = (d: any): boolean => {
     d.formData?.partnerBdmId ||
     d.formData?.partnerBdmName
   );
+};
+
+export const isDealPaymentVerified = (d: any): boolean => {
+  if (!d) return false;
+  return Boolean(
+    d.paymentVerified === true ||
+    d.paymentVerified === 'true' ||
+    d.paymentVerified === 'Verified' ||
+    d.Payment_verifications === true ||
+    d.Payment_verifications === 'true' ||
+    d.Payment_verifications === 'Verified' ||
+    d.Payment_verifications === 'Yes' ||
+    d.rawZohoDeal?.Payment_verifications === true ||
+    d.rawZohoDeal?.Payment_verifications === 'true' ||
+    d.rawZohoDeal?.Payment_verifications === 'Verified' ||
+    d.rawZohoDeal?.Payment_verifications === 'Yes'
+  );
+};
+
+export const getDealVerifiedReceivedAmount = (d: any): number => {
+  if (!isDealPaymentVerified(d)) return 0;
+  return getDealReceivedAmount(d);
 };
 
 export const getDealReceivedAmount = (d: any): number => {
@@ -343,11 +371,18 @@ export const getDealSplitBreakdown = (
     }
   }
 
+  const isPaymentVerified = isDealPaymentVerified(d);
+  const verifiedReceived = isPaymentVerified ? fullReceived : 0;
+  const verifiedPartnerAmount = isPaymentVerified ? partnerAmount : 0;
+  const verifiedPrimaryAmount = isPaymentVerified ? primaryAmount : 0;
+  const verifiedDisplayReceived = isPaymentVerified ? displayReceived : 0;
+
   return {
     hasPartnerBdm: hasPartner,
     isUserPartner,
     isUserPrimary,
     isUserSplitParticipant,
+    isPaymentVerified,
     partnerName,
     partnerId,
     primaryName,
@@ -361,6 +396,10 @@ export const getDealSplitBreakdown = (
     displayAmount,
     displayReceived,
     displayPending,
-    splitBadgeText
+    splitBadgeText,
+    verifiedReceived,
+    verifiedDisplayReceived,
+    verifiedPartnerAmount,
+    verifiedPrimaryAmount
   };
 };

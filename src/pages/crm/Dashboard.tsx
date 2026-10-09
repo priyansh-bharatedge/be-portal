@@ -114,9 +114,10 @@ export const CrmDashboard = () => {
   };
 
   // User-scoped deal amounts (handles 50/50 Partner BDM split for individual BDMs)
+  // Accounts workflow: received revenue is ONLY calculated and added to BDM revenue after Payment_verifications is verified
   const getUserDealReceived = (d: any): number => {
     const breakdown = getDealSplitBreakdown(d, currentUser, isSuperAdmin || isHOD);
-    return breakdown.displayReceived;
+    return breakdown.verifiedDisplayReceived;
   };
 
   const getUserDealPending = (d: any): number => {
@@ -305,6 +306,8 @@ export const CrmDashboard = () => {
         zohoId: zDeal.id,
         quotationId: zDeal.Quotation?.id || zDeal.quotationId,
         source: zDeal.source || (zDeal.Quotation ? 'Quotation' : 'Direct'),
+        Payment_verifications: zDeal.Payment_verifications,
+        paymentVerified: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes',
         rawZohoDeal: zDeal
       };
     });
@@ -700,8 +703,8 @@ export const CrmDashboard = () => {
       const splitBreakdown = getDealSplitBreakdown(deal, null, true);
       const isSplit = splitBreakdown.hasPartnerBdm;
       const fullAmt = splitBreakdown.fullAmount;
-      const fullRec = splitBreakdown.fullReceived;
-      const pAmt = splitBreakdown.partnerAmount;
+      const fullRec = splitBreakdown.verifiedReceived;
+      const pAmt = splitBreakdown.verifiedPartnerAmount;
       const primaryAmt = isSplit ? Math.round(fullAmt / 2) : fullAmt;
       const primaryRec = isSplit ? pAmt : fullRec;
 
@@ -841,7 +844,7 @@ export const CrmDashboard = () => {
     rbacDeals.forEach(deal => {
       const splitBreakdown = getDealSplitBreakdown(deal, currentUser, isSuperAdmin || isHOD);
       const amt = splitBreakdown.displayAmount;
-      const rec = splitBreakdown.displayReceived;
+      const rec = splitBreakdown.verifiedDisplayReceived;
       const isWon = deal.status === 'Won' || deal.stage?.includes('Won');
 
       const ownerName = (deal.owner || deal.Deal_Owner || deal.bdm || '').trim().toLowerCase();
@@ -1731,10 +1734,17 @@ export const CrmDashboard = () => {
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-4 font-bold text-emerald-600">
-                          <div>{dispRec}</div>
+                        <td className="px-6 py-4">
+                          <div className={`font-bold ${breakdown.isPaymentVerified ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {dispRec}
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${breakdown.isPaymentVerified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                              {breakdown.isPaymentVerified ? 'Verified' : 'Pending Verif.'}
+                            </span>
+                          </div>
                           {breakdown.hasPartnerBdm && !isSuperAdmin && !isHOD && (
-                            <div className="text-[10px] text-gray-400 font-normal">Pre-GST 50%</div>
+                            <div className="text-[10px] text-gray-400 font-normal mt-0.5">Pre-GST 50%</div>
                           )}
                         </td>
                         <td className="px-6 py-4">

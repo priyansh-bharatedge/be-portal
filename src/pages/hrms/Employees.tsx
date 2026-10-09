@@ -903,10 +903,16 @@ export const Employees = () => {
     : matchedEmployees;
 
   const filteredEmployees = visibleEmployees.filter(e => {
+    const isDeptMatch = selectedDeptFilter === 'All' || 
+      e.dept === selectedDeptFilter || 
+      ((selectedDeptFilter === 'Accounts' || selectedDeptFilter === 'Accountant') && (e.dept === 'Finance' || e.dept === 'Accounts' || e.dept === 'Account' || e.dept === 'Accountant')) ||
+      (selectedDeptFilter === 'Operation' && (e.dept === 'Operations' || e.dept === 'Operation')) ||
+      (selectedDeptFilter === 'IT' && (e.dept === 'IT' || e.dept === 'It')) ||
+      (selectedDeptFilter === 'HR' && (e.dept === 'HR' || e.dept === 'Hr' || String(e.dept || '').toLowerCase().includes('human')));
+
     if (!searchQuery) {
       const matchesRole = selectedRoleFilter === 'All' || e.systemRole === selectedRoleFilter;
-      const matchesDept = selectedDeptFilter === 'All' || e.dept === selectedDeptFilter;
-      return matchesRole && matchesDept;
+      return matchesRole && isDeptMatch;
     }
 
     const q = searchQuery.toLowerCase().trim();
@@ -929,9 +935,8 @@ export const Employees = () => {
       (e.formData?.aadhaarNumber && String(e.formData.aadhaarNumber).includes(q));
 
     const matchesRole = selectedRoleFilter === 'All' || e.systemRole === selectedRoleFilter;
-    const matchesDept = selectedDeptFilter === 'All' || e.dept === selectedDeptFilter;
 
-    return matchesSearch && matchesRole && matchesDept;
+    return matchesSearch && matchesRole && isDeptMatch;
   });
 
 
@@ -1163,12 +1168,13 @@ export const Employees = () => {
             >
               <option value="All">All Departments</option>
               <option value="Sales">Sales</option>
+              <option value="Accounts">Accounts</option>
+              <option value="Legal">Legal</option>
+              <option value="Operation">Operation</option>
+              <option value="Marketing">Marketing</option>
               <option value="IT">IT</option>
               <option value="HR">HR</option>
-              <option value="Finance">Finance</option>
-              <option value="Operations">Operations</option>
-              <option value="Marketing">Marketing</option>
-              <option value="Management">Management</option>
+              <option value="Other">Other</option>
             </select>
           </div>
         </div>
@@ -1603,12 +1609,13 @@ export const Employees = () => {
                           className="w-full px-3 py-2 border rounded-xl outline-none bg-white font-medium border-gray-300 focus:ring-1 focus:ring-be-orange"
                         >
                           <option value="Sales">Sales</option>
+                          <option value="Accounts">Accounts</option>
+                          <option value="Legal">Legal</option>
+                          <option value="Operation">Operation</option>
+                          <option value="Marketing">Marketing</option>
                           <option value="IT">IT</option>
                           <option value="HR">HR</option>
-                          <option value="Finance">Finance</option>
-                          <option value="Operations">Operations</option>
-                          <option value="Marketing">Marketing</option>
-                          <option value="Management">Management</option>
+                          <option value="Other">Other</option>
                         </select>
                       </div>
 

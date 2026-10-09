@@ -130,6 +130,241 @@ function zohoApiPlugin(): Plugin {
     return null;
   }
 
+  const companyLookupCache = new Map<string, string>();
+
+  async function resolveZohoCompanyId(compInfo: any, token: string, apiBase: string): Promise<string | null> {
+    if (!compInfo) return null;
+
+    const directId = typeof compInfo === 'object' ? compInfo.id || compInfo.zohoId || compInfo.companyZohoId : compInfo;
+    const name = (typeof compInfo === 'object' ? (compInfo.name || compInfo.companyName || compInfo.company || compInfo.Company_Name) : (typeof compInfo === 'string' && !/^\d+$/.test(compInfo) ? compInfo : '')) || '';
+    const gst = (typeof compInfo === 'object' ? (compInfo.gstNumber || compInfo.Gst_number || compInfo.GST_Number) : '') || '';
+    const pan = (typeof compInfo === 'object' ? (compInfo.panNumber || compInfo.companyPan || compInfo.Pan_number || compInfo.PAN_Number || compInfo.Company_PAN_Number) : '') || '';
+
+    const cleanDirectId = String(directId || '').trim();
+    const cleanName = String(name || '').trim();
+    const cleanGst = String(gst || '').trim().toUpperCase();
+    const cleanPan = String(pan || '').trim().toUpperCase();
+
+    if (!cleanDirectId && !cleanName && !cleanGst && !cleanPan) {
+      return null;
+    }
+
+    if (cleanDirectId && /^\d{15,}$/.test(cleanDirectId)) {
+      return cleanDirectId;
+    }
+
+    const cacheKey = `${cleanDirectId}|${cleanName}|${cleanGst}|${cleanPan}`;
+    if (companyLookupCache.has(cacheKey)) {
+      return companyLookupCache.get(cacheKey)!;
+    }
+
+    try {
+      const moduleName = process.env.VITE_ZOHO_COMPANIES_MODULE_NAME || 'Companies';
+      const compRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200&fields=id,Name,Company_Name,GST_Number,Gst_number,Pan_number,PAN_Number,Company_PAN_Number`, {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+      });
+      if (compRes.status === 200) {
+        const compData: any = await compRes.json();
+        const list: any[] = compData.data || [];
+
+        if (cleanDirectId && /^\d{15,}$/.test(cleanDirectId)) {
+          const directMatch = list.find((c: any) => String(c.id) === cleanDirectId);
+          if (directMatch?.id) {
+            const foundId = String(directMatch.id);
+            companyLookupCache.set(cacheKey, foundId);
+            return foundId;
+          }
+        }
+
+        const match = list.find((c: any) => {
+          const cGst = String(c.GST_Number || c.Gst_number || '').trim().toUpperCase();
+          const cPan = String(c.PAN_Number || c.Pan_number || c.Company_PAN_Number || '').trim().toUpperCase();
+          const cName = String(c.Name || c.Company_Name || '').trim().toLowerCase();
+          const targetName = cleanName.toLowerCase();
+
+          return (
+            (cleanGst && cGst && cGst === cleanGst) ||
+            (cleanPan && cPan && cPan === cleanPan) ||
+            (cleanName && (
+              cName === targetName ||
+              cName.includes(targetName) ||
+              targetName.includes(cName)
+            ))
+          );
+        });
+
+        if (match?.id) {
+          const foundId = String(match.id);
+          companyLookupCache.set(cacheKey, foundId);
+          return foundId;
+        }
+      }
+    } catch (err) {
+      console.warn('[Zoho CRM] Company search query failed:', err);
+    }
+
+    return null;
+  }
+
+  const clientLookupCache = new Map<string, string>();
+
+  async function resolveZohoClientId(clientInfo: any, token: string, apiBase: string): Promise<string | null> {
+    if (!clientInfo) return null;
+
+    const directId = typeof clientInfo === 'object' ? clientInfo.id || clientInfo.zohoId || clientInfo.clientZohoId : clientInfo;
+    const name = (typeof clientInfo === 'object' ? (clientInfo.name || clientInfo.clientName || clientInfo.client || clientInfo.Contact_Name) : (typeof clientInfo === 'string' && !/^\d+$/.test(clientInfo) ? clientInfo : '')) || '';
+    const phone = (typeof clientInfo === 'object' ? (clientInfo.phone || clientInfo.mobile || clientInfo.Client_contact_detail) : '') || '';
+    const email = (typeof clientInfo === 'object' ? (clientInfo.email || clientInfo.Client_Email_address) : '') || '';
+
+    const cleanDirectId = String(directId || '').trim();
+    const cleanName = String(name || '').trim();
+    const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
+    const cleanEmail = String(email || '').trim().toLowerCase();
+
+    if (!cleanDirectId && !cleanName && !cleanPhone && !cleanEmail) {
+      return null;
+    }
+
+    if (cleanDirectId && /^\d{15,}$/.test(cleanDirectId)) {
+      return cleanDirectId;
+    }
+
+    const cacheKey = `${cleanDirectId}|${cleanName}|${cleanPhone}|${cleanEmail}`;
+    if (clientLookupCache.has(cacheKey)) {
+      return clientLookupCache.get(cacheKey)!;
+    }
+
+    try {
+      const moduleName = process.env.VITE_ZOHO_CLIENTS_MODULE_NAME || 'Clients';
+      const clRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200&fields=id,Name,Contact_Name,Client_contact_detail,Mobile,Phone,Email,Client_Email_address`, {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+      });
+      if (clRes.status === 200) {
+        const clData: any = await clRes.json();
+        const list: any[] = clData.data || [];
+
+        if (cleanDirectId && /^\d{15,}$/.test(cleanDirectId)) {
+          const directMatch = list.find((c: any) => String(c.id) === cleanDirectId);
+          if (directMatch?.id) {
+            const foundId = String(directMatch.id);
+            clientLookupCache.set(cacheKey, foundId);
+            return foundId;
+          }
+        }
+
+        const match = list.find((c: any) => {
+          const cPhone = String(c.Mobile || c.Phone || c.Client_contact_detail || '').replace(/[^0-9]/g, '');
+          const cEmail = String(c.Email || c.Client_Email_address || '').trim().toLowerCase();
+          const cName = String(c.Name || c.Contact_Name || '').trim().toLowerCase();
+          const targetName = cleanName.toLowerCase();
+
+          return (
+            (cleanPhone && cPhone && (cPhone === cleanPhone || cPhone.endsWith(cleanPhone) || cleanPhone.endsWith(cPhone))) ||
+            (cleanEmail && cEmail && cEmail === cleanEmail) ||
+            (cleanName && (cName === targetName || cName.includes(targetName) || targetName.includes(cName)))
+          );
+        });
+
+        if (match?.id) {
+          const foundId = String(match.id);
+          clientLookupCache.set(cacheKey, foundId);
+          return foundId;
+        }
+      }
+    } catch (err) {
+      console.warn('[Zoho CRM] Client search query failed:', err);
+    }
+
+    return null;
+  }
+
+  const ZOHO_DEAL_TRANSITION_MAP: Record<string, string> = {
+    'accounts': '1078476000000489153',
+    'account': '1078476000000489153',
+    'sales to account': '1078476000000489153',
+    'sales_to_account': '1078476000000489153',
+    'sales to accounts': '1078476000000489153',
+    'sales_to_accounts': '1078476000000489153',
+
+    'legal': '1078476000000492001',
+    'account to legal': '1078476000000492001',
+    'account_to_legal': '1078476000000492001',
+    'accounts to legal': '1078476000000492001',
+    'accounts_to_legal': '1078476000000492001',
+
+    'operations allocator': '1078476000000492099',
+    'operations_allocator': '1078476000000492099',
+    'allocator': '1078476000000492099',
+    'legal to operations allocator': '1078476000000492099',
+    'legal_to_operations_allocator': '1078476000000492099',
+
+    'operations executors': '1078476000001938757',
+    'operations_executors': '1078476000001938757',
+    'executors': '1078476000001938757',
+    'operations allocator to operations executors': '1078476000001938757',
+    'operations_allocator_to_operations_executors': '1078476000001938757',
+  };
+
+  async function executeZohoDealBlueprintTransition(
+    recordId: string,
+    transitionId: string,
+    remarks: string = 'Updated via API from Frontend Portal',
+    token: string,
+    apiBase: string,
+    additionalData: Record<string, any> = {}
+  ): Promise<{ success: boolean; message: string; data?: any }> {
+    try {
+      const endpoint = `${apiBase}/crm/v8/Deals/${recordId}/actions/blueprint`;
+      console.log(`[Vite Zoho Plugin] Executing Blueprint Transition for Deal #${recordId} (Transition ID: ${transitionId})`);
+      
+      const bodyPayload = {
+        blueprint: [
+          {
+            transition_id: transitionId,
+            data: {
+              Remarks: remarks || 'Updated via API from Frontend Portal',
+              ...additionalData,
+            },
+          },
+        ],
+      };
+
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bodyPayload),
+      });
+
+      const data: any = await res.json();
+      console.log(`[Vite Zoho Plugin] Blueprint Transition Response (Status ${res.status}):`, JSON.stringify(data));
+
+      const result = Array.isArray(data?.blueprint) ? data.blueprint[0] : (data?.data?.[0] || data);
+      if (res.ok && (result?.code === 'SUCCESS' || result?.status === 'success' || data?.code === 'SUCCESS')) {
+        return {
+          success: true,
+          message: result?.message || 'Deal stage transitioned successfully via Zoho Blueprint',
+          data,
+        };
+      } else {
+        const errMsg = result?.message || data?.message || 'Failed to execute blueprint transition in Zoho CRM';
+        return {
+          success: false,
+          message: errMsg,
+          data,
+        };
+      }
+    } catch (e: any) {
+      console.error('[Vite Zoho Plugin] Exception during Blueprint transition:', e);
+      return {
+        success: false,
+        message: e?.message || 'Network exception executing Blueprint transition',
+      };
+    }
+  }
+
   
   function buildZohoPaginationQuery(urlObj: URL): string {
     const queryParts: string[] = [];
@@ -318,7 +553,9 @@ function zohoApiPlugin(): Plugin {
       CRM_filled_date: bookingDate,
       Payment_received_date: bookingDate,
       Payment_Date: bookingDate,
-      Payment_verifications: true,
+      Payment_verifications: deal.Payment_verifications !== undefined
+        ? Boolean(deal.Payment_verifications)
+        : (deal.paymentVerified !== undefined ? Boolean(deal.paymentVerified) : (deal.rawZohoDeal?.Payment_verifications !== undefined ? Boolean(deal.rawZohoDeal.Payment_verifications) : false)),
       Payment_Type: 'Online',
     };
 
@@ -326,25 +563,27 @@ function zohoApiPlugin(): Plugin {
       payload.id = String(deal.zohoId);
     }
 
-    // Company & Account Details (Standard: Account_Name, Custom: Company_name, Company_Name, Lookup: Company)
+    // Company & Account Details (Standard: Account_Name, Custom: Company_name, Company_Name, Lookup: Company, Companies)
+    const compZohoId = deal.companyZohoId || fd.companyZohoId || (typeof deal.Company === 'object' ? deal.Company?.id : null) || (typeof deal.Companies === 'object' ? deal.Companies?.id : null);
+    if (compZohoId && /^\d{15,}$/.test(String(compZohoId).trim())) {
+      payload.Company = { id: String(compZohoId).trim() };
+      payload.Companies = { id: String(compZohoId).trim() };
+    }
     if (companyName) {
       payload.Account_Name = companyName;
       payload.Company_Name = companyName;
       payload.Company_name = companyName;
     }
-    const compZohoId = deal.companyZohoId || fd.companyZohoId;
-    if (compZohoId) {
-      payload.Company = { id: String(compZohoId) };
-    }
 
-    // Client & Contact Details (Standard: Contact_Name, Custom: Client_Name, Client_contact_detail, Mobile, Email, Lookup: Clients)
+    // Client & Contact Details (Standard: Contact_Name, Custom: Client_Name, Client_contact_detail, Mobile, Email, Lookup: Clients, Client)
+    const clZohoId = deal.clientZohoId || fd.clientZohoId || (typeof deal.Clients === 'object' ? deal.Clients?.id : null) || (typeof deal.Client === 'object' ? deal.Client?.id : null);
+    if (clZohoId && /^\d{15,}$/.test(String(clZohoId).trim())) {
+      payload.Clients = { id: String(clZohoId).trim() };
+      payload.Client = { id: String(clZohoId).trim() };
+    }
     if (clientName) {
       payload.Contact_Name = clientName;
       payload.Client_Name = clientName;
-    }
-    const clZohoId = deal.clientZohoId || fd.clientZohoId;
-    if (clZohoId) {
-      payload.Clients = { id: String(clZohoId) };
     }
     const mobile = String(fd.mobile || deal.mobile || '').replace(/[^0-9]/g, '');
     if (mobile) {
@@ -440,7 +679,7 @@ function zohoApiPlugin(): Plugin {
       if (st.includes('won') || st.includes('closed won') || st.includes('execut')) {
         stage = 'Operations executors';
       } else if (st.includes('account')) {
-        stage = 'Account';
+        stage = 'Accounts';
       } else if (st.includes('legal')) {
         stage = 'Legal';
       } else if (st.includes('allocat')) {
@@ -1214,6 +1453,32 @@ function zohoApiPlugin(): Plugin {
               const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
               const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
 
+              // Dynamically resolve Company lookup to valid Zoho numeric record ID in custom Companies module
+              const compLookupInfo = {
+                id: deal.companyZohoId || deal.formData?.companyZohoId || (typeof deal.Company === 'object' ? deal.Company?.id : (typeof payload.Company === 'object' ? payload.Company?.id : deal.Company)),
+                name: deal.company || deal.formData?.companyName || deal.companyName,
+                gst: deal.gstNumber || deal.formData?.gstNumber,
+                pan: deal.panNumber || deal.formData?.panNumber || deal.formData?.companyPan,
+              };
+              const resolvedCompId = await resolveZohoCompanyId(compLookupInfo, accessToken, apiBase);
+              if (resolvedCompId) {
+                payload.Company = { id: resolvedCompId };
+                payload.Companies = { id: resolvedCompId };
+              }
+
+              // Dynamically resolve Client lookup to valid Zoho numeric record ID in custom Clients module
+              const clientLookupInfo = {
+                id: deal.clientZohoId || deal.formData?.clientZohoId || (typeof deal.Clients === 'object' ? deal.Clients?.id : (typeof payload.Clients === 'object' ? payload.Clients?.id : deal.Clients)),
+                name: deal.client || deal.formData?.clientName || deal.clientName,
+                phone: deal.mobile || deal.formData?.mobile || deal.phone,
+                email: deal.email || deal.formData?.email,
+              };
+              const resolvedClientId = await resolveZohoClientId(clientLookupInfo, accessToken, apiBase);
+              if (resolvedClientId) {
+                payload.Clients = { id: resolvedClientId };
+                payload.Client = { id: resolvedClientId };
+              }
+
               // Dynamically resolve Employee lookup to valid Zoho numeric record ID in custom Employee module
               const empLookupInfo = {
                 id: deal.employeeZohoId || deal.formData?.employeeZohoId || deal.empZohoId || deal.formData?.empZohoId || (typeof deal.Employee === 'object' ? deal.Employee?.id : (typeof payload.Employee === 'object' ? payload.Employee?.id : deal.Employee)),
@@ -1245,6 +1510,24 @@ function zohoApiPlugin(): Plugin {
                 }
               } else {
                 delete payload.Partner_BDM;
+              }
+
+              // Automatically trigger Blueprint Transition if target Stage has a registered Transition ID
+              const requestedStage = String(deal.stage || deal.Stage || payload.Stage || '').toLowerCase().trim();
+              const autoTransitionId = ZOHO_DEAL_TRANSITION_MAP[requestedStage];
+              if (isUpdate && deal.zohoId && autoTransitionId) {
+                try {
+                  const bpRes = await executeZohoDealBlueprintTransition(
+                    String(deal.zohoId),
+                    autoTransitionId,
+                    deal.remarks || 'Updated via API from Frontend Portal',
+                    accessToken,
+                    apiBase
+                  );
+                  console.log(`[Vite Zoho Plugin] Auto-Blueprint Transition Result for Deal #${deal.zohoId}:`, bpRes.success ? 'SUCCESS' : bpRes.message);
+                } catch (bpErr) {
+                  console.warn('[Vite Zoho Plugin] Auto-Blueprint Transition error:', bpErr);
+                }
               }
 
               console.log(`[Vite Zoho Plugin] ${isUpdate ? 'Updating' : 'Inserting'} Deal in Zoho CRM:`, payload.Name || payload.Deal_Name, deal.zohoId ? `(ID: ${deal.zohoId})` : '');
@@ -1281,6 +1564,33 @@ function zohoApiPlugin(): Plugin {
                 crmData = await crmRes.json();
               }
 
+              // Handle Blueprint restriction on Stage: if update failed due to Stage Blueprint, retry without Stage/Pipeline
+              let dealResult = crmData.data?.[0];
+              if (isUpdate && (dealResult?.code === 'STAGE_CANNOT_BE_UPDATED' || (dealResult?.message && String(dealResult.message).toLowerCase().includes('blueprint')))) {
+                console.log('[Vite Zoho Plugin] Deal Stage is governed by Blueprint in Zoho CRM. Retrying deal update without Stage field to sync Company, Lookups & Payment...');
+                const retryPayload = { ...payload };
+                delete retryPayload.Stage;
+                delete retryPayload.Pipeline;
+
+                const retryRes = await fetch(crmEndpoint, {
+                  method: httpMethod,
+                  headers: {
+                    'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    data: [retryPayload],
+                    trigger: ['approval', 'workflow', 'blueprint'],
+                  }),
+                });
+                const retryData: any = await retryRes.json();
+                if (retryData.data?.[0]?.code === 'SUCCESS') {
+                  crmData = retryData;
+                  dealResult = retryData.data[0];
+                  console.log('[Vite Zoho Plugin] Deal updated successfully in Zoho CRM (Company and all fields linked, Stage managed by Blueprint)!');
+                }
+              }
+
               logZohoApiCall(isUpdate ? 'update-deal' : 'insert-deal', httpMethod, crmEndpoint, payload, crmRes.status, crmData);
 
               res.setHeader('Content-Type', 'application/json');
@@ -1312,6 +1622,116 @@ function zohoApiPlugin(): Plugin {
               }
             } catch (err: any) {
               console.error('[Vite Zoho Plugin] Deal server error:', err);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+          });
+          return;
+        }
+
+        // Deal Blueprint Stage Transition Endpoint (API Specifications: PUT /crm/v8/Deals/{record_id}/actions/blueprint)
+        if ((pathname === '/api/zoho/deal-blueprint-transition' || pathname === '/api/zoho/blueprint-transition') && (req.method === 'POST' || req.method === 'PUT')) {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const reqData = JSON.parse(body);
+              let dealZohoId = reqData.dealZohoId || reqData.dealId || reqData.zohoId || reqData.id;
+              const targetStage = reqData.targetStage || reqData.stage || reqData.Stage || '';
+              let transitionId = reqData.transitionId || reqData.transition_id;
+              const remarks = reqData.remarks || reqData.Remarks || 'Updated via API from Frontend Portal';
+              const additionalData = reqData.data || reqData.additionalData || {};
+
+              if (!transitionId && targetStage) {
+                transitionId = ZOHO_DEAL_TRANSITION_MAP[String(targetStage).toLowerCase().trim()];
+              }
+
+              if (!transitionId) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({
+                  success: false,
+                  message: `Missing or invalid transition_id for stage "${targetStage}". Available stages: Sales to Account ("1078476000000489153"), Account to Legal ("1078476000000492001"), Legal to Operations Allocator ("1078476000000492099"), Operations Allocator to Operations Executors ("1078476000001938757").`,
+                }));
+              }
+
+              let accessToken = await getAccessToken(env);
+              const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+
+              // If dealZohoId is not a numeric ID (e.g. DL-1234), search Deal record in Zoho CRM
+              if (!dealZohoId || !/^\d{15,}$/.test(String(dealZohoId).trim())) {
+                try {
+                  const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
+                  const sRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200&fields=id,Deal_Name`, {
+                    headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                  });
+                  if (sRes.ok) {
+                    const sData: any = await sRes.json();
+                    const list: any[] = sData.data || [];
+                    const matched = list.find((d: any) => String(d.id) === String(dealZohoId) || (dealZohoId && String(d.Deal_Name || '').includes(String(dealZohoId))));
+                    if (matched?.id) {
+                      dealZohoId = String(matched.id);
+                    }
+                  }
+                } catch (sErr) {
+                  console.warn('[Vite Zoho Plugin] Deal search for blueprint transition failed:', sErr);
+                }
+              }
+
+              if (!dealZohoId || !/^\d{15,}$/.test(String(dealZohoId).trim())) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({
+                  success: false,
+                  message: `Invalid Zoho Deal Record ID (${dealZohoId}). Deal must be synchronized to Zoho CRM before executing blueprint transition.`,
+                }));
+              }
+
+              let bpResult = await executeZohoDealBlueprintTransition(
+                String(dealZohoId).trim(),
+                String(transitionId).trim(),
+                remarks,
+                accessToken,
+                apiBase,
+                additionalData
+              );
+
+              // If token expired, refresh and retry once
+              if (!bpResult.success && bpResult.data?.code === 'INVALID_TOKEN') {
+                cachedToken = null;
+                accessToken = await getAccessToken(env);
+                bpResult = await executeZohoDealBlueprintTransition(
+                  String(dealZohoId).trim(),
+                  String(transitionId).trim(),
+                  remarks,
+                  accessToken,
+                  apiBase,
+                  additionalData
+                );
+              }
+
+              res.setHeader('Content-Type', 'application/json');
+              if (bpResult.success) {
+                return res.end(JSON.stringify({
+                  success: true,
+                  dealZohoId,
+                  transitionId,
+                  message: bpResult.message || 'Deal stage transitioned successfully via Zoho CRM Blueprint',
+                  data: bpResult.data,
+                }));
+              } else {
+                res.statusCode = 400;
+                return res.end(JSON.stringify({
+                  success: false,
+                  dealZohoId,
+                  transitionId,
+                  message: bpResult.message,
+                  errorDetails: bpResult.data,
+                }));
+              }
+            } catch (err: any) {
+              console.error('[Vite Zoho Plugin] Deal blueprint endpoint error:', err);
               res.statusCode = 500;
               res.setHeader('Content-Type', 'application/json');
               return res.end(JSON.stringify({ success: false, message: err.message }));
@@ -1380,7 +1800,7 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company_name,Client_Name,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Deal_Amount,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Deal_Received_Amount,Total_Pending_Amount,Pending_amount,Deal_Pending_Amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,Partner_BDM_Name,Partner_BDM_Amount,Partner_BDM_ID,Quotation';
+            const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Companies,Company_Name,Company_name,Client_Name,Clients,Client,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Deal_Amount,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Deal_Received_Amount,Total_Pending_Amount,Pending_amount,Deal_Pending_Amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,Partner_BDM_Name,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications';
             const criteria = urlObj.searchParams.get('criteria') || '';
             const paginationQuery = buildZohoPaginationQuery(urlObj);
             const crmEndpoint = criteria

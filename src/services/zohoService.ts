@@ -1172,6 +1172,138 @@ export async function saveOrUpdateZohoDeal(deal: any): Promise<ZohoApiResponse> 
 }
 
 /**
+ * Transition ID Mapping for Zoho CRM Deal Blueprint:
+ * - Sales to Account: "1078476000000489153"
+ * - Account to Legal: "1078476000000492001"
+ * - Legal to Operations Allocator: "1078476000000492099"
+ * - Operations Allocator to Operations Executors: "1078476000001938757"
+ */
+export const ZOHO_DEAL_BLUEPRINT_TRANSITIONS = {
+  SALES_TO_ACCOUNT: '1078476000000489153',
+  ACCOUNT_TO_LEGAL: '1078476000000492001',
+  LEGAL_TO_OPERATIONS_ALLOCATOR: '1078476000000492099',
+  OPERATIONS_ALLOCATOR_TO_OPERATIONS_EXECUTORS: '1078476000001938757',
+} as const;
+
+/**
+ * Triggers a Zoho CRM Blueprint Transition for a Deal record.
+ * Endpoint: PUT https://www.zohoapis.in/crm/v8/Deals/{record_id}/actions/blueprint
+ *
+ * @param dealIdOrZohoId - Numeric Zoho record ID or portal Deal ID (e.g. DL-1001)
+ * @param transitionId - Zoho Blueprint Transition ID
+ * @param remarks - Optional transition notes (defaults to 'Updated via API from Frontend Portal')
+ * @param additionalData - Optional custom field data to include with transition
+ */
+export async function transitionZohoDealBlueprint(
+  dealIdOrZohoId: string,
+  transitionId: string,
+  remarks: string = 'Updated via API from Frontend Portal',
+  additionalData: Record<string, any> = {}
+): Promise<ZohoApiResponse> {
+  try {
+    const response = await fetch('/api/zoho/deal-blueprint-transition', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        dealZohoId: dealIdOrZohoId,
+        transitionId,
+        remarks: remarks || 'Updated via API from Frontend Portal',
+        data: additionalData,
+      }),
+    });
+
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        zohoId: data.dealZohoId || dealIdOrZohoId,
+        message: data.message || 'Deal stage transitioned successfully via Zoho Blueprint',
+        data: data.data,
+      };
+    } else {
+      return {
+        success: false,
+        message: data.message || 'Failed to execute blueprint transition in Zoho CRM',
+        errorDetails: data.errorDetails || data,
+      };
+    }
+  } catch (error: any) {
+    console.error('[Zoho Service] Client exception executing blueprint transition:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with Blueprint transition endpoint',
+      errorDetails: error,
+    };
+  }
+}
+
+/**
+ * Workflow transition: Sales -> Accounts
+ */
+export async function moveDealToAccounts(
+  dealIdOrZohoId: string,
+  remarks: string = 'Updated via API from Frontend Portal',
+  additionalData: Record<string, any> = {}
+): Promise<ZohoApiResponse> {
+  return transitionZohoDealBlueprint(
+    dealIdOrZohoId,
+    ZOHO_DEAL_BLUEPRINT_TRANSITIONS.SALES_TO_ACCOUNT,
+    remarks,
+    additionalData
+  );
+}
+
+/**
+ * Workflow transition: Accounts -> Legal
+ */
+export async function moveDealToLegal(
+  dealIdOrZohoId: string,
+  remarks: string = 'Updated via API from Frontend Portal',
+  additionalData: Record<string, any> = {}
+): Promise<ZohoApiResponse> {
+  return transitionZohoDealBlueprint(
+    dealIdOrZohoId,
+    ZOHO_DEAL_BLUEPRINT_TRANSITIONS.ACCOUNT_TO_LEGAL,
+    remarks,
+    additionalData
+  );
+}
+
+/**
+ * Workflow transition: Legal -> Operations Allocator
+ */
+export async function moveDealToOperationsAllocator(
+  dealIdOrZohoId: string,
+  remarks: string = 'Updated via API from Frontend Portal',
+  additionalData: Record<string, any> = {}
+): Promise<ZohoApiResponse> {
+  return transitionZohoDealBlueprint(
+    dealIdOrZohoId,
+    ZOHO_DEAL_BLUEPRINT_TRANSITIONS.LEGAL_TO_OPERATIONS_ALLOCATOR,
+    remarks,
+    additionalData
+  );
+}
+
+/**
+ * Workflow transition: Operations Allocator -> Operations Executors
+ */
+export async function moveDealToOperationsExecutors(
+  dealIdOrZohoId: string,
+  remarks: string = 'Updated via API from Frontend Portal',
+  additionalData: Record<string, any> = {}
+): Promise<ZohoApiResponse> {
+  return transitionZohoDealBlueprint(
+    dealIdOrZohoId,
+    ZOHO_DEAL_BLUEPRINT_TRANSITIONS.OPERATIONS_ALLOCATOR_TO_OPERATIONS_EXECUTORS,
+    remarks,
+    additionalData
+  );
+}
+
+/**
  * Deletes a deal record successfully using REST API v8.
  * Module API Name: Deals
  */
@@ -1499,6 +1631,22 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     existingDeal?.employeeZohoId ||
     '';
 
+  const compZohoId = 
+    (rawZoho.Company && typeof rawZoho.Company === 'object' ? rawZoho.Company.id : (typeof rawZoho.Company === 'string' && /^\d+$/.test(rawZoho.Company) ? rawZoho.Company : null)) ||
+    (rawZoho.Companies && typeof rawZoho.Companies === 'object' ? rawZoho.Companies.id : (typeof rawZoho.Companies === 'string' && /^\d+$/.test(rawZoho.Companies) ? rawZoho.Companies : null)) ||
+    (rawZoho.Account_Name && typeof rawZoho.Account_Name === 'object' ? rawZoho.Account_Name.id : null) ||
+    existingDeal?.companyZohoId ||
+    existingDeal?.formData?.companyZohoId ||
+    null;
+
+  const clientZohoId = 
+    (rawZoho.Clients && typeof rawZoho.Clients === 'object' ? rawZoho.Clients.id : (typeof rawZoho.Clients === 'string' && /^\d+$/.test(rawZoho.Clients) ? rawZoho.Clients : null)) ||
+    (rawZoho.Client && typeof rawZoho.Client === 'object' ? rawZoho.Client.id : (typeof rawZoho.Client === 'string' && /^\d+$/.test(rawZoho.Client) ? rawZoho.Client : null)) ||
+    (rawZoho.Contact_Name && typeof rawZoho.Contact_Name === 'object' ? rawZoho.Contact_Name.id : null) ||
+    existingDeal?.clientZohoId ||
+    existingDeal?.formData?.clientZohoId ||
+    null;
+
   let embeddedDlId = '';
   if (rawZoho.Deal_Name) {
     const match = String(rawZoho.Deal_Name).match(/\b(DL-\d+)\b/i);
@@ -1513,6 +1661,11 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     zohoId: rawZoho.id || existingDeal?.zohoId,
     client: resolvedClient,
     company: resolvedCompany,
+    companyZohoId: compZohoId,
+    clientZohoId: clientZohoId,
+    Company: rawZoho.Company || (compZohoId ? { id: compZohoId, name: resolvedCompany } : undefined),
+    Companies: rawZoho.Companies || (compZohoId ? { id: compZohoId, name: resolvedCompany } : undefined),
+    Clients: rawZoho.Clients || (clientZohoId ? { id: clientZohoId, name: resolvedClient } : undefined),
     service: serviceTitle,
     employeeName,
     employeeZohoId,
@@ -1545,6 +1698,11 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     formData: {
       clientName: resolvedClient,
       companyName: resolvedCompany,
+      companyZohoId: compZohoId,
+      clientZohoId: clientZohoId,
+      Company: rawZoho.Company || (compZohoId ? { id: compZohoId, name: resolvedCompany } : undefined),
+      Companies: rawZoho.Companies || (compZohoId ? { id: compZohoId, name: resolvedCompany } : undefined),
+      Clients: rawZoho.Clients || (clientZohoId ? { id: clientZohoId, name: resolvedClient } : undefined),
       email: email,
       mobile: phone,
       gstNumber: gst,

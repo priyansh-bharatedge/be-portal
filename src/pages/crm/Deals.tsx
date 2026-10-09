@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink, Users, UserCheck } from 'lucide-react';
+import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink, Users, UserCheck, ArrowRight, Clock, Building2, ShieldCheck, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { saveDocument } from '../../lib/db';
@@ -16,7 +16,13 @@ import {
   saveOrUpdateZohoClient,
   deleteZohoRecord,
   fetchZohoEmployees,
-  fetchSalesEmployees
+  fetchSalesEmployees,
+  transitionZohoDealBlueprint,
+  moveDealToAccounts,
+  moveDealToLegal,
+  moveDealToOperationsAllocator,
+  moveDealToOperationsExecutors,
+  ZOHO_DEAL_BLUEPRINT_TRANSITIONS
 } from '../../services/zohoService';
 import { buildZohoRbacCriteria } from '../../services/zohoRbacService';
 import { Pagination } from '../../components/ui/Pagination';
@@ -25,6 +31,7 @@ import { Layers, DownloadCloud } from 'lucide-react';
 import {
   getDealSplitBreakdown,
   isDealPartnerBdm,
+  isDealPaymentVerified,
   getDealTotalAmount,
   getDealReceivedAmount,
   getDealPendingAmount
@@ -41,7 +48,7 @@ export const Deals = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, isSuperAdmin, isHR, isHOD, availableUsers, filterRecords } = useAuth();
+  const { currentUser, isSuperAdmin, isHR, isHOD, isAccounts, availableUsers, filterRecords } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
@@ -49,7 +56,8 @@ export const Deals = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
-    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals') return tabParam;
+    if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) return 'All Deals';
+    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified') return tabParam;
     return 'All Deals';
   });
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
@@ -65,7 +73,11 @@ export const Deals = () => {
   useEffect(() => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
     if (tabParam) {
-      setActiveTab(tabParam);
+      if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) {
+        setActiveTab('All Deals');
+      } else {
+        setActiveTab(tabParam);
+      }
     }
     const searchParam = searchParams.get('search') || location.state?.search;
     if (searchParam !== null && searchParam !== undefined) {
@@ -140,28 +152,6 @@ export const Deals = () => {
       d.quotationNumber ||
       d.rawZohoDeal?.Quotation_Number ||
       d.rawZohoDeal?.Quotation_Id
-    );
-  };
-
-  const isDealPartnerBdm = (d: any): boolean => {
-    if (!d) return false;
-    return Boolean(
-      d.hasPartnerBdm ||
-      d.has_partner_bdm ||
-      d.partnerBdmId ||
-      d.partner_bdm_id ||
-      d.partnerBdmName ||
-      d.partner_bdm_name ||
-      d.Partner_BDM ||
-      d.Partner_BDM_ID ||
-      d.Partner_BDM_Name ||
-      d.rawZohoDeal?.Has_Partner_BDM ||
-      d.rawZohoDeal?.Partner_BDM ||
-      d.rawZohoDeal?.Partner_BDM_Name ||
-      d.formData?.hasPartnerBdm ||
-      d.formData?.has_partner_bdm ||
-      d.formData?.partnerBdmId ||
-      d.formData?.partnerBdmName
     );
   };
 
@@ -1302,10 +1292,25 @@ export const Deals = () => {
 
       const empCode = zDeal.Employment_ID || zDeal.Employee_Code || (existingIdx >= 0 ? updatedDeals[existingIdx]?.empId : '') || '';
 
+      const compZohoId = (zDeal.Company && typeof zDeal.Company === 'object' ? zDeal.Company.id : (typeof zDeal.Company === 'string' && /^\d+$/.test(zDeal.Company) ? zDeal.Company : undefined)) ||
+        (zDeal.Companies && typeof zDeal.Companies === 'object' ? zDeal.Companies.id : (typeof zDeal.Companies === 'string' && /^\d+$/.test(zDeal.Companies) ? zDeal.Companies : undefined)) ||
+        (zDeal.Account_Name && typeof zDeal.Account_Name === 'object' ? zDeal.Account_Name.id : undefined) ||
+        (existingIdx >= 0 ? updatedDeals[existingIdx]?.companyZohoId : undefined);
+
+      const clZohoId = (zDeal.Clients && typeof zDeal.Clients === 'object' ? zDeal.Clients.id : (typeof zDeal.Clients === 'string' && /^\d+$/.test(zDeal.Clients) ? zDeal.Clients : undefined)) ||
+        (zDeal.Client && typeof zDeal.Client === 'object' ? zDeal.Client.id : (typeof zDeal.Client === 'string' && /^\d+$/.test(zDeal.Client) ? zDeal.Client : undefined)) ||
+        (zDeal.Contact_Name && typeof zDeal.Contact_Name === 'object' ? zDeal.Contact_Name.id : undefined) ||
+        (existingIdx >= 0 ? updatedDeals[existingIdx]?.clientZohoId : undefined);
+
       const dealObj: any = {
         id: resolvedDealId,
         client: resolvedClientName,
         company: resolvedCompanyName,
+        companyZohoId: compZohoId,
+        clientZohoId: clZohoId,
+        Company: zDeal.Company || (compZohoId ? { id: compZohoId, name: resolvedCompanyName } : undefined),
+        Companies: zDeal.Companies || (compZohoId ? { id: compZohoId, name: resolvedCompanyName } : undefined),
+        Clients: zDeal.Clients || (clZohoId ? { id: clZohoId, name: resolvedClientName } : undefined),
         service: serviceTitle,
         amount: formatRupee(totalAmountNum),
         received: formatRupee(receivedAmountNum),
@@ -1335,9 +1340,16 @@ export const Deals = () => {
         zohoId: zDeal.id,
         zohoStatus: 'synced',
         zohoSyncedAt: new Date().toISOString(),
+        Payment_verifications: zDeal.Payment_verifications !== undefined ? zDeal.Payment_verifications : (existingIdx >= 0 ? updatedDeals[existingIdx]?.Payment_verifications : false),
+        paymentVerified: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes' || Boolean(existingIdx >= 0 && updatedDeals[existingIdx]?.paymentVerified),
         formData: {
           clientName: resolvedClientName,
           companyName: resolvedCompanyName,
+          companyZohoId: compZohoId,
+          clientZohoId: clZohoId,
+          Company: zDeal.Company || (compZohoId ? { id: compZohoId, name: resolvedCompanyName } : undefined),
+          Companies: zDeal.Companies || (compZohoId ? { id: compZohoId, name: resolvedCompanyName } : undefined),
+          Clients: zDeal.Clients || (clZohoId ? { id: clZohoId, name: resolvedClientName } : undefined),
           email: contactEmail,
           mobile: contactPhone,
           gstNumber: gstNum,
@@ -2167,6 +2179,267 @@ export const Deals = () => {
     }
   };
 
+  const isDealMissingMandatoryDetails = (deal: any): { isMissing: boolean; reason?: string } => {
+    if (!deal) return { isMissing: true, reason: 'Deal data not available' };
+    const clientName = deal.client || deal.formData?.clientName || deal.rawZohoDeal?.Contact_Name || deal.rawZohoDeal?.Client_Name;
+    const companyName = deal.company || deal.formData?.companyName || deal.rawZohoDeal?.Account_Name || deal.rawZohoDeal?.Company_name;
+    const totalAmt = getDealAmount(deal);
+    const hasContact = Boolean(
+      deal.mobile || deal.formData?.mobile || deal.rawZohoDeal?.Mobile || deal.rawZohoDeal?.Phone || deal.rawZohoDeal?.Client_contact_detail ||
+      deal.email || deal.formData?.email || deal.rawZohoDeal?.Email || deal.rawZohoDeal?.Client_Email_address
+    );
+    if (!clientName || clientName === 'Client') return { isMissing: true, reason: 'Client Name is required' };
+    if (!companyName || companyName === 'Company') return { isMissing: true, reason: 'Company Name is required' };
+    if (!totalAmt || totalAmt <= 0) return { isMissing: true, reason: 'Deal Amount is required' };
+    if (!hasContact) return { isMissing: true, reason: 'Contact mobile or email is required' };
+    return { isMissing: false };
+  };
+
+  const handleSendToAccounts = async (deal: any) => {
+    try {
+      const validation = isDealMissingMandatoryDetails(deal);
+      if (validation.isMissing) {
+        setToast({
+          type: 'error',
+          message: 'Cannot Send to Accounts',
+          submessage: validation.reason
+        });
+        return;
+      }
+
+      setSyncingId(deal.id);
+      const updatedDeal = {
+        ...deal,
+        stage: 'Accounts',
+        Stage: 'Accounts',
+        status: 'Accounts',
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Stage: 'Accounts'
+        }
+      };
+
+      const updatedList = deals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+      setDeals(updatedList);
+      safeSaveDealsToStorage(updatedList);
+
+      // Execute Zoho CRM Blueprint Transition: Sales to Account ("1078476000000489153")
+      const zohoRes = await moveDealToAccounts(deal.zohoId || deal.id);
+      if (zohoRes.success) {
+        setToast({
+          type: 'success',
+          message: 'Sent to Accounts Department',
+          submessage: `Deal ${deal.id} stage updated to Accounts via Zoho Blueprint.`
+        });
+      } else {
+        await saveOrUpdateZohoDeal(updatedDeal);
+        setToast({
+          type: 'error',
+          message: 'Zoho Blueprint Transition Warning',
+          submessage: zohoRes.message || 'Saved locally, but failed to execute Blueprint transition in Zoho CRM'
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: 'error',
+        message: 'Error sending deal to Accounts',
+        submessage: err?.message || 'Unexpected error'
+      });
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
+  const handleVerifyPayment = async (deal: any) => {
+    try {
+      setSyncingId(deal.id);
+      const updatedDeal = {
+        ...deal,
+        Payment_verifications: true,
+        paymentVerified: true,
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Payment_verifications: true
+        }
+      };
+
+      const updatedList = deals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+      setDeals(updatedList);
+      safeSaveDealsToStorage(updatedList);
+
+      const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
+      if (zohoRes.success) {
+        setToast({
+          type: 'success',
+          message: 'Payment Verified',
+          submessage: `Payment verified for deal ${deal.id}. You can now send this deal to Legal.`
+        });
+      } else {
+        setToast({
+          type: 'error',
+          message: 'Zoho Sync Warning',
+          submessage: zohoRes.message || 'Verified locally, but failed to sync verification to Zoho CRM'
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: 'error',
+        message: 'Error verifying payment',
+        submessage: err?.message || 'Unexpected error'
+      });
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
+  const handleSendToLegal = async (deal: any) => {
+    try {
+      setSyncingId(deal.id);
+      const updatedDeal = {
+        ...deal,
+        stage: 'Legal',
+        Stage: 'Legal',
+        status: 'Legal',
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Stage: 'Legal'
+        }
+      };
+
+      const updatedList = deals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+      setDeals(updatedList);
+      safeSaveDealsToStorage(updatedList);
+
+      // Execute Zoho CRM Blueprint Transition: Account to Legal ("1078476000000492001")
+      const zohoRes = await moveDealToLegal(deal.zohoId || deal.id);
+      if (zohoRes.success) {
+        setToast({
+          type: 'success',
+          message: 'Sent to Legal Department',
+          submessage: `Deal ${deal.id} stage successfully updated to Legal via Zoho Blueprint.`
+        });
+      } else {
+        await saveOrUpdateZohoDeal(updatedDeal);
+        setToast({
+          type: 'error',
+          message: 'Zoho Blueprint Transition Warning',
+          submessage: zohoRes.message || 'Saved locally, but failed to execute Blueprint transition in Zoho CRM'
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: 'error',
+        message: 'Error sending deal to Legal',
+        submessage: err?.message || 'Unexpected error'
+      });
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
+  const handleSendToOperationsAllocator = async (deal: any) => {
+    try {
+      setSyncingId(deal.id);
+      const updatedDeal = {
+        ...deal,
+        stage: 'Operations Allocator',
+        Stage: 'Operations Allocator',
+        status: 'Operations Allocator',
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Stage: 'Operations Allocator'
+        }
+      };
+
+      const updatedList = deals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+      setDeals(updatedList);
+      safeSaveDealsToStorage(updatedList);
+
+      // Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
+      const zohoRes = await moveDealToOperationsAllocator(deal.zohoId || deal.id);
+      if (zohoRes.success) {
+        setToast({
+          type: 'success',
+          message: 'Sent to Operations Allocator',
+          submessage: `Deal ${deal.id} stage successfully transitioned to Operations Allocator via Zoho Blueprint.`
+        });
+      } else {
+        await saveOrUpdateZohoDeal(updatedDeal);
+        setToast({
+          type: 'error',
+          message: 'Zoho Blueprint Transition Warning',
+          submessage: zohoRes.message || 'Saved locally, but failed to execute Blueprint transition in Zoho CRM'
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: 'error',
+        message: 'Error sending deal to Operations Allocator',
+        submessage: err?.message || 'Unexpected error'
+      });
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
+  const handleSendToOperationsExecutors = async (deal: any) => {
+    try {
+      setSyncingId(deal.id);
+      const updatedDeal = {
+        ...deal,
+        stage: 'Operations Executors',
+        Stage: 'Operations Executors',
+        status: 'Operations Executors',
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Stage: 'Operations Executors'
+        }
+      };
+
+      const updatedList = deals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+      setDeals(updatedList);
+      safeSaveDealsToStorage(updatedList);
+
+      // Execute Zoho CRM Blueprint Transition: Operations Allocator to Operations Executors ("1078476000001938757")
+      const zohoRes = await moveDealToOperationsExecutors(deal.zohoId || deal.id);
+      if (zohoRes.success) {
+        setToast({
+          type: 'success',
+          message: 'Sent to Operations Executors',
+          submessage: `Deal ${deal.id} stage successfully transitioned to Operations Executors via Zoho Blueprint.`
+        });
+      } else {
+        await saveOrUpdateZohoDeal(updatedDeal);
+        setToast({
+          type: 'error',
+          message: 'Zoho Blueprint Transition Warning',
+          submessage: zohoRes.message || 'Saved locally, but failed to execute Blueprint transition in Zoho CRM'
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: 'error',
+        message: 'Error sending deal to Operations Executors',
+        submessage: err?.message || 'Unexpected error'
+      });
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
+  const accountQueueCount = useMemo(() => {
+    return rbacDeals.filter((d: any) => {
+      const st = String(d.stage || d.rawZohoDeal?.Stage || '').toLowerCase();
+      const isAcc = st.includes('account');
+      const isVerif = isDealPaymentVerified(d);
+      return isAcc && !isVerif;
+    }).length;
+  }, [rbacDeals]);
+
+  const accountVerifiedCount = useMemo(() => {
+    return rbacDeals.filter((d: any) => isDealPaymentVerified(d)).length;
+  }, [rbacDeals]);
+
   const isFiltered = Boolean(
     (quickFilter && quickFilter !== 'all') ||
     Boolean(searchQuery) ||
@@ -2178,9 +2451,15 @@ export const Deals = () => {
     return rbacDeals.filter((deal: any) => {
       const isFromQt = isDealFromQuotation(deal);
       const isPartner = isDealPartnerBdm(deal);
+      const isVerified = isDealPaymentVerified(deal);
+      const isAccStage = String(deal.stage || deal.rawZohoDeal?.Stage || '').toLowerCase().includes('account');
+
       if (activeTab === 'Manual Deals' && isFromQt) return false;
       if (activeTab === 'From Quotations' && !isFromQt) return false;
       if (activeTab === 'Partner BDM Deals' && !isPartner) return false;
+      if (activeTab === 'Account Queue' && (!isAccStage || isVerified)) return false;
+      if (activeTab === 'Account Verified' && !isVerified) return false;
+
       if (quickFilter === 'today' && !isDealToday(deal)) return false;
       if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
       if (quickFilter === 'pending' && getDealPending(deal) <= 0) return false;
@@ -2284,18 +2563,32 @@ export const Deals = () => {
       </div>
 
       <div className="flex border-b border-gray-200 mb-4 overflow-x-auto">
-        {['All Deals', 'Manual Deals', 'From Quotations', 'Partner BDM Deals'].map(tab => (
+        {[
+          { id: 'All Deals', label: 'All Deals', count: null },
+          ...((isAccounts || isSuperAdmin) ? [
+            { id: 'Account Queue', label: 'Account Queue', count: accountQueueCount, isQueue: true },
+            { id: 'Account Verified', label: 'Account Verified', count: accountVerifiedCount, isVerified: true },
+          ] : []),
+          { id: 'Manual Deals', label: 'Manual Deals', count: null },
+          { id: 'From Quotations', label: 'From Quotations', count: null },
+          { id: 'Partner BDM Deals', label: 'Partner BDM Deals', count: null }
+        ].map(tabItem => (
           <button
-            key={tab}
+            key={tabItem.id}
             onClick={() => {
-              setActiveTab(tab);
+              setActiveTab(tabItem.id);
               // Clear quick filter if manually switching tabs
               if (quickFilter !== 'all') setQuickFilter('all');
             }}
-            className={`px-6 py-3 font-medium text-sm transition-colors relative whitespace-nowrap ${activeTab === tab ? 'text-be-orange font-bold' : 'text-gray-500 hover:text-gray-700'}`}
+            className={`px-5 py-3 font-medium text-sm transition-colors relative whitespace-nowrap flex items-center space-x-2 ${activeTab === tabItem.id ? 'text-be-orange font-bold' : 'text-gray-500 hover:text-gray-700'}`}
           >
-            {tab}
-            {activeTab === tab && (
+            <span>{tabItem.label}</span>
+            {tabItem.count !== null && (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${tabItem.isQueue && tabItem.count > 0 ? 'bg-amber-100 text-amber-800' : tabItem.isVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'}`}>
+                {tabItem.count}
+              </span>
+            )}
+            {activeTab === tabItem.id && (
               <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-be-orange" />
             )}
           </button>
@@ -2399,8 +2692,21 @@ export const Deals = () => {
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-5 font-bold text-emerald-600 border-t border-b border-gray-100 group-hover:border-orange-100">
-                          <div>{displayReceived}</div>
+                        <td className="px-6 py-5 font-bold border-t border-b border-gray-100 group-hover:border-orange-100">
+                          <div className="flex items-center space-x-1.5">
+                            <span className={breakdown.isPaymentVerified ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
+                              {displayReceived}
+                            </span>
+                            {breakdown.isPaymentVerified ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Payment Verified by Accounts">
+                                <CheckCircle2 size={10} className="mr-0.5 text-emerald-600" /> Verified
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200" title="Payment Pending Verification">
+                                <Clock size={10} className="mr-0.5 text-rose-500" /> Pending Verif.
+                              </span>
+                            )}
+                          </div>
                           {breakdown.hasPartnerBdm && !isSuperAdmin && !isHOD && (
                             <div className="text-[10px] text-gray-400 font-normal">Pre-GST 50%</div>
                           )}
@@ -2439,29 +2745,110 @@ export const Deals = () => {
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100">
-                        <div className="flex items-center justify-end space-x-2">
+                      <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end space-x-1.5">
+                          {(() => {
+                            const rawStage = (deal.stage || deal.rawZohoDeal?.Stage || 'Sales').toLowerCase().trim();
+                            const isAccountsStage = rawStage.includes('account');
+                            const isLegalStage = rawStage.includes('legal');
+                            const isAllocatorStage = rawStage.includes('allocat') && !rawStage.includes('execut');
+                            const isExecutorsStage = rawStage.includes('execut');
+                            const isSalesOrDraft = !isAccountsStage && !isLegalStage && !isAllocatorStage && !isExecutorsStage;
+
+                            return (
+                              <>
+                                {/* 1. Send to Accounts Button (Sales to Account Blueprint Transition: 1078476000000489153) */}
+                                {isSalesOrDraft && !breakdown.isPaymentVerified && (
+                                  (() => {
+                                    const val = isDealMissingMandatoryDetails(deal);
+                                    return (
+                                      <button
+                                        onClick={() => handleSendToAccounts(deal)}
+                                        disabled={val.isMissing || syncingId === deal.id}
+                                        title={val.isMissing ? `Cannot send: ${val.reason}` : 'Send Deal to Accounts Department (Zoho Blueprint)'}
+                                        className="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold shadow-xs flex items-center transition-all shrink-0"
+                                      >
+                                        {syncingId === deal.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <Building2 size={12} className="mr-1" />}
+                                        Send to Accounts
+                                      </button>
+                                    );
+                                  })()
+                                )}
+
+                                {/* 2. Verify Payment Button (Accounts Department Action) */}
+                                {!breakdown.isPaymentVerified && (isAccountsStage || isAccounts || isSuperAdmin) && (
+                                  <button
+                                    onClick={() => handleVerifyPayment(deal)}
+                                    disabled={syncingId === deal.id}
+                                    title="Verify payment for this deal"
+                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center transition-all shrink-0"
+                                  >
+                                    {syncingId === deal.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <CheckCircle2 size={12} className="mr-1" />}
+                                    Verify Payment
+                                  </button>
+                                )}
+
+                                {/* 3. Send to Legal Button (Account to Legal Blueprint Transition: 1078476000000492001) */}
+                                {breakdown.isPaymentVerified && isAccountsStage && (
+                                  <button
+                                    onClick={() => handleSendToLegal(deal)}
+                                    disabled={syncingId === deal.id}
+                                    title="Send verified deal to Legal department (Zoho Blueprint)"
+                                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center transition-all shrink-0"
+                                  >
+                                    {syncingId === deal.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <ShieldCheck size={12} className="mr-1" />}
+                                    Send to Legal
+                                  </button>
+                                )}
+
+                                {/* 4. Send to Operations Allocator (Legal to Operations Allocator Blueprint Transition: 1078476000000492099) */}
+                                {isLegalStage && (
+                                  <button
+                                    onClick={() => handleSendToOperationsAllocator(deal)}
+                                    disabled={syncingId === deal.id}
+                                    title="Send deal from Legal to Operations Allocator (Zoho Blueprint)"
+                                    className="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center transition-all shrink-0"
+                                  >
+                                    {syncingId === deal.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <Users size={12} className="mr-1" />}
+                                    To Allocator
+                                  </button>
+                                )}
+
+                                {/* 5. Send to Operations Executors (Operations Allocator to Operations Executors Blueprint Transition: 1078476000001938757) */}
+                                {isAllocatorStage && (
+                                  <button
+                                    onClick={() => handleSendToOperationsExecutors(deal)}
+                                    disabled={syncingId === deal.id}
+                                    title="Send deal from Allocator to Operations Executors (Zoho Blueprint)"
+                                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center transition-all shrink-0"
+                                  >
+                                    {syncingId === deal.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <ArrowRight size={12} className="mr-1" />}
+                                    To Executors
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
+
+                          {/* Standard Actions (View, Edit, Delete) */}
                           <button
-                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                             title="View Deal Details"
-                            onClick={(e) => { e.stopPropagation(); navigate(`/crm/deals/${deal.id}`); }}
+                            onClick={() => navigate(`/crm/deals/${deal.id}`)}
                           >
                             <Eye size={16} />
                           </button>
                           <button
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Edit Deal"
-                            onClick={(e) => { e.stopPropagation(); handleOpenModal(deal); }}
+                            onClick={() => handleOpenModal(deal)}
                           >
                             <Edit size={16} />
                           </button>
                           <button
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete Deal"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteDeal(deal);
-                            }}
+                            onClick={() => handleDeleteDeal(deal)}
                           >
                             <Trash2 size={16} />
                           </button>
