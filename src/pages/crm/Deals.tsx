@@ -1340,8 +1340,8 @@ export const Deals = () => {
         zohoId: zDeal.id,
         zohoStatus: 'synced',
         zohoSyncedAt: new Date().toISOString(),
-        Payment_verifications: zDeal.Payment_verifications !== undefined ? zDeal.Payment_verifications : (existingIdx >= 0 ? updatedDeals[existingIdx]?.Payment_verifications : false),
-        paymentVerified: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes' || Boolean(existingIdx >= 0 && updatedDeals[existingIdx]?.paymentVerified),
+        Payment_verifications: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes' ? true : false,
+        paymentVerified: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes' ? true : false,
         formData: {
           clientName: resolvedClientName,
           companyName: resolvedCompanyName,
