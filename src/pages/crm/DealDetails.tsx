@@ -1250,7 +1250,7 @@ export const DealDetails = () => {
                           <td className="px-4 py-3.5 text-right font-bold text-gray-900">
                             ₹{totalNum.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                           </td>
-                          <td className="px-4 py-3.5 text-right font-bold text-emerald-600">
+                          <td className={`px-4 py-3.5 text-right font-bold ${splitBreakdown.isPaymentVerified ? 'text-emerald-600' : 'text-rose-600'}`}>
                             {recNum > 0 ? `₹${recNum.toLocaleString('en-IN')}` : '—'}
                           </td>
                           <td className="px-4 py-3.5 text-right font-bold text-orange-600">
@@ -1264,7 +1264,7 @@ export const DealDetails = () => {
                       <td className="px-4 py-3.5 text-right text-gray-700">₹{baseAmountNum.toLocaleString('en-IN')}</td>
                       <td className="px-4 py-3.5 text-right text-gray-500">₹{gstAmountNum.toLocaleString('en-IN')}</td>
                       <td className="px-4 py-3.5 text-right text-base text-gray-900">₹{totalAmountNum.toLocaleString('en-IN')}</td>
-                      <td className="px-4 py-3.5 text-right text-emerald-600">₹{receivedAmountNum.toLocaleString('en-IN')}</td>
+                      <td className={`px-4 py-3.5 text-right ${splitBreakdown.isPaymentVerified ? 'text-emerald-600' : 'text-rose-600'}`}>₹{receivedAmountNum.toLocaleString('en-IN')}</td>
                       <td className="px-4 py-3.5 text-right text-orange-600">₹{pendingAmountNum.toLocaleString('en-IN')}</td>
                     </tr>
                   </tbody>
@@ -1952,11 +1952,13 @@ export const DealDetails = () => {
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-semibold">
                 <span className="text-gray-600">Payment Collection</span>
-                <span className="text-emerald-600">{percentReceived}%</span>
+                <span className={splitBreakdown.isPaymentVerified ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
+                  {percentReceived}% {splitBreakdown.isPaymentVerified ? '' : '(Pending Verif.)'}
+                </span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                 <div 
-                  className="bg-gradient-to-r from-emerald-500 to-teal-500 h-2.5 rounded-full transition-all duration-500"
+                  className={`h-2.5 rounded-full transition-all duration-500 ${splitBreakdown.isPaymentVerified ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-rose-500 to-amber-500'}`}
                   style={{ width: `${percentReceived}%` }}
                 />
               </div>

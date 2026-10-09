@@ -1879,6 +1879,8 @@ export const Deals = () => {
           };
         }),
         totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount },
+        Payment_verifications: isEditing ? (existingDeal?.Payment_verifications ?? false) : false,
+        paymentVerified: isEditing ? (existingDeal?.paymentVerified ?? false) : false,
         paymentScreenshotName: paymentScreenshotName,
         documentsData: docsToSave,
         zohoId: existingDeal?.zohoId || undefined,

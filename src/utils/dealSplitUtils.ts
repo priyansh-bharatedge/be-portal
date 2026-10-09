@@ -71,6 +71,10 @@ export const isDealPartnerBdm = (d: any): boolean => {
 
 export const isDealPaymentVerified = (d: any): boolean => {
   if (!d) return false;
+  // If explicitly false or unverified in any flag, return false
+  if (d.paymentVerified === false || d.Payment_verifications === false) return false;
+  if (d.rawZohoDeal?.Payment_verifications === false || d.rawZohoDeal?.Payment_verifications === 'false' || d.rawZohoDeal?.Payment_verifications === 'No' || d.rawZohoDeal?.Payment_verifications === 'Unverified') return false;
+
   return Boolean(
     d.paymentVerified === true ||
     d.paymentVerified === 'true' ||

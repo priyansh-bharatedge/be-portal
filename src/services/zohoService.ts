@@ -1689,9 +1689,14 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     partnerBdmName,
     partner_bdm_name: partnerBdmName,
     partnerBdmAmount,
-    partner_bdm_amount: partnerBdmAmount,
     zohoStatus: 'synced',
     zohoSyncedAt: new Date().toISOString(),
+    Payment_verifications: rawZoho.Payment_verifications === true || rawZoho.Payment_verifications === 'true' || rawZoho.Payment_verifications === 'Verified' || rawZoho.Payment_verifications === 'Yes'
+      ? true
+      : (rawZoho.Payment_verifications === false || rawZoho.Payment_verifications === 'false' || rawZoho.Payment_verifications === 'No' || rawZoho.Payment_verifications === 'Unverified' ? false : (existingDeal?.Payment_verifications === true)),
+    paymentVerified: rawZoho.Payment_verifications === true || rawZoho.Payment_verifications === 'true' || rawZoho.Payment_verifications === 'Verified' || rawZoho.Payment_verifications === 'Yes'
+      ? true
+      : (rawZoho.Payment_verifications === false || rawZoho.Payment_verifications === 'false' || rawZoho.Payment_verifications === 'No' || rawZoho.Payment_verifications === 'Unverified' ? false : (existingDeal?.paymentVerified === true)),
     documentsData: existingDeal?.documentsData || [],
     paymentScreenshotName: existingDeal?.paymentScreenshotName || rawZoho.Payment_Screenshot_Name || '',
     paymentScreenshotUrl: existingDeal?.paymentScreenshotUrl || '',
