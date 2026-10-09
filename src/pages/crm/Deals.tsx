@@ -2234,7 +2234,6 @@ export const Deals = () => {
           submessage: `Deal ${deal.id} stage updated to Accounts via Zoho Blueprint.`
         });
       } else {
-        await saveOrUpdateZohoDeal(updatedDeal);
         setToast({
           type: 'error',
           message: 'Zoho Blueprint Transition Warning',
@@ -2321,7 +2320,6 @@ export const Deals = () => {
           submessage: `Deal ${deal.id} stage successfully updated to Legal via Zoho Blueprint.`
         });
       } else {
-        await saveOrUpdateZohoDeal(updatedDeal);
         setToast({
           type: 'error',
           message: 'Zoho Blueprint Transition Warning',
@@ -2366,7 +2364,6 @@ export const Deals = () => {
           submessage: `Deal ${deal.id} stage successfully transitioned to Operations Allocator via Zoho Blueprint.`
         });
       } else {
-        await saveOrUpdateZohoDeal(updatedDeal);
         setToast({
           type: 'error',
           message: 'Zoho Blueprint Transition Warning',
@@ -2411,7 +2408,6 @@ export const Deals = () => {
           submessage: `Deal ${deal.id} stage successfully transitioned to Operations Executors via Zoho Blueprint.`
         });
       } else {
-        await saveOrUpdateZohoDeal(updatedDeal);
         setToast({
           type: 'error',
           message: 'Zoho Blueprint Transition Warning',

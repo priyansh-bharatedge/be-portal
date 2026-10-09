@@ -239,7 +239,6 @@ export const DealDetails = () => {
       if (zohoRes.success) {
         setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Accounts via Zoho Blueprint.' });
       } else {
-        await saveOrUpdateZohoDeal(updatedDeal);
         setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to execute Blueprint transition in Zoho CRM' });
       }
     } catch (e: any) {
@@ -316,7 +315,6 @@ export const DealDetails = () => {
       if (zohoRes.success) {
         setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Legal department via Zoho Blueprint.' });
       } else {
-        await saveOrUpdateZohoDeal(updatedDeal);
         setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to execute Blueprint transition in Zoho CRM' });
       }
     } catch (e: any) {
@@ -356,7 +354,6 @@ export const DealDetails = () => {
       if (zohoRes.success) {
         setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Operations Allocator via Zoho Blueprint.' });
       } else {
-        await saveOrUpdateZohoDeal(updatedDeal);
         setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to execute Blueprint transition in Zoho CRM' });
       }
     } catch (e: any) {
@@ -396,7 +393,6 @@ export const DealDetails = () => {
       if (zohoRes.success) {
         setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Operations Executors via Zoho Blueprint.' });
       } else {
-        await saveOrUpdateZohoDeal(updatedDeal);
         setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to execute Blueprint transition in Zoho CRM' });
       }
     } catch (e: any) {
