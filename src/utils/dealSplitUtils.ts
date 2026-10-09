@@ -71,14 +71,35 @@ export const isDealPartnerBdm = (d: any): boolean => {
 
 export const isDealPaymentVerified = (d: any): boolean => {
   if (!d) return false;
-  // If explicitly false or unverified in any flag, return false
+
+  // 1. Deals in 'Sales', 'Draft', or 'New' stage are by definition NOT verified by Accounts yet
+  const stage = String(d.stage || d.Stage || d.rawZohoDeal?.Stage || '').toLowerCase().trim();
+  if (['sales', 'draft', 'new'].includes(stage)) {
+    return false;
+  }
+
+  // 2. If explicitly false or unverified in any flag, return false
   if (d.paymentVerified === false || d.Payment_verifications === false) return false;
-  if (d.rawZohoDeal?.Payment_verifications === false || d.rawZohoDeal?.Payment_verifications === 'false' || d.rawZohoDeal?.Payment_verifications === 'No' || d.rawZohoDeal?.Payment_verifications === 'Unverified') return false;
+  if (
+    d.rawZohoDeal?.Payment_verifications === false ||
+    d.rawZohoDeal?.Payment_verifications === 'false' ||
+    d.rawZohoDeal?.Payment_verifications === 'No' ||
+    d.rawZohoDeal?.Payment_verifications === 'Unverified' ||
+    d.rawZohoDeal?.Payment_verifications === null ||
+    d.rawZohoDeal?.Payment_verifications === undefined ||
+    d.rawZohoDeal?.Payment_verifications === ''
+  ) {
+    if (d.paymentVerified === true || d.Payment_verifications === true) {
+      return true;
+    }
+    return false;
+  }
 
   return Boolean(
     d.paymentVerified === true ||
     d.paymentVerified === 'true' ||
     d.paymentVerified === 'Verified' ||
+    d.paymentVerified === 'Yes' ||
     d.Payment_verifications === true ||
     d.Payment_verifications === 'true' ||
     d.Payment_verifications === 'Verified' ||
