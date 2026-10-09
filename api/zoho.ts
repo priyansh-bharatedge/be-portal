@@ -522,15 +522,15 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
     CRM_filled: true,
     CRM_filled_date: bookingDate,
     Payment_received_date: bookingDate,
-    Payment_Date: bookingDate,
-    Payment_verifications: deal.Payment_verifications !== undefined
-      ? Boolean(deal.Payment_verifications)
-      : (deal.paymentVerified !== undefined ? Boolean(deal.paymentVerified) : (deal.rawZohoDeal?.Payment_verifications !== undefined ? Boolean(deal.rawZohoDeal.Payment_verifications) : false)),
     Payment_Type: 'Online',
   };
 
   if (deal.zohoId) {
     payload.id = String(deal.zohoId);
+    // Payment_verifications is ONLY updated when explicitly verified by Accounts
+    if (deal.Payment_verifications === true || deal.paymentVerified === true) {
+      payload.Payment_verifications = true;
+    }
   }
 
   // Company & Account Details (Standard: Account_Name, Custom: Company_name, Company_Name, Lookup: Company, Companies)
