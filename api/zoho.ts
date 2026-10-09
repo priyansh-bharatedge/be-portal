@@ -1450,10 +1450,10 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
   // Determine normalized action path (e.g. 'insert-employee')
   let action = rawAction;
   if (!action) {
-    action = pathname.replace(/^\/api\/zoho\/?/, '').replace(/^\/+/, '');
+    action = pathname.replace(/^\/api\/zoho\/?/, '').replace(/^\/+/, '').split('?')[0].replace(/\/+$/, '');
   }
   if (!action && urlObj.searchParams.get('action')) {
-    action = urlObj.searchParams.get('action') || '';
+    action = (urlObj.searchParams.get('action') || '').split('?')[0].replace(/\/+$/, '');
   }
 
   const method = (req.method || 'GET').toUpperCase();
