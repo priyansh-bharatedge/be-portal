@@ -57,6 +57,7 @@ export const Deals = () => {
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
     if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) return 'All Deals';
+    if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && isAccounts && !isSuperAdmin) return 'All Deals';
     if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified') return tabParam;
     return 'All Deals';
   });
@@ -74,6 +75,8 @@ export const Deals = () => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
     if (tabParam) {
       if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) {
+        setActiveTab('All Deals');
+      } else if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && isAccounts && !isSuperAdmin) {
         setActiveTab('All Deals');
       } else {
         setActiveTab(tabParam);
@@ -2567,9 +2570,11 @@ export const Deals = () => {
             { id: 'Account Queue', label: 'Account Queue', count: accountQueueCount, isQueue: true },
             { id: 'Account Verified', label: 'Account Verified', count: accountVerifiedCount, isVerified: true },
           ] : []),
-          { id: 'Manual Deals', label: 'Manual Deals', count: null },
-          { id: 'From Quotations', label: 'From Quotations', count: null },
-          { id: 'Partner BDM Deals', label: 'Partner BDM Deals', count: null }
+          ...((!isAccounts || isSuperAdmin) ? [
+            { id: 'Manual Deals', label: 'Manual Deals', count: null },
+            { id: 'From Quotations', label: 'From Quotations', count: null },
+            { id: 'Partner BDM Deals', label: 'Partner BDM Deals', count: null }
+          ] : [])
         ].map(tabItem => (
           <button
             key={tabItem.id}
