@@ -1058,8 +1058,19 @@ export const Deals = () => {
       let subformWithoutGst = 0;
       let subformReceived = 0;
       let subformPending = 0;
-      if (Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0) {
-        zDeal.Subform_1.forEach((sf: any) => {
+      const seenSubformsInDeal = new Set<string>();
+      const uniqueSubform1 = Array.isArray(zDeal.Subform_1)
+        ? zDeal.Subform_1.filter((sf: any) => {
+            const nameKey = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '').trim().toLowerCase();
+            if (!nameKey) return true;
+            if (seenSubformsInDeal.has(nameKey)) return false;
+            seenSubformsInDeal.add(nameKey);
+            return true;
+          })
+        : [];
+
+      if (uniqueSubform1.length > 0) {
+        uniqueSubform1.forEach((sf: any) => {
           const a = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
           const bg = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base);
           const r = parseZohoNum(sf.Received_amount || sf.Received);
@@ -1142,8 +1153,8 @@ export const Deals = () => {
 
       // 4. Subform_1 (Choose Services)
       let servicesFromSubform: any[] = [];
-      if (Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0) {
-        servicesFromSubform = zDeal.Subform_1.map((sf: any, i: number) => {
+      if (uniqueSubform1.length > 0) {
+        servicesFromSubform = uniqueSubform1.map((sf: any, i: number) => {
           const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || 0);
           const withoutGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
           const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);

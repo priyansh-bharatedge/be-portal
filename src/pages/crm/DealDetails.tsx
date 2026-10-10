@@ -184,12 +184,29 @@ export const DealDetails = () => {
       // Synchronize Legal Subform Items
       const rawLegal = Array.isArray(raw.Legal) && raw.Legal.length > 0 ? raw.Legal : null;
       const dealLegal = Array.isArray(deal.legalData) && deal.legalData.length > 0 ? deal.legalData : null;
-      const servicesList = Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0
+      const rawServicesList = Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0
         ? raw.Subform_1
         : (Array.isArray(deal.servicesData) && deal.servicesData.length > 0 ? deal.servicesData : []);
 
+      const seenSvc = new Set<string>();
+      const servicesList = rawServicesList.filter((s: any) => {
+        const key = (s.Schemas || s.Schema || s.name || s.Service_Name || '').trim().toLowerCase();
+        if (!key) return true;
+        if (seenSvc.has(key)) return false;
+        seenSvc.add(key);
+        return true;
+      });
+
       if (dealLegal) {
-        setLegalSubformItems(dealLegal.map((lg: any, i: number) => ({
+        const seenLegal = new Set<string>();
+        const uniqueDealLegal = dealLegal.filter((lg: any) => {
+          const key = (lg.schema || lg.Legal_Schemas || lg.Schemas || '').trim().toLowerCase();
+          if (!key) return true;
+          if (seenLegal.has(key)) return false;
+          seenLegal.add(key);
+          return true;
+        });
+        setLegalSubformItems(uniqueDealLegal.map((lg: any, i: number) => ({
           id: String(lg.id || `temp_${i + 1}`),
           schema: lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service',
           internalTeamType: lg.internalTeamType || lg.Internal_team_type || '',
@@ -201,7 +218,15 @@ export const DealDetails = () => {
           tenure: lg.tenure || lg.Tenure_of_Service || '',
         })));
       } else if (rawLegal) {
-        setLegalSubformItems(rawLegal.map((lg: any, i: number) => ({
+        const seenLegal = new Set<string>();
+        const uniqueRawLegal = rawLegal.filter((lg: any) => {
+          const key = (lg.Legal_Schemas || lg.Schemas || lg.schema || '').trim().toLowerCase();
+          if (!key) return true;
+          if (seenLegal.has(key)) return false;
+          seenLegal.add(key);
+          return true;
+        });
+        setLegalSubformItems(uniqueRawLegal.map((lg: any, i: number) => ({
           id: String(lg.id || `temp_${i + 1}`),
           schema: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service',
           internalTeamType: lg.Internal_team_type || lg.internalTeamType || '',
@@ -1051,14 +1076,24 @@ export const DealDetails = () => {
   };
 
   // 1. Extract Services first so we can aggregate subform amounts
-  let services = deal.servicesData || [];
+  let rawServices = deal.servicesData || [];
+  let services: any[] = [];
   let servicesSumTotal = 0;
   let servicesSumBase = 0;
   let servicesSumReceived = 0;
   let servicesSumPending = 0;
 
   if (Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0) {
-    services = raw.Subform_1.map((sf: any, i: number) => {
+    const seenSubforms = new Set<string>();
+    const uniqueSubforms = raw.Subform_1.filter((sf: any) => {
+      const nameKey = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '').trim().toLowerCase();
+      if (!nameKey) return true;
+      if (seenSubforms.has(nameKey)) return false;
+      seenSubforms.add(nameKey);
+      return true;
+    });
+
+    services = uniqueSubforms.map((sf: any, i: number) => {
       const agreementAmount = parseNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount || 0);
       const withoutGst = parseNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
       const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
@@ -1084,7 +1119,17 @@ export const DealDetails = () => {
         successFees: sf.Success_fees || '',
       };
     });
-  } else if (services.length > 0) {
+  } else if (rawServices.length > 0) {
+    const seenSvc = new Set<string>();
+    const uniqueServices = rawServices.filter((s: any) => {
+      const nameKey = (s.name || s.Schemas || s.Service_Name || '').trim().toLowerCase();
+      if (!nameKey) return true;
+      if (seenSvc.has(nameKey)) return false;
+      seenSvc.add(nameKey);
+      return true;
+    });
+
+    services = uniqueServices;
     services.forEach((s: any) => {
       const t = parseNum(s.totalAmount);
       const b = parseNum(s.baseAmount || (t > 0 ? t / 1.18 : 0));

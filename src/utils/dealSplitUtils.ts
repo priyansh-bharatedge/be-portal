@@ -116,6 +116,18 @@ export const getDealVerifiedReceivedAmount = (d: any): number => {
   return getDealReceivedAmount(d);
 };
 
+const deduplicateSubforms = (list: any[]): any[] => {
+  if (!Array.isArray(list) || list.length === 0) return [];
+  const seen = new Set<string>();
+  return list.filter((item: any) => {
+    const key = (item.Schemas || item.Schema || item.Service_Name || item.Service || item.Business_plan_selected || item.name || '').trim().toLowerCase();
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export const getDealReceivedAmount = (d: any): number => {
   if (!d) return 0;
   if (d.rawReceived && d.rawReceived > 0) return d.rawReceived;
@@ -125,11 +137,13 @@ export const getDealReceivedAmount = (d: any): number => {
     if (parsed > 0) return parsed;
   }
   if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
-    const sRec = d.servicesData.reduce((sum: number, sf: any) => sum + parseNum(sf.receivedAmount || sf.Received_amount || sf.Received), 0);
+    const unique = deduplicateSubforms(d.servicesData);
+    const sRec = unique.reduce((sum: number, sf: any) => sum + parseNum(sf.receivedAmount || sf.Received_amount || sf.Received), 0);
     if (sRec > 0) return sRec;
   }
   if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
-    const sRec = d.rawZohoDeal.Subform_1.reduce((sum: number, sf: any) => sum + parseNum(sf.Received_amount || sf.Received), 0);
+    const unique = deduplicateSubforms(d.rawZohoDeal.Subform_1);
+    const sRec = unique.reduce((sum: number, sf: any) => sum + parseNum(sf.Received_amount || sf.Received), 0);
     if (sRec > 0) return sRec;
   }
   if (d.rawZohoDeal) {
@@ -155,11 +169,13 @@ export const getDealPendingAmount = (d: any): number => {
     if (parsed > 0) return parsed;
   }
   if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
-    const sPend = d.servicesData.reduce((sum: number, sf: any) => sum + parseNum(sf.pendingAmount || sf.Pending_amount || sf.Pending), 0);
+    const unique = deduplicateSubforms(d.servicesData);
+    const sPend = unique.reduce((sum: number, sf: any) => sum + parseNum(sf.pendingAmount || sf.Pending_amount || sf.Pending), 0);
     if (sPend > 0) return sPend;
   }
   if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
-    const sPend = d.rawZohoDeal.Subform_1.reduce((sum: number, sf: any) => sum + parseNum(sf.Pending_amount || sf.Pending), 0);
+    const unique = deduplicateSubforms(d.rawZohoDeal.Subform_1);
+    const sPend = unique.reduce((sum: number, sf: any) => sum + parseNum(sf.Pending_amount || sf.Pending), 0);
     if (sPend > 0) return sPend;
   }
   if (d.rawZohoDeal) {
@@ -187,7 +203,8 @@ export const getDealTotalAmount = (d: any): number => {
     if (parsed > 0) return parsed;
   }
   if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
-    const sTotal = d.servicesData.reduce((sum: number, sf: any) => {
+    const unique = deduplicateSubforms(d.servicesData);
+    const sTotal = unique.reduce((sum: number, sf: any) => {
       const a = parseNum(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount);
       const b = parseNum(sf.baseAmount || sf.Without_GST || sf.Base);
       const itemTotal = a || (b > 0 ? Number((b * 1.18).toFixed(2)) : 0);
@@ -196,7 +213,8 @@ export const getDealTotalAmount = (d: any): number => {
     if (sTotal > 0) return sTotal;
   }
   if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
-    const sTotal = d.rawZohoDeal.Subform_1.reduce((sum: number, sf: any) => {
+    const unique = deduplicateSubforms(d.rawZohoDeal.Subform_1);
+    const sTotal = unique.reduce((sum: number, sf: any) => {
       const a = parseNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
       const b = parseNum(sf.Without_GST || sf.baseAmount || sf.Base);
       const itemTotal = a || (b > 0 ? Number((b * 1.18).toFixed(2)) : 0);

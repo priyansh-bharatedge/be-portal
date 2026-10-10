@@ -186,8 +186,19 @@ export const CrmDashboard = () => {
       let subformTotal = 0;
       let subformReceived = 0;
       let subformPending = 0;
-      if (Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0) {
-        zDeal.Subform_1.forEach((sf: any) => {
+      const seenDashSubforms = new Set<string>();
+      const uniqueDashSubforms = Array.isArray(zDeal.Subform_1)
+        ? zDeal.Subform_1.filter((sf: any) => {
+            const nameKey = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '').trim().toLowerCase();
+            if (!nameKey) return true;
+            if (seenDashSubforms.has(nameKey)) return false;
+            seenDashSubforms.add(nameKey);
+            return true;
+          })
+        : [];
+
+      if (uniqueDashSubforms.length > 0) {
+        uniqueDashSubforms.forEach((sf: any) => {
           const a = parseMoney(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount);
           const bg = parseMoney(sf.Without_GST || sf.baseAmount || sf.Base);
           const r = parseMoney(sf.Received_amount || sf.Received);

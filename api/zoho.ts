@@ -586,9 +586,18 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
   }
 
   if (Array.isArray(servicesData) && servicesData.length > 0) {
-    payload.Service_Count = servicesData.length;
-    payload.Service_Name = servicesData.length === 1 ? servicesData[0].name : `${servicesData.length} Services`;
-    payload.Subform_1 = servicesData.map((svc: any, idx: number) => {
+    const seenSvc = new Set<string>();
+    const deduplicatedServices = servicesData.filter((s: any) => {
+      const nameKey = (s.name || s.Schemas || s.Service_Name || '').trim().toLowerCase();
+      if (!nameKey) return true;
+      if (seenSvc.has(nameKey)) return false;
+      seenSvc.add(nameKey);
+      return true;
+    });
+
+    payload.Service_Count = deduplicatedServices.length;
+    payload.Service_Name = deduplicatedServices.length === 1 ? (deduplicatedServices[0].name || deduplicatedServices[0].Schemas) : `${deduplicatedServices.length} Services`;
+    payload.Subform_1 = deduplicatedServices.map((svc: any, idx: number) => {
       const itemTotalFromSvc = Number(svc.totalAmount) || 0;
       const itemBase = itemTotalFromSvc > 0 
         ? to2Dec(itemTotalFromSvc / 1.18) 
@@ -601,19 +610,20 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
       let itemReceived = 0;
       if (grandTotalNum > 0) {
         itemReceived = to2Dec((itemTotal / grandTotalNum) * amountReceivedNum);
-      } else if (servicesData.length === 1) {
+      } else if (deduplicatedServices.length === 1) {
         itemReceived = amountReceivedNum;
       }
       const itemPending = to2Dec(Math.max(0, itemTotal - itemReceived));
 
       return {
-        Schemas: svc.name || 'Website Development',
+        ...(svc.id && !String(svc.id).startsWith('temp_') && /^\d+$/.test(String(svc.id)) ? { id: String(svc.id) } : {}),
+        Schemas: svc.name || svc.Schemas || 'Website Development',
         Without_GST: itemBase,
         GST_amount: itemGst,
         Agreement_amount: itemTotal,
         Received_amount: itemReceived,
         Pending_amount: itemPending,
-        Payment_stages: '.',
+        Payment_stages: svc.Payment_stages || '.',
         Payment_type: amountReceivedNum >= grandTotalNum ? 'Full amount paid' : amountReceivedNum > 0 ? 'Partially paid' : 'Online',
         Payment_received_date: bookingDate,
         LinkingModule2_Serial_Number: String(idx + 1),
@@ -640,10 +650,19 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
   }
 
   // Legal Subform (API Name: Legal)
-  const legalData = deal.legalData || deal.rawZohoDeal?.Legal || deal.Legal || fd.legalData || fd.Legal;
-  if (Array.isArray(legalData) && legalData.length > 0) {
-    payload.Legal = legalData.map((lg: any, idx: number) => ({
-      ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: lg.id } : {}),
+  const rawLegalData = deal.legalData || deal.rawZohoDeal?.Legal || deal.Legal || fd.legalData || fd.Legal;
+  if (Array.isArray(rawLegalData) && rawLegalData.length > 0) {
+    const seenLegal = new Set<string>();
+    const deduplicatedLegal = rawLegalData.filter((lg: any) => {
+      const schemaKey = (lg.Legal_Schemas || lg.schema || lg.Schemas || '').trim().toLowerCase();
+      if (!schemaKey) return true;
+      if (seenLegal.has(schemaKey)) return false;
+      seenLegal.add(schemaKey);
+      return true;
+    });
+
+    payload.Legal = deduplicatedLegal.map((lg: any, idx: number) => ({
+      ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: String(lg.id) } : {}),
       Legal_Schemas: lg.Legal_Schemas || lg.schema || lg.Schemas || (payload.Subform_1?.[idx]?.Schemas) || 'General Services',
       Internal_team_type: lg.Internal_team_type || lg.internalTeamType || '',
       Internal_legal_status: lg.Internal_legal_status || lg.legalStatus || '',

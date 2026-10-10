@@ -1441,7 +1441,16 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   let subformPending = 0;
 
   if (Array.isArray(rawZoho.Subform_1) && rawZoho.Subform_1.length > 0) {
-    servicesSubform = rawZoho.Subform_1.map((sf: any, i: number) => {
+    const seenSubforms = new Set<string>();
+    const uniqueRawSubform = rawZoho.Subform_1.filter((sf: any) => {
+      const sName = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '').trim().toLowerCase();
+      if (!sName) return true;
+      if (seenSubforms.has(sName)) return false;
+      seenSubforms.add(sName);
+      return true;
+    });
+
+    servicesSubform = uniqueRawSubform.map((sf: any, i: number) => {
       const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount || 0);
       const wGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
       const tAmt = agreementAmount || (wGst > 0 ? Number((wGst * 1.18).toFixed(2)) : 0);
@@ -1468,7 +1477,14 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       };
     });
   } else if (Array.isArray(existingDeal?.servicesData) && existingDeal.servicesData.length > 0) {
-    servicesSubform = existingDeal.servicesData;
+    const seenSvc = new Set<string>();
+    servicesSubform = existingDeal.servicesData.filter((s: any) => {
+      const sName = (s.name || s.Schemas || s.Service_Name || '').trim().toLowerCase();
+      if (!sName) return true;
+      if (seenSvc.has(sName)) return false;
+      seenSvc.add(sName);
+      return true;
+    });
     servicesSubform.forEach((sf: any) => {
       const a = parseZohoNum(sf.totalAmount || sf.Agreement_amount || sf.Total_amount || sf.Total || sf.Amount);
       const bg = parseZohoNum(sf.baseAmount || sf.Without_GST || sf.Base);
@@ -1765,27 +1781,38 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     reminder5Date: rawZoho.Reminder_5_date || rawZoho.Reminder_5 || existingDeal?.reminder5Date || '',
     Reminder_5_date: rawZoho.Reminder_5_date || rawZoho.Reminder_5 || existingDeal?.Reminder_5_date || '',
     servicesData: servicesSubform,
-    legalData: Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0
-      ? rawZoho.Legal.map((lg: any, i: number) => ({
-          id: String(lg.id || `temp_${i + 1}`),
-          schema: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service',
-          Legal_Schemas: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service',
-          internalTeamType: lg.Internal_team_type || lg.internalTeamType || '',
-          Internal_team_type: lg.Internal_team_type || lg.internalTeamType || '',
-          legalStatus: lg.Internal_legal_status || lg.legalStatus || '',
-          Internal_legal_status: lg.Internal_legal_status || lg.legalStatus || '',
-          remark: lg.Remark || lg.remark || '',
-          Remark: lg.Remark || lg.remark || '',
-          docTypes: lg.Types_of_legal_documents || lg.docTypes || '',
-          Types_of_legal_documents: lg.Types_of_legal_documents || lg.docTypes || '',
-          terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
-          Agreement_Terms_I: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
-          terms2: lg.Agreement_Terms_II || lg.terms2 || '',
-          Agreement_Terms_II: lg.Agreement_Terms_II || lg.terms2 || '',
-          tenure: lg.Tenure_of_Service || lg.tenure || '',
-          Tenure_of_Service: lg.Tenure_of_Service || lg.tenure || '',
-        }))
-      : (existingDeal?.legalData || []),
+    legalData: (() => {
+      const rawList = Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0
+        ? rawZoho.Legal
+        : (Array.isArray(existingDeal?.legalData) && existingDeal.legalData.length > 0 ? existingDeal.legalData : []);
+      const seenLegal = new Set<string>();
+      const uniqueLegal = rawList.filter((lg: any) => {
+        const schemaKey = (lg.Legal_Schemas || lg.Schemas || lg.schema || '').trim().toLowerCase();
+        if (!schemaKey) return true;
+        if (seenLegal.has(schemaKey)) return false;
+        seenLegal.add(schemaKey);
+        return true;
+      });
+      return uniqueLegal.map((lg: any, i: number) => ({
+        id: String(lg.id || `temp_${i + 1}`),
+        schema: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service',
+        Legal_Schemas: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service',
+        internalTeamType: lg.Internal_team_type || lg.internalTeamType || '',
+        Internal_team_type: lg.Internal_team_type || lg.internalTeamType || '',
+        legalStatus: lg.Internal_legal_status || lg.legalStatus || '',
+        Internal_legal_status: lg.Internal_legal_status || lg.legalStatus || '',
+        remark: lg.Remark || lg.remark || '',
+        Remark: lg.Remark || lg.remark || '',
+        docTypes: lg.Types_of_legal_documents || lg.docTypes || '',
+        Types_of_legal_documents: lg.Types_of_legal_documents || lg.docTypes || '',
+        terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
+        Agreement_Terms_I: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
+        terms2: lg.Agreement_Terms_II || lg.terms2 || '',
+        Agreement_Terms_II: lg.Agreement_Terms_II || lg.terms2 || '',
+        tenure: lg.Tenure_of_Service || lg.tenure || '',
+        Tenure_of_Service: lg.Tenure_of_Service || lg.tenure || '',
+      }));
+    })(),
     Legal: Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0
       ? rawZoho.Legal
       : (existingDeal?.Legal || existingDeal?.legalData || []),
