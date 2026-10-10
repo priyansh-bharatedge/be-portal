@@ -465,6 +465,113 @@ function buildQuotationZohoPayload(quotation: any): Record<string, any> {
   return payload;
 }
 
+async function reconcileDealSubformsWithZoho(
+  dealZohoId: string,
+  payload: Record<string, any>,
+  accessToken: string,
+  apiBase: string,
+  moduleName: string = 'Deals'
+): Promise<void> {
+  const cleanId = String(dealZohoId || '').trim();
+  if (!cleanId || !/^\d{15,}$/.test(cleanId)) return;
+
+  try {
+    const fetchUrl = `${apiBase}/crm/v8/${moduleName}/${cleanId}?fields=Subform_1,Legal`;
+    const res = await fetch(fetchUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+      },
+    });
+    if (!res.ok) return;
+    const json: any = await res.json();
+    const existing = json?.data?.[0];
+    if (!existing) return;
+
+    // 1. Reconcile Subform_1 (Choose services)
+    if (Array.isArray(payload.Subform_1) && payload.Subform_1.length > 0) {
+      const existingSubform = Array.isArray(existing.Subform_1) ? existing.Subform_1 : [];
+      const usedIds = new Set<string>();
+
+      payload.Subform_1 = payload.Subform_1.map((item: any, idx: number) => {
+        if (item.id && /^\d{15,}$/.test(String(item.id))) {
+          usedIds.add(String(item.id));
+          return item;
+        }
+
+        const itemSchema = (item.Schemas || item.Schema || item.name || '').trim().toLowerCase();
+        let matched = existingSubform.find(
+          (ex: any) => ex.id && !usedIds.has(String(ex.id)) && (ex.Schemas || ex.Schema || '').trim().toLowerCase() === itemSchema
+        );
+        if (!matched && existingSubform[idx] && !usedIds.has(String(existingSubform[idx].id))) {
+          matched = existingSubform[idx];
+        }
+
+        if (matched && matched.id && /^\d{15,}$/.test(String(matched.id))) {
+          usedIds.add(String(matched.id));
+          return { ...item, id: String(matched.id) };
+        }
+
+        const cleanItem = { ...item };
+        delete cleanItem.id;
+        return cleanItem;
+      });
+
+      // Mark all duplicate/unused rows in Zoho CRM for deletion
+      for (const ex of existingSubform) {
+        if (ex.id && /^\d{15,}$/.test(String(ex.id)) && !usedIds.has(String(ex.id))) {
+          payload.Subform_1.push({
+            id: String(ex.id),
+            _delete: null,
+          });
+        }
+      }
+    }
+
+    // 2. Reconcile Legal Subform
+    if (Array.isArray(payload.Legal) && payload.Legal.length > 0) {
+      const existingLegal = Array.isArray(existing.Legal) ? existing.Legal : [];
+      const usedLegalIds = new Set<string>();
+
+      payload.Legal = payload.Legal.map((item: any, idx: number) => {
+        if (item.id && /^\d{15,}$/.test(String(item.id))) {
+          usedLegalIds.add(String(item.id));
+          return item;
+        }
+
+        const itemSchema = (item.Legal_Schemas || item.schema || item.Schemas || '').trim().toLowerCase();
+        let matched = existingLegal.find(
+          (ex: any) => ex.id && !usedLegalIds.has(String(ex.id)) && (ex.Legal_Schemas || ex.Schemas || '').trim().toLowerCase() === itemSchema
+        );
+        if (!matched && existingLegal[idx] && !usedLegalIds.has(String(existingLegal[idx].id))) {
+          matched = existingLegal[idx];
+        }
+
+        if (matched && matched.id && /^\d{15,}$/.test(String(matched.id))) {
+          usedLegalIds.add(String(matched.id));
+          return { ...item, id: String(matched.id) };
+        }
+
+        const cleanItem = { ...item };
+        delete cleanItem.id;
+        return cleanItem;
+      });
+
+      // Mark all duplicate/unused rows in Zoho CRM for deletion
+      for (const ex of existingLegal) {
+        if (ex.id && /^\d{15,}$/.test(String(ex.id)) && !usedLegalIds.has(String(ex.id))) {
+          payload.Legal.push({
+            id: String(ex.id),
+            _delete: null,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Zoho API Handler] Error reconciling subform row IDs with Zoho CRM:', err);
+  }
+}
+
 function buildDealZohoPayload(deal: any): Record<string, any> {
   const fd = deal.formData || {};
   const clientName = fd.clientName || deal.client || '';
@@ -616,7 +723,7 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
       const itemPending = to2Dec(Math.max(0, itemTotal - itemReceived));
 
       return {
-        ...(svc.id && !String(svc.id).startsWith('temp_') && /^\d+$/.test(String(svc.id)) ? { id: String(svc.id) } : {}),
+        ...(svc.id && /^\d{15,}$/.test(String(svc.id)) ? { id: String(svc.id) } : {}),
         Schemas: svc.name || svc.Schemas || 'Website Development',
         Without_GST: itemBase,
         GST_amount: itemGst,
@@ -662,7 +769,7 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
     });
 
     payload.Legal = deduplicatedLegal.map((lg: any, idx: number) => ({
-      ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: String(lg.id) } : {}),
+      ...(lg.id && /^\d{15,}$/.test(String(lg.id)) ? { id: String(lg.id) } : {}),
       Legal_Schemas: lg.Legal_Schemas || lg.schema || lg.Schemas || (payload.Subform_1?.[idx]?.Schemas) || 'General Services',
       Internal_team_type: lg.Internal_team_type || lg.internalTeamType || '',
       Internal_legal_status: lg.Internal_legal_status || lg.legalStatus || '',
@@ -1747,6 +1854,12 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         } catch (bpErr) {
           console.warn('[Zoho API Handler] Auto-Blueprint Transition error:', bpErr);
         }
+      }
+
+      // Reconcile subform row IDs with existing Zoho CRM deal to prevent duplicate rows & delete old duplicate rows
+      if (isUpdate && (deal.zohoId || payload.id)) {
+        const targetZohoId = String(deal.zohoId || payload.id);
+        await reconcileDealSubformsWithZoho(targetZohoId, payload, accessToken, apiBase, moduleName);
       }
 
       let crmRes = await fetch(crmEndpoint, {

@@ -494,6 +494,113 @@ function zohoApiPlugin(): Plugin {
     return payload;
   }
 
+  async function reconcileDealSubformsWithZoho(
+    dealZohoId: string,
+    payload: Record<string, any>,
+    accessToken: string,
+    apiBase: string,
+    moduleName: string = 'Deals'
+  ): Promise<void> {
+    const cleanId = String(dealZohoId || '').trim();
+    if (!cleanId || !/^\d{15,}$/.test(cleanId)) return;
+
+    try {
+      const fetchUrl = `${apiBase}/crm/v8/${moduleName}/${cleanId}?fields=Subform_1,Legal`;
+      const res = await fetch(fetchUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`,
+        },
+      });
+      if (!res.ok) return;
+      const json: any = await res.json();
+      const existing = json?.data?.[0];
+      if (!existing) return;
+
+      // 1. Reconcile Subform_1 (Choose services)
+      if (Array.isArray(payload.Subform_1) && payload.Subform_1.length > 0) {
+        const existingSubform = Array.isArray(existing.Subform_1) ? existing.Subform_1 : [];
+        const usedIds = new Set<string>();
+
+        payload.Subform_1 = payload.Subform_1.map((item: any, idx: number) => {
+          if (item.id && /^\d{15,}$/.test(String(item.id))) {
+            usedIds.add(String(item.id));
+            return item;
+          }
+
+          const itemSchema = (item.Schemas || item.Schema || item.name || '').trim().toLowerCase();
+          let matched = existingSubform.find(
+            (ex: any) => ex.id && !usedIds.has(String(ex.id)) && (ex.Schemas || ex.Schema || '').trim().toLowerCase() === itemSchema
+          );
+          if (!matched && existingSubform[idx] && !usedIds.has(String(existingSubform[idx].id))) {
+            matched = existingSubform[idx];
+          }
+
+          if (matched && matched.id && /^\d{15,}$/.test(String(matched.id))) {
+            usedIds.add(String(matched.id));
+            return { ...item, id: String(matched.id) };
+          }
+
+          const cleanItem = { ...item };
+          delete cleanItem.id;
+          return cleanItem;
+        });
+
+        // Mark all duplicate/unused rows in Zoho CRM for deletion
+        for (const ex of existingSubform) {
+          if (ex.id && /^\d{15,}$/.test(String(ex.id)) && !usedIds.has(String(ex.id))) {
+            payload.Subform_1.push({
+              id: String(ex.id),
+              _delete: null,
+            });
+          }
+        }
+      }
+
+      // 2. Reconcile Legal Subform
+      if (Array.isArray(payload.Legal) && payload.Legal.length > 0) {
+        const existingLegal = Array.isArray(existing.Legal) ? existing.Legal : [];
+        const usedLegalIds = new Set<string>();
+
+        payload.Legal = payload.Legal.map((item: any, idx: number) => {
+          if (item.id && /^\d{15,}$/.test(String(item.id))) {
+            usedLegalIds.add(String(item.id));
+            return item;
+          }
+
+          const itemSchema = (item.Legal_Schemas || item.schema || item.Schemas || '').trim().toLowerCase();
+          let matched = existingLegal.find(
+            (ex: any) => ex.id && !usedLegalIds.has(String(ex.id)) && (ex.Legal_Schemas || ex.Schemas || '').trim().toLowerCase() === itemSchema
+          );
+          if (!matched && existingLegal[idx] && !usedLegalIds.has(String(existingLegal[idx].id))) {
+            matched = existingLegal[idx];
+          }
+
+          if (matched && matched.id && /^\d{15,}$/.test(String(matched.id))) {
+            usedLegalIds.add(String(matched.id));
+            return { ...item, id: String(matched.id) };
+          }
+
+          const cleanItem = { ...item };
+          delete cleanItem.id;
+          return cleanItem;
+        });
+
+        // Mark all duplicate/unused rows in Zoho CRM for deletion
+        for (const ex of existingLegal) {
+          if (ex.id && /^\d{15,}$/.test(String(ex.id)) && !usedLegalIds.has(String(ex.id))) {
+            payload.Legal.push({
+              id: String(ex.id),
+              _delete: null,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Vite Zoho Plugin] Error reconciling subform row IDs with Zoho CRM:', err);
+    }
+  }
+
   function buildDealZohoPayload(deal: any): Record<string, any> {
     const fd = deal.formData || {};
     const clientName = fd.clientName || deal.client || '';
@@ -619,34 +726,44 @@ function zohoApiPlugin(): Plugin {
 
     // Services Overview & Subform_1 (API Name: Subform_1)
     if (Array.isArray(servicesData) && servicesData.length > 0) {
-      payload.Service_Count = servicesData.length;
-      payload.Service_Name = servicesData.length === 1 ? servicesData[0].name : `${servicesData.length} Services`;
-      payload.Subform_1 = servicesData.map((svc: any, idx: number) => {
+      const seenSvc = new Set<string>();
+      const deduplicatedServices = servicesData.filter((s: any) => {
+        const nameKey = (s.name || s.Schemas || s.Service_Name || '').trim().toLowerCase();
+        if (!nameKey) return true;
+        if (seenSvc.has(nameKey)) return false;
+        seenSvc.add(nameKey);
+        return true;
+      });
+
+      payload.Service_Count = deduplicatedServices.length;
+      payload.Service_Name = deduplicatedServices.length === 1 ? (deduplicatedServices[0].name || deduplicatedServices[0].Schemas) : `${deduplicatedServices.length} Services`;
+      payload.Subform_1 = deduplicatedServices.map((svc: any, idx: number) => {
         const itemTotalFromSvc = Number(svc.totalAmount) || 0;
-        const itemGst = itemTotalFromSvc > 0
-          ? to2Dec(itemTotalFromSvc * 0.18)
-          : to2Dec((Number(svc.baseAmount) || 0) * 0.18);
-        const itemBase = itemTotalFromSvc > 0
-          ? to2Dec(itemTotalFromSvc - itemGst)
+        const itemBase = itemTotalFromSvc > 0 
+          ? to2Dec(itemTotalFromSvc / 1.18) 
           : to2Dec(Number(svc.baseAmount) || 0);
+        const itemGst = itemTotalFromSvc > 0 
+          ? to2Dec(itemTotalFromSvc - itemBase) 
+          : to2Dec(itemBase * 0.18);
         const itemTotal = itemTotalFromSvc > 0 ? to2Dec(itemTotalFromSvc) : to2Dec(itemBase + itemGst);
 
         let itemReceived = 0;
         if (grandTotalNum > 0) {
           itemReceived = to2Dec((itemTotal / grandTotalNum) * amountReceivedNum);
-        } else if (servicesData.length === 1) {
+        } else if (deduplicatedServices.length === 1) {
           itemReceived = amountReceivedNum;
         }
         const itemPending = to2Dec(Math.max(0, itemTotal - itemReceived));
 
         return {
-          Schemas: svc.name || 'Website Development',
+          ...(svc.id && /^\d{15,}$/.test(String(svc.id)) ? { id: String(svc.id) } : {}),
+          Schemas: svc.name || svc.Schemas || 'Website Development',
           Without_GST: itemBase,
           GST_amount: itemGst,
           Agreement_amount: itemTotal,
           Received_amount: itemReceived,
           Pending_amount: itemPending,
-          Payment_stages: '.',
+          Payment_stages: svc.Payment_stages || '.',
           Payment_type: amountReceivedNum >= grandTotalNum ? 'Full amount paid' : amountReceivedNum > 0 ? 'Partially paid' : 'Online',
           Payment_received_date: bookingDate,
           LinkingModule2_Serial_Number: String(idx + 1),
@@ -673,15 +790,24 @@ function zohoApiPlugin(): Plugin {
     }
 
     // Legal Subform (API Name: Legal)
-    const legalData = deal.legalData || deal.rawZohoDeal?.Legal || fd.legalData;
-    if (Array.isArray(legalData) && legalData.length > 0) {
-      payload.Legal = legalData.map((lg: any, idx: number) => ({
-        ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: lg.id } : {}),
-        Legal_Schemas: lg.schema || lg.Legal_Schemas || lg.Schemas || (payload.Subform_1?.[idx]?.Schemas) || 'General Services',
-        Internal_team_type: lg.internalTeamType || lg.Internal_team_type || '',
-        Internal_legal_status: lg.legalStatus || lg.Internal_legal_status || '',
-        Remark: lg.remark || lg.Remark || '',
-        Types_of_legal_documents: lg.docTypes || lg.Types_of_legal_documents || '',
+    const rawLegalData = deal.legalData || deal.rawZohoDeal?.Legal || deal.Legal || fd.legalData || fd.Legal;
+    if (Array.isArray(rawLegalData) && rawLegalData.length > 0) {
+      const seenLegal = new Set<string>();
+      const deduplicatedLegal = rawLegalData.filter((lg: any) => {
+        const schemaKey = (lg.Legal_Schemas || lg.schema || lg.Schemas || '').trim().toLowerCase();
+        if (!schemaKey) return true;
+        if (seenLegal.has(schemaKey)) return false;
+        seenLegal.add(schemaKey);
+        return true;
+      });
+
+      payload.Legal = deduplicatedLegal.map((lg: any, idx: number) => ({
+        ...(lg.id && /^\d{15,}$/.test(String(lg.id)) ? { id: String(lg.id) } : {}),
+        Legal_Schemas: lg.Legal_Schemas || lg.schema || lg.Schemas || (payload.Subform_1?.[idx]?.Schemas) || 'General Services',
+        Internal_team_type: lg.Internal_team_type || lg.internalTeamType || '',
+        Internal_legal_status: lg.Internal_legal_status || lg.legalStatus || '',
+        Remark: lg.Remark || lg.remark || '',
+        Types_of_legal_documents: lg.Types_of_legal_documents || lg.docTypes || '',
         Agreement_Terms_I: lg.terms1 || lg.Agreement_Terms_I || lg.agreementTerms || '',
         Agreement_Terms_II: lg.terms2 || lg.Agreement_Terms_II || '',
         Tenure_of_Service: lg.tenure || lg.Tenure_of_Service || '',
@@ -1587,6 +1713,12 @@ function zohoApiPlugin(): Plugin {
                 } catch (bpErr) {
                   console.warn('[Vite Zoho Plugin] Auto-Blueprint Transition error:', bpErr);
                 }
+              }
+
+              // Reconcile subform row IDs with existing Zoho CRM deal to prevent duplicate rows & delete old duplicate rows
+              if (isUpdate && (deal.zohoId || payload.id)) {
+                const targetZohoId = String(deal.zohoId || payload.id);
+                await reconcileDealSubformsWithZoho(targetZohoId, payload, accessToken, apiBase, moduleName);
               }
 
               console.log(`[Vite Zoho Plugin] ${isUpdate ? 'Updating' : 'Inserting'} Deal in Zoho CRM:`, payload.Name || payload.Deal_Name, deal.zohoId ? `(ID: ${deal.zohoId})` : '');

@@ -538,7 +538,7 @@ export const DealDetails = () => {
         ...deal,
         legalData: formattedLegal,
         Legal: formattedLegal.map((lg: any) => ({
-          ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: lg.id } : {}),
+          ...(lg.id && /^\d{15,}$/.test(String(lg.id)) ? { id: lg.id } : {}),
           Legal_Schemas: lg.schema || lg.Legal_Schemas || 'Service',
           Internal_team_type: lg.internalTeamType || lg.Internal_team_type || '',
           Internal_legal_status: lg.legalStatus || lg.Internal_legal_status || '',
@@ -556,7 +556,7 @@ export const DealDetails = () => {
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
           Legal: formattedLegal.map((lg: any) => ({
-            ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: lg.id } : {}),
+            ...(lg.id && /^\d{15,}$/.test(String(lg.id)) ? { id: lg.id } : {}),
             Legal_Schemas: lg.schema || lg.Legal_Schemas || 'Service',
             Internal_team_type: lg.internalTeamType || lg.Internal_team_type || '',
             Internal_legal_status: lg.legalStatus || lg.Internal_legal_status || '',
@@ -668,7 +668,7 @@ export const DealDetails = () => {
           Reminder_5_date: legalHandoverData.reminder5Date,
           Reminder_5: legalHandoverData.reminder5Date,
           Legal: legalSubformItems.map((lg: any) => ({
-            ...(lg.id && !String(lg.id).startsWith('temp_') ? { id: lg.id } : {}),
+            ...(lg.id && /^\d{15,}$/.test(String(lg.id)) ? { id: lg.id } : {}),
             Legal_Schemas: lg.schema,
             Internal_team_type: lg.internalTeamType,
             Internal_legal_status: lg.legalStatus,
@@ -781,7 +781,7 @@ export const DealDetails = () => {
           Reminder_5_date: legalHandoverData.reminder5Date,
           Reminder_5: legalHandoverData.reminder5Date,
           Legal: legalSubformItems.map((lg: any) => ({
-            ...(lg.id && !String(lg.id).startsWith('temp_') ? { id: lg.id } : {}),
+            ...(lg.id && /^\d{15,}$/.test(String(lg.id)) ? { id: lg.id } : {}),
             Legal_Schemas: lg.schema,
             Internal_team_type: lg.internalTeamType,
             Internal_legal_status: lg.legalStatus,
