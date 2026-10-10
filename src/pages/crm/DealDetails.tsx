@@ -139,7 +139,7 @@ export const AGREEMENT_TERMS = [
 export const DealDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentUser, isSuperAdmin, isHOD, isAccounts, isLegal } = useAuth();
+  const { currentUser, isSuperAdmin, isHOD, isAccounts, isLegal, isSales } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deal, setDeal] = useState<any>(null);
@@ -1321,7 +1321,7 @@ export const DealDetails = () => {
             return (
               <>
                 {/* 1. Send to Accounts (Sales to Account: 1078476000000489153) */}
-                {isSalesOrDraft && !splitBreakdown.isPaymentVerified && (
+                {isSalesOrDraft && !splitBreakdown.isPaymentVerified && (isSales || isSuperAdmin || (!isAccounts && !isLegal)) && (
                   <button
                     onClick={handleSendToAccounts}
                     disabled={isActionInProgress}
@@ -1334,7 +1334,7 @@ export const DealDetails = () => {
                 )}
 
                 {/* 2. Verify Payment (Accounts action - Automatically moves to Legal) */}
-                {!splitBreakdown.isPaymentVerified && (isAccountsStage || isAccounts || isSuperAdmin) && (
+                {!splitBreakdown.isPaymentVerified && isAccountsStage && (isAccounts || isSuperAdmin) && (
                   <button
                     onClick={handleVerifyPayment}
                     disabled={isActionInProgress}
@@ -1347,7 +1347,7 @@ export const DealDetails = () => {
                 )}
 
                 {/* 3. Send to Legal (Account to Legal: 1078476000000492001) */}
-                {splitBreakdown.isPaymentVerified && isAccountsStage && (
+                {splitBreakdown.isPaymentVerified && isAccountsStage && (isAccounts || isSuperAdmin) && (
                   <button
                     onClick={handleSendToLegal}
                     disabled={isActionInProgress}
@@ -1360,7 +1360,7 @@ export const DealDetails = () => {
                 )}
 
                 {/* 4. Send to Operations Allocator (Legal to Operations Allocator: 1078476000000492099) */}
-                {isLegalStage && (
+                {isLegalStage && (isLegal || isSuperAdmin) && (
                   <button
                     onClick={handleSendToOperationsAllocator}
                     disabled={isActionInProgress}
@@ -1373,7 +1373,7 @@ export const DealDetails = () => {
                 )}
 
                 {/* 5. Send to Operations Executors (Operations Allocator to Operations Executors: 1078476000001938757) */}
-                {isAllocatorStage && (
+                {isAllocatorStage && (isSuperAdmin || (!isSales && !isAccounts && !isLegal)) && (
                   <button
                     onClick={handleSendToOperationsExecutors}
                     disabled={isActionInProgress}
@@ -2741,7 +2741,7 @@ export const DealDetails = () => {
                 return (
                   <>
                     {/* 1. Send to Accounts (Sales to Account: 1078476000000489153) */}
-                    {isSalesOrDraft && !splitBreakdown.isPaymentVerified && (
+                    {isSalesOrDraft && !splitBreakdown.isPaymentVerified && (isSales || isSuperAdmin || (!isAccounts && !isLegal)) && (
                       <button
                         onClick={handleSendToAccounts}
                         disabled={isActionInProgress}
@@ -2753,7 +2753,7 @@ export const DealDetails = () => {
                     )}
 
                     {/* 2. Verify Payment (Accounts action - Automatically moves to Legal) */}
-                    {!splitBreakdown.isPaymentVerified && (isAccountsStage || isAccounts || isSuperAdmin) && (
+                    {!splitBreakdown.isPaymentVerified && isAccountsStage && (isAccounts || isSuperAdmin) && (
                       <button
                         onClick={handleVerifyPayment}
                         disabled={isActionInProgress}
@@ -2765,7 +2765,7 @@ export const DealDetails = () => {
                     )}
 
                     {/* 3. Send to Legal (Account to Legal: 1078476000000492001) */}
-                    {splitBreakdown.isPaymentVerified && isAccountsStage && (
+                    {splitBreakdown.isPaymentVerified && isAccountsStage && (isAccounts || isSuperAdmin) && (
                       <button
                         onClick={handleSendToLegal}
                         disabled={isActionInProgress}
@@ -2777,7 +2777,7 @@ export const DealDetails = () => {
                     )}
 
                     {/* 4. Send to Operations Allocator (Legal to Operations Allocator: 1078476000000492099) */}
-                    {isLegalStage && (
+                    {isLegalStage && (isLegal || isSuperAdmin) && (
                       <button
                         onClick={handleSendToOperationsAllocator}
                         disabled={isActionInProgress}
@@ -2789,7 +2789,7 @@ export const DealDetails = () => {
                     )}
 
                     {/* 5. Send to Operations Executors (Operations Allocator to Operations Executors: 1078476000001938757) */}
-                    {isAllocatorStage && (
+                    {isAllocatorStage && (isSuperAdmin || (!isSales && !isAccounts && !isLegal)) && (
                       <button
                         onClick={handleSendToOperationsExecutors}
                         disabled={isActionInProgress}

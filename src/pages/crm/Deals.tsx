@@ -48,7 +48,7 @@ export const Deals = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, isSuperAdmin, isHR, isHOD, isAccounts, isLegal, availableUsers, filterRecords } = useAuth();
+  const { currentUser, isSuperAdmin, isHR, isHOD, isAccounts, isLegal, isSales, availableUsers, filterRecords } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
@@ -2789,7 +2789,7 @@ export const Deals = () => {
                             return (
                               <>
                                 {/* 1. Send to Accounts Button (Sales to Account Blueprint Transition: 1078476000000489153) */}
-                                {isSalesOrDraft && !breakdown.isPaymentVerified && (
+                                {isSalesOrDraft && !breakdown.isPaymentVerified && (isSales || isSuperAdmin || (!isAccounts && !isLegal)) && (
                                   (() => {
                                     const val = isDealMissingMandatoryDetails(deal);
                                     return (
@@ -2807,7 +2807,7 @@ export const Deals = () => {
                                 )}
 
                                 {/* 2. Verify Payment Button (Accounts Department Action - Automatically moves deal to Legal) */}
-                                {!breakdown.isPaymentVerified && (isAccountsStage || isAccounts || isSuperAdmin) && (
+                                {!breakdown.isPaymentVerified && isAccountsStage && (isAccounts || isSuperAdmin) && (
                                   <button
                                     onClick={() => handleVerifyPayment(deal)}
                                     disabled={syncingId === deal.id}
@@ -2820,7 +2820,7 @@ export const Deals = () => {
                                 )}
 
                                 {/* 3. Send to Legal Button (Account to Legal Blueprint Transition: 1078476000000492001) */}
-                                {breakdown.isPaymentVerified && isAccountsStage && (
+                                {breakdown.isPaymentVerified && isAccountsStage && (isAccounts || isSuperAdmin) && (
                                   <button
                                     onClick={() => handleSendToLegal(deal)}
                                     disabled={syncingId === deal.id}
@@ -2833,7 +2833,7 @@ export const Deals = () => {
                                 )}
 
                                 {/* 4. Send to Operations Allocator (Legal to Operations Allocator Blueprint Transition: 1078476000000492099) */}
-                                {isLegalStage && (
+                                {isLegalStage && (isLegal || isSuperAdmin) && (
                                   <button
                                     onClick={() => handleSendToOperationsAllocator(deal)}
                                     disabled={syncingId === deal.id}
@@ -2846,7 +2846,7 @@ export const Deals = () => {
                                 )}
 
                                 {/* 5. Send to Operations Executors (Operations Allocator to Operations Executors Blueprint Transition: 1078476000001938757) */}
-                                {isAllocatorStage && (
+                                {isAllocatorStage && (isSuperAdmin || (!isSales && !isAccounts && !isLegal)) && (
                                   <button
                                     onClick={() => handleSendToOperationsExecutors(deal)}
                                     disabled={syncingId === deal.id}

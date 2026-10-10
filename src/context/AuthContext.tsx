@@ -42,6 +42,7 @@ interface AuthContextType {
   isTM: boolean;
   isAccounts: boolean;
   isLegal: boolean;
+  isSales: boolean;
   can: (permission: string) => boolean;
   searchEmployeeInZoho: (email: string) => Promise<{ success: boolean; exists: boolean; hasPassword?: boolean; employee?: any; error?: string }>;
   login: (email: string, password?: string, role?: SystemRole) => { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser; token?: string };
@@ -913,6 +914,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deptLower = (currentUser.department || '').toLowerCase();
   const isAccounts = deptLower.includes('account') || deptLower.includes('finance');
   const isLegal = deptLower.includes('legal');
+  const isSales = deptLower.includes('sale') || deptLower.includes('bdm') || (!isAccounts && !isLegal && !isSuperAdmin && !isHR && !deptLower.includes('allocat') && !deptLower.includes('execut') && !deptLower.includes('operat'));
 
   const activeRole: SystemRole = isSuperAdmin ? 'Super Admin' : isHR ? 'HR' : isHOD ? 'HOD' : isTL ? 'TL' : 'TM';
   const roleInfo = ROLE_DEFINITIONS[activeRole] || ROLE_DEFINITIONS['TM'];
@@ -1027,6 +1029,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isTM,
         isAccounts,
         isLegal,
+        isSales,
         can,
         searchEmployeeInZoho,
         login,
