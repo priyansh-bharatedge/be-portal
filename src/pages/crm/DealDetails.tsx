@@ -189,18 +189,28 @@ export const DealDetails = () => {
         : (Array.isArray(deal.servicesData) && deal.servicesData.length > 0 ? deal.servicesData : []);
 
       if (dealLegal) {
-        setLegalSubformItems(dealLegal);
+        setLegalSubformItems(dealLegal.map((lg: any, i: number) => ({
+          id: String(lg.id || `temp_${i + 1}`),
+          schema: lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service',
+          internalTeamType: lg.internalTeamType || lg.Internal_team_type || '',
+          legalStatus: lg.legalStatus || lg.Internal_legal_status || '',
+          remark: lg.remark || lg.Remark || '',
+          docTypes: lg.docTypes || lg.Types_of_legal_documents || '',
+          terms1: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
+          terms2: lg.terms2 || lg.Agreement_Terms_II || '',
+          tenure: lg.tenure || lg.Tenure_of_Service || '',
+        })));
       } else if (rawLegal) {
         setLegalSubformItems(rawLegal.map((lg: any, i: number) => ({
           id: String(lg.id || `temp_${i + 1}`),
-          schema: lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service',
-          internalTeamType: lg.Internal_team_type || '',
-          legalStatus: lg.Internal_legal_status || '',
-          remark: lg.Remark || '',
-          docTypes: lg.Types_of_legal_documents || '',
-          terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || '',
-          terms2: lg.Agreement_Terms_II || '',
-          tenure: lg.Tenure_of_Service || '',
+          schema: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service',
+          internalTeamType: lg.Internal_team_type || lg.internalTeamType || '',
+          legalStatus: lg.Internal_legal_status || lg.legalStatus || '',
+          remark: lg.Remark || lg.remark || '',
+          docTypes: lg.Types_of_legal_documents || lg.docTypes || '',
+          terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
+          terms2: lg.Agreement_Terms_II || lg.terms2 || '',
+          tenure: lg.Tenure_of_Service || lg.tenure || '',
         })));
       } else if (servicesList.length > 0) {
         setLegalSubformItems(servicesList.map((svc: any, i: number) => ({
@@ -479,17 +489,37 @@ export const DealDetails = () => {
     if (!deal) return;
     setIsSavingLegalSubform(true);
     try {
+      const formattedLegal = legalSubformItems.map((lg: any, idx: number) => ({
+        id: String(lg.id || `temp_${idx + 1}`),
+        schema: lg.schema || lg.Legal_Schemas || lg.Schemas || 'Service',
+        Legal_Schemas: lg.schema || lg.Legal_Schemas || lg.Schemas || 'Service',
+        internalTeamType: lg.internalTeamType || lg.Internal_team_type || '',
+        Internal_team_type: lg.internalTeamType || lg.Internal_team_type || '',
+        legalStatus: lg.legalStatus || lg.Internal_legal_status || '',
+        Internal_legal_status: lg.legalStatus || lg.Internal_legal_status || '',
+        remark: lg.remark || lg.Remark || '',
+        Remark: lg.remark || lg.Remark || '',
+        docTypes: lg.docTypes || lg.Types_of_legal_documents || '',
+        Types_of_legal_documents: lg.docTypes || lg.Types_of_legal_documents || '',
+        terms1: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
+        Agreement_Terms_I: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
+        terms2: lg.terms2 || lg.Agreement_Terms_II || '',
+        Agreement_Terms_II: lg.terms2 || lg.Agreement_Terms_II || '',
+        tenure: lg.tenure || lg.Tenure_of_Service || '',
+        Tenure_of_Service: lg.tenure || lg.Tenure_of_Service || '',
+      }));
+
       const updatedDeal = {
         ...deal,
-        legalData: legalSubformItems,
+        legalData: formattedLegal,
         formData: {
           ...(deal.formData || {}),
-          legalData: legalSubformItems,
+          legalData: formattedLegal,
         },
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
-          Legal: legalSubformItems.map((lg: any) => ({
-            ...(lg.id && !String(lg.id).startsWith('temp_') ? { id: lg.id } : {}),
+          Legal: formattedLegal.map((lg: any) => ({
+            ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: lg.id } : {}),
             Legal_Schemas: lg.schema,
             Internal_team_type: lg.internalTeamType,
             Internal_legal_status: lg.legalStatus,
@@ -503,6 +533,8 @@ export const DealDetails = () => {
       };
 
       setDeal(updatedDeal);
+      setLegalSubformItems(formattedLegal);
+
       try {
         const saved = localStorage.getItem('be_deals');
         if (saved) {
@@ -512,10 +544,15 @@ export const DealDetails = () => {
         }
       } catch (e) {}
 
+      // Dispatch real-time global deal update event
+      try {
+        window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
+      } catch (e) {}
+
       const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
       if (!silent) {
         if (zohoRes.success) {
-          setWorkflowToast({ type: 'success', message: 'Legal subform details updated & synchronized with Zoho CRM successfully.' });
+          setWorkflowToast({ type: 'success', message: 'Legal subform details submitted & synchronized with Zoho CRM successfully.' });
         } else {
           setWorkflowToast({ type: 'success', message: 'Legal subform details saved locally and queued for database synchronization.' });
         }
@@ -523,7 +560,7 @@ export const DealDetails = () => {
       return updatedDeal;
     } catch (e: any) {
       if (!silent) {
-        setWorkflowToast({ type: 'error', message: e?.message || 'Failed to save legal subform details' });
+        setWorkflowToast({ type: 'error', message: e?.message || 'Failed to submit legal subform details' });
       }
     } finally {
       setIsSavingLegalSubform(false);
@@ -1638,10 +1675,10 @@ export const DealDetails = () => {
                     type="button"
                     onClick={() => handleSaveLegalSubform(false)}
                     disabled={isSavingLegalSubform || isActionInProgress}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-all shadow-xs disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs disabled:opacity-50"
                   >
-                    {isSavingLegalSubform ? <Loader2 size={13} className="animate-spin text-indigo-600" /> : <Save size={13} className="text-indigo-600" />}
-                    <span>Save Legal Subform</span>
+                    {isSavingLegalSubform ? <Loader2 size={13} className="animate-spin text-white" /> : <Save size={13} className="text-white" />}
+                    <span>{isSavingLegalSubform ? 'Submitting...' : 'Submit Legal Details'}</span>
                   </button>
                 )}
               </div>
@@ -1787,6 +1824,34 @@ export const DealDetails = () => {
                   </table>
                 </div>
               </div>
+
+              {/* Submit Action Bar at the bottom of the Legal Subform table */}
+              {shouldShowLegalSection && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100 bg-gray-50/50 -mx-6 -mb-6 p-4 rounded-b-2xl">
+                  <div className="text-xs text-gray-500 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                    <span>Fill in internal team, legal status, document types & terms, then click <strong>Submit</strong> to update the record.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveLegalSubform(false)}
+                    disabled={isSavingLegalSubform || isActionInProgress}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg active:scale-[0.99] transition-all disabled:opacity-50 w-full sm:w-auto cursor-pointer"
+                  >
+                    {isSavingLegalSubform ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-white" />
+                        <span>Submitting Legal Details...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={14} className="text-white" />
+                        <span>Submit Legal Details</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
