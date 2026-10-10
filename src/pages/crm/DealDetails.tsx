@@ -512,22 +512,34 @@ export const DealDetails = () => {
       const updatedDeal = {
         ...deal,
         legalData: formattedLegal,
+        Legal: formattedLegal.map((lg: any) => ({
+          ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: lg.id } : {}),
+          Legal_Schemas: lg.schema || lg.Legal_Schemas || 'Service',
+          Internal_team_type: lg.internalTeamType || lg.Internal_team_type || '',
+          Internal_legal_status: lg.legalStatus || lg.Internal_legal_status || '',
+          Remark: lg.remark || lg.Remark || '',
+          Types_of_legal_documents: lg.docTypes || lg.Types_of_legal_documents || '',
+          Agreement_Terms_I: lg.terms1 || lg.Agreement_Terms_I || '',
+          Agreement_Terms_II: lg.terms2 || lg.Agreement_Terms_II || '',
+          Tenure_of_Service: lg.tenure || lg.Tenure_of_Service || '',
+        })),
         formData: {
           ...(deal.formData || {}),
           legalData: formattedLegal,
+          Legal: formattedLegal,
         },
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
           Legal: formattedLegal.map((lg: any) => ({
             ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: lg.id } : {}),
-            Legal_Schemas: lg.schema,
-            Internal_team_type: lg.internalTeamType,
-            Internal_legal_status: lg.legalStatus,
-            Remark: lg.remark,
-            Types_of_legal_documents: lg.docTypes,
-            Agreement_Terms_I: lg.terms1,
-            Agreement_Terms_II: lg.terms2,
-            Tenure_of_Service: lg.tenure,
+            Legal_Schemas: lg.schema || lg.Legal_Schemas || 'Service',
+            Internal_team_type: lg.internalTeamType || lg.Internal_team_type || '',
+            Internal_legal_status: lg.legalStatus || lg.Internal_legal_status || '',
+            Remark: lg.remark || lg.Remark || '',
+            Types_of_legal_documents: lg.docTypes || lg.Types_of_legal_documents || '',
+            Agreement_Terms_I: lg.terms1 || lg.Agreement_Terms_I || '',
+            Agreement_Terms_II: lg.terms2 || lg.Agreement_Terms_II || '',
+            Tenure_of_Service: lg.tenure || lg.Tenure_of_Service || '',
           }))
         }
       };

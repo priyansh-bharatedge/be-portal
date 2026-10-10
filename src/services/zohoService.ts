@@ -1768,16 +1768,27 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     legalData: Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0
       ? rawZoho.Legal.map((lg: any, i: number) => ({
           id: String(lg.id || `temp_${i + 1}`),
-          schema: lg.Legal_Schemas || lg.Schemas || servicesSubform[i]?.name || 'Service',
-          internalTeamType: lg.Internal_team_type || '',
-          legalStatus: lg.Internal_legal_status || '',
-          remark: lg.Remark || '',
-          docTypes: lg.Types_of_legal_documents || '',
-          terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || '',
-          terms2: lg.Agreement_Terms_II || '',
-          tenure: lg.Tenure_of_Service || '',
+          schema: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service',
+          Legal_Schemas: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service',
+          internalTeamType: lg.Internal_team_type || lg.internalTeamType || '',
+          Internal_team_type: lg.Internal_team_type || lg.internalTeamType || '',
+          legalStatus: lg.Internal_legal_status || lg.legalStatus || '',
+          Internal_legal_status: lg.Internal_legal_status || lg.legalStatus || '',
+          remark: lg.Remark || lg.remark || '',
+          Remark: lg.Remark || lg.remark || '',
+          docTypes: lg.Types_of_legal_documents || lg.docTypes || '',
+          Types_of_legal_documents: lg.Types_of_legal_documents || lg.docTypes || '',
+          terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
+          Agreement_Terms_I: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
+          terms2: lg.Agreement_Terms_II || lg.terms2 || '',
+          Agreement_Terms_II: lg.Agreement_Terms_II || lg.terms2 || '',
+          tenure: lg.Tenure_of_Service || lg.tenure || '',
+          Tenure_of_Service: lg.Tenure_of_Service || lg.tenure || '',
         }))
       : (existingDeal?.legalData || []),
+    Legal: Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0
+      ? rawZoho.Legal
+      : (existingDeal?.Legal || existingDeal?.legalData || []),
     totals: {
       grandTotal: totalNum,
       baseAmount: withoutGst,
