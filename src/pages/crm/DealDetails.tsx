@@ -171,7 +171,7 @@ export const DealDetails = () => {
       const fd = deal.formData || {};
       setLegalHandoverData({
         legalDocsSenderName: deal.legalDocsSenderName || deal.Legal_documents_sender_name || raw.Legal_documents_sender_name || raw.Employee_name_sent1 || raw.Employee_name_sent || fd.legalDocsSenderName || '',
-        legalDocsSenderDate: normalizeDateForInput(deal.legalDocsSenderDate || deal.Legal_documents_sender_date || raw.Legal_documents_sender_date || deal.Legal_date || raw.Legal_date || fd.legalDocsSenderDate || ''),
+        legalDocsSenderDate: normalizeDateForInput(deal.legalDocsSenderDate || deal.Date || deal.Legal_documents_sender_date || raw.Date || raw.Legal_documents_sender_date || deal.Legal_date || raw.Legal_date || fd.Date || fd.legalDocsSenderDate || ''),
         legalDocsReceiverName: deal.legalDocsReceiverName || deal.Legal_documents_receiver_name || raw.Legal_documents_receiver_name || raw.Employee_name_received1 || raw.Employee_name_received || fd.legalDocsReceiverName || '',
         legalDocsReceivedDate: normalizeDateForInput(deal.legalDocsReceivedDate || deal.Legal_documents_received_date || raw.Legal_documents_received_date || fd.legalDocsReceivedDate || ''),
         reminder1Date: normalizeDateForInput(deal.reminder1Date || deal.Reminder_1_date || raw.Reminder_1_date || raw.Reminder_1 || fd.reminder1Date || ''),
@@ -576,41 +576,60 @@ export const DealDetails = () => {
         ...legalHandoverData,
         legalData: legalSubformItems,
         Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+        Date: legalHandoverData.legalDocsSenderDate,
         Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
         Legal_date: legalHandoverData.legalDocsSenderDate,
         Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
         Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
         Reminder_1_date: legalHandoverData.reminder1Date,
+        Reminder_1: legalHandoverData.reminder1Date,
         Reminder_2_date: legalHandoverData.reminder2Date,
+        Reminder_2: legalHandoverData.reminder2Date,
         Reminder_3_date: legalHandoverData.reminder3Date,
+        Reminder_3: legalHandoverData.reminder3Date,
         Reminder_4_date: legalHandoverData.reminder4Date,
+        Reminder_4: legalHandoverData.reminder4Date,
         Reminder_5_date: legalHandoverData.reminder5Date,
+        Reminder_5: legalHandoverData.reminder5Date,
         formData: {
           ...(deal.formData || {}),
           ...legalHandoverData,
           legalData: legalSubformItems,
           Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
-          Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
-          Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
-          Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
-          Reminder_1_date: legalHandoverData.reminder1Date,
-          Reminder_2_date: legalHandoverData.reminder2Date,
-          Reminder_3_date: legalHandoverData.reminder3Date,
-          Reminder_4_date: legalHandoverData.reminder4Date,
-          Reminder_5_date: legalHandoverData.reminder5Date,
-        },
-        rawZohoDeal: {
-          ...(deal.rawZohoDeal || {}),
-          Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+          Date: legalHandoverData.legalDocsSenderDate,
           Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
           Legal_date: legalHandoverData.legalDocsSenderDate,
           Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
           Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
           Reminder_1_date: legalHandoverData.reminder1Date,
+          Reminder_1: legalHandoverData.reminder1Date,
           Reminder_2_date: legalHandoverData.reminder2Date,
+          Reminder_2: legalHandoverData.reminder2Date,
           Reminder_3_date: legalHandoverData.reminder3Date,
+          Reminder_3: legalHandoverData.reminder3Date,
           Reminder_4_date: legalHandoverData.reminder4Date,
+          Reminder_4: legalHandoverData.reminder4Date,
           Reminder_5_date: legalHandoverData.reminder5Date,
+          Reminder_5: legalHandoverData.reminder5Date,
+        },
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+          Date: legalHandoverData.legalDocsSenderDate,
+          Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
+          Legal_date: legalHandoverData.legalDocsSenderDate,
+          Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
+          Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
+          Reminder_1_date: legalHandoverData.reminder1Date,
+          Reminder_1: legalHandoverData.reminder1Date,
+          Reminder_2_date: legalHandoverData.reminder2Date,
+          Reminder_2: legalHandoverData.reminder2Date,
+          Reminder_3_date: legalHandoverData.reminder3Date,
+          Reminder_3: legalHandoverData.reminder3Date,
+          Reminder_4_date: legalHandoverData.reminder4Date,
+          Reminder_4: legalHandoverData.reminder4Date,
+          Reminder_5_date: legalHandoverData.reminder5Date,
+          Reminder_5: legalHandoverData.reminder5Date,
           Legal: legalSubformItems.map((lg: any) => ({
             ...(lg.id && !String(lg.id).startsWith('temp_') ? { id: lg.id } : {}),
             Legal_Schemas: lg.schema,
@@ -635,12 +654,17 @@ export const DealDetails = () => {
         }
       } catch (e) {}
 
+      // Dispatch real-time global deal update event
+      try {
+        window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
+      } catch (e) {}
+
       const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
       if (!silent) {
         if (zohoRes.success) {
-          setWorkflowToast({ type: 'success', message: 'Legal document handover details and follow-up reminders saved successfully.' });
+          setWorkflowToast({ type: 'success', message: 'Legal document handover details and follow-up reminders saved & updated in Zoho CRM successfully.' });
         } else {
-          setWorkflowToast({ type: 'success', message: 'Saved locally, syncing with database.' });
+          setWorkflowToast({ type: 'success', message: 'Saved locally, syncing with Zoho CRM database.' });
         }
       }
       return updatedDeal;
@@ -663,28 +687,40 @@ export const DealDetails = () => {
         ...legalHandoverData,
         legalData: legalSubformItems,
         Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+        Date: legalHandoverData.legalDocsSenderDate,
         Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
         Legal_date: legalHandoverData.legalDocsSenderDate,
         Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
         Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
         Reminder_1_date: legalHandoverData.reminder1Date,
+        Reminder_1: legalHandoverData.reminder1Date,
         Reminder_2_date: legalHandoverData.reminder2Date,
+        Reminder_2: legalHandoverData.reminder2Date,
         Reminder_3_date: legalHandoverData.reminder3Date,
+        Reminder_3: legalHandoverData.reminder3Date,
         Reminder_4_date: legalHandoverData.reminder4Date,
+        Reminder_4: legalHandoverData.reminder4Date,
         Reminder_5_date: legalHandoverData.reminder5Date,
+        Reminder_5: legalHandoverData.reminder5Date,
         formData: {
           ...(deal.formData || {}),
           ...legalHandoverData,
           legalData: legalSubformItems,
           Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+          Date: legalHandoverData.legalDocsSenderDate,
           Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
           Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
           Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
           Reminder_1_date: legalHandoverData.reminder1Date,
+          Reminder_1: legalHandoverData.reminder1Date,
           Reminder_2_date: legalHandoverData.reminder2Date,
+          Reminder_2: legalHandoverData.reminder2Date,
           Reminder_3_date: legalHandoverData.reminder3Date,
+          Reminder_3: legalHandoverData.reminder3Date,
           Reminder_4_date: legalHandoverData.reminder4Date,
+          Reminder_4: legalHandoverData.reminder4Date,
           Reminder_5_date: legalHandoverData.reminder5Date,
+          Reminder_5: legalHandoverData.reminder5Date,
         },
         stage: 'Operations Allocator',
         Stage: 'Operations Allocator',
@@ -692,15 +728,21 @@ export const DealDetails = () => {
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
           Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+          Date: legalHandoverData.legalDocsSenderDate,
           Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
           Legal_date: legalHandoverData.legalDocsSenderDate,
           Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
           Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
           Reminder_1_date: legalHandoverData.reminder1Date,
+          Reminder_1: legalHandoverData.reminder1Date,
           Reminder_2_date: legalHandoverData.reminder2Date,
+          Reminder_2: legalHandoverData.reminder2Date,
           Reminder_3_date: legalHandoverData.reminder3Date,
+          Reminder_3: legalHandoverData.reminder3Date,
           Reminder_4_date: legalHandoverData.reminder4Date,
+          Reminder_4: legalHandoverData.reminder4Date,
           Reminder_5_date: legalHandoverData.reminder5Date,
+          Reminder_5: legalHandoverData.reminder5Date,
           Legal: legalSubformItems.map((lg: any) => ({
             ...(lg.id && !String(lg.id).startsWith('temp_') ? { id: lg.id } : {}),
             Legal_Schemas: lg.schema,
@@ -724,6 +766,11 @@ export const DealDetails = () => {
           const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
           localStorage.setItem('be_deals', JSON.stringify(updatedAll));
         }
+      } catch (e) {}
+
+      // Dispatch real-time global deal update event
+      try {
+        window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
       } catch (e) {}
 
       // 1. Sync updated deal data & legal fields to Zoho CRM

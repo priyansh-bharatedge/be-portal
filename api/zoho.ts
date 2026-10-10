@@ -728,52 +728,74 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
     payload.Employee_Code = String(empCode);
   }
 
-  // Legal Handover Details & Follow-up Reminders
-  const legalSenderName = deal.legalDocsSenderName || deal.Legal_documents_sender_name || fd.legalDocsSenderName || fd.Legal_documents_sender_name || '';
+  // Legal Handover Details & Follow-up Reminders (Zoho API Names: Legal_documents_sender_name, Date, Legal_documents_receiver_name, Legal_documents_received_date, Reminder_1_date .. Reminder_5_date)
+  const legalSenderName = deal.Legal_documents_sender_name || deal.legalDocsSenderName || fd.Legal_documents_sender_name || fd.legalDocsSenderName || '';
   if (legalSenderName) {
     payload.Legal_documents_sender_name = legalSenderName;
     payload.Employee_name_sent = legalSenderName;
     payload.Employee_name_sent1 = legalSenderName;
   }
-  const legalSenderDate = deal.legalDocsSenderDate || deal.Legal_documents_sender_date || deal.Legal_date || fd.legalDocsSenderDate || fd.Legal_documents_sender_date || '';
+  const legalSenderDate = deal.Date || deal.legalDocsSenderDate || deal.Legal_documents_sender_date || deal.Legal_date || fd.Date || fd.legalDocsSenderDate || fd.Legal_documents_sender_date || '';
   if (legalSenderDate) {
-    payload.Legal_documents_sender_date = legalSenderDate;
-    payload.Legal_date = legalSenderDate;
+    const formattedSenderDate = formatDateForZoho(legalSenderDate);
+    if (formattedSenderDate) {
+      payload.Date = formattedSenderDate;
+      payload.Legal_documents_sender_date = formattedSenderDate;
+      payload.Legal_date = formattedSenderDate;
+    }
   }
-  const legalReceiverName = deal.legalDocsReceiverName || deal.Legal_documents_receiver_name || fd.legalDocsReceiverName || fd.Legal_documents_receiver_name || '';
+  const legalReceiverName = deal.Legal_documents_receiver_name || deal.legalDocsReceiverName || fd.Legal_documents_receiver_name || fd.legalDocsReceiverName || '';
   if (legalReceiverName) {
     payload.Legal_documents_receiver_name = legalReceiverName;
     payload.Employee_name_received = legalReceiverName;
     payload.Employee_name_received1 = legalReceiverName;
   }
-  const legalReceivedDate = deal.legalDocsReceivedDate || deal.Legal_documents_received_date || fd.legalDocsReceivedDate || fd.Legal_documents_received_date || '';
+  const legalReceivedDate = deal.Legal_documents_received_date || deal.legalDocsReceivedDate || fd.Legal_documents_received_date || fd.legalDocsReceivedDate || '';
   if (legalReceivedDate) {
-    payload.Legal_documents_received_date = legalReceivedDate;
+    const formattedReceivedDate = formatDateForZoho(legalReceivedDate);
+    if (formattedReceivedDate) {
+      payload.Legal_documents_received_date = formattedReceivedDate;
+    }
   }
-  const rem1 = deal.reminder1Date || deal.Reminder_1_date || fd.reminder1Date || fd.Reminder_1_date || '';
+  const rem1 = deal.Reminder_1_date || deal.reminder1Date || deal.Reminder_1 || fd.Reminder_1_date || fd.reminder1Date || '';
   if (rem1) {
-    payload.Reminder_1_date = rem1;
-    payload.Reminder_1 = rem1;
+    const formattedRem1 = formatDateForZoho(rem1);
+    if (formattedRem1) {
+      payload.Reminder_1_date = formattedRem1;
+      payload.Reminder_1 = formattedRem1;
+    }
   }
-  const rem2 = deal.reminder2Date || deal.Reminder_2_date || fd.reminder2Date || fd.Reminder_2_date || '';
+  const rem2 = deal.Reminder_2_date || deal.reminder2Date || deal.Reminder_2 || fd.Reminder_2_date || fd.reminder2Date || '';
   if (rem2) {
-    payload.Reminder_2_date = rem2;
-    payload.Reminder_2 = rem2;
+    const formattedRem2 = formatDateForZoho(rem2);
+    if (formattedRem2) {
+      payload.Reminder_2_date = formattedRem2;
+      payload.Reminder_2 = formattedRem2;
+    }
   }
-  const rem3 = deal.reminder3Date || deal.Reminder_3_date || fd.reminder3Date || fd.Reminder_3_date || '';
+  const rem3 = deal.Reminder_3_date || deal.reminder3Date || deal.Reminder_3 || fd.Reminder_3_date || fd.reminder3Date || '';
   if (rem3) {
-    payload.Reminder_3_date = rem3;
-    payload.Reminder_3 = rem3;
+    const formattedRem3 = formatDateForZoho(rem3);
+    if (formattedRem3) {
+      payload.Reminder_3_date = formattedRem3;
+      payload.Reminder_3 = formattedRem3;
+    }
   }
-  const rem4 = deal.reminder4Date || deal.Reminder_4_date || fd.reminder4Date || fd.Reminder_4_date || '';
+  const rem4 = deal.Reminder_4_date || deal.reminder4Date || deal.Reminder_4 || fd.Reminder_4_date || fd.reminder4Date || '';
   if (rem4) {
-    payload.Reminder_4_date = rem4;
-    payload.Reminder_4 = rem4;
+    const formattedRem4 = formatDateForZoho(rem4);
+    if (formattedRem4) {
+      payload.Reminder_4_date = formattedRem4;
+      payload.Reminder_4 = formattedRem4;
+    }
   }
-  const rem5 = deal.reminder5Date || deal.Reminder_5_date || fd.reminder5Date || fd.Reminder_5_date || '';
+  const rem5 = deal.Reminder_5_date || deal.reminder5Date || deal.Reminder_5 || fd.Reminder_5_date || fd.reminder5Date || '';
   if (rem5) {
-    payload.Reminder_5_date = rem5;
-    payload.Reminder_5 = rem5;
+    const formattedRem5 = formatDateForZoho(rem5);
+    if (formattedRem5) {
+      payload.Reminder_5_date = formattedRem5;
+      payload.Reminder_5 = formattedRem5;
+    }
   }
 
   return payload;
