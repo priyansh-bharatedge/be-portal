@@ -1728,18 +1728,6 @@ export const DealDetails = () => {
                     Legal
                   </span>
                 </div>
-
-                {shouldShowLegalSection && (
-                  <button
-                    type="button"
-                    onClick={() => handleSaveLegalSubform(false)}
-                    disabled={isSavingLegalSubform || isActionInProgress}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs disabled:opacity-50"
-                  >
-                    {isSavingLegalSubform ? <Loader2 size={13} className="animate-spin text-white" /> : <Save size={13} className="text-white" />}
-                    <span>{isSavingLegalSubform ? 'Submitting...' : 'Submit Legal Details'}</span>
-                  </button>
-                )}
               </div>
 
               <div className="border border-gray-100 rounded-xl overflow-hidden shadow-xs">
