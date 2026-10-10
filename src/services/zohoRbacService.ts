@@ -502,7 +502,16 @@ export function filterRecordsByRbac<T = any>(
     const fdEmpId = String(rec.formData?.empId || rec.formData?.employeeId || rec.formData?.employeeZohoId || rec.empId || rec.employeeId || '').trim().toLowerCase();
     if (fdEmpId && idSet.has(fdEmpId)) return true;
 
-    // 8. Special fallback for Quotations: if created locally or before employee metadata was linked
+    // 8. Legal Department access: If user is in Legal department, allow access to all deals in Legal stage or with Legal department/subforms
+    if (userDept.includes('legal') && (moduleName === 'Deals' || moduleName === 'Deal' || moduleName === 'CRM')) {
+      const dealStage = String(rec.stage || rec.Stage || rec.status || rec.Status || rec.rawZohoDeal?.Stage || '').toLowerCase().trim();
+      const recDept = String(rec.Department || rec.department || rec.Department_Name || '').toLowerCase().trim();
+      if (dealStage.includes('legal') || recDept === 'legal' || (Array.isArray(rec.legalData) && rec.legalData.length > 0)) {
+        return true;
+      }
+    }
+
+    // 9. Special fallback for Quotations: if created locally or before employee metadata was linked
     if (moduleName === 'Quotations' || moduleName === 'quotation' || moduleName === 'CRM') {
       const isUnassigned = (!rec.Employee || (typeof rec.Employee === 'object' && !rec.Employee.id && !rec.Employee.name)) &&
                            !rec.employeeId && !rec.empId && !rec.employeeName &&

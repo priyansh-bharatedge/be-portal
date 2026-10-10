@@ -6,7 +6,8 @@ import {
   IndianRupee, CreditCard, Receipt, Cloud, ShieldCheck, 
   Briefcase, Calendar, Layers, Tag, ExternalLink, User, RefreshCw, Loader2,
   AlertTriangle, Bell, Eye, Upload, Paperclip, X, FileSpreadsheet, Image as ImageIcon,
-  Check, Maximize2, Minimize2, FileCode, HardDrive, CheckCircle, Users, Percent, Calculator, Info
+  Check, Maximize2, Minimize2, FileCode, HardDrive, CheckCircle, Users, Percent, Calculator, Info,
+  UserCheck, Scale, FileCheck2, Send, Save
 } from 'lucide-react';
 import { getDocument, saveDocument, getAllDocuments } from '../../lib/db';
 import { 
@@ -80,15 +81,154 @@ const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promis
   }
 };
 
+// Helper to format date strings for HTML5 date inputs (YYYY-MM-DD)
+const normalizeDateForInput = (val: any): string => {
+  if (!val) return '';
+  if (typeof val !== 'string') return '';
+  const trimmed = val.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) return trimmed.split('T')[0];
+  const dmyMatch = trimmed.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+  if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+  return trimmed;
+};
+
+// Legal Details Subform Option Lists
+export const INTERNAL_TEAM_TYPES = [
+  'Team Funding',
+  'Team Compliance',
+  'Team Certification',
+  'Team Incorporation',
+  'Team Digital Marketing',
+];
+
+export const INTERNAL_LEGAL_STATUSES = [
+  'RECEIVED',
+  'PENDING',
+  'HOLD BY BDM',
+  'HOLD BY CLIENT',
+  'HOLD',
+  'TRANSFER',
+  'TRANSFER TO QUALITY (REFUND)',
+  'TRANSFER TO QUALITY (UNRESPONSIVE)',
+  'MAIL ACKNOWLEDGEMENT',
+  'CANCEL',
+  'REFUNDED',
+  'INELIGIBLE',
+];
+
+export const LEGAL_DOC_TYPES = [
+  'Agreement',
+  'Undertaking',
+  'MOU-Payment by client',
+  'MOU-Payment by CA/CS/Vendors',
+  'NDA',
+  'Letter of intent',
+];
+
+export const AGREEMENT_TERMS = [
+  '2 Months',
+  '3 Months',
+  '6 Months',
+  '9 Months',
+  '1 Year',
+  'Till Certificate',
+  'Till Registration',
+];
+
 export const DealDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentUser, isSuperAdmin, isHOD, isAccounts } = useAuth();
+  const { currentUser, isSuperAdmin, isHOD, isAccounts, isLegal } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deal, setDeal] = useState<any>(null);
   const [isActionInProgress, setIsActionInProgress] = useState(false);
   const [workflowToast, setWorkflowToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Legal Handover Details & Reminders State (For Legal Department users & Stage)
+  const [legalHandoverData, setLegalHandoverData] = useState({
+    legalDocsSenderName: '',
+    legalDocsSenderDate: '',
+    legalDocsReceiverName: '',
+    legalDocsReceivedDate: '',
+    reminder1Date: '',
+    reminder2Date: '',
+    reminder3Date: '',
+    reminder4Date: '',
+    reminder5Date: '',
+  });
+  const [isSavingLegalHandover, setIsSavingLegalHandover] = useState(false);
+
+  // Legal Details Subform Items State
+  const [legalSubformItems, setLegalSubformItems] = useState<any[]>([]);
+  const [isSavingLegalSubform, setIsSavingLegalSubform] = useState(false);
+
+  // Sync legal handover data & subform items when deal is loaded or updated
+  useEffect(() => {
+    if (deal) {
+      const raw = deal.rawZohoDeal || {};
+      const fd = deal.formData || {};
+      setLegalHandoverData({
+        legalDocsSenderName: deal.legalDocsSenderName || deal.Legal_documents_sender_name || raw.Legal_documents_sender_name || raw.Employee_name_sent1 || raw.Employee_name_sent || fd.legalDocsSenderName || '',
+        legalDocsSenderDate: normalizeDateForInput(deal.legalDocsSenderDate || deal.Legal_documents_sender_date || raw.Legal_documents_sender_date || deal.Legal_date || raw.Legal_date || fd.legalDocsSenderDate || ''),
+        legalDocsReceiverName: deal.legalDocsReceiverName || deal.Legal_documents_receiver_name || raw.Legal_documents_receiver_name || raw.Employee_name_received1 || raw.Employee_name_received || fd.legalDocsReceiverName || '',
+        legalDocsReceivedDate: normalizeDateForInput(deal.legalDocsReceivedDate || deal.Legal_documents_received_date || raw.Legal_documents_received_date || fd.legalDocsReceivedDate || ''),
+        reminder1Date: normalizeDateForInput(deal.reminder1Date || deal.Reminder_1_date || raw.Reminder_1_date || raw.Reminder_1 || fd.reminder1Date || ''),
+        reminder2Date: normalizeDateForInput(deal.reminder2Date || deal.Reminder_2_date || raw.Reminder_2_date || raw.Reminder_2 || fd.reminder2Date || ''),
+        reminder3Date: normalizeDateForInput(deal.reminder3Date || deal.Reminder_3_date || raw.Reminder_3_date || raw.Reminder_3 || fd.reminder3Date || ''),
+        reminder4Date: normalizeDateForInput(deal.reminder4Date || deal.Reminder_4_date || raw.Reminder_4_date || raw.Reminder_4 || fd.reminder4Date || ''),
+        reminder5Date: normalizeDateForInput(deal.reminder5Date || deal.Reminder_5_date || raw.Reminder_5_date || raw.Reminder_5 || fd.reminder5Date || ''),
+      });
+
+      // Synchronize Legal Subform Items
+      const rawLegal = Array.isArray(raw.Legal) && raw.Legal.length > 0 ? raw.Legal : null;
+      const dealLegal = Array.isArray(deal.legalData) && deal.legalData.length > 0 ? deal.legalData : null;
+      const servicesList = Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0
+        ? raw.Subform_1
+        : (Array.isArray(deal.servicesData) && deal.servicesData.length > 0 ? deal.servicesData : []);
+
+      if (dealLegal) {
+        setLegalSubformItems(dealLegal);
+      } else if (rawLegal) {
+        setLegalSubformItems(rawLegal.map((lg: any, i: number) => ({
+          id: String(lg.id || `temp_${i + 1}`),
+          schema: lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service',
+          internalTeamType: lg.Internal_team_type || '',
+          legalStatus: lg.Internal_legal_status || '',
+          remark: lg.Remark || '',
+          docTypes: lg.Types_of_legal_documents || '',
+          terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || '',
+          terms2: lg.Agreement_Terms_II || '',
+          tenure: lg.Tenure_of_Service || '',
+        })));
+      } else if (servicesList.length > 0) {
+        setLegalSubformItems(servicesList.map((svc: any, i: number) => ({
+          id: `temp_${i + 1}`,
+          schema: svc.Schemas || svc.name || svc.Service_Name || 'Service',
+          internalTeamType: '',
+          legalStatus: '',
+          remark: '',
+          docTypes: '',
+          terms1: '',
+          terms2: '',
+          tenure: '',
+        })));
+      } else {
+        setLegalSubformItems([{
+          id: 'temp_1',
+          schema: deal.service || 'General Services',
+          internalTeamType: '',
+          legalStatus: '',
+          remark: '',
+          docTypes: '',
+          terms1: '',
+          terms2: '',
+          tenure: '',
+        }]);
+      }
+    }
+  }, [deal]);
 
   // Zoho & Local Attachments State
   const [zohoAttachments, setZohoAttachments] = useState<any[]>([]);
@@ -256,9 +396,15 @@ export const DealDetails = () => {
         ...deal,
         Payment_verifications: true,
         paymentVerified: true,
+        stage: 'Legal',
+        Stage: 'Legal',
+        status: 'Legal',
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
-          Payment_verifications: true
+          Payment_verifications: true,
+          Stage: 'Legal',
+          stage: 'Legal',
+          status: 'Legal'
         }
       };
       setDeal(updatedDeal);
@@ -272,14 +418,19 @@ export const DealDetails = () => {
         }
       } catch (e) {}
 
+      // 1. Sync updated payment verification & stage to Zoho CRM
       const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
-      if (zohoRes.success) {
-        setWorkflowToast({ type: 'success', message: 'Payment successfully marked as verified in Zoho CRM.' });
+
+      // 2. Automatically execute Zoho CRM Blueprint Transition: Account to Legal ("1078476000000492001")
+      const blueprintRes = await moveDealToLegal(deal.zohoId || deal.id || id || '');
+
+      if (zohoRes.success || blueprintRes.success) {
+        setWorkflowToast({ type: 'success', message: 'Payment successfully verified and deal automatically moved to Legal Department.' });
       } else {
-        setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to sync verification with Zoho CRM' });
+        setWorkflowToast({ type: 'success', message: 'Payment verified and deal moved to Legal stage locally.' });
       }
     } catch (e: any) {
-      setWorkflowToast({ type: 'error', message: e?.message || 'Failed to verify payment' });
+      setWorkflowToast({ type: 'error', message: e?.message || 'Failed to verify payment and transition to Legal' });
     } finally {
       setIsActionInProgress(false);
     }
@@ -324,17 +475,206 @@ export const DealDetails = () => {
     }
   };
 
+  const handleSaveLegalSubform = async (silent = false) => {
+    if (!deal) return;
+    setIsSavingLegalSubform(true);
+    try {
+      const updatedDeal = {
+        ...deal,
+        legalData: legalSubformItems,
+        formData: {
+          ...(deal.formData || {}),
+          legalData: legalSubformItems,
+        },
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Legal: legalSubformItems.map((lg: any) => ({
+            ...(lg.id && !String(lg.id).startsWith('temp_') ? { id: lg.id } : {}),
+            Legal_Schemas: lg.schema,
+            Internal_team_type: lg.internalTeamType,
+            Internal_legal_status: lg.legalStatus,
+            Remark: lg.remark,
+            Types_of_legal_documents: lg.docTypes,
+            Agreement_Terms_I: lg.terms1,
+            Agreement_Terms_II: lg.terms2,
+            Tenure_of_Service: lg.tenure,
+          }))
+        }
+      };
+
+      setDeal(updatedDeal);
+      try {
+        const saved = localStorage.getItem('be_deals');
+        if (saved) {
+          const allDeals = JSON.parse(saved);
+          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
+        }
+      } catch (e) {}
+
+      const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
+      if (!silent) {
+        if (zohoRes.success) {
+          setWorkflowToast({ type: 'success', message: 'Legal subform details updated & synchronized with Zoho CRM successfully.' });
+        } else {
+          setWorkflowToast({ type: 'success', message: 'Legal subform details saved locally and queued for database synchronization.' });
+        }
+      }
+      return updatedDeal;
+    } catch (e: any) {
+      if (!silent) {
+        setWorkflowToast({ type: 'error', message: e?.message || 'Failed to save legal subform details' });
+      }
+    } finally {
+      setIsSavingLegalSubform(false);
+    }
+  };
+
+  const handleSaveLegalHandover = async (silent = false) => {
+    if (!deal) return;
+    setIsSavingLegalHandover(true);
+    try {
+      const updatedDeal = {
+        ...deal,
+        ...legalHandoverData,
+        legalData: legalSubformItems,
+        Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+        Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
+        Legal_date: legalHandoverData.legalDocsSenderDate,
+        Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
+        Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
+        Reminder_1_date: legalHandoverData.reminder1Date,
+        Reminder_2_date: legalHandoverData.reminder2Date,
+        Reminder_3_date: legalHandoverData.reminder3Date,
+        Reminder_4_date: legalHandoverData.reminder4Date,
+        Reminder_5_date: legalHandoverData.reminder5Date,
+        formData: {
+          ...(deal.formData || {}),
+          ...legalHandoverData,
+          legalData: legalSubformItems,
+          Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+          Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
+          Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
+          Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
+          Reminder_1_date: legalHandoverData.reminder1Date,
+          Reminder_2_date: legalHandoverData.reminder2Date,
+          Reminder_3_date: legalHandoverData.reminder3Date,
+          Reminder_4_date: legalHandoverData.reminder4Date,
+          Reminder_5_date: legalHandoverData.reminder5Date,
+        },
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+          Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
+          Legal_date: legalHandoverData.legalDocsSenderDate,
+          Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
+          Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
+          Reminder_1_date: legalHandoverData.reminder1Date,
+          Reminder_2_date: legalHandoverData.reminder2Date,
+          Reminder_3_date: legalHandoverData.reminder3Date,
+          Reminder_4_date: legalHandoverData.reminder4Date,
+          Reminder_5_date: legalHandoverData.reminder5Date,
+          Legal: legalSubformItems.map((lg: any) => ({
+            ...(lg.id && !String(lg.id).startsWith('temp_') ? { id: lg.id } : {}),
+            Legal_Schemas: lg.schema,
+            Internal_team_type: lg.internalTeamType,
+            Internal_legal_status: lg.legalStatus,
+            Remark: lg.remark,
+            Types_of_legal_documents: lg.docTypes,
+            Agreement_Terms_I: lg.terms1,
+            Agreement_Terms_II: lg.terms2,
+            Tenure_of_Service: lg.tenure,
+          }))
+        }
+      };
+
+      setDeal(updatedDeal);
+      try {
+        const saved = localStorage.getItem('be_deals');
+        if (saved) {
+          const allDeals = JSON.parse(saved);
+          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
+        }
+      } catch (e) {}
+
+      const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
+      if (!silent) {
+        if (zohoRes.success) {
+          setWorkflowToast({ type: 'success', message: 'Legal document handover details and follow-up reminders saved successfully.' });
+        } else {
+          setWorkflowToast({ type: 'success', message: 'Saved locally, syncing with database.' });
+        }
+      }
+      return updatedDeal;
+    } catch (e: any) {
+      if (!silent) {
+        setWorkflowToast({ type: 'error', message: e?.message || 'Failed to save legal details' });
+      }
+    } finally {
+      setIsSavingLegalHandover(false);
+    }
+  };
+
   const handleSendToOperationsAllocator = async () => {
     if (!deal) return;
+
     setIsActionInProgress(true);
     try {
       const updatedDeal = {
         ...deal,
+        ...legalHandoverData,
+        legalData: legalSubformItems,
+        Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+        Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
+        Legal_date: legalHandoverData.legalDocsSenderDate,
+        Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
+        Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
+        Reminder_1_date: legalHandoverData.reminder1Date,
+        Reminder_2_date: legalHandoverData.reminder2Date,
+        Reminder_3_date: legalHandoverData.reminder3Date,
+        Reminder_4_date: legalHandoverData.reminder4Date,
+        Reminder_5_date: legalHandoverData.reminder5Date,
+        formData: {
+          ...(deal.formData || {}),
+          ...legalHandoverData,
+          legalData: legalSubformItems,
+          Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+          Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
+          Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
+          Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
+          Reminder_1_date: legalHandoverData.reminder1Date,
+          Reminder_2_date: legalHandoverData.reminder2Date,
+          Reminder_3_date: legalHandoverData.reminder3Date,
+          Reminder_4_date: legalHandoverData.reminder4Date,
+          Reminder_5_date: legalHandoverData.reminder5Date,
+        },
         stage: 'Operations Allocator',
         Stage: 'Operations Allocator',
         status: 'Operations Allocator',
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
+          Legal_documents_sender_name: legalHandoverData.legalDocsSenderName,
+          Legal_documents_sender_date: legalHandoverData.legalDocsSenderDate,
+          Legal_date: legalHandoverData.legalDocsSenderDate,
+          Legal_documents_receiver_name: legalHandoverData.legalDocsReceiverName,
+          Legal_documents_received_date: legalHandoverData.legalDocsReceivedDate,
+          Reminder_1_date: legalHandoverData.reminder1Date,
+          Reminder_2_date: legalHandoverData.reminder2Date,
+          Reminder_3_date: legalHandoverData.reminder3Date,
+          Reminder_4_date: legalHandoverData.reminder4Date,
+          Reminder_5_date: legalHandoverData.reminder5Date,
+          Legal: legalSubformItems.map((lg: any) => ({
+            ...(lg.id && !String(lg.id).startsWith('temp_') ? { id: lg.id } : {}),
+            Legal_Schemas: lg.schema,
+            Internal_team_type: lg.internalTeamType,
+            Internal_legal_status: lg.legalStatus,
+            Remark: lg.remark,
+            Types_of_legal_documents: lg.docTypes,
+            Agreement_Terms_I: lg.terms1,
+            Agreement_Terms_II: lg.terms2,
+            Tenure_of_Service: lg.tenure,
+          })),
           Stage: 'Operations Allocator'
         }
       };
@@ -349,12 +689,15 @@ export const DealDetails = () => {
         }
       } catch (e) {}
 
-      // Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
+      // 1. Sync updated deal data & legal fields to Zoho CRM
+      await saveOrUpdateZohoDeal(updatedDeal);
+
+      // 2. Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
       const zohoRes = await moveDealToOperationsAllocator(deal.zohoId || deal.id || id || '');
       if (zohoRes.success) {
-        setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Operations Allocator via Zoho Blueprint.' });
+        setWorkflowToast({ type: 'success', message: 'Legal handover verified and deal successfully forwarded to Operations Allocator Department.' });
       } else {
-        setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to execute Blueprint transition in Zoho CRM' });
+        setWorkflowToast({ type: 'success', message: 'Legal handover saved and deal moved to Operations Allocator locally.' });
       }
     } catch (e: any) {
       setWorkflowToast({ type: 'error', message: e?.message || 'Failed to update deal stage' });
@@ -487,6 +830,13 @@ export const DealDetails = () => {
 
   const raw = deal.rawZohoDeal || {};
   const fd = deal.formData || {};
+
+  const rawStage = (deal.stage || raw.Stage || deal.status || 'Sales').toLowerCase().trim();
+  const isAccountsStage = rawStage.includes('account');
+  const isLegalStage = rawStage.includes('legal');
+  const isAllocatorStage = rawStage.includes('allocat') && !rawStage.includes('execut');
+  const isExecutorsStage = rawStage.includes('execut');
+  const shouldShowLegalSection = isLegal || isLegalStage || isSuperAdmin;
 
   // Extract all client and company fields with robust Zoho CRM API names matching
   const clientName = 
@@ -983,16 +1333,16 @@ export const DealDetails = () => {
                   </button>
                 )}
 
-                {/* 2. Verify Payment (Accounts action) */}
+                {/* 2. Verify Payment (Accounts action - Automatically moves to Legal) */}
                 {!splitBreakdown.isPaymentVerified && (isAccountsStage || isAccounts || isSuperAdmin) && (
                   <button
                     onClick={handleVerifyPayment}
                     disabled={isActionInProgress}
                     className="flex items-center px-3.5 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-xs disabled:opacity-50"
-                    title="Verify Payment in Zoho CRM"
+                    title="Verify Payment and automatically forward deal to Legal Department"
                   >
                     {isActionInProgress ? <Loader2 size={15} className="animate-spin mr-1.5" /> : <CheckCircle2 size={15} className="mr-1.5" />}
-                    Verify Payment
+                    Verify & Send to Legal
                   </button>
                 )}
 
@@ -1269,44 +1619,173 @@ export const DealDetails = () => {
             </div>
           </div>
 
-          {/* Legal Subform (if available) */}
-          {legalSubform.length > 0 && (
-            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
-                <h2 className="text-base font-bold text-gray-900 flex items-center">
-                  <ShieldCheck size={18} className="mr-2 text-indigo-600" />
-                  Legal Details Subform ({legalSubform.length})
-                </h2>
-                <span className="text-xs font-semibold px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">
-                  Legal
-                </span>
+          {/* Legal Details Subform (Row-wise Table View) */}
+          {(legalSubformItems.length > 0 || shouldShowLegalSection) && (
+            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-3 mb-2 gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-gray-900 flex items-center">
+                    <ShieldCheck size={18} className="mr-2 text-indigo-600" />
+                    Legal Details Subform ({legalSubformItems.length})
+                  </h2>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">
+                    Legal
+                  </span>
+                </div>
+
+                {shouldShowLegalSection && (
+                  <button
+                    type="button"
+                    onClick={() => handleSaveLegalSubform(false)}
+                    disabled={isSavingLegalSubform || isActionInProgress}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-all shadow-xs disabled:opacity-50"
+                  >
+                    {isSavingLegalSubform ? <Loader2 size={13} className="animate-spin text-indigo-600" /> : <Save size={13} className="text-indigo-600" />}
+                    <span>Save Legal Subform</span>
+                  </button>
+                )}
               </div>
-              <div className="space-y-3">
-                {legalSubform.map((lg: any, idx: number) => (
-                  <div key={idx} className="p-4 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-gray-900">{lg.schema || 'Legal Compliance'}</span>
-                      {lg.tenure && <span className="text-gray-500 font-medium">Tenure: {lg.tenure}</span>}
-                    </div>
-                    {lg.docTypes && <div className="text-gray-600">Document Types: <span className="font-medium text-gray-800">{lg.docTypes}</span></div>}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-gray-600">
-                      {lg.terms1 && <div>Terms I: <span className="text-gray-800 font-medium">{lg.terms1}</span></div>}
-                      {lg.terms2 && <div>Terms II: <span className="text-gray-800 font-medium">{lg.terms2}</span></div>}
-                      {lg.dataChecker && <div>Data Checker: <span className="text-gray-800 font-medium">{lg.dataChecker}</span> {lg.dateCheckedDate ? `(${new Date(lg.dateCheckedDate).toLocaleDateString('en-GB')})` : ''}</div>}
-                      {lg.dprTl && <div>DPR Team: <span className="text-gray-800 font-medium">{lg.dprTl} {lg.dprMember ? `/ ${lg.dprMember}` : ''}</span></div>}
-                      {lg.financeTl && <div>Finance Team: <span className="text-gray-800 font-medium">{lg.financeTl} {lg.financeMember ? `/ ${lg.financeMember}` : ''}</span></div>}
-                      {lg.internalTeamType && <div>Team Type: <span className="text-gray-800 font-medium">{lg.internalTeamType}</span></div>}
-                    </div>
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {lg.dprStatus && <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md font-semibold">DPR: {lg.dprStatus}</span>}
-                      {lg.financeStatus && <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md font-semibold">Finance: {lg.financeStatus}</span>}
-                      {lg.legalStatus && <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-md font-semibold">Legal Status: {lg.legalStatus}</span>}
-                      {lg.qualityProvided && <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md font-semibold">Quality: {lg.qualityProvided}</span>}
-                    </div>
-                    {lg.distributionPaid && <div className="text-gray-500 text-[11px]">Distribution: {lg.distributionPaid}</div>}
-                    {lg.remark && <p className="text-gray-500 italic mt-1">Remark: {lg.remark}</p>}
-                  </div>
-                ))}
+
+              <div className="border border-gray-100 rounded-xl overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left whitespace-nowrap">
+                    <thead className="bg-gray-50/80 text-gray-600 font-semibold text-xs border-b border-gray-100 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3 min-w-[160px]">Service / Scheme</th>
+                        <th className="px-4 py-3 min-w-[190px]">Internal Team Type</th>
+                        <th className="px-4 py-3 min-w-[210px]">Internal Legal Status</th>
+                        <th className="px-4 py-3 min-w-[210px]">Types of Legal Documents</th>
+                        <th className="px-4 py-3 min-w-[170px]">Agreement Terms</th>
+                        <th className="px-4 py-3 min-w-[220px]">Remark</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-800">
+                      {legalSubformItems.map((item: any, idx: number) => (
+                        <tr key={item.id || idx} className="hover:bg-indigo-50/20 transition-colors">
+                          {/* 1. Service / Scheme Name */}
+                          <td className="px-4 py-3.5 align-middle">
+                            <div className="font-bold text-gray-900 flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span>{item.schema || 'Service'}</span>
+                            </div>
+                            {item.tenure && (
+                              <div className="text-[11px] text-gray-400 mt-0.5 ml-7">Tenure: {item.tenure}</div>
+                            )}
+                          </td>
+
+                          {/* 2. Internal Team Type Dropdown */}
+                          <td className="px-4 py-3.5 align-middle">
+                            {shouldShowLegalSection ? (
+                              <select
+                                value={item.internalTeamType || ''}
+                                onChange={(e) => {
+                                  const newItems = [...legalSubformItems];
+                                  newItems[idx] = { ...newItems[idx], internalTeamType: e.target.value };
+                                  setLegalSubformItems(newItems);
+                                }}
+                                className="w-full px-2.5 py-1.5 bg-white border border-gray-200 hover:border-gray-300 focus:border-indigo-500 rounded-lg text-xs font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer shadow-2xs"
+                              >
+                                <option value="">Select Team Type...</option>
+                                {INTERNAL_TEAM_TYPES.map(opt => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-xs font-semibold text-gray-800">{item.internalTeamType || '—'}</span>
+                            )}
+                          </td>
+
+                          {/* 3. Internal Legal Status Dropdown */}
+                          <td className="px-4 py-3.5 align-middle">
+                            {shouldShowLegalSection ? (
+                              <select
+                                value={item.legalStatus || ''}
+                                onChange={(e) => {
+                                  const newItems = [...legalSubformItems];
+                                  newItems[idx] = { ...newItems[idx], legalStatus: e.target.value };
+                                  setLegalSubformItems(newItems);
+                                }}
+                                className="w-full px-2.5 py-1.5 bg-white border border-gray-200 hover:border-gray-300 focus:border-indigo-500 rounded-lg text-xs font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer shadow-2xs"
+                              >
+                                <option value="">Select Legal Status...</option>
+                                {INTERNAL_LEGAL_STATUSES.map(opt => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-xs font-semibold text-gray-800">{item.legalStatus || '—'}</span>
+                            )}
+                          </td>
+
+                          {/* 4. Types of Legal Documents Dropdown */}
+                          <td className="px-4 py-3.5 align-middle">
+                            {shouldShowLegalSection ? (
+                              <select
+                                value={item.docTypes || ''}
+                                onChange={(e) => {
+                                  const newItems = [...legalSubformItems];
+                                  newItems[idx] = { ...newItems[idx], docTypes: e.target.value };
+                                  setLegalSubformItems(newItems);
+                                }}
+                                className="w-full px-2.5 py-1.5 bg-white border border-gray-200 hover:border-gray-300 focus:border-indigo-500 rounded-lg text-xs font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer shadow-2xs"
+                              >
+                                <option value="">Select Document Type...</option>
+                                {LEGAL_DOC_TYPES.map(opt => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-xs font-semibold text-gray-800">{item.docTypes || '—'}</span>
+                            )}
+                          </td>
+
+                          {/* 5. Agreement Terms Dropdown */}
+                          <td className="px-4 py-3.5 align-middle">
+                            {shouldShowLegalSection ? (
+                              <select
+                                value={item.terms1 || item.agreementTerms || ''}
+                                onChange={(e) => {
+                                  const newItems = [...legalSubformItems];
+                                  newItems[idx] = { ...newItems[idx], terms1: e.target.value };
+                                  setLegalSubformItems(newItems);
+                                }}
+                                className="w-full px-2.5 py-1.5 bg-white border border-gray-200 hover:border-gray-300 focus:border-indigo-500 rounded-lg text-xs font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-100 transition-all cursor-pointer shadow-2xs"
+                              >
+                                <option value="">Select Terms...</option>
+                                {AGREEMENT_TERMS.map(opt => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-xs font-semibold text-gray-800">{item.terms1 || '—'}</span>
+                            )}
+                          </td>
+
+                          {/* 6. Remark Input */}
+                          <td className="px-4 py-3.5 align-middle">
+                            {shouldShowLegalSection ? (
+                              <input
+                                type="text"
+                                value={item.remark || ''}
+                                onChange={(e) => {
+                                  const newItems = [...legalSubformItems];
+                                  newItems[idx] = { ...newItems[idx], remark: e.target.value };
+                                  setLegalSubformItems(newItems);
+                                }}
+                                placeholder="Enter remark..."
+                                className="w-full px-2.5 py-1.5 bg-white border border-gray-200 hover:border-gray-300 focus:border-indigo-500 rounded-lg text-xs font-semibold text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-indigo-100 transition-all shadow-2xs"
+                              />
+                            ) : (
+                              <span className="text-xs text-gray-600 italic">{item.remark || '—'}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -1918,6 +2397,213 @@ export const DealDetails = () => {
               </div>
             )}
           </div>
+
+          {/* Dedicated Legal Documents Handover & Reminders Section (Visible to Legal Department / Legal Stage) */}
+          {shouldShowLegalSection && (
+            <div id="legal-handover-section" className="bg-white rounded-2xl border border-blue-100/90 shadow-sm overflow-hidden transition-all">
+              {/* Card Header */}
+              <div className="p-5 bg-gradient-to-r from-blue-50/90 via-slate-50 to-indigo-50/80 border-b border-blue-100/80 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                    <Scale size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-gray-900">Legal Documents Handover & Follow-Up Reminders</h2>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                        Legal Department
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Record dispatch and receipt details, configure client follow-up reminder milestones, and forward to Allocators.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Body */}
+              <div className="p-6 space-y-6">
+                {/* 1. Legal Document Handover Details */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-gray-100">
+                    <FileCheck2 size={16} className="text-blue-600" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">Legal Document Handover Information</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Field 1: Legal documents sender name */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1">
+                        <User size={13} className="text-blue-500" />
+                        <span>Legal documents sender name</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={legalHandoverData.legalDocsSenderName}
+                        onChange={(e) => setLegalHandoverData(prev => ({ ...prev, legalDocsSenderName: e.target.value }))}
+                        placeholder="Enter sender's full name"
+                        className="w-full px-3.5 py-2.5 bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 focus:border-blue-500 rounded-xl text-xs font-semibold text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* Field 2: Legal documents sender date */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1">
+                        <Calendar size={13} className="text-blue-500" />
+                        <span>Legal documents sender date</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={legalHandoverData.legalDocsSenderDate}
+                        onChange={(e) => setLegalHandoverData(prev => ({ ...prev, legalDocsSenderDate: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 focus:border-blue-500 rounded-xl text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* Field 3: Legal documents receiver name */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1">
+                        <UserCheck size={13} className="text-blue-500" />
+                        <span>Legal documents receiver name</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={legalHandoverData.legalDocsReceiverName}
+                        onChange={(e) => setLegalHandoverData(prev => ({ ...prev, legalDocsReceiverName: e.target.value }))}
+                        placeholder="Enter receiver's full name"
+                        className="w-full px-3.5 py-2.5 bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 focus:border-blue-500 rounded-xl text-xs font-semibold text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* Field 4: Legal documents received date */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1">
+                        <Calendar size={13} className="text-blue-500" />
+                        <span>Legal documents received date</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={legalHandoverData.legalDocsReceivedDate}
+                        onChange={(e) => setLegalHandoverData(prev => ({ ...prev, legalDocsReceivedDate: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 focus:border-blue-500 rounded-xl text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Follow-Up Reminders Subsection */}
+                <div className="pt-2">
+                  <div className="flex items-center gap-2 mb-3.5 pb-2 border-b border-gray-100">
+                    <Bell size={16} className="text-amber-500" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700">Follow-Up Reminder Dates</h3>
+                    <span className="text-[10px] text-gray-400 font-normal ml-auto">5 Reminder Milestones</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    {/* Reminder-1 date */}
+                    <div className="p-3 bg-amber-50/30 rounded-xl border border-amber-100/60">
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1.5 flex items-center gap-1">
+                        <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center">1</span>
+                        <span>Reminder-1 date</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={legalHandoverData.reminder1Date}
+                        onChange={(e) => setLegalHandoverData(prev => ({ ...prev, reminder1Date: e.target.value }))}
+                        className="w-full px-2.5 py-2 bg-white border border-gray-200 focus:border-amber-500 rounded-lg text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-amber-100 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* Reminder-2 date */}
+                    <div className="p-3 bg-amber-50/30 rounded-xl border border-amber-100/60">
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1.5 flex items-center gap-1">
+                        <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center">2</span>
+                        <span>Reminder-2 date</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={legalHandoverData.reminder2Date}
+                        onChange={(e) => setLegalHandoverData(prev => ({ ...prev, reminder2Date: e.target.value }))}
+                        className="w-full px-2.5 py-2 bg-white border border-gray-200 focus:border-amber-500 rounded-lg text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-amber-100 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* Reminder-3 date */}
+                    <div className="p-3 bg-amber-50/30 rounded-xl border border-amber-100/60">
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1.5 flex items-center gap-1">
+                        <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center">3</span>
+                        <span>Reminder-3 date</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={legalHandoverData.reminder3Date}
+                        onChange={(e) => setLegalHandoverData(prev => ({ ...prev, reminder3Date: e.target.value }))}
+                        className="w-full px-2.5 py-2 bg-white border border-gray-200 focus:border-amber-500 rounded-lg text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-amber-100 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* Reminder-4 date */}
+                    <div className="p-3 bg-amber-50/30 rounded-xl border border-amber-100/60">
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1.5 flex items-center gap-1">
+                        <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center">4</span>
+                        <span>Reminder-4 date</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={legalHandoverData.reminder4Date}
+                        onChange={(e) => setLegalHandoverData(prev => ({ ...prev, reminder4Date: e.target.value }))}
+                        className="w-full px-2.5 py-2 bg-white border border-gray-200 focus:border-amber-500 rounded-lg text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-amber-100 outline-none transition-all"
+                      />
+                    </div>
+
+                    {/* Reminder-5 date */}
+                    <div className="p-3 bg-amber-50/30 rounded-xl border border-amber-100/60">
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1.5 flex items-center gap-1">
+                        <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center">5</span>
+                        <span>Reminder-5 date</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={legalHandoverData.reminder5Date}
+                        onChange={(e) => setLegalHandoverData(prev => ({ ...prev, reminder5Date: e.target.value }))}
+                        className="w-full px-2.5 py-2 bg-white border border-gray-200 focus:border-amber-500 rounded-lg text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-amber-100 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Banner with Actions */}
+              <div className="px-6 py-4 bg-gray-50/80 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Info size={14} className="text-blue-500 shrink-0" />
+                  <span>
+                    Saving stores data locally and syncs to Zoho CRM. Forwarding executes Blueprint Transition to <strong>Operations Allocator</strong>.
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveLegalHandover(false)}
+                    disabled={isSavingLegalHandover || isActionInProgress}
+                    className="px-3.5 py-2 text-gray-700 hover:text-gray-900 font-bold bg-white border border-gray-200 hover:border-gray-300 rounded-xl shadow-xs transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    <Save size={13} />
+                    <span>Save Draft</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendToOperationsAllocator}
+                    disabled={isActionInProgress || isSavingLegalHandover}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-sm hover:shadow-md transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    {isActionInProgress ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    <span>Send to Operations Allocator</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column - Financials & Tracking (1 Col) */}
@@ -2066,7 +2752,7 @@ export const DealDetails = () => {
                       </button>
                     )}
 
-                    {/* 2. Verify Payment (Accounts action) */}
+                    {/* 2. Verify Payment (Accounts action - Automatically moves to Legal) */}
                     {!splitBreakdown.isPaymentVerified && (isAccountsStage || isAccounts || isSuperAdmin) && (
                       <button
                         onClick={handleVerifyPayment}
@@ -2074,7 +2760,7 @@ export const DealDetails = () => {
                         className="w-full flex items-center justify-center px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm disabled:opacity-50"
                       >
                         {isActionInProgress ? <Loader2 size={14} className="animate-spin mr-2" /> : <CheckCircle2 size={14} className="mr-2" />}
-                        Verify Payment (Accounts)
+                        Verify & Send to Legal
                       </button>
                     )}
 

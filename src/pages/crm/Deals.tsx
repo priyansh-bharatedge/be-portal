@@ -48,7 +48,7 @@ export const Deals = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, isSuperAdmin, isHR, isHOD, isAccounts, availableUsers, filterRecords } = useAuth();
+  const { currentUser, isSuperAdmin, isHR, isHOD, isAccounts, isLegal, availableUsers, filterRecords } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
@@ -57,8 +57,11 @@ export const Deals = () => {
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
     if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) return 'All Deals';
-    if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && isAccounts && !isSuperAdmin) return 'All Deals';
-    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified') return tabParam;
+    if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) return 'All Deals';
+    if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && (isAccounts || isLegal) && !isSuperAdmin) return 'All Deals';
+    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Legal Queue') return tabParam;
+    if (isLegal && !isSuperAdmin) return 'Legal Queue';
+    if (isAccounts && !isSuperAdmin) return 'Account Queue';
     return 'All Deals';
   });
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
@@ -76,7 +79,9 @@ export const Deals = () => {
     if (tabParam) {
       if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) {
         setActiveTab('All Deals');
-      } else if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && isAccounts && !isSuperAdmin) {
+      } else if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) {
+        setActiveTab('All Deals');
+      } else if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && (isAccounts || isLegal) && !isSuperAdmin) {
         setActiveTab('All Deals');
       } else {
         setActiveTab(tabParam);
@@ -2261,9 +2266,15 @@ export const Deals = () => {
         ...deal,
         Payment_verifications: true,
         paymentVerified: true,
+        stage: 'Legal',
+        Stage: 'Legal',
+        status: 'Legal',
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
-          Payment_verifications: true
+          Payment_verifications: true,
+          Stage: 'Legal',
+          stage: 'Legal',
+          status: 'Legal'
         }
       };
 
@@ -2271,18 +2282,23 @@ export const Deals = () => {
       setDeals(updatedList);
       safeSaveDealsToStorage(updatedList);
 
+      // 1. Sync updated verification status and stage to Zoho CRM Deal record
       const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
-      if (zohoRes.success) {
+      
+      // 2. Automatically trigger Zoho CRM Blueprint Transition: Account to Legal ("1078476000000492001")
+      const blueprintRes = await moveDealToLegal(deal.zohoId || deal.id);
+
+      if (zohoRes.success || blueprintRes.success) {
         setToast({
           type: 'success',
-          message: 'Payment Verified',
-          submessage: `Payment verified for deal ${deal.id}. You can now send this deal to Legal.`
+          message: 'Payment Verified & Moved to Legal',
+          submessage: `Payment for deal ${deal.id} was verified and the deal has automatically moved to the Legal department queue.`
         });
       } else {
         setToast({
-          type: 'error',
-          message: 'Zoho Sync Warning',
-          submessage: zohoRes.message || 'Verified locally, but failed to sync verification to Zoho CRM'
+          type: 'info',
+          message: 'Payment Verified Locally',
+          submessage: `Verified and moved to Legal stage locally. ${zohoRes.message || blueprintRes.message || ''}`
         });
       }
     } catch (err: any) {
@@ -2441,6 +2457,13 @@ export const Deals = () => {
     return rbacDeals.filter((d: any) => isDealPaymentVerified(d)).length;
   }, [rbacDeals]);
 
+  const legalQueueCount = useMemo(() => {
+    return rbacDeals.filter((d: any) => {
+      const st = String(d.stage || d.rawZohoDeal?.Stage || '').toLowerCase();
+      return st.includes('legal');
+    }).length;
+  }, [rbacDeals]);
+
   const isFiltered = Boolean(
     (quickFilter && quickFilter !== 'all') ||
     Boolean(searchQuery) ||
@@ -2454,12 +2477,14 @@ export const Deals = () => {
       const isPartner = isDealPartnerBdm(deal);
       const isVerified = isDealPaymentVerified(deal);
       const isAccStage = String(deal.stage || deal.rawZohoDeal?.Stage || '').toLowerCase().includes('account');
+      const isLegalStage = String(deal.stage || deal.rawZohoDeal?.Stage || '').toLowerCase().includes('legal');
 
       if (activeTab === 'Manual Deals' && isFromQt) return false;
       if (activeTab === 'From Quotations' && !isFromQt) return false;
       if (activeTab === 'Partner BDM Deals' && !isPartner) return false;
       if (activeTab === 'Account Queue' && (!isAccStage || isVerified)) return false;
       if (activeTab === 'Account Verified' && !isVerified) return false;
+      if (activeTab === 'Legal Queue' && !isLegalStage) return false;
 
       if (quickFilter === 'today' && !isDealToday(deal)) return false;
       if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
@@ -2570,7 +2595,10 @@ export const Deals = () => {
             { id: 'Account Queue', label: 'Account Queue', count: accountQueueCount, isQueue: true },
             { id: 'Account Verified', label: 'Account Verified', count: accountVerifiedCount, isVerified: true },
           ] : []),
-          ...((!isAccounts || isSuperAdmin) ? [
+          ...((isLegal || isSuperAdmin) ? [
+            { id: 'Legal Queue', label: 'Legal Queue', count: legalQueueCount, isLegal: true },
+          ] : []),
+          ...(((!isAccounts && !isLegal) || isSuperAdmin) ? [
             { id: 'Manual Deals', label: 'Manual Deals', count: null },
             { id: 'From Quotations', label: 'From Quotations', count: null },
             { id: 'Partner BDM Deals', label: 'Partner BDM Deals', count: null }
@@ -2587,7 +2615,7 @@ export const Deals = () => {
           >
             <span>{tabItem.label}</span>
             {tabItem.count !== null && (
-              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${tabItem.isQueue && tabItem.count > 0 ? 'bg-amber-100 text-amber-800' : tabItem.isVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'}`}>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${tabItem.isQueue && tabItem.count > 0 ? 'bg-amber-100 text-amber-800' : tabItem.isVerified ? 'bg-emerald-100 text-emerald-800' : tabItem.isLegal ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-600'}`}>
                 {tabItem.count}
               </span>
             )}
@@ -2778,16 +2806,16 @@ export const Deals = () => {
                                   })()
                                 )}
 
-                                {/* 2. Verify Payment Button (Accounts Department Action) */}
+                                {/* 2. Verify Payment Button (Accounts Department Action - Automatically moves deal to Legal) */}
                                 {!breakdown.isPaymentVerified && (isAccountsStage || isAccounts || isSuperAdmin) && (
                                   <button
                                     onClick={() => handleVerifyPayment(deal)}
                                     disabled={syncingId === deal.id}
-                                    title="Verify payment for this deal"
+                                    title="Verify payment and automatically send deal to Legal department"
                                     className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs flex items-center transition-all shrink-0"
                                   >
                                     {syncingId === deal.id ? <Loader2 size={12} className="animate-spin mr-1" /> : <CheckCircle2 size={12} className="mr-1" />}
-                                    Verify Payment
+                                    Verify & Send to Legal
                                   </button>
                                 )}
 

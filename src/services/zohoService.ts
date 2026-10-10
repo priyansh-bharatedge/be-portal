@@ -1727,6 +1727,19 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       ...(existingDeal?.formData || {})
     },
     servicesData: servicesSubform,
+    legalData: Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0
+      ? rawZoho.Legal.map((lg: any, i: number) => ({
+          id: String(lg.id || `temp_${i + 1}`),
+          schema: lg.Legal_Schemas || lg.Schemas || servicesSubform[i]?.name || 'Service',
+          internalTeamType: lg.Internal_team_type || '',
+          legalStatus: lg.Internal_legal_status || '',
+          remark: lg.Remark || '',
+          docTypes: lg.Types_of_legal_documents || '',
+          terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || '',
+          terms2: lg.Agreement_Terms_II || '',
+          tenure: lg.Tenure_of_Service || '',
+        }))
+      : (existingDeal?.legalData || []),
     totals: {
       grandTotal: totalNum,
       baseAmount: withoutGst,

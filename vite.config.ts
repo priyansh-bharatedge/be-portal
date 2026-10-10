@@ -672,6 +672,22 @@ function zohoApiPlugin(): Plugin {
       ];
     }
 
+    // Legal Subform (API Name: Legal)
+    const legalData = deal.legalData || deal.rawZohoDeal?.Legal || fd.legalData;
+    if (Array.isArray(legalData) && legalData.length > 0) {
+      payload.Legal = legalData.map((lg: any, idx: number) => ({
+        ...(lg.id && !String(lg.id).startsWith('temp_') && /^\d+$/.test(String(lg.id)) ? { id: lg.id } : {}),
+        Legal_Schemas: lg.schema || lg.Legal_Schemas || lg.Schemas || (payload.Subform_1?.[idx]?.Schemas) || 'General Services',
+        Internal_team_type: lg.internalTeamType || lg.Internal_team_type || '',
+        Internal_legal_status: lg.legalStatus || lg.Internal_legal_status || '',
+        Remark: lg.remark || lg.Remark || '',
+        Types_of_legal_documents: lg.docTypes || lg.Types_of_legal_documents || '',
+        Agreement_Terms_I: lg.terms1 || lg.Agreement_Terms_I || lg.agreementTerms || '',
+        Agreement_Terms_II: lg.terms2 || lg.Agreement_Terms_II || '',
+        Tenure_of_Service: lg.tenure || lg.Tenure_of_Service || '',
+      }));
+    }
+
     // Pipeline & Stage mapping (Default stage: Sales)
     let stage = deal.stage || deal.Stage;
     if (!stage) {
@@ -742,9 +758,52 @@ function zohoApiPlugin(): Plugin {
       payload.Employee = { id: String(empLookupId).trim() };
     }
     const empCode = deal.empId || fd.empId || deal.employeeId || fd.employeeId;
-    if (empCode) {
-      payload.Employment_ID = String(empCode);
-      payload.Employee_Code = String(empCode);
+    // Legal Handover Details & Follow-up Reminders
+    const legalSenderName = deal.legalDocsSenderName || deal.Legal_documents_sender_name || fd.legalDocsSenderName || fd.Legal_documents_sender_name || '';
+    if (legalSenderName) {
+      payload.Legal_documents_sender_name = legalSenderName;
+      payload.Employee_name_sent = legalSenderName;
+      payload.Employee_name_sent1 = legalSenderName;
+    }
+    const legalSenderDate = deal.legalDocsSenderDate || deal.Legal_documents_sender_date || deal.Legal_date || fd.legalDocsSenderDate || fd.Legal_documents_sender_date || '';
+    if (legalSenderDate) {
+      payload.Legal_documents_sender_date = legalSenderDate;
+      payload.Legal_date = legalSenderDate;
+    }
+    const legalReceiverName = deal.legalDocsReceiverName || deal.Legal_documents_receiver_name || fd.legalDocsReceiverName || fd.Legal_documents_receiver_name || '';
+    if (legalReceiverName) {
+      payload.Legal_documents_receiver_name = legalReceiverName;
+      payload.Employee_name_received = legalReceiverName;
+      payload.Employee_name_received1 = legalReceiverName;
+    }
+    const legalReceivedDate = deal.legalDocsReceivedDate || deal.Legal_documents_received_date || fd.legalDocsReceivedDate || fd.Legal_documents_received_date || '';
+    if (legalReceivedDate) {
+      payload.Legal_documents_received_date = legalReceivedDate;
+    }
+    const rem1 = deal.reminder1Date || deal.Reminder_1_date || fd.reminder1Date || fd.Reminder_1_date || '';
+    if (rem1) {
+      payload.Reminder_1_date = rem1;
+      payload.Reminder_1 = rem1;
+    }
+    const rem2 = deal.reminder2Date || deal.Reminder_2_date || fd.reminder2Date || fd.Reminder_2_date || '';
+    if (rem2) {
+      payload.Reminder_2_date = rem2;
+      payload.Reminder_2 = rem2;
+    }
+    const rem3 = deal.reminder3Date || deal.Reminder_3_date || fd.reminder3Date || fd.Reminder_3_date || '';
+    if (rem3) {
+      payload.Reminder_3_date = rem3;
+      payload.Reminder_3 = rem3;
+    }
+    const rem4 = deal.reminder4Date || deal.Reminder_4_date || fd.reminder4Date || fd.Reminder_4_date || '';
+    if (rem4) {
+      payload.Reminder_4_date = rem4;
+      payload.Reminder_4 = rem4;
+    }
+    const rem5 = deal.reminder5Date || deal.Reminder_5_date || fd.reminder5Date || fd.Reminder_5_date || '';
+    if (rem5) {
+      payload.Reminder_5_date = rem5;
+      payload.Reminder_5 = rem5;
     }
 
     return payload;
@@ -1800,7 +1859,7 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Companies,Company_Name,Company_name,Client_Name,Clients,Client,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Deal_Amount,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Deal_Received_Amount,Total_Pending_Amount,Pending_amount,Deal_Pending_Amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,Partner_BDM_Name,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications';
+            const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Companies,Company_Name,Company_name,Client_Name,Clients,Client,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Deal_Amount,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Deal_Received_Amount,Total_Pending_Amount,Pending_amount,Deal_Pending_Amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Has_Partner_BDM,Partner_BDM_Name,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications';
             const criteria = urlObj.searchParams.get('criteria') || '';
             const paginationQuery = buildZohoPaginationQuery(urlObj);
             const crmEndpoint = criteria
