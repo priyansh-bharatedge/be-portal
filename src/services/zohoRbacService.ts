@@ -52,9 +52,10 @@ export function resolveAccessibleEmployeeIds(
 
   const dept = (user.department || '').trim().toLowerCase();
   const isAccounts = dept.includes('account') || dept.includes('finance');
+  const isLegal = dept.includes('legal');
 
-  // 1. Super Admin, Head of Department (HOD), & Accounts Department have full organizational visibility across all modules
-  if (role === 'Super Admin' || role === 'HOD' || isAccounts || userEmail === 'superadmin@be.com' || userEmail === 'md@bharat-edge.com') {
+  // 1. Super Admin, Head of Department (HOD), Accounts, & Legal Department have full organizational visibility across all modules
+  if (role === 'Super Admin' || role === 'HOD' || isAccounts || isLegal || userEmail === 'superadmin@be.com' || userEmail === 'md@bharat-edge.com') {
     return { employeeIds: [], zohoIds: [], isAll: true };
   }
 
@@ -297,8 +298,9 @@ export function buildZohoRbacCriteria(
 
   const userDept = (user?.department || '').trim().toLowerCase();
   const isAccounts = userDept.includes('account') || userDept.includes('finance');
+  const isLegal = userDept.includes('legal');
 
-  // Exempt modules and full-visibility roles (Super Admin, HOD, HR, Accounts) have no role filters
+  // Exempt modules and full-visibility roles (Super Admin, HOD, HR, Accounts, Legal) have no role filters
   if (
     config?.isLookupExempt || 
     !user || 
@@ -306,6 +308,7 @@ export function buildZohoRbacCriteria(
     user.role === 'HOD' || 
     user.role === 'HR' ||
     isAccounts ||
+    isLegal ||
     user.email === 'superadmin@be.com' || 
     user.email === 'md@bharat-edge.com'
   ) {
@@ -400,6 +403,7 @@ export function filterRecordsByRbac<T = any>(
   if (!Array.isArray(records) || records.length === 0) return [];
   const userDept = (user?.department || '').trim().toLowerCase();
   const isAccounts = userDept.includes('account') || userDept.includes('finance');
+  const isLegal = userDept.includes('legal');
 
   if (
     !user || 
@@ -407,6 +411,7 @@ export function filterRecordsByRbac<T = any>(
     user.role === 'HOD' || 
     user.role === 'HR' ||
     isAccounts ||
+    isLegal ||
     user.email === 'superadmin@be.com' ||
     user.email === 'md@bharat-edge.com' ||
     user.email === 'hrmshr@be.com'
