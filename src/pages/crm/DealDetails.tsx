@@ -17,6 +17,7 @@ import {
   getZohoAttachmentDownloadUrl, 
   downloadZohoAttachment, 
   uploadZohoAttachmentToDeal,
+  uploadZohoDealPhoto,
   saveOrUpdateZohoDeal,
   transitionZohoDealBlueprint,
   moveDealToAccounts,
@@ -1763,6 +1764,11 @@ export const DealDetails = () => {
             console.warn(`IndexedDB save error for ${slot.tabName}:`, dbErr);
           }
           if (targetZohoId) {
+            try {
+              await uploadZohoDealPhoto(targetZohoId, file, file.name, 'Deals', slot.screenshotField);
+            } catch (pErr) {
+              console.warn(`Zoho deal photo error for ${slot.tabName}:`, pErr);
+            }
             try {
               await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
             } catch (uErr) {

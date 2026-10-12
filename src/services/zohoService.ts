@@ -331,6 +331,64 @@ export async function uploadZohoAttachmentToDeal(
 }
 
 /**
+ * Uploads an image/photo to a Zoho CRM record using the Upload Record Image API (v8).
+ * Documentation: https://www.zoho.com/crm/developer/docs/api/v8/upload-image.html
+ * Endpoint: POST https://www.zohoapis.com/crm/v8/{module}/{recordId}/photo
+ *
+ * @param recordId - The numeric Zoho CRM record ID (e.g. Deal ID)
+ * @param file - The File or Blob containing the image (PNG, JPEG, JPG, GIF, BMP)
+ * @param fileName - Optional custom filename (e.g. 'screenshot.png')
+ * @param module - Module name (defaults to 'Deals')
+ * @param fieldApiName - Optional field API name (e.g. 'R1_Received_Screenshot')
+ */
+export async function uploadZohoDealPhoto(
+  recordId: string,
+  file: File | Blob,
+  fileName?: string,
+  module: string = 'Deals',
+  fieldApiName?: string
+): Promise<ZohoApiResponse> {
+  try {
+    const formData = new FormData();
+    const resolvedName = fileName || (file instanceof File ? file.name : 'screenshot.png');
+    formData.append('file', file, resolvedName);
+    formData.append('recordId', recordId);
+    formData.append('module', module);
+    if (fieldApiName) {
+      formData.append('field_api_name', fieldApiName);
+    }
+
+    const response = await fetch('/api/zoho/upload-deal-photo', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        zohoId: recordId,
+        message: data.message || 'Record photo uploaded successfully to Zoho CRM',
+        data: data.data,
+      };
+    } else {
+      return {
+        success: false,
+        message: data.message || 'Failed to upload record photo to Zoho CRM',
+        errorDetails: data.errorDetails || data,
+      };
+    }
+  } catch (error: any) {
+    console.error('[System] Client exception while uploading record photo:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with photo endpoint',
+      errorDetails: error,
+    };
+  }
+}
+
+/**
  * Convenience helper to upload a file attachment to a Lead record.
  * Endpoint: POST https://www.zohoapis.com/crm/v8/Leads/{leadId}/Attachments
  */

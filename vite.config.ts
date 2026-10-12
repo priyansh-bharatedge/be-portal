@@ -4616,6 +4616,103 @@ function zohoApiPlugin(): Plugin {
           }
         }
 
+        // Upload Record Photo / Image endpoint (v8 Upload Record Image API)
+        // Documentation: https://www.zoho.com/crm/developer/docs/api/v8/upload-image.html
+        // e.g. POST https://www.zohoapis.com/crm/v8/Deals/{recordId}/photo
+        if ((pathname === '/api/zoho/upload-deal-photo' || pathname === '/api/zoho/upload-photo') && req.method === 'POST') {
+          try {
+            const chunks: Buffer[] = [];
+            for await (const chunk of req) {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            }
+            const buffer = Buffer.concat(chunks);
+            const contentType = req.headers['content-type'] || '';
+
+            const webReq = new Request('http://localhost' + req.url, {
+              method: 'POST',
+              headers: {
+                'content-type': contentType,
+              },
+              body: buffer,
+            });
+
+            const formData = await webReq.formData();
+            const file = formData.get('file') as File | null;
+            const recordId = (formData.get('recordId') as string) || '';
+            const moduleName = (formData.get('module') as string) || 'Deals';
+            const fieldApiName = (formData.get('field_api_name') as string) || '';
+
+            if (!file || !recordId) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({
+                success: false,
+                message: 'Both "file" and "recordId" are required to upload record photo/image.',
+              }));
+            }
+
+            let accessToken = await getAccessToken(env);
+            const domain = env.VITE_ZOHO_DOMAIN || 'in';
+            const apiBase = env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
+            let crmPhotoEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/photo`;
+            if (fieldApiName) {
+              crmPhotoEndpoint += `?field_api_name=${encodeURIComponent(fieldApiName)}`;
+            }
+
+            console.log(`[Vite Zoho Plugin] Uploading record photo (${file.name}) to: ${crmPhotoEndpoint}`);
+
+            const zohoForm = new FormData();
+            zohoForm.append('file', file, file.name);
+
+            let photoRes = await fetch(crmPhotoEndpoint, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${accessToken}`,
+              },
+              body: zohoForm,
+            });
+
+            let photoData: any = await photoRes.json();
+
+            if (photoRes.status === 401 || photoData.code === 'INVALID_TOKEN') {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              photoRes = await fetch(crmPhotoEndpoint, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                },
+                body: zohoForm,
+              });
+              photoData = await photoRes.json();
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            if (photoData.code === 'SUCCESS' || photoData.status === 'success') {
+              console.log('[Vite Zoho Plugin] Photo uploaded successfully to Zoho record!');
+              return res.end(JSON.stringify({
+                success: true,
+                message: photoData.message || 'Photo uploaded successfully to Zoho CRM record',
+                data: photoData,
+              }));
+            } else {
+              res.statusCode = 400;
+              const errMsg = photoData.message || 'Failed to upload photo in Zoho CRM';
+              console.error('[Vite Zoho Plugin] Photo upload failed:', errMsg, photoData);
+              return res.end(JSON.stringify({
+                success: false,
+                message: errMsg,
+                errorDetails: photoData,
+              }));
+            }
+          } catch (err: any) {
+            console.error('[Vite Zoho Plugin] Photo server error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
         // --- DEV ENDPOINT: /api/send-otp ---
         if ((pathname === '/api/send-otp' || req.url?.startsWith('/api/send-otp')) && req.method === 'POST') {
           let body = '';

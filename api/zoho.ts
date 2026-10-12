@@ -3908,6 +3908,86 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // 21. Upload Record Photo / Image (v8 Upload Record Image API)
+    // Documentation: https://www.zoho.com/crm/developer/docs/api/v8/upload-image.html
+    // e.g. POST https://www.zohoapis.com/crm/v8/Deals/{recordId}/photo
+    if ((action === 'upload-deal-photo' || action === 'upload-photo') && method === 'POST') {
+      try {
+        let buffer: Buffer;
+        if (Buffer.isBuffer((req as any).body)) {
+          buffer = (req as any).body;
+        } else if (Buffer.isBuffer((req as any).rawBody)) {
+          buffer = (req as any).rawBody;
+        } else {
+          const chunks: Buffer[] = [];
+          for await (const chunk of (req as any)) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+          buffer = Buffer.concat(chunks);
+        }
+        const contentType = (req.headers && req.headers['content-type']) || '';
+
+        const webReq = new Request('http://localhost' + (req.url || '/'), {
+          method: 'POST',
+          headers: { 'content-type': contentType },
+          body: buffer,
+        });
+
+        const formData = await webReq.formData();
+        const file = formData.get('file') as File | null;
+        const recordId = (formData.get('recordId') as string) || '';
+        const moduleName = (formData.get('module') as string) || 'Deals';
+        const fieldApiName = (formData.get('field_api_name') as string) || '';
+
+        if (!file || !recordId) {
+          return sendJson(res, 400, {
+            success: false,
+            message: 'Both "file" and "recordId" are required to upload record photo/image.',
+          });
+        }
+
+        let accessToken = await getAccessToken();
+        let crmPhotoEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/photo`;
+        if (fieldApiName) {
+          crmPhotoEndpoint += `?field_api_name=${encodeURIComponent(fieldApiName)}`;
+        }
+
+        const zohoForm = new FormData();
+        zohoForm.append('file', file, file.name);
+
+        let photoRes = await fetch(crmPhotoEndpoint, {
+          method: 'POST',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+          body: zohoForm,
+        });
+
+        let photoData: any = await photoRes.json();
+        if (photoRes.status === 401 || photoData.code === 'INVALID_TOKEN') {
+          cachedToken = null;
+          accessToken = await getAccessToken();
+          photoRes = await fetch(crmPhotoEndpoint, {
+            method: 'POST',
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            body: zohoForm,
+          });
+          photoData = await photoRes.json();
+        }
+
+        if (photoData.code === 'SUCCESS' || photoData.status === 'success') {
+          return sendJson(res, 200, {
+            success: true,
+            message: photoData.message || 'Photo uploaded successfully to Zoho CRM record',
+            data: photoData,
+          });
+        } else {
+          const errMsg = photoData.message || 'Failed to upload photo in Zoho CRM';
+          return sendJson(res, 400, { success: false, message: errMsg, errorDetails: photoData });
+        }
+      } catch (err: any) {
+        return sendJson(res, 500, { success: false, message: err.message });
+      }
+    }
+
     // Default: Route not recognized
     return sendJson(res, 404, {
       success: false,
