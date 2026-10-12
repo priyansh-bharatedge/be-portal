@@ -3988,6 +3988,121 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // 22. Upload Custom Image Field (v8 Files API -> Record Update)
+    // Uploads file to /crm/v8/files then sets { [fieldApiName]: [{ File_Id__s: fileId }] } on Deals/{recordId}
+    if ((action === 'upload-deal-image-field' || action === 'upload-image-field') && method === 'POST') {
+      try {
+        let buffer: Buffer;
+        if (Buffer.isBuffer((req as any).body)) {
+          buffer = (req as any).body;
+        } else if (Buffer.isBuffer((req as any).rawBody)) {
+          buffer = (req as any).rawBody;
+        } else {
+          const chunks: Buffer[] = [];
+          for await (const chunk of (req as any)) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+          buffer = Buffer.concat(chunks);
+        }
+        const contentType = (req.headers && req.headers['content-type']) || '';
+
+        const webReq = new Request('http://localhost' + (req.url || '/'), {
+          method: 'POST',
+          headers: { 'content-type': contentType },
+          body: buffer,
+        });
+
+        const formData = await webReq.formData();
+        const file = formData.get('file') as File | null;
+        const recordId = (formData.get('recordId') as string) || '';
+        const fieldApiName = (formData.get('field_api_name') as string) || 'R1_Received_Screenshot';
+        const moduleName = (formData.get('module') as string) || 'Deals';
+
+        if (!file || !recordId || !fieldApiName) {
+          return sendJson(res, 400, {
+            success: false,
+            message: '"file", "recordId", and "field_api_name" are required to upload into an image field.',
+          });
+        }
+
+        let accessToken = await getAccessToken();
+
+        // Step 1: Upload file to Zoho File System (/crm/v8/files)
+        const filesForm = new FormData();
+        filesForm.append('file', file, file.name);
+
+        let filesRes = await fetch(`${apiBase}/crm/v8/files`, {
+          method: 'POST',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+          body: filesForm,
+        });
+        let filesData: any = await filesRes.json().catch(() => null);
+
+        if (filesRes.status === 401 || filesData?.code === 'INVALID_TOKEN') {
+          cachedToken = null;
+          accessToken = await getAccessToken();
+          filesRes = await fetch(`${apiBase}/crm/v8/files`, {
+            method: 'POST',
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            body: filesForm,
+          });
+          filesData = await filesRes.json().catch(() => null);
+        }
+
+        const fileId = filesData?.data?.[0]?.details?.id;
+        if (!fileId) {
+          console.warn('[Zoho Files API] Upload response:', filesRes.status, filesData);
+          return sendJson(res, filesRes.status >= 400 ? filesRes.status : 400, {
+            success: false,
+            code: filesData?.code,
+            message: filesData?.message || 'Failed to upload image file to Zoho File System',
+            errorDetails: filesData,
+          });
+        }
+
+        // Step 2: Update the Deal record with File_Id__s in the custom Image Upload field
+        const updatePayload = {
+          data: [
+            {
+              id: recordId,
+              [fieldApiName]: [
+                {
+                  File_Id__s: fileId,
+                },
+              ],
+            },
+          ],
+        };
+
+        let updateRes = await fetch(`${apiBase}/crm/v8/${moduleName}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updatePayload),
+        });
+        let updateData: any = await updateRes.json().catch(() => null);
+
+        if (updateRes.ok && updateData?.data?.[0]?.code === 'SUCCESS') {
+          return sendJson(res, 200, {
+            success: true,
+            fileId,
+            message: `Image successfully uploaded into ${fieldApiName} field on Zoho deal`,
+            data: updateData.data[0],
+          });
+        } else {
+          return sendJson(res, 400, {
+            success: false,
+            message: updateData?.data?.[0]?.message || updateData?.message || `Failed to link image to ${fieldApiName} in Zoho CRM`,
+            errorDetails: updateData,
+          });
+        }
+      } catch (err: any) {
+        return sendJson(res, 500, { success: false, message: err.message });
+      }
+    }
+
     // Default: Route not recognized
     return sendJson(res, 404, {
       success: false,

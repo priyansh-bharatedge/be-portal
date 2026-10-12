@@ -389,6 +389,61 @@ export async function uploadZohoDealPhoto(
 }
 
 /**
+ * Uploads an image directly into a custom Image Upload field on a Deal record (e.g. R1_Received_Screenshot).
+ * Uploads file to Zoho File System (/crm/v8/files) and then maps File_Id__s onto the deal record.
+ *
+ * @param recordId - The numeric Zoho CRM record ID
+ * @param file - The File or Blob containing the image
+ * @param fieldApiName - The API Name of the custom field (e.g. 'R1_Received_Screenshot')
+ * @param fileName - Optional file name
+ * @param module - Module name (defaults to 'Deals')
+ */
+export async function uploadZohoDealImageField(
+  recordId: string,
+  file: File | Blob,
+  fieldApiName: string,
+  fileName?: string,
+  module: string = 'Deals'
+): Promise<ZohoApiResponse> {
+  try {
+    const formData = new FormData();
+    const resolvedName = fileName || (file instanceof File ? file.name : 'screenshot.png');
+    formData.append('file', file, resolvedName);
+    formData.append('recordId', recordId);
+    formData.append('field_api_name', fieldApiName);
+    formData.append('module', module);
+
+    const response = await fetch('/api/zoho/upload-deal-image-field', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        zohoId: recordId,
+        message: data.message || `Image successfully set in field ${fieldApiName}`,
+        data: data.data,
+      };
+    } else {
+      return {
+        success: false,
+        message: data.message || `Failed to set image in field ${fieldApiName}`,
+        errorDetails: data.errorDetails || data,
+      };
+    }
+  } catch (error: any) {
+    console.error('[System] Client exception while uploading deal image field:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with image field endpoint',
+      errorDetails: error,
+    };
+  }
+}
+
+/**
  * Convenience helper to upload a file attachment to a Lead record.
  * Endpoint: POST https://www.zohoapis.com/crm/v8/Leads/{leadId}/Attachments
  */

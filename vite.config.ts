@@ -4713,6 +4713,130 @@ function zohoApiPlugin(): Plugin {
           }
         }
 
+        // Upload Custom Image Field (v8 Files API -> Record Update)
+        // Uploads file to /crm/v8/files then sets { [fieldApiName]: [{ File_Id__s: fileId }] } on Deals/{recordId}
+        if ((pathname === '/api/zoho/upload-deal-image-field' || pathname === '/api/zoho/upload-image-field') && req.method === 'POST') {
+          try {
+            const chunks: Buffer[] = [];
+            for await (const chunk of req) {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            }
+            const buffer = Buffer.concat(chunks);
+            const contentType = req.headers['content-type'] || '';
+
+            const webReq = new Request('http://localhost' + req.url, {
+              method: 'POST',
+              headers: {
+                'content-type': contentType,
+              },
+              body: buffer,
+            });
+
+            const formData = await webReq.formData();
+            const file = formData.get('file') as File | null;
+            const recordId = (formData.get('recordId') as string) || '';
+            const fieldApiName = (formData.get('field_api_name') as string) || 'R1_Received_Screenshot';
+            const moduleName = (formData.get('module') as string) || 'Deals';
+
+            if (!file || !recordId || !fieldApiName) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({
+                success: false,
+                message: '"file", "recordId", and "field_api_name" are required to upload into an image field.',
+              }));
+            }
+
+            let accessToken = await getAccessToken(env);
+            const domain = env.VITE_ZOHO_DOMAIN || 'in';
+            const apiBase = env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
+
+            console.log(`[Vite Zoho Plugin] Uploading image (${file.name}) to ZFS for field ${fieldApiName} on ${recordId}`);
+
+            // Step 1: Upload to /crm/v8/files
+            const filesForm = new FormData();
+            filesForm.append('file', file, file.name);
+
+            let filesRes = await fetch(`${apiBase}/crm/v8/files`, {
+              method: 'POST',
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+              body: filesForm,
+            });
+            let filesData: any = await filesRes.json().catch(() => null);
+
+            if (filesRes.status === 401 || filesData?.code === 'INVALID_TOKEN') {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              filesRes = await fetch(`${apiBase}/crm/v8/files`, {
+                method: 'POST',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                body: filesForm,
+              });
+              filesData = await filesRes.json().catch(() => null);
+            }
+
+            const fileId = filesData?.data?.[0]?.details?.id;
+            if (!fileId) {
+              console.warn('[Vite Zoho Plugin] Files API upload failed:', filesRes.status, filesData);
+              res.statusCode = filesRes.status >= 400 ? filesRes.status : 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({
+                success: false,
+                code: filesData?.code,
+                message: filesData?.message || 'Failed to upload image to Zoho File System',
+                errorDetails: filesData,
+              }));
+            }
+
+            // Step 2: Update Deal record
+            const updatePayload = {
+              data: [
+                {
+                  id: recordId,
+                  [fieldApiName]: [
+                    {
+                      File_Id__s: fileId,
+                    },
+                  ],
+                },
+              ],
+            };
+
+            let updateRes = await fetch(`${apiBase}/crm/v8/${moduleName}`, {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(updatePayload),
+            });
+            let updateData: any = await updateRes.json().catch(() => null);
+
+            res.setHeader('Content-Type', 'application/json');
+            if (updateRes.ok && updateData?.data?.[0]?.code === 'SUCCESS') {
+              console.log(`[Vite Zoho Plugin] Image linked to ${fieldApiName} successfully!`);
+              return res.end(JSON.stringify({
+                success: true,
+                fileId,
+                message: `Image successfully uploaded into ${fieldApiName} field on Zoho deal`,
+                data: updateData.data[0],
+              }));
+            } else {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({
+                success: false,
+                message: updateData?.data?.[0]?.message || updateData?.message || `Failed to link image to ${fieldApiName} in Zoho CRM`,
+                errorDetails: updateData,
+              }));
+            }
+          } catch (err: any) {
+            console.error('[Vite Zoho Plugin] Image field error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
         // --- DEV ENDPOINT: /api/send-otp ---
         if ((pathname === '/api/send-otp' || req.url?.startsWith('/api/send-otp')) && req.method === 'POST') {
           let body = '';
