@@ -1165,8 +1165,22 @@ export async function updateZohoDeal(deal: any): Promise<ZohoApiResponse> {
  * Automatically inserts or updates a deal record successfully depending on whether deal.zohoId exists.
  */
 export async function saveOrUpdateZohoDeal(deal: any): Promise<ZohoApiResponse> {
-  if (deal.zohoId) {
-    return updateZohoDeal(deal);
+  let zohoId = deal.zohoId;
+  if (!zohoId && typeof window !== 'undefined' && deal.id) {
+    try {
+      const saved = localStorage.getItem('be_deals');
+      if (saved) {
+        const list = JSON.parse(saved);
+        const found = list.find((d: any) => (d.id === deal.id || (deal.name && d.name === deal.name)) && d.zohoId);
+        if (found?.zohoId) {
+          zohoId = found.zohoId;
+          deal.zohoId = zohoId;
+        }
+      }
+    } catch (_) {}
+  }
+  if (zohoId) {
+    return updateZohoDeal({ ...deal, zohoId });
   }
   return insertZohoDeal(deal);
 }
@@ -1443,8 +1457,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   if (Array.isArray(rawZoho.Subform_1) && rawZoho.Subform_1.length > 0) {
     const seenSubforms = new Set<string>();
     const uniqueRawSubform = rawZoho.Subform_1.filter((sf: any) => {
-      const sName = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '').trim().toLowerCase();
-      if (!sName) return true;
+      const sName = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'website development').trim().toLowerCase();
       if (seenSubforms.has(sName)) return false;
       seenSubforms.add(sName);
       return true;
@@ -1786,9 +1799,8 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
         ? rawZoho.Legal
         : (Array.isArray(existingDeal?.legalData) && existingDeal.legalData.length > 0 ? existingDeal.legalData : []);
       const seenLegal = new Set<string>();
-      const uniqueLegal = rawList.filter((lg: any) => {
-        const schemaKey = (lg.Legal_Schemas || lg.Schemas || lg.schema || '').trim().toLowerCase();
-        if (!schemaKey) return true;
+      const uniqueLegal = rawList.filter((lg: any, idx: number) => {
+        const schemaKey = (lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[idx]?.name || 'service').trim().toLowerCase();
         if (seenLegal.has(schemaKey)) return false;
         seenLegal.add(schemaKey);
         return true;

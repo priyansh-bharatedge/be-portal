@@ -190,8 +190,7 @@ export const DealDetails = () => {
 
       const seenSvc = new Set<string>();
       const servicesList = rawServicesList.filter((s: any) => {
-        const key = (s.Schemas || s.Schema || s.name || s.Service_Name || '').trim().toLowerCase();
-        if (!key) return true;
+        const key = (s.Schemas || s.Schema || s.name || s.Service_Name || deal.service || 'Website Development').trim().toLowerCase();
         if (seenSvc.has(key)) return false;
         seenSvc.add(key);
         return true;
@@ -199,29 +198,39 @@ export const DealDetails = () => {
 
       if (dealLegal) {
         const seenLegal = new Set<string>();
-        const uniqueDealLegal = dealLegal.filter((lg: any) => {
-          const key = (lg.schema || lg.Legal_Schemas || lg.Schemas || '').trim().toLowerCase();
-          if (!key) return true;
+        const uniqueDealLegal = dealLegal.filter((lg: any, idx: number) => {
+          const key = (lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[idx]?.Schemas || servicesList[idx]?.name || 'Service').trim().toLowerCase();
           if (seenLegal.has(key)) return false;
           seenLegal.add(key);
           return true;
         });
-        setLegalSubformItems(uniqueDealLegal.map((lg: any, i: number) => ({
-          id: String(lg.id || `temp_${i + 1}`),
-          schema: lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service',
-          internalTeamType: lg.internalTeamType || lg.Internal_team_type || '',
-          legalStatus: lg.legalStatus || lg.Internal_legal_status || '',
-          remark: lg.remark || lg.Remark || '',
-          docTypes: lg.docTypes || lg.Types_of_legal_documents || '',
-          terms1: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
-          terms2: lg.terms2 || lg.Agreement_Terms_II || '',
-          tenure: lg.tenure || lg.Tenure_of_Service || '',
-        })));
+        setLegalSubformItems(uniqueDealLegal.map((lg: any, i: number) => {
+          const schemaName = lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service';
+          let realId = (lg.id && /^\d{15,}$/.test(String(lg.id))) ? String(lg.id) : '';
+          if (!realId && rawLegal) {
+            const matchedRaw = rawLegal.find((rl: any) => 
+              (rl.Legal_Schemas || rl.Schemas || '').trim().toLowerCase() === schemaName.trim().toLowerCase()
+            ) || rawLegal[i];
+            if (matchedRaw?.id && /^\d{15,}$/.test(String(matchedRaw.id))) {
+              realId = String(matchedRaw.id);
+            }
+          }
+          return {
+            id: realId || String(lg.id || `temp_${i + 1}`),
+            schema: schemaName,
+            internalTeamType: lg.internalTeamType || lg.Internal_team_type || '',
+            legalStatus: lg.legalStatus || lg.Internal_legal_status || '',
+            remark: lg.remark || lg.Remark || '',
+            docTypes: lg.docTypes || lg.Types_of_legal_documents || '',
+            terms1: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
+            terms2: lg.terms2 || lg.Agreement_Terms_II || '',
+            tenure: lg.tenure || lg.Tenure_of_Service || '',
+          };
+        }));
       } else if (rawLegal) {
         const seenLegal = new Set<string>();
-        const uniqueRawLegal = rawLegal.filter((lg: any) => {
-          const key = (lg.Legal_Schemas || lg.Schemas || lg.schema || '').trim().toLowerCase();
-          if (!key) return true;
+        const uniqueRawLegal = rawLegal.filter((lg: any, idx: number) => {
+          const key = (lg.Legal_Schemas || lg.Schemas || lg.schema || servicesList[idx]?.Schemas || servicesList[idx]?.name || 'Service').trim().toLowerCase();
           if (seenLegal.has(key)) return false;
           seenLegal.add(key);
           return true;
@@ -239,7 +248,7 @@ export const DealDetails = () => {
         })));
       } else if (servicesList.length > 0) {
         setLegalSubformItems(servicesList.map((svc: any, i: number) => ({
-          id: `temp_${i + 1}`,
+          id: (svc.id && /^\d{15,}$/.test(String(svc.id))) ? String(svc.id) : `temp_${i + 1}`,
           schema: svc.Schemas || svc.name || svc.Service_Name || 'Service',
           internalTeamType: '',
           legalStatus: '',
@@ -514,25 +523,46 @@ export const DealDetails = () => {
     if (!deal) return;
     setIsSavingLegalSubform(true);
     try {
-      const formattedLegal = legalSubformItems.map((lg: any, idx: number) => ({
-        id: String(lg.id || `temp_${idx + 1}`),
-        schema: lg.schema || lg.Legal_Schemas || lg.Schemas || 'Service',
-        Legal_Schemas: lg.schema || lg.Legal_Schemas || lg.Schemas || 'Service',
-        internalTeamType: lg.internalTeamType || lg.Internal_team_type || '',
-        Internal_team_type: lg.internalTeamType || lg.Internal_team_type || '',
-        legalStatus: lg.legalStatus || lg.Internal_legal_status || '',
-        Internal_legal_status: lg.legalStatus || lg.Internal_legal_status || '',
-        remark: lg.remark || lg.Remark || '',
-        Remark: lg.remark || lg.Remark || '',
-        docTypes: lg.docTypes || lg.Types_of_legal_documents || '',
-        Types_of_legal_documents: lg.docTypes || lg.Types_of_legal_documents || '',
-        terms1: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
-        Agreement_Terms_I: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
-        terms2: lg.terms2 || lg.Agreement_Terms_II || '',
-        Agreement_Terms_II: lg.terms2 || lg.Agreement_Terms_II || '',
-        tenure: lg.tenure || lg.Tenure_of_Service || '',
-        Tenure_of_Service: lg.tenure || lg.Tenure_of_Service || '',
-      }));
+      const existingRawLegal = deal.rawZohoDeal?.Legal || (deal as any).Legal || [];
+      const seenLg = new Set<string>();
+      const dedupedItems = legalSubformItems.filter((lg: any, idx: number) => {
+        const key = (lg.schema || lg.Legal_Schemas || lg.Schemas || `service_${idx}`).trim().toLowerCase();
+        if (seenLg.has(key)) return false;
+        seenLg.add(key);
+        return true;
+      });
+
+      const formattedLegal = dedupedItems.map((lg: any, idx: number) => {
+        let validId = lg.id && /^\d{15,}$/.test(String(lg.id)) ? String(lg.id) : '';
+        if (!validId && Array.isArray(existingRawLegal) && existingRawLegal.length > 0) {
+          const matched = existingRawLegal.find((rl: any) => 
+            rl.id && /^\d{15,}$/.test(String(rl.id)) &&
+            (rl.Legal_Schemas || rl.Schemas || '').trim().toLowerCase() === (lg.schema || lg.Legal_Schemas || '').trim().toLowerCase()
+          ) || existingRawLegal[idx];
+          if (matched?.id && /^\d{15,}$/.test(String(matched.id))) {
+            validId = String(matched.id);
+          }
+        }
+        return {
+          id: validId || String(lg.id || `temp_${idx + 1}`),
+          schema: lg.schema || lg.Legal_Schemas || lg.Schemas || 'Service',
+          Legal_Schemas: lg.schema || lg.Legal_Schemas || lg.Schemas || 'Service',
+          internalTeamType: lg.internalTeamType || lg.Internal_team_type || '',
+          Internal_team_type: lg.internalTeamType || lg.Internal_team_type || '',
+          legalStatus: lg.legalStatus || lg.Internal_legal_status || '',
+          Internal_legal_status: lg.legalStatus || lg.Internal_legal_status || '',
+          remark: lg.remark || lg.Remark || '',
+          Remark: lg.remark || lg.Remark || '',
+          docTypes: lg.docTypes || lg.Types_of_legal_documents || '',
+          Types_of_legal_documents: lg.docTypes || lg.Types_of_legal_documents || '',
+          terms1: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
+          Agreement_Terms_I: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
+          terms2: lg.terms2 || lg.Agreement_Terms_II || '',
+          Agreement_Terms_II: lg.terms2 || lg.Agreement_Terms_II || '',
+          tenure: lg.tenure || lg.Tenure_of_Service || '',
+          Tenure_of_Service: lg.tenure || lg.Tenure_of_Service || '',
+        };
+      });
 
       const updatedDeal = {
         ...deal,

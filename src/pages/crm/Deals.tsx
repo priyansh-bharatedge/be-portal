@@ -1011,6 +1011,11 @@ export const Deals = () => {
         existingIdx = dealIndexByZohoId.get(zIdStr)!;
       } else if (zIdStr && dealIndexById.has(zIdStr)) {
         existingIdx = dealIndexById.get(zIdStr)!;
+      } else if (zDeal.Deal_Name) {
+        const dlMatch = String(zDeal.Deal_Name).match(/\b(DL-\d+)\b/i);
+        if (dlMatch && dealIndexById.has(dlMatch[1].toUpperCase())) {
+          existingIdx = dealIndexById.get(dlMatch[1].toUpperCase())!;
+        }
       }
 
       // 1. Clean Client Name & Company Name
@@ -1061,8 +1066,7 @@ export const Deals = () => {
       const seenSubformsInDeal = new Set<string>();
       const uniqueSubform1 = Array.isArray(zDeal.Subform_1)
         ? zDeal.Subform_1.filter((sf: any) => {
-            const nameKey = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '').trim().toLowerCase();
-            if (!nameKey) return true;
+            const nameKey = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'website development').trim().toLowerCase();
             if (seenSubformsInDeal.has(nameKey)) return false;
             seenSubformsInDeal.add(nameKey);
             return true;
@@ -1205,8 +1209,17 @@ export const Deals = () => {
           : 'Services';
 
       // 5. Legal Subform
-      const legalSubform = Array.isArray(zDeal.Legal) && zDeal.Legal.length > 0
-        ? zDeal.Legal.map((lg: any, i: number) => ({
+      const seenLegalRows = new Set<string>();
+      const dedupedRawLegal = Array.isArray(zDeal.Legal)
+        ? zDeal.Legal.filter((lg: any, i: number) => {
+            const sKey = (lg.Legal_Schemas || lg.Schemas || `row_${i}`).trim().toLowerCase();
+            if (seenLegalRows.has(sKey)) return false;
+            seenLegalRows.add(sKey);
+            return true;
+          })
+        : [];
+      const legalSubform = dedupedRawLegal.length > 0
+        ? dedupedRawLegal.map((lg: any, i: number) => ({
             id: String(lg.id || i + 1),
             schema: lg.Legal_Schemas || lg.Schemas || '',
             tenure: lg.Tenure_of_Service || '',

@@ -120,8 +120,7 @@ const deduplicateSubforms = (list: any[]): any[] => {
   if (!Array.isArray(list) || list.length === 0) return [];
   const seen = new Set<string>();
   return list.filter((item: any) => {
-    const key = (item.Schemas || item.Schema || item.Service_Name || item.Service || item.Business_plan_selected || item.name || '').trim().toLowerCase();
-    if (!key) return true;
+    const key = (item.Schemas || item.Schema || item.Service_Name || item.Service || item.Business_plan_selected || item.name || 'service').trim().toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
