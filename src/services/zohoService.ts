@@ -1415,6 +1415,17 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     return 0;
   };
 
+  const extractZohoName = (val: any, fallback = ''): string => {
+    if (val === null || val === undefined) return fallback;
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number') return String(val);
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    if (typeof val === 'object') {
+      return val.name || val.display_value || val.id || fallback;
+    }
+    return String(val);
+  };
+
   // 1. Resolve Client & Company Names
   let resolvedClient = '';
   if (rawZoho.Client_Name && typeof rawZoho.Client_Name === 'string' && !/^\(\d+\)$/.test(rawZoho.Client_Name.trim())) {
@@ -1457,7 +1468,8 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   if (Array.isArray(rawZoho.Subform_1) && rawZoho.Subform_1.length > 0) {
     const seenSubforms = new Set<string>();
     const uniqueRawSubform = rawZoho.Subform_1.filter((sf: any) => {
-      const sName = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'website development').trim().toLowerCase();
+      const sRaw = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'website development');
+      const sName = sRaw.trim().toLowerCase();
       if (seenSubforms.has(sName)) return false;
       seenSubforms.add(sName);
       return true;
@@ -1475,17 +1487,19 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       subformReceived += recAmt;
       subformPending += pendAmt;
 
+      const svcName = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service');
+
       return {
         id: String(sf.id || i + 1),
-        name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service',
+        name: svcName,
         totalAmount: String(tAmt || ''),
         baseAmount: String(wGst || 0),
         receivedAmount: sf.Received_amount || sf.Received || (recAmt > 0 ? String(recAmt) : ''),
         pendingAmount: sf.Pending_amount || sf.Pending || (pendAmt > 0 ? String(pendAmt) : ''),
-        paymentStages: sf.Payment_stages || '',
-        paymentType: sf.Payment_type || '',
-        paymentDate: sf.Payment_received_date || '',
-        qualityProvided: sf.Quality_provided || '',
+        paymentStages: extractZohoName(sf.Payment_stages || ''),
+        paymentType: extractZohoName(sf.Payment_type || ''),
+        paymentDate: extractZohoName(sf.Payment_received_date || ''),
+        qualityProvided: extractZohoName(sf.Quality_provided || ''),
         successFees: sf.Success_fees || '',
       };
     });
@@ -1625,7 +1639,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     partnerBdmAmount = Number(((recNum / 1.18) / 2).toFixed(2));
   }
 
-  const stage = rawZoho.Stage || rawZoho.Status || existingDeal?.stage || 'Operations';
+  const stage = extractZohoName(rawZoho.Stage || rawZoho.Status || existingDeal?.stage || 'Operations');
   let status = 'New';
   if (stage === 'Closed Won' || stage === 'Won' || stage.includes('Won') || stage === 'Operations executors') {
     status = 'Won';
@@ -1643,7 +1657,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
 
   const serviceTitle = servicesSubform.length > 0 
     ? (servicesSubform.length === 1 ? servicesSubform[0].name : `${servicesSubform.length} Services`) 
-    : (rawZoho.Choose_Wisely || rawZoho.Service_Name || (rawZoho.Deal_Name && rawZoho.Deal_Name.includes(' - ') ? rawZoho.Deal_Name.split(' - ').slice(1).join(' - ').trim() : (existingDeal?.service || 'Services')));
+    : extractZohoName(rawZoho.Choose_Wisely || rawZoho.Service_Name || (rawZoho.Deal_Name && rawZoho.Deal_Name.includes(' - ') ? rawZoho.Deal_Name.split(' - ').slice(1).join(' - ').trim() : (existingDeal?.service || 'Services')));
 
   const employeeName = 
     (rawZoho.Employee && typeof rawZoho.Employee === 'object' ? rawZoho.Employee.name : (typeof rawZoho.Employee === 'string' && !/^\d+$/.test(rawZoho.Employee) ? rawZoho.Employee : '')) ||
@@ -1708,7 +1722,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     rawPending: pendNum,
     status,
     stage,
-    owner: rawZoho.Owner?.name || rawZoho.Owner || rawZoho.BDM_names?.name || rawZoho.BDM_name || existingDeal?.owner || 'Admin',
+    owner: extractZohoName(rawZoho.Owner?.name || rawZoho.Owner || rawZoho.BDM_names?.name || rawZoho.BDM_name || existingDeal?.owner || 'Admin'),
     date: rawZoho.Closing_Date ? new Date(rawZoho.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (rawZoho.Booking_Date ? new Date(rawZoho.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))),
     source: existingDeal?.source || 'System',
     hasPartnerBdm,
@@ -1807,22 +1821,22 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       });
       return uniqueLegal.map((lg: any, i: number) => ({
         id: String(lg.id || `temp_${i + 1}`),
-        schema: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service',
-        Legal_Schemas: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service',
-        internalTeamType: lg.Internal_team_type || lg.internalTeamType || '',
-        Internal_team_type: lg.Internal_team_type || lg.internalTeamType || '',
-        legalStatus: lg.Internal_legal_status || lg.legalStatus || '',
-        Internal_legal_status: lg.Internal_legal_status || lg.legalStatus || '',
-        remark: lg.Remark || lg.remark || '',
-        Remark: lg.Remark || lg.remark || '',
-        docTypes: lg.Types_of_legal_documents || lg.docTypes || '',
-        Types_of_legal_documents: lg.Types_of_legal_documents || lg.docTypes || '',
-        terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
-        Agreement_Terms_I: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
-        terms2: lg.Agreement_Terms_II || lg.terms2 || '',
-        Agreement_Terms_II: lg.Agreement_Terms_II || lg.terms2 || '',
-        tenure: lg.Tenure_of_Service || lg.tenure || '',
-        Tenure_of_Service: lg.Tenure_of_Service || lg.tenure || '',
+        schema: extractZohoName(lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service'),
+        Legal_Schemas: extractZohoName(lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[i]?.name || 'Service'),
+        internalTeamType: extractZohoName(lg.Internal_team_type || lg.internalTeamType || ''),
+        Internal_team_type: extractZohoName(lg.Internal_team_type || lg.internalTeamType || ''),
+        legalStatus: extractZohoName(lg.Internal_legal_status || lg.legalStatus || ''),
+        Internal_legal_status: extractZohoName(lg.Internal_legal_status || lg.legalStatus || ''),
+        remark: extractZohoName(lg.Remark || lg.remark || ''),
+        Remark: extractZohoName(lg.Remark || lg.remark || ''),
+        docTypes: extractZohoName(lg.Types_of_legal_documents || lg.docTypes || ''),
+        Types_of_legal_documents: extractZohoName(lg.Types_of_legal_documents || lg.docTypes || ''),
+        terms1: extractZohoName(lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || ''),
+        Agreement_Terms_I: extractZohoName(lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || ''),
+        terms2: extractZohoName(lg.Agreement_Terms_II || lg.terms2 || ''),
+        Agreement_Terms_II: extractZohoName(lg.Agreement_Terms_II || lg.terms2 || ''),
+        tenure: extractZohoName(lg.Tenure_of_Service || lg.tenure || ''),
+        Tenure_of_Service: extractZohoName(lg.Tenure_of_Service || lg.tenure || ''),
       }));
     })(),
     Legal: Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0

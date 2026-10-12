@@ -93,6 +93,21 @@ const normalizeDateForInput = (val: any): string => {
   return trimmed;
 };
 
+// Helper to safely format Zoho CRM values (including lookup objects like { id, name }) to strings
+const formatZohoValue = (val: any, fallback: string = ''): string => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+  if (typeof val === 'object') {
+    if (val.name && typeof val.name === 'string') return val.name;
+    if (val.display_value && typeof val.display_value === 'string') return val.display_value;
+    if (val.id && typeof val.id === 'string') return String(val.id);
+    return fallback;
+  }
+  return String(val);
+};
+
 // Legal Details Subform Option Lists
 export const INTERNAL_TEAM_TYPES = [
   'Team Funding',
@@ -199,17 +214,18 @@ export const DealDetails = () => {
       if (dealLegal) {
         const seenLegal = new Set<string>();
         const uniqueDealLegal = dealLegal.filter((lg: any, idx: number) => {
-          const key = (lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[idx]?.Schemas || servicesList[idx]?.name || 'Service').trim().toLowerCase();
+          const rawKey = formatZohoValue(lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[idx]?.Schemas || servicesList[idx]?.name || 'Service');
+          const key = rawKey.trim().toLowerCase();
           if (seenLegal.has(key)) return false;
           seenLegal.add(key);
           return true;
         });
         setLegalSubformItems(uniqueDealLegal.map((lg: any, i: number) => {
-          const schemaName = lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service';
+          const schemaName = formatZohoValue(lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service');
           let realId = (lg.id && /^\d{15,}$/.test(String(lg.id))) ? String(lg.id) : '';
           if (!realId && rawLegal) {
             const matchedRaw = rawLegal.find((rl: any) => 
-              (rl.Legal_Schemas || rl.Schemas || '').trim().toLowerCase() === schemaName.trim().toLowerCase()
+              formatZohoValue(rl.Legal_Schemas || rl.Schemas || '').trim().toLowerCase() === schemaName.trim().toLowerCase()
             ) || rawLegal[i];
             if (matchedRaw?.id && /^\d{15,}$/.test(String(matchedRaw.id))) {
               realId = String(matchedRaw.id);
@@ -218,38 +234,39 @@ export const DealDetails = () => {
           return {
             id: realId || String(lg.id || `temp_${i + 1}`),
             schema: schemaName,
-            internalTeamType: lg.internalTeamType || lg.Internal_team_type || '',
-            legalStatus: lg.legalStatus || lg.Internal_legal_status || '',
-            remark: lg.remark || lg.Remark || '',
-            docTypes: lg.docTypes || lg.Types_of_legal_documents || '',
-            terms1: lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || '',
-            terms2: lg.terms2 || lg.Agreement_Terms_II || '',
-            tenure: lg.tenure || lg.Tenure_of_Service || '',
+            internalTeamType: formatZohoValue(lg.internalTeamType || lg.Internal_team_type || ''),
+            legalStatus: formatZohoValue(lg.legalStatus || lg.Internal_legal_status || ''),
+            remark: formatZohoValue(lg.remark || lg.Remark || ''),
+            docTypes: formatZohoValue(lg.docTypes || lg.Types_of_legal_documents || ''),
+            terms1: formatZohoValue(lg.terms1 || lg.Agreement_Terms_I || lg.Agreement_Terms || lg.agreementTerms || ''),
+            terms2: formatZohoValue(lg.terms2 || lg.Agreement_Terms_II || ''),
+            tenure: formatZohoValue(lg.tenure || lg.Tenure_of_Service || ''),
           };
         }));
       } else if (rawLegal) {
         const seenLegal = new Set<string>();
         const uniqueRawLegal = rawLegal.filter((lg: any, idx: number) => {
-          const key = (lg.Legal_Schemas || lg.Schemas || lg.schema || servicesList[idx]?.Schemas || servicesList[idx]?.name || 'Service').trim().toLowerCase();
+          const rawKey = formatZohoValue(lg.Legal_Schemas || lg.Schemas || lg.schema || servicesList[idx]?.Schemas || servicesList[idx]?.name || 'Service');
+          const key = rawKey.trim().toLowerCase();
           if (seenLegal.has(key)) return false;
           seenLegal.add(key);
           return true;
         });
         setLegalSubformItems(uniqueRawLegal.map((lg: any, i: number) => ({
           id: String(lg.id || `temp_${i + 1}`),
-          schema: lg.Legal_Schemas || lg.Schemas || lg.schema || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service',
-          internalTeamType: lg.Internal_team_type || lg.internalTeamType || '',
-          legalStatus: lg.Internal_legal_status || lg.legalStatus || '',
-          remark: lg.Remark || lg.remark || '',
-          docTypes: lg.Types_of_legal_documents || lg.docTypes || '',
-          terms1: lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || '',
-          terms2: lg.Agreement_Terms_II || lg.terms2 || '',
-          tenure: lg.Tenure_of_Service || lg.tenure || '',
+          schema: formatZohoValue(lg.Legal_Schemas || lg.Schemas || lg.schema || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service'),
+          internalTeamType: formatZohoValue(lg.Internal_team_type || lg.internalTeamType || ''),
+          legalStatus: formatZohoValue(lg.Internal_legal_status || lg.legalStatus || ''),
+          remark: formatZohoValue(lg.Remark || lg.remark || ''),
+          docTypes: formatZohoValue(lg.Types_of_legal_documents || lg.docTypes || ''),
+          terms1: formatZohoValue(lg.Agreement_Terms_I || lg.Agreement_Terms || lg.terms1 || lg.agreementTerms || ''),
+          terms2: formatZohoValue(lg.Agreement_Terms_II || lg.terms2 || ''),
+          tenure: formatZohoValue(lg.Tenure_of_Service || lg.tenure || ''),
         })));
       } else if (servicesList.length > 0) {
         setLegalSubformItems(servicesList.map((svc: any, i: number) => ({
           id: (svc.id && /^\d{15,}$/.test(String(svc.id))) ? String(svc.id) : `temp_${i + 1}`,
-          schema: svc.Schemas || svc.name || svc.Service_Name || 'Service',
+          schema: formatZohoValue(svc.Schemas || svc.name || svc.Service_Name || 'Service'),
           internalTeamType: '',
           legalStatus: '',
           remark: '',
@@ -261,7 +278,7 @@ export const DealDetails = () => {
       } else {
         setLegalSubformItems([{
           id: 'temp_1',
-          schema: deal.service || 'General Services',
+          schema: formatZohoValue(deal.service || 'General Services'),
           internalTeamType: '',
           legalStatus: '',
           remark: '',
@@ -990,39 +1007,42 @@ export const DealDetails = () => {
   const shouldShowLegalSection = isLegal || isLegalStage || isSuperAdmin;
 
   // Extract all client and company fields with robust Zoho CRM API names matching
-  const clientName = 
+  const clientName = formatZohoValue(
     raw.Client_Name ||
-    (raw.Clients && (typeof raw.Clients === 'object' ? raw.Clients.name : raw.Clients)) ||
-    (raw.Contact_Name && (typeof raw.Contact_Name === 'object' ? raw.Contact_Name.name : raw.Contact_Name)) ||
+    raw.Clients ||
+    raw.Contact_Name ||
     raw.Name1 ||
     raw.Name ||
     fd.clientName ||
     (deal.client && deal.client !== 'Client' ? deal.client : '') ||
     (raw.Deal_Name ? raw.Deal_Name.split(' - ')[0] : '') ||
-    (deal.client || 'Client');
+    deal.client || 'Client'
+  );
 
-  const companyName = 
+  const companyName = formatZohoValue(
     raw.Company_name ||
     raw.Company_name_bp ||
     raw.Company_name_cs ||
     raw.Company_name_st ||
-    (raw.Company && (typeof raw.Company === 'object' ? raw.Company.name : raw.Company)) ||
-    (raw.Account_Name && (typeof raw.Account_Name === 'object' ? raw.Account_Name.name : raw.Account_Name)) ||
+    raw.Company ||
+    raw.Account_Name ||
     raw.Company_Name ||
     fd.companyName ||
     (deal.company && deal.company !== 'N/A' ? deal.company : '') ||
-    (clientName !== 'Client' ? clientName : 'N/A');
+    (clientName !== 'Client' ? clientName : 'N/A')
+  );
 
-  const employeeName = 
+  const employeeName = formatZohoValue(
     (raw.Employee && typeof raw.Employee === 'object' ? raw.Employee.name : (typeof raw.Employee === 'string' && !/^\d+$/.test(raw.Employee) ? raw.Employee : '')) ||
     deal.employeeName ||
     raw.employeeName ||
     raw.salesEmployee ||
     deal.salesEmployee ||
     fd.employeeName ||
-    '';
+    ''
+  );
 
-  const mobilePhone = 
+  const mobilePhone = formatZohoValue(
     raw.Client_contact_detail ||
     raw.Client_contact_detail_cs ||
     raw.Client_contact_detail_bp ||
@@ -1033,9 +1053,10 @@ export const DealDetails = () => {
     raw.Mobile ||
     raw.Phone ||
     fd.mobile ||
-    'N/A';
+    'N/A'
+  );
 
-  const emailAddress = 
+  const emailAddress = formatZohoValue(
     raw.Client_Email_address ||
     raw.Client_Email_address_cs ||
     raw.Client_Email_address_fnf ||
@@ -1043,17 +1064,19 @@ export const DealDetails = () => {
     raw.client_email_address_st ||
     raw.Email ||
     fd.email ||
-    'N/A';
+    'N/A'
+  );
 
-  const gstin = 
+  const gstin = formatZohoValue(
     raw.Gst_number ||
     raw.GST_Number ||
     raw.GSTIN ||
     raw.GST_No ||
     fd.gstNumber ||
-    'N/A';
+    'N/A'
+  );
 
-  const pan = 
+  const pan = formatZohoValue(
     raw.Pan_number ||
     raw.PAN_Number ||
     raw.PAN_Card ||
@@ -1061,31 +1084,35 @@ export const DealDetails = () => {
     raw.PAN ||
     fd.panCard ||
     fd.companyPan ||
-    'N/A';
+    'N/A'
+  );
 
-  const aadhaar = 
+  const aadhaar = formatZohoValue(
     raw.Aadhaar_Card ||
     raw.Aadhaar_number ||
     raw.Aadhaar_Number ||
     raw.Aadhar_Card ||
     raw.Aadhaar ||
     fd.aadhaarCard ||
-    'N/A';
+    'N/A'
+  );
 
-  const fullAddress = 
+  const fullAddress = formatZohoValue(
     raw.Billing_address ||
     raw.Company_address ||
     fd.billingAddress ||
-    (raw.City || raw.State ? `${raw.City || ''}, ${raw.State || ''}`.replace(/^, |, $/g, '') : '') ||
-    (fd.city || fd.state ? `${fd.city || ''}, ${fd.state || ''}`.replace(/^, |, $/g, '') : '') ||
-    'Address not specified';
+    (raw.City || raw.State ? `${formatZohoValue(raw.City) || ''}, ${formatZohoValue(raw.State) || ''}`.replace(/^, |, $/g, '') : '') ||
+    (fd.city || fd.state ? `${formatZohoValue(fd.city) || ''}, ${formatZohoValue(fd.state) || ''}`.replace(/^, |, $/g, '') : '') ||
+    'Address not specified'
+  );
 
-  const businessType = 
+  const businessType = formatZohoValue(
     raw.Company_Type ||
     raw.Choose_Wisely ||
     raw.Compliance_type ||
     fd.businessType ||
-    'Business';
+    'Business'
+  );
 
   // Helper for numbers in render
   const parseNum = (val: any): number => {
@@ -1116,7 +1143,8 @@ export const DealDetails = () => {
   if (Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0) {
     const seenSubforms = new Set<string>();
     const uniqueSubforms = raw.Subform_1.filter((sf: any) => {
-      const nameKey = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '').trim().toLowerCase();
+      const rawKey = formatZohoValue(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '');
+      const nameKey = rawKey.trim().toLowerCase();
       if (!nameKey) return true;
       if (seenSubforms.has(nameKey)) return false;
       seenSubforms.add(nameKey);
@@ -1137,15 +1165,15 @@ export const DealDetails = () => {
 
       return {
         id: String(sf.id || i + 1),
-        name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service',
+        name: formatZohoValue(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service'),
         totalAmount: String(totalAmt || ''),
         baseAmount: String(withoutGst || 0),
         receivedAmount: sf.Received_amount || sf.Received || (recAmt > 0 ? String(recAmt) : ''),
         pendingAmount: sf.Pending_amount || sf.Pending || (pendAmt > 0 ? String(pendAmt) : ''),
-        paymentStages: sf.Payment_stages || '',
-        paymentType: sf.Payment_type || '',
-        paymentDate: sf.Payment_received_date || '',
-        qualityProvided: sf.Quality_provided || '',
+        paymentStages: formatZohoValue(sf.Payment_stages || ''),
+        paymentType: formatZohoValue(sf.Payment_type || ''),
+        paymentDate: formatZohoValue(sf.Payment_received_date || ''),
+        qualityProvided: formatZohoValue(sf.Quality_provided || ''),
         successFees: sf.Success_fees || '',
       };
     });
@@ -1240,7 +1268,7 @@ export const DealDetails = () => {
 
   // If services array was still empty, create default single row with the resolved totals
   if (services.length === 0 || (services.length === 1 && services[0].name === 'General Services' && totalAmountNum > 0)) {
-    const serviceTitle = raw.Choose_Wisely || raw.Service_Name || raw.Business_plan_selected || (raw.Deal_Name && raw.Deal_Name.includes(' - ') ? raw.Deal_Name.split(' - ').slice(1).join(' - ').trim() : '') || deal.service || 'General Services';
+    const serviceTitle = formatZohoValue(raw.Choose_Wisely || raw.Service_Name || raw.Business_plan_selected || (raw.Deal_Name && raw.Deal_Name.includes(' - ') ? raw.Deal_Name.split(' - ').slice(1).join(' - ').trim() : '') || deal.service || 'General Services');
     services = [{
       id: '1',
       name: serviceTitle,
@@ -1255,9 +1283,9 @@ export const DealDetails = () => {
 
   // Extract BDM and Partner BDM Details using standardized split utility
   const splitBreakdown = getDealSplitBreakdown(deal, currentUser, isSuperAdmin || isHOD);
-  const primaryBdmName = splitBreakdown.primaryName || deal.bdmName || deal.owner || 'Admin';
+  const primaryBdmName = formatZohoValue(splitBreakdown.primaryName || deal.bdmName || deal.owner || 'Admin');
   const hasPartnerBdm = splitBreakdown.hasPartnerBdm;
-  const partnerBdmName = splitBreakdown.partnerName;
+  const partnerBdmName = formatZohoValue(splitBreakdown.partnerName);
   const preGstReceivedNum = splitBreakdown.preGstReceived;
   const partnerBdmAmount = splitBreakdown.partnerAmount;
 
@@ -1265,27 +1293,27 @@ export const DealDetails = () => {
   const legalSubform = deal.legalData || (Array.isArray(raw.Legal) && raw.Legal.length > 0
     ? raw.Legal.map((lg: any, i: number) => ({
         id: String(lg.id || i + 1),
-        schema: lg.Legal_Schemas || lg.Schemas || '',
-        tenure: lg.Tenure_of_Service || '',
-        docTypes: lg.Types_of_legal_documents || '',
-        terms1: lg.Agreement_Terms_I || '',
-        terms2: lg.Agreement_Terms_II || '',
-        dataChecker: lg.Data_checker_name_subform?.name || lg.Data_checker_name_subform || '',
-        dateCheckedDate: lg.Date_checked_date || '',
-        dateCheckerStatus: lg.Date_checker_status || '',
-        dprStatus: lg.DPR_status || '',
-        dateOfDprStatusChange: lg.Date_of_DPR_status_change || '',
-        dprTl: lg.Operation_team_leader?.name || lg.Operation_team_leader || '',
-        dprMember: lg.Operation_team_member?.name || lg.Operation_team_member || '',
-        financeStatus: lg.Finance_status || '',
-        dateOfFinanceStatusChange: lg.Date_of_finance_status_change || '',
-        financeTl: lg.Finance_team_leader?.name || lg.Finance_team_leader || '',
-        financeMember: lg.Finance_team_member?.name || lg.Finance_team_member || '',
-        legalStatus: lg.Internal_legal_status || '',
-        internalTeamType: lg.Internal_team_type || '',
-        qualityProvided: lg.Quality_provided || '',
-        distributionPaid: lg.Distribution_of_amount_paid_by_the_S || lg.Distribution_of_amount_paid_by_ || '',
-        remark: lg.Remark || ''
+        schema: formatZohoValue(lg.Legal_Schemas || lg.Schemas || ''),
+        tenure: formatZohoValue(lg.Tenure_of_Service || ''),
+        docTypes: formatZohoValue(lg.Types_of_legal_documents || ''),
+        terms1: formatZohoValue(lg.Agreement_Terms_I || ''),
+        terms2: formatZohoValue(lg.Agreement_Terms_II || ''),
+        dataChecker: formatZohoValue(lg.Data_checker_name_subform?.name || lg.Data_checker_name_subform || ''),
+        dateCheckedDate: formatZohoValue(lg.Date_checked_date || ''),
+        dateCheckerStatus: formatZohoValue(lg.Date_checker_status || ''),
+        dprStatus: formatZohoValue(lg.DPR_status || ''),
+        dateOfDprStatusChange: formatZohoValue(lg.Date_of_DPR_status_change || ''),
+        dprTl: formatZohoValue(lg.Operation_team_leader?.name || lg.Operation_team_leader || ''),
+        dprMember: formatZohoValue(lg.Operation_team_member?.name || lg.Operation_team_member || ''),
+        financeStatus: formatZohoValue(lg.Finance_status || ''),
+        dateOfFinanceStatusChange: formatZohoValue(lg.Date_of_finance_status_change || ''),
+        financeTl: formatZohoValue(lg.Finance_team_leader?.name || lg.Finance_team_leader || ''),
+        financeMember: formatZohoValue(lg.Finance_team_member?.name || lg.Finance_team_member || ''),
+        legalStatus: formatZohoValue(lg.Internal_legal_status || ''),
+        internalTeamType: formatZohoValue(lg.Internal_team_type || ''),
+        qualityProvided: formatZohoValue(lg.Quality_provided || ''),
+        distributionPaid: formatZohoValue(lg.Distribution_of_amount_paid_by_the_S || lg.Distribution_of_amount_paid_by_ || ''),
+        remark: formatZohoValue(lg.Remark || '')
       }))
     : []);
 
@@ -1468,13 +1496,13 @@ export const DealDetails = () => {
                 deal.status === 'Lost' ? 'bg-rose-100 text-rose-800' :
                 'bg-gray-100 text-gray-800'
               }`}>
-                {deal.stage || deal.status || 'Active'}
+                {formatZohoValue(deal.stage || deal.status || 'Active')}
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-1 font-medium">
-              Created on {deal.date || 'Recent'} • Managed by <span className="text-gray-700 font-semibold">{deal.owner || 'Admin'}</span>
+              Created on {deal.date || 'Recent'} • Managed by <span className="text-gray-700 font-semibold">{formatZohoValue(deal.owner || 'Admin')}</span>
               {employeeName && (
-                <> • Employee: <span className="text-be-orange font-bold">{employeeName}</span></>
+                <> • Employee: <span className="text-be-orange font-bold">{formatZohoValue(employeeName)}</span></>
               )}
             </p>
           </div>
@@ -1712,7 +1740,7 @@ export const DealDetails = () => {
                   {raw.State && (
                     <div className="flex items-center justify-between">
                       <span className="text-gray-400">State:</span>
-                      <span className="text-gray-800 font-semibold">{raw.State}</span>
+                      <span className="text-gray-800 font-semibold">{formatZohoValue(raw.State)}</span>
                     </div>
                   )}
                 </div>
@@ -1756,9 +1784,9 @@ export const DealDetails = () => {
                       return (
                         <tr key={idx} className="hover:bg-orange-50/30 transition-colors">
                           <td className="px-4 py-3.5">
-                            <div className="font-bold text-gray-900">{s.name || 'Website Development'}</div>
+                            <div className="font-bold text-gray-900">{formatZohoValue(s.name || 'Website Development')}</div>
                             {s.paymentStages && (
-                              <div className="text-[11px] text-gray-400 mt-0.5">Stage: {s.paymentStages} {s.paymentType ? `• ${s.paymentType}` : ''}</div>
+                              <div className="text-[11px] text-gray-400 mt-0.5">Stage: {formatZohoValue(s.paymentStages)} {s.paymentType ? `• ${formatZohoValue(s.paymentType)}` : ''}</div>
                             )}
                           </td>
                           <td className="px-4 py-3.5 text-right font-medium text-gray-700">
@@ -1830,10 +1858,10 @@ export const DealDetails = () => {
                               <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center shrink-0">
                                 {idx + 1}
                               </span>
-                              <span>{item.schema || 'Service'}</span>
+                              <span>{formatZohoValue(item.schema || 'Service')}</span>
                             </div>
                             {item.tenure && (
-                              <div className="text-[11px] text-gray-400 mt-0.5 ml-7">Tenure: {item.tenure}</div>
+                              <div className="text-[11px] text-gray-400 mt-0.5 ml-7">Tenure: {formatZohoValue(item.tenure)}</div>
                             )}
                           </td>
 
@@ -1855,7 +1883,7 @@ export const DealDetails = () => {
                                 ))}
                               </select>
                             ) : (
-                              <span className="text-xs font-semibold text-gray-800">{item.internalTeamType || '—'}</span>
+                              <span className="text-xs font-semibold text-gray-800">{formatZohoValue(item.internalTeamType || '—')}</span>
                             )}
                           </td>
 
@@ -1877,7 +1905,7 @@ export const DealDetails = () => {
                                 ))}
                               </select>
                             ) : (
-                              <span className="text-xs font-semibold text-gray-800">{item.legalStatus || '—'}</span>
+                              <span className="text-xs font-semibold text-gray-800">{formatZohoValue(item.legalStatus || '—')}</span>
                             )}
                           </td>
 
@@ -1899,7 +1927,7 @@ export const DealDetails = () => {
                                 ))}
                               </select>
                             ) : (
-                              <span className="text-xs font-semibold text-gray-800">{item.docTypes || '—'}</span>
+                              <span className="text-xs font-semibold text-gray-800">{formatZohoValue(item.docTypes || '—')}</span>
                             )}
                           </td>
 
@@ -1921,7 +1949,7 @@ export const DealDetails = () => {
                                 ))}
                               </select>
                             ) : (
-                              <span className="text-xs font-semibold text-gray-800">{item.terms1 || '—'}</span>
+                              <span className="text-xs font-semibold text-gray-800">{formatZohoValue(item.terms1 || '—')}</span>
                             )}
                           </td>
 
@@ -1940,7 +1968,7 @@ export const DealDetails = () => {
                                 className="w-full px-2.5 py-1.5 bg-white border border-gray-200 hover:border-gray-300 focus:border-indigo-500 rounded-lg text-xs font-semibold text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-indigo-100 transition-all shadow-2xs"
                               />
                             ) : (
-                              <span className="text-xs text-gray-600 italic">{item.remark || '—'}</span>
+                              <span className="text-xs text-gray-600 italic">{formatZohoValue(item.remark || '—')}</span>
                             )}
                           </td>
                         </tr>
@@ -1990,7 +2018,7 @@ export const DealDetails = () => {
                 </span>
                 {raw.Operation_stages && (
                   <span className="text-xs font-semibold px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-200">
-                    {raw.Operation_stages}
+                    {formatZohoValue(raw.Operation_stages)}
                   </span>
                 )}
               </h2>
@@ -1998,13 +2026,13 @@ export const DealDetails = () => {
                 {raw.Operation_team_leader && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100">
                     <span className="text-gray-400 block mb-0.5">Ops Team Leader</span>
-                    <span className="font-bold text-gray-900">{raw.Operation_team_leader}</span>
+                    <span className="font-bold text-gray-900">{formatZohoValue(raw.Operation_team_leader)}</span>
                   </div>
                 )}
                 {raw.Operation_team_member && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100">
                     <span className="text-gray-400 block mb-0.5">Ops Team Member</span>
-                    <span className="font-bold text-gray-900">{raw.Operation_team_member}</span>
+                    <span className="font-bold text-gray-900">{formatZohoValue(raw.Operation_team_member)}</span>
                   </div>
                 )}
                 {(raw.Project_assign_Date || raw.Projects_assign_date) && (
@@ -2016,39 +2044,39 @@ export const DealDetails = () => {
                 {raw.Quality_team_leader && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100">
                     <span className="text-gray-400 block mb-0.5">Quality TL</span>
-                    <span className="font-bold text-gray-900">{raw.Quality_team_leader}</span>
+                    <span className="font-bold text-gray-900">{formatZohoValue(raw.Quality_team_leader)}</span>
                   </div>
                 )}
                 {(raw.Quality_team_member || raw.Quality_team_mdember) && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100">
                     <span className="text-gray-400 block mb-0.5">Quality Member</span>
-                    <span className="font-bold text-gray-900">{raw.Quality_team_member || raw.Quality_team_mdember}</span>
+                    <span className="font-bold text-gray-900">{formatZohoValue(raw.Quality_team_member || raw.Quality_team_mdember)}</span>
                   </div>
                 )}
                 {raw.Query_by_name && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100">
                     <span className="text-gray-400 block mb-0.5">Query Handled By</span>
-                    <span className="font-semibold text-gray-800">{raw.Query_by_name}</span>
+                    <span className="font-semibold text-gray-800">{formatZohoValue(raw.Query_by_name)}</span>
                   </div>
                 )}
                 {(raw.Data_check_employee || raw.Data_checker_name || raw.Data_check_employee1) && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100">
                     <span className="text-gray-400 block mb-0.5">Data Checker</span>
-                    <span className="font-bold text-gray-900">{raw.Data_check_employee || raw.Data_checker_name || raw.Data_check_employee1}</span>
-                    {raw.Date_checker_status && <span className="text-[10px] text-emerald-600 block mt-0.5">Status: {raw.Date_checker_status}</span>}
+                    <span className="font-bold text-gray-900">{formatZohoValue(raw.Data_check_employee || raw.Data_checker_name || raw.Data_check_employee1)}</span>
+                    {raw.Date_checker_status && <span className="text-[10px] text-emerald-600 block mt-0.5">Status: {formatZohoValue(raw.Date_checker_status)}</span>}
                   </div>
                 )}
                 {raw.DPR_creator && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100">
                     <span className="text-gray-400 block mb-0.5">DPR Creator</span>
-                    <span className="font-bold text-gray-900">{raw.DPR_creator}</span>
-                    {raw.DPR_status && <span className="text-[10px] text-blue-600 block mt-0.5">DPR: {raw.DPR_status}</span>}
+                    <span className="font-bold text-gray-900">{formatZohoValue(raw.DPR_creator)}</span>
+                    {raw.DPR_status && <span className="text-[10px] text-blue-600 block mt-0.5">DPR: {formatZohoValue(raw.DPR_status)}</span>}
                   </div>
                 )}
                 {raw.Finance_creator && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100">
                     <span className="text-gray-400 block mb-0.5">Finance Creator</span>
-                    <span className="font-bold text-gray-900">{raw.Finance_creator}</span>
+                    <span className="font-bold text-gray-900">{formatZohoValue(raw.Finance_creator)}</span>
                     {raw.Finance_date && <span className="text-[10px] text-gray-500 block mt-0.5">{new Date(raw.Finance_date).toLocaleDateString('en-GB')}</span>}
                   </div>
                 )}
@@ -2066,7 +2094,7 @@ export const DealDetails = () => {
                 </span>
                 {raw.Internal_legal_status && (
                   <span className="text-xs font-semibold px-2.5 py-0.5 bg-purple-50 text-purple-700 rounded-full border border-purple-200">
-                    {raw.Internal_legal_status}
+                    {formatZohoValue(raw.Internal_legal_status)}
                   </span>
                 )}
               </h2>
@@ -2080,31 +2108,31 @@ export const DealDetails = () => {
                 {raw.LLP_stages && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 flex justify-between items-center">
                     <span className="text-gray-400">Doc Collection:</span>
-                    <span className="font-semibold text-gray-900">{raw.LLP_stages}</span>
+                    <span className="font-semibold text-gray-900">{formatZohoValue(raw.LLP_stages)}</span>
                   </div>
                 )}
                 {raw.LLP_Finance_stages && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 flex justify-between items-center">
                     <span className="text-gray-400">Pvt / LLP Stage:</span>
-                    <span className="font-semibold text-gray-900">{raw.LLP_Finance_stages}</span>
+                    <span className="font-semibold text-gray-900">{formatZohoValue(raw.LLP_Finance_stages)}</span>
                   </div>
                 )}
                 {raw.LLP_application_stages && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 flex justify-between items-center">
                     <span className="text-gray-400">Application Stage:</span>
-                    <span className="font-semibold text-gray-900">{raw.LLP_application_stages}</span>
+                    <span className="font-semibold text-gray-900">{formatZohoValue(raw.LLP_application_stages)}</span>
                   </div>
                 )}
                 {(raw.Legal_documents_sender_name || raw.Employee_name_sent1 || raw.Employee_name_sent) && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 flex justify-between items-center">
                     <span className="text-gray-400">Docs Sent By:</span>
-                    <span className="font-semibold text-gray-900">{raw.Legal_documents_sender_name || raw.Employee_name_sent1 || raw.Employee_name_sent}</span>
+                    <span className="font-semibold text-gray-900">{formatZohoValue(raw.Legal_documents_sender_name || raw.Employee_name_sent1 || raw.Employee_name_sent)}</span>
                   </div>
                 )}
                 {(raw.Legal_documents_receiver_name || raw.Employee_name_received1 || raw.Employee_name_received) && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 flex justify-between items-center">
                     <span className="text-gray-400">Docs Received By:</span>
-                    <span className="font-semibold text-gray-900">{raw.Legal_documents_receiver_name || raw.Employee_name_received1 || raw.Employee_name_received}</span>
+                    <span className="font-semibold text-gray-900">{formatZohoValue(raw.Legal_documents_receiver_name || raw.Employee_name_received1 || raw.Employee_name_received)}</span>
                   </div>
                 )}
                 {raw.Legal_documents_received_date && (
@@ -2126,8 +2154,8 @@ export const DealDetails = () => {
                   Installment Rounds & Payment Cycles
                 </h2>
                 <div className="flex gap-2 text-[11px]">
-                  {raw.Remaining_1 && <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md font-semibold">Remaining 1</span>}
-                  {raw.Remaining_2 && <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded-md font-semibold">Remaining 2</span>}
+                  {Boolean(raw.Remaining_1) && <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md font-semibold">Remaining 1</span>}
+                  {Boolean(raw.Remaining_2) && <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded-md font-semibold">Remaining 2</span>}
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
@@ -2150,16 +2178,16 @@ export const DealDetails = () => {
                     <div className="text-gray-500">Date: <span className="font-medium text-gray-800">{new Date(raw.R1_Payment_Date).toLocaleDateString('en-GB')}</span></div>
                   )}
                   {raw.R1_application_status && (
-                    <div className="text-gray-500">App Status: <span className="font-medium text-gray-800">{raw.R1_application_status}</span></div>
+                    <div className="text-gray-500">App Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R1_application_status)}</span></div>
                   )}
                   {raw.R1_DPR_status && (
-                    <div className="text-gray-500">DPR Status: <span className="font-medium text-gray-800">{raw.R1_DPR_status}</span></div>
+                    <div className="text-gray-500">DPR Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R1_DPR_status)}</span></div>
                   )}
                   {raw.R1_Bank_details && (
-                    <div className="text-gray-500">Bank: <span className="font-medium text-gray-800">{raw.R1_Bank_details}</span></div>
+                    <div className="text-gray-500">Bank: <span className="font-medium text-gray-800">{formatZohoValue(raw.R1_Bank_details)}</span></div>
                   )}
                   {raw.R1_Accounts_remark && (
-                    <p className="text-gray-600 text-[11px] italic pt-1 border-t border-gray-200/60">{raw.R1_Accounts_remark}</p>
+                    <p className="text-gray-600 text-[11px] italic pt-1 border-t border-gray-200/60">{formatZohoValue(raw.R1_Accounts_remark)}</p>
                   )}
                 </div>
 
@@ -2183,16 +2211,16 @@ export const DealDetails = () => {
                       <div className="text-gray-500">Date: <span className="font-medium text-gray-800">{new Date(raw.R2_Payment_Date).toLocaleDateString('en-GB')}</span></div>
                     )}
                     {raw.R2_application_status && (
-                      <div className="text-gray-500">App Status: <span className="font-medium text-gray-800">{raw.R2_application_status}</span></div>
+                      <div className="text-gray-500">App Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R2_application_status)}</span></div>
                     )}
                     {raw.R2_DPR_status && (
-                      <div className="text-gray-500">DPR Status: <span className="font-medium text-gray-800">{raw.R2_DPR_status}</span></div>
+                      <div className="text-gray-500">DPR Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R2_DPR_status)}</span></div>
                     )}
                     {raw.R2_Bank_details && (
-                      <div className="text-gray-500">Bank: <span className="font-medium text-gray-800">{raw.R2_Bank_details}</span></div>
+                      <div className="text-gray-500">Bank: <span className="font-medium text-gray-800">{formatZohoValue(raw.R2_Bank_details)}</span></div>
                     )}
                     {raw.R2_Accounts_remark && (
-                      <p className="text-gray-600 text-[11px] italic pt-1 border-t border-gray-200/60">{raw.R2_Accounts_remark}</p>
+                      <p className="text-gray-600 text-[11px] italic pt-1 border-t border-gray-200/60">{formatZohoValue(raw.R2_Accounts_remark)}</p>
                     )}
                   </div>
                 )}
@@ -2204,13 +2232,13 @@ export const DealDetails = () => {
                       <span className="font-bold text-sm text-gray-900">Round 3 (R3)</span>
                     </div>
                     {raw.R3_application_status && (
-                      <div className="text-gray-500">App Status: <span className="font-medium text-gray-800">{raw.R3_application_status}</span></div>
+                      <div className="text-gray-500">App Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R3_application_status)}</span></div>
                     )}
                     {raw.R3_DPR_status && (
-                      <div className="text-gray-500">DPR Status: <span className="font-medium text-gray-800">{raw.R3_DPR_status}</span></div>
+                      <div className="text-gray-500">DPR Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R3_DPR_status)}</span></div>
                     )}
                     {raw.R3_finance_status && (
-                      <div className="text-gray-500">Finance Status: <span className="font-medium text-gray-800">{raw.R3_finance_status}</span></div>
+                      <div className="text-gray-500">Finance Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R3_finance_status)}</span></div>
                     )}
                   </div>
                 )}
@@ -2236,19 +2264,19 @@ export const DealDetails = () => {
                 {raw.Reassignment_Reason && (
                   <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 space-y-1">
                     <span className="font-bold text-gray-900 block">Quality Reassignment:</span>
-                    <p className="text-gray-700">{raw.Reassignment_Reason}</p>
+                    <p className="text-gray-700">{formatZohoValue(raw.Reassignment_Reason)}</p>
                   </div>
                 )}
                 {raw.Reason_for_complimentary && (
                   <div className="p-3.5 bg-purple-50/60 rounded-xl border border-purple-100 space-y-1">
                     <span className="font-bold text-purple-900 block">Complimentary Reason:</span>
-                    <p className="text-gray-700">{raw.Reason_for_complimentary}</p>
+                    <p className="text-gray-700">{formatZohoValue(raw.Reason_for_complimentary)}</p>
                   </div>
                 )}
                 {raw.Reason_For_Loss__s && (
                   <div className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-100 space-y-1">
                     <span className="font-bold text-rose-600 block">Reason for Loss:</span>
-                    <p className="text-gray-800 font-semibold">{raw.Reason_For_Loss__s}</p>
+                    <p className="text-gray-800 font-semibold">{formatZohoValue(raw.Reason_For_Loss__s)}</p>
                   </div>
                 )}
               </div>
@@ -2266,7 +2294,7 @@ export const DealDetails = () => {
                 {(raw.Status_qd || raw.Date_qd) && (
                   <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 space-y-1">
                     <span className="text-gray-400 block">Query Info</span>
-                    {raw.Status_qd && <div className="font-semibold text-gray-900">Status: {raw.Status_qd}</div>}
+                    {raw.Status_qd && <div className="font-semibold text-gray-900">Status: {formatZohoValue(raw.Status_qd)}</div>}
                     {raw.Date_qd && <div className="text-gray-500">Date: {new Date(raw.Date_qd).toLocaleDateString('en-GB')}</div>}
                   </div>
                 )}
@@ -2294,31 +2322,31 @@ export const DealDetails = () => {
                 {raw.Accounts_remark && (
                   <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100 text-amber-900">
                     <span className="font-bold block mb-1">Accounts Remark:</span>
-                    <p className="text-gray-700 leading-relaxed">{raw.Accounts_remark}</p>
+                    <p className="text-gray-700 leading-relaxed">{formatZohoValue(raw.Accounts_remark)}</p>
                   </div>
                 )}
                 {raw.Customer_update && (
                   <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-blue-900">
                     <span className="font-bold block mb-1">Customer Update:</span>
-                    <p className="text-gray-700 leading-relaxed">{raw.Customer_update}</p>
+                    <p className="text-gray-700 leading-relaxed">{formatZohoValue(raw.Customer_update)}</p>
                   </div>
                 )}
                 {(raw.Google_remark || raw.Google_review || raw.Google_reviews) && (
                   <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 text-emerald-900">
                     <span className="font-bold block mb-1">Google Review / Feedback:</span>
-                    <p className="text-gray-700 leading-relaxed">{raw.Google_review || raw.Google_reviews || raw.Google_remark}</p>
+                    <p className="text-gray-700 leading-relaxed">{formatZohoValue(raw.Google_review || raw.Google_reviews || raw.Google_remark)}</p>
                   </div>
                 )}
                 {raw.Remark && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-gray-800">
                     <span className="font-bold block mb-1 text-gray-900">General Remark:</span>
-                    <p className="text-gray-600 leading-relaxed">{raw.Remark}</p>
+                    <p className="text-gray-600 leading-relaxed">{formatZohoValue(raw.Remark)}</p>
                   </div>
                 )}
                 {raw.Description && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-gray-800">
                     <span className="font-bold block mb-1 text-gray-900">Description:</span>
-                    <p className="text-gray-600 leading-relaxed">{raw.Description}</p>
+                    <p className="text-gray-600 leading-relaxed">{formatZohoValue(raw.Description)}</p>
                   </div>
                 )}
               </div>
@@ -2879,11 +2907,11 @@ export const DealDetails = () => {
                   <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-bold">Pre-GST: ₹{preGstReceivedNum.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between items-center text-gray-700 pt-0.5">
-                  <span className="font-medium">Primary BDM ({primaryBdmName}):</span>
+                  <span className="font-medium">Primary BDM ({formatZohoValue(primaryBdmName)}):</span>
                   <span className="font-extrabold text-purple-950">₹{partnerBdmAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (50%)</span>
                 </div>
                 <div className="flex justify-between items-center text-gray-700">
-                  <span className="font-medium">Partner BDM ({partnerBdmName}):</span>
+                  <span className="font-medium">Partner BDM ({formatZohoValue(partnerBdmName)}):</span>
                   <span className="font-extrabold text-purple-950">₹{partnerBdmAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (50%)</span>
                 </div>
               </div>
@@ -2893,7 +2921,7 @@ export const DealDetails = () => {
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Deal Stage:</span>
-                <span className="font-bold text-gray-900 px-2 py-0.5 bg-orange-50 text-be-orange rounded-md border border-orange-100">{deal.stage || raw.Stage || 'Sales'}</span>
+                <span className="font-bold text-gray-900 px-2 py-0.5 bg-orange-50 text-be-orange rounded-md border border-orange-100">{formatZohoValue(deal.stage || raw.Stage || 'Sales')}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Payment Verification:</span>
@@ -2904,7 +2932,7 @@ export const DealDetails = () => {
               {(raw.Payment_Type || raw.Payment_status || raw.Payment_stages) && (
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Payment Status:</span>
-                  <span className="font-semibold text-gray-800">{raw.Payment_status || raw.Payment_stages || raw.Payment_Type}</span>
+                  <span className="font-semibold text-gray-800">{formatZohoValue(raw.Payment_status || raw.Payment_stages || raw.Payment_Type)}</span>
                 </div>
               )}
               {(raw.Payment_received_date || raw.Payment_Date) && (
@@ -2918,7 +2946,7 @@ export const DealDetails = () => {
               {raw.If_partially_paid && (
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Partially Paid:</span>
-                  <span className="font-semibold text-orange-600">{raw.If_partially_paid}</span>
+                  <span className="font-semibold text-orange-600">{formatZohoValue(raw.If_partially_paid)}</span>
                 </div>
               )}
             </div>
@@ -3101,24 +3129,24 @@ export const DealDetails = () => {
             <div className="space-y-3 text-xs">
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-400">Deal Stage:</span>
-                <span className="font-bold text-gray-900">{deal.stage || deal.status || 'Operations'}</span>
+                <span className="font-bold text-gray-900">{formatZohoValue(deal.stage || deal.status) || 'Operations'}</span>
               </div>
               {raw.Pipeline && (
                 <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-400">Pipeline:</span>
-                  <span className="font-medium text-gray-800">{raw.Pipeline}</span>
+                  <span className="font-medium text-gray-800">{formatZohoValue(raw.Pipeline)}</span>
                 </div>
               )}
               {raw.ID_of_application && (
                 <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-400">Application ID:</span>
-                  <span className="font-mono font-bold text-gray-900">{raw.ID_of_application}</span>
+                  <span className="font-mono font-bold text-gray-900">{formatZohoValue(raw.ID_of_application)}</span>
                 </div>
               )}
               {raw.Lead_Source && (
                 <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-400">Lead Source:</span>
-                  <span className="font-medium text-gray-800">{raw.Lead_Source}</span>
+                  <span className="font-medium text-gray-800">{formatZohoValue(raw.Lead_Source)}</span>
                 </div>
               )}
               {raw.Booking_Date && (
@@ -3142,22 +3170,22 @@ export const DealDetails = () => {
               {raw.Choose_Wisely && (
                 <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-400">Category:</span>
-                  <span className="font-semibold text-be-orange">{raw.Choose_Wisely}</span>
+                  <span className="font-semibold text-be-orange">{formatZohoValue(raw.Choose_Wisely)}</span>
                 </div>
               )}
               {employeeName && (
                 <div className="flex justify-between py-2 border-b border-gray-100">
                   <span className="text-gray-400">Employee (Lookup):</span>
-                  <span className="font-bold text-be-orange bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{employeeName}</span>
+                  <span className="font-bold text-be-orange bg-orange-50 px-2 py-0.5 rounded border border-orange-100">{formatZohoValue(employeeName)}</span>
                 </div>
               )}
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-400">Deal Owner:</span>
-                <span className="font-bold text-gray-900">{deal.owner || 'Admin'}</span>
+                <span className="font-bold text-gray-900">{formatZohoValue(deal.owner) || 'Admin'}</span>
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-gray-400">Sync Source:</span>
-                <span className="font-medium text-gray-800">{deal.source || 'Cloud'}</span>
+                <span className="font-medium text-gray-800">{formatZohoValue(deal.source) || 'Cloud'}</span>
               </div>
             </div>
           </div>
