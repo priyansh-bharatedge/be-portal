@@ -1766,25 +1766,15 @@ export const DealDetails = () => {
           }
           if (targetZohoId) {
             try {
-              await uploadZohoDealImageField(targetZohoId, file, slot.screenshotField, file.name);
+              const imgRes = await uploadZohoDealImageField(targetZohoId, file, slot.screenshotField, file.name);
+              if (!imgRes.success) {
+                console.warn(`Zoho deal image field upload failed for ${slot.tabName} (${slot.screenshotField}):`, imgRes.message);
+              }
             } catch (fErr) {
               console.warn(`Zoho deal image field error for ${slot.tabName}:`, fErr);
             }
-            try {
-              await uploadZohoDealPhoto(targetZohoId, file, file.name, 'Deals', slot.screenshotField);
-            } catch (pErr) {
-              console.warn(`Zoho deal photo error for ${slot.tabName}:`, pErr);
-            }
-            try {
-              await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
-            } catch (uErr) {
-              console.warn(`Zoho attachment error for ${slot.tabName}:`, uErr);
-            }
           }
         }
-      }
-      if (targetZohoId && Object.keys(slotScreenshots).length > 0) {
-        await loadAttachments(targetZohoId);
       }
 
       // 2. Financial totals across all 8 slots
