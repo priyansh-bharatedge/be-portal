@@ -551,11 +551,12 @@ export const Deals = () => {
     } finally {
       setIsLoadingSalesEmployees(false);
     }
-  }, [availableUsers]);
+  }, []);
 
   useEffect(() => {
     loadSalesEmployees();
-    const handleEmployeeUpdate = () => {
+    const handleEmployeeUpdate = (e?: StorageEvent | Event) => {
+      if (e && 'key' in e && e.key && e.key !== 'be_employees') return;
       loadSalesEmployees();
     };
     window.addEventListener('be_employees_updated', handleEmployeeUpdate);

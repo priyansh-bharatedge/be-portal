@@ -345,7 +345,7 @@ export const DealDetails = () => {
 
     loadEmps();
     return () => { isMounted = false; };
-  }, [availableUsers]);
+  }, []);
 
   // Legal Handover Details & Reminders State (For Legal Department users & Stage)
   const [legalHandoverData, setLegalHandoverData] = useState({

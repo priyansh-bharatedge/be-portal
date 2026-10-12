@@ -220,7 +220,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Sync available users whenever employees change
   useEffect(() => {
-    const loadUsers = () => {
+    const loadUsers = (e?: StorageEvent | Event) => {
+      if (e && 'key' in e && e.key && e.key !== 'be_employees' && e.key !== 'be_active_user') {
+        return;
+      }
       const users = getAllUsersFromStorage();
       setAvailableUsers(users);
     };

@@ -250,9 +250,12 @@ export const getDealTotalAmount = (d: any): number => {
   if (d.totals?.baseAmount && Number(d.totals.baseAmount) > 0) {
     return Number((Number(d.totals.baseAmount) * 1.18).toFixed(2));
   }
+  if (d.rawPending && d.rawReceived) {
+    const sum = Number(d.rawPending) + Number(d.rawReceived);
+    if (sum > 0) return sum;
+  }
   const rec = getDealReceivedAmount(d);
-  const pend = getDealPendingAmount(d);
-  if (rec + pend > 0) return rec + pend;
+  if (rec > 0) return rec;
   return 0;
 };
 
