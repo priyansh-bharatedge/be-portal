@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, ArrowRight, Edit, Download, MoreHorizontal, FileText, 
@@ -1453,18 +1453,16 @@ export const DealDetails = () => {
   );
 
   // Milestone payments calculation across 8 slots
-  const totalReceivedAllSlots = useMemo(() => {
-    return PAYMENT_SLOTS.reduce((sum, slot) => {
-      const item = paymentSlotsData[slot.index];
-      const val = item?.amount ? parseNum(item.amount) : 0;
-      return sum + val;
-    }, 0);
-  }, [paymentSlotsData]);
+  const totalReceivedAllSlots = PAYMENT_SLOTS.reduce((sum, slot) => {
+    const item = paymentSlotsData[slot.index];
+    const val = item?.amount ? parseNum(item.amount) : 0;
+    return sum + val;
+  }, 0);
 
-  const totalPendingAllSlots = useMemo(() => {
-    const total = totalAmountNum > 0 ? totalAmountNum : (totalReceivedAllSlots > 0 ? totalReceivedAllSlots : 0);
-    return Math.max(0, Number((total - totalReceivedAllSlots).toFixed(2)));
-  }, [totalAmountNum, totalReceivedAllSlots]);
+  const totalPendingAllSlots = Math.max(
+    0,
+    Number(((totalAmountNum > 0 ? totalAmountNum : (totalReceivedAllSlots > 0 ? totalReceivedAllSlots : 0)) - totalReceivedAllSlots).toFixed(2))
+  );
 
   // If services array was still empty, create default single row with the resolved totals
   if (services.length === 0 || (services.length === 1 && services[0].name === 'General Services' && totalAmountNum > 0)) {
