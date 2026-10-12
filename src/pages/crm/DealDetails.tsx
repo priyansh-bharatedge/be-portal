@@ -1922,6 +1922,15 @@ export const DealDetails = () => {
             );
           })()}
 
+          <button
+            onClick={openPaymentModal}
+            className="flex items-center px-3.5 py-2 text-sm font-bold text-white bg-be-orange hover:bg-be-orangeHover rounded-xl transition-all shadow-xs cursor-pointer"
+            title="Record or update received payment, proof screenshot, and BDM allocation"
+          >
+            <CreditCard size={15} className="mr-1.5" />
+            Record Payment
+          </button>
+
           <button 
             onClick={() => loadLiveDeal(deal?.zohoId || id || '')}
             disabled={isRefreshing}
@@ -3554,7 +3563,7 @@ export const DealDetails = () => {
             </div>
 
             {/* Modal Body */}
-            <form onSubmit={handleRecordPaymentSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
+            <form onSubmit={handleRecordPaymentSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
               {paymentModalError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
                   <AlertTriangle size={15} className="shrink-0 text-rose-500" />
@@ -3562,289 +3571,206 @@ export const DealDetails = () => {
                 </div>
               )}
 
-              {/* Received Amount Field */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
-                  <span>Received Amount <span className="text-rose-500">*</span></span>
-                  <span className="text-[11px] text-gray-400 font-normal">
-                    Total Deal: ₹{totalAmountNum.toLocaleString('en-IN')}
-                  </span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 font-bold text-sm">
-                    ₹
-                  </div>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    required
-                    value={paymentFormData.receivedAmount}
-                    onChange={(e) => setPaymentFormData({ ...paymentFormData, receivedAmount: e.target.value })}
-                    placeholder="Enter received amount"
-                    className="w-full pl-8 pr-4 py-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:bg-white focus:border-be-orange focus:ring-2 focus:ring-be-orange/20 transition-all outline-none"
-                  />
-                </div>
-                {/* Live Helper Calculations */}
-                <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
-                  <div className="p-2 bg-orange-50/70 border border-orange-100 rounded-lg text-orange-800">
-                    <span className="text-gray-500 block">Pending Balance:</span>
-                    <span className="font-extrabold">
-                      ₹{Math.max(0, Number((totalAmountNum - (parseNum(paymentFormData.receivedAmount) || 0)).toFixed(2))).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  <div className="p-2 bg-gray-50 border border-gray-100 rounded-lg text-gray-800">
-                    <span className="text-gray-500 block">Pre-GST Received (÷1.18):</span>
-                    <span className="font-extrabold text-gray-900">
-                      ₹{((parseNum(paymentFormData.receivedAmount) || 0) / 1.18).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment Received Date & Payment Type */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-700 flex items-center">
-                    <Calendar size={13} className="mr-1 text-be-orange" /> Payment Received Date <span className="text-rose-500 ml-0.5">*</span>
+              <div className="divide-y divide-gray-100 text-xs">
+                {/* Row 1: Received Amount */}
+                <div className="flex flex-col sm:flex-row sm:items-start py-3 gap-2 sm:gap-4">
+                  <label className="sm:w-44 sm:pt-2 font-bold text-gray-700 shrink-0">
+                    Received Amount <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="date"
-                    required
-                    value={paymentFormData.paymentDate}
-                    onChange={(e) => setPaymentFormData({ ...paymentFormData, paymentDate: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:border-be-orange focus:ring-2 focus:ring-be-orange/20 transition-all outline-none"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-700 flex items-center">
-                    <CreditCard size={13} className="mr-1 text-be-orange" /> Payment Mode / Type
-                  </label>
-                  <select
-                    value={paymentFormData.paymentType}
-                    onChange={(e) => setPaymentFormData({ ...paymentFormData, paymentType: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:border-be-orange focus:ring-2 focus:ring-be-orange/20 transition-all outline-none"
-                  >
-                    <option value="Online">Online / UPI / IMPS</option>
-                    <option value="Bank Transfer">Bank Transfer / NEFT / RTGS</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Paytm">Paytm / Gateway</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* BDM Allocation Section */}
-              <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-100 space-y-3">
-                <div className="flex items-center justify-between border-b border-gray-200/60 pb-2">
-                  <span className="text-xs font-bold text-gray-900 flex items-center">
-                    <Users size={14} className="mr-1.5 text-be-orange" />
-                    BDM Revenue Allocation
-                  </span>
-                  <span className="text-[10px] text-gray-500">
-                    Single BDM or 50/50 Partner BDM
-                  </span>
-                </div>
-
-                {/* Received by BDM 1 (Primary) */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
-                    <span className="flex items-center">
-                      <User size={12} className="mr-1 text-gray-500" />
-                      Received by BDM 1 (Primary Deal Owner) <span className="text-rose-500 ml-0.5">*</span>
-                    </span>
-                  </label>
-                  <select
-                    required
-                    value={paymentFormData.bdm1Name}
-                    onChange={(e) => {
-                      const selectedName = e.target.value;
-                      const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
-                      setPaymentFormData({
-                        ...paymentFormData,
-                        bdm1Name: selectedName,
-                        bdm1Id: matched?.id || matched?.zohoId || '',
-                      });
-                    }}
-                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-900 focus:border-be-orange focus:ring-2 focus:ring-be-orange/20 transition-all outline-none"
-                  >
-                    <option value="">-- Select Primary BDM --</option>
-                    {salesEmployees.map((emp) => (
-                      <option key={`bdm1-${emp.id}-${emp.name}`} value={emp.name}>
-                        {emp.name} {emp.dept ? `(${emp.dept})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Received by BDM 2 (Partner BDM) */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
-                    <span className="flex items-center">
-                      <Users size={12} className="mr-1 text-purple-600" />
-                      Received by BDM 2 (Partner BDM - 50/50 Split)
-                    </span>
-                    {paymentFormData.bdm2Name && paymentFormData.bdm2Name !== 'none' && (
-                      <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-                        50/50 Split Active
-                      </span>
-                    )}
-                  </label>
-                  <select
-                    value={paymentFormData.bdm2Name}
-                    onChange={(e) => {
-                      const selectedName = e.target.value;
-                      const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
-                      setPaymentFormData({
-                        ...paymentFormData,
-                        bdm2Name: selectedName,
-                        bdm2Id: matched?.id || matched?.zohoId || '',
-                      });
-                    }}
-                    className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-xs font-semibold text-purple-950 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all outline-none"
-                  >
-                    <option value="">-- None / Single BDM Deal (100% to BDM 1) --</option>
-                    {salesEmployees.map((emp) => (
-                      <option key={`bdm2-${emp.id}-${emp.name}`} value={emp.name}>
-                        {emp.name} {emp.dept ? `(${emp.dept})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Live 50/50 Split Preview if BDM 2 is selected */}
-                {(() => {
-                  const hasBdm2 = Boolean(paymentFormData.bdm2Name && paymentFormData.bdm2Name.trim() !== '' && paymentFormData.bdm2Name !== 'none');
-                  const curRec = parseNum(paymentFormData.receivedAmount);
-                  const preGst = curRec > 0 ? curRec / 1.18 : 0;
-                  const halfShare = preGst / 2;
-
-                  if (hasBdm2) {
-                    return (
-                      <div className="p-3 bg-gradient-to-br from-purple-50 to-indigo-50/60 rounded-xl border border-purple-200 space-y-1.5 text-xs animate-in fade-in duration-150">
-                        <div className="flex items-center justify-between text-purple-900 font-bold border-b border-purple-200/60 pb-1">
-                          <span className="flex items-center"><CheckCircle2 size={12} className="mr-1 text-purple-600" /> 50/50 Pre-GST Revenue Split</span>
-                          <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-extrabold">Pre-GST: ₹{preGst.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-gray-700 pt-0.5">
-                          <span className="font-medium">BDM 1 ({paymentFormData.bdm1Name || 'Primary'}):</span>
-                          <span className="font-extrabold text-purple-950">₹{halfShare.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (50%)</span>
-                        </div>
-                        <div className="flex justify-between items-center text-gray-700">
-                          <span className="font-medium">BDM 2 ({paymentFormData.bdm2Name}):</span>
-                          <span className="font-extrabold text-purple-950">₹{halfShare.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (50%)</span>
-                        </div>
-                        <p className="text-[10px] text-purple-700 pt-1 border-t border-purple-100">
-                          ✨ <strong>Updates in both:</strong> Both {paymentFormData.bdm1Name || 'BDM 1'} and {paymentFormData.bdm2Name} will see this deal credited with their 50% share in their respective CRM dashboards and deal reports.
-                        </p>
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div className="p-2.5 bg-gray-100/70 rounded-lg text-[11px] text-gray-600 flex items-center justify-between">
-                        <span>Single BDM Deal: 100% revenue credited to <strong>{paymentFormData.bdm1Name || 'BDM 1'}</strong>.</span>
-                        <span className="text-gray-400">Pre-GST: ₹{preGst.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                      </div>
-                    );
-                  }
-                })()}
-              </div>
-
-              {/* Payment Screenshot Upload */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
-                  <span className="flex items-center">
-                    <Paperclip size={13} className="mr-1 text-be-orange" /> Payment Screenshot / Proof of Receipt
-                  </span>
-                  {paymentFormData.existingScreenshotName && !paymentFormData.screenshotFile && (
-                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center">
-                      <CheckCircle2 size={11} className="mr-0.5" /> Attached: {paymentFormData.existingScreenshotName}
-                    </span>
-                  )}
-                </label>
-
-                {paymentFormData.screenshotFile ? (
-                  <div className="flex items-center justify-between p-3 bg-orange-50/60 border border-orange-200 rounded-xl">
-                    <div className="flex items-center space-x-2.5 min-w-0">
-                      {paymentFormData.screenshotPreview ? (
-                        <img
-                          src={paymentFormData.screenshotPreview}
-                          alt="Screenshot preview"
-                          className="w-10 h-10 object-cover rounded-lg border border-orange-200 shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-orange-100 text-be-orange flex items-center justify-center font-bold text-xs shrink-0">
-                          FILE
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-gray-900 truncate max-w-xs">{paymentFormData.screenshotFile.name}</p>
-                        <p className="text-[10px] text-gray-500">{(paymentFormData.screenshotFile.size / 1024).toFixed(1)} KB</p>
-                      </div>
+                  <div className="flex-1">
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 font-bold text-sm">₹</span>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        required
+                        value={paymentFormData.receivedAmount}
+                        onChange={(e) => setPaymentFormData({ ...paymentFormData, receivedAmount: e.target.value })}
+                        placeholder="0.00"
+                        className="w-full pl-7 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
+                      />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentFormData({ ...paymentFormData, screenshotFile: null, screenshotPreview: null })}
-                      className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                      title="Remove file"
-                    >
-                      <X size={16} />
-                    </button>
+                    <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-500">
+                      <span>Total: <strong className="text-gray-700">₹{totalAmountNum.toLocaleString('en-IN')}</strong></span>
+                      <span>•</span>
+                      <span>Pending: <strong className="text-orange-600">₹{Math.max(0, Number((totalAmountNum - (parseNum(paymentFormData.receivedAmount) || 0)).toFixed(2))).toLocaleString('en-IN')}</strong></span>
+                      <span>•</span>
+                      <span>Pre-GST: <strong className="text-gray-700">₹{((parseNum(paymentFormData.receivedAmount) || 0) / 1.18).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></span>
+                    </div>
                   </div>
-                ) : (
-                  <div
-                    onClick={() => paymentScreenshotInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-200 hover:border-be-orange/60 bg-gray-50/50 hover:bg-orange-50/30 rounded-xl p-4 text-center cursor-pointer transition-all space-y-1"
-                  >
-                    <Upload size={20} className="mx-auto text-gray-400" />
-                    <p className="text-xs font-semibold text-gray-700">Click to upload payment screenshot or transaction receipt</p>
-                    <p className="text-[10px] text-gray-400">PNG, JPG, JPEG, WEBP or PDF (Max 10MB)</p>
+                </div>
+
+                {/* Row 2: Payment Received Date */}
+                <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
+                  <label className="sm:w-44 font-bold text-gray-700 shrink-0">
+                    Payment Received Date <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="flex-1">
+                    <input
+                      type="date"
+                      required
+                      value={paymentFormData.paymentDate}
+                      onChange={(e) => setPaymentFormData({ ...paymentFormData, paymentDate: e.target.value })}
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: Received by BDM 1 */}
+                <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
+                  <label className="sm:w-44 font-bold text-gray-700 shrink-0">
+                    Received by BDM 1 <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="flex-1">
+                    <select
+                      required
+                      value={paymentFormData.bdm1Name}
+                      onChange={(e) => {
+                        const selectedName = e.target.value;
+                        const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
+                        setPaymentFormData({
+                          ...paymentFormData,
+                          bdm1Name: selectedName,
+                          bdm1Id: matched?.id || matched?.zohoId || '',
+                        });
+                      }}
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
+                    >
+                      <option value="">-- Select Primary BDM --</option>
+                      {salesEmployees.map((emp) => (
+                        <option key={`bdm1-${emp.id}-${emp.name}`} value={emp.name}>
+                          {emp.name} {emp.dept ? `(${emp.dept})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Row 4: Received by BDM 2 */}
+                <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
+                  <label className="sm:w-44 font-bold text-gray-700 shrink-0">
+                    Received by BDM 2
+                  </label>
+                  <div className="flex-1">
+                    <select
+                      value={paymentFormData.bdm2Name}
+                      onChange={(e) => {
+                        const selectedName = e.target.value;
+                        const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
+                        setPaymentFormData({
+                          ...paymentFormData,
+                          bdm2Name: selectedName,
+                          bdm2Id: matched?.id || matched?.zohoId || '',
+                        });
+                      }}
+                      className="w-full px-3 py-2 bg-gray-50 border border-purple-200 rounded-lg text-xs font-semibold text-purple-950 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
+                    >
+                      <option value="">-- None / Single BDM Deal (100%) --</option>
+                      {salesEmployees.map((emp) => (
+                        <option key={`bdm2-${emp.id}-${emp.name}`} value={emp.name}>
+                          {emp.name} {emp.dept ? `(${emp.dept})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* 50/50 Split Preview (Shown when BDM 2 is selected) */}
+                {Boolean(paymentFormData.bdm2Name && paymentFormData.bdm2Name.trim() !== '' && paymentFormData.bdm2Name !== 'none') && (
+                  <div className="flex flex-col sm:flex-row sm:items-center py-2.5 px-3 bg-purple-50/70 rounded-lg border border-purple-100 gap-2 sm:gap-4 my-1">
+                    <span className="sm:w-44 font-bold text-purple-900 shrink-0 flex items-center">
+                      <Users size={12} className="mr-1 text-purple-600" />
+                      50/50 Split (Pre-GST):
+                    </span>
+                    <div className="flex-1 text-[11px] text-purple-800 flex flex-wrap gap-x-4 gap-y-1">
+                      <span><strong>BDM 1 ({paymentFormData.bdm1Name || 'Primary'}):</strong> ₹{(((parseNum(paymentFormData.receivedAmount) || 0) / 1.18) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      <span><strong>BDM 2 ({paymentFormData.bdm2Name}):</strong> ₹{(((parseNum(paymentFormData.receivedAmount) || 0) / 1.18) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
                   </div>
                 )}
-                <input
-                  ref={paymentScreenshotInputRef}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const isImg = file.type.startsWith('image/');
-                      setPaymentFormData({
-                        ...paymentFormData,
-                        screenshotFile: file,
-                        screenshotPreview: isImg ? URL.createObjectURL(file) : null,
-                      });
-                    }
-                  }}
-                />
+
+                {/* Row 5: Payment Screenshot */}
+                <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
+                  <label className="sm:w-44 font-bold text-gray-700 shrink-0">
+                    Payment Screenshot
+                  </label>
+                  <div className="flex-1 flex items-center gap-2.5">
+                    <input
+                      ref={paymentScreenshotInputRef}
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const isImg = file.type.startsWith('image/');
+                          setPaymentFormData({
+                            ...paymentFormData,
+                            screenshotFile: file,
+                            screenshotPreview: isImg ? URL.createObjectURL(file) : null,
+                          });
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => paymentScreenshotInputRef.current?.click()}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 border border-gray-200"
+                    >
+                      <Upload size={13} />
+                      {paymentFormData.screenshotFile ? 'Change File' : 'Choose File'}
+                    </button>
+
+                    {paymentFormData.screenshotFile ? (
+                      <span className="text-xs text-gray-800 font-medium truncate flex items-center gap-1.5">
+                        <span className="font-semibold text-be-orange truncate max-w-xs">{paymentFormData.screenshotFile.name}</span>
+                        <span className="text-[10px] text-gray-400">({(paymentFormData.screenshotFile.size / 1024).toFixed(0)} KB)</span>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentFormData({ ...paymentFormData, screenshotFile: null, screenshotPreview: null })}
+                          className="text-gray-400 hover:text-rose-500 p-0.5 cursor-pointer"
+                          title="Remove"
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ) : paymentFormData.existingScreenshotName ? (
+                      <span className="text-xs text-emerald-700 font-medium flex items-center gap-1 truncate">
+                        <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+                        Current: {paymentFormData.existingScreenshotName}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">No file chosen (Optional)</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Modal Footer Actions */}
-              <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2.5">
+              <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsPaymentModalOpen(false)}
                   disabled={isSubmittingPayment}
-                  className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingPayment}
-                  className="px-5 py-2.5 bg-gradient-to-r from-be-orange to-amber-600 hover:from-be-orangeHover hover:to-amber-700 text-white text-xs font-bold rounded-xl transition-all shadow-md hover:shadow-lg flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2 bg-be-orange hover:bg-be-orangeHover text-white text-xs font-bold rounded-lg transition-all shadow-sm hover:shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmittingPayment ? (
                     <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Updating Deal & Synchronizing...
+                      <Loader2 size={13} className="animate-spin" />
+                      Updating...
                     </>
                   ) : (
                     <>
-                      <Check size={14} />
-                      Submit & Record Payment
+                      <Check size={13} />
+                      Submit
                     </>
                   )}
                 </button>
