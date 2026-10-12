@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, ArrowRight, Edit, Download, MoreHorizontal, FileText, 
@@ -153,6 +153,102 @@ export const AGREEMENT_TERMS = [
   'Till Registration',
 ];
 
+// 8 Milestone Payment Slots configuration matching Zoho CRM Deals module API names
+export const PAYMENT_SLOTS = [
+  {
+    index: 1,
+    label: '1st Payment (R1)',
+    tabName: 'R1',
+    amountField: 'R1_Received_amount23',
+    dateField: 'Closing_Date',
+    screenshotField: 'R1_Received_Screenshot',
+    bdm1Field: 'R1_Received_by_BDM1',
+    bdm2Field: 'R1_Received_by_BDM2',
+  },
+  {
+    index: 2,
+    label: '2nd Payment (R2)',
+    tabName: 'R2',
+    amountField: 'R2_Received_amount12',
+    dateField: 'DPR_status_change_date',
+    screenshotField: 'R2_Received_Screenshot',
+    bdm1Field: 'R2_Received_by_BDM1',
+    bdm2Field: 'R2_Received_by_BDM2',
+  },
+  {
+    index: 3,
+    label: '3rd Payment (R3)',
+    tabName: 'R3',
+    amountField: 'R3_Received_amount',
+    dateField: 'Date_of_status_change',
+    screenshotField: 'R3_Received_Screenshot',
+    bdm1Field: 'R3_Received_by_BDM1',
+    bdm2Field: 'R3_Received_by_BDM2',
+  },
+  {
+    index: 4,
+    label: '4th Payment (R4)',
+    tabName: 'R4',
+    amountField: 'R4_Received_amount',
+    dateField: 'Date_of_status_change_f',
+    screenshotField: 'R4_Received_Screenshot',
+    bdm1Field: 'R4_Received_by_BDM1',
+    bdm2Field: 'R4_Received_by_BDM2',
+  },
+  {
+    index: 5,
+    label: '5th Payment (R5)',
+    tabName: 'R5',
+    amountField: 'R5_Received_amount',
+    dateField: 'Document_collection_Pitch_deck_creation_DPR_date',
+    screenshotField: 'R5_Received_Screenshot',
+    bdm1Field: 'R5_Received_by_BDM1',
+    bdm2Field: 'R5_Received_by_BDM2',
+  },
+  {
+    index: 6,
+    label: '6th Payment (R6)',
+    tabName: 'R6',
+    amountField: 'R6_Received_amount',
+    dateField: 'Document_sent_date',
+    screenshotField: 'R6_Received_Screenshot',
+    bdm1Field: 'R6_Received_BDM1',
+    bdm2Field: 'R6_Received_BDM2',
+  },
+  {
+    index: 7,
+    label: '7th Payment (R7)',
+    tabName: 'R7',
+    amountField: 'R7_Received_amount',
+    dateField: 'Finance_status_change_date',
+    screenshotField: 'R7_Received_Screenshot',
+    bdm1Field: 'R7_Received_by_BDM1',
+    bdm2Field: 'R7_Received_by_BDM2',
+  },
+  {
+    index: 8,
+    label: '8th Payment (R8)',
+    tabName: 'R8',
+    amountField: 'R8_Received_amount',
+    dateField: 'Date_of_financedate_change',
+    screenshotField: 'R8_Received_Screenshot',
+    bdm1Field: 'R8_Received_by_BDM1',
+    bdm2Field: 'R8_Received_by_BDM2',
+  },
+] as const;
+
+export interface PaymentSlotItem {
+  amount: string;
+  date: string;
+  bdm1Id: string;
+  bdm1Name: string;
+  bdm2Id: string;
+  bdm2Name: string;
+  screenshotFile: File | null;
+  screenshotPreview: string | null;
+  existingScreenshotName: string;
+}
+
 export const DealDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -163,23 +259,21 @@ export const DealDetails = () => {
   const [isActionInProgress, setIsActionInProgress] = useState(false);
   const [workflowToast, setWorkflowToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Record / Update Payment Modal State
+  // Record / Update Payment Modal State (8 Milestones)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [paymentModalError, setPaymentModalError] = useState<string | null>(null);
   const [salesEmployees, setSalesEmployees] = useState<any[]>([]);
-  const [paymentFormData, setPaymentFormData] = useState({
-    receivedAmount: '',
-    paymentDate: '',
-    bdm1Id: '',
-    bdm1Name: '',
-    bdm2Id: '',
-    bdm2Name: '',
-    paymentType: 'Online',
-    screenshotFile: null as File | null,
-    screenshotPreview: null as string | null,
-    existingScreenshotName: '',
-    existingScreenshotUrl: '',
+  const [activePaymentTab, setActivePaymentTab] = useState<number>(1);
+  const [paymentSlotsData, setPaymentSlotsData] = useState<Record<number, PaymentSlotItem>>({
+    1: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
+    2: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
+    3: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
+    4: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
+    5: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
+    6: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
+    7: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
+    8: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
   });
   const paymentScreenshotInputRef = useRef<HTMLInputElement>(null);
 
@@ -1358,6 +1452,20 @@ export const DealDetails = () => {
     deal.pending ? parseNum(deal.pending) : 0
   );
 
+  // Milestone payments calculation across 8 slots
+  const totalReceivedAllSlots = useMemo(() => {
+    return PAYMENT_SLOTS.reduce((sum, slot) => {
+      const item = paymentSlotsData[slot.index];
+      const val = item?.amount ? parseNum(item.amount) : 0;
+      return sum + val;
+    }, 0);
+  }, [paymentSlotsData]);
+
+  const totalPendingAllSlots = useMemo(() => {
+    const total = totalAmountNum > 0 ? totalAmountNum : (totalReceivedAllSlots > 0 ? totalReceivedAllSlots : 0);
+    return Math.max(0, Number((total - totalReceivedAllSlots).toFixed(2)));
+  }, [totalAmountNum, totalReceivedAllSlots]);
+
   // If services array was still empty, create default single row with the resolved totals
   if (services.length === 0 || (services.length === 1 && services[0].name === 'General Services' && totalAmountNum > 0)) {
     const serviceTitle = formatZohoValue(raw.Choose_Wisely || raw.Service_Name || raw.Business_plan_selected || (raw.Deal_Name && raw.Deal_Name.includes(' - ') ? raw.Deal_Name.split(' - ').slice(1).join(' - ').trim() : '') || deal.service || 'General Services');
@@ -1567,32 +1675,63 @@ export const DealDetails = () => {
 
   const openPaymentModal = () => {
     setPaymentModalError(null);
-    const currentReceived = receivedAmountNum > 0 ? String(receivedAmountNum) : '';
-    const currentPaymentDate = raw.Payment_received_date || raw.Payment_Date || new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    const initialSlots: Record<number, PaymentSlotItem> = {} as any;
 
-    // Primary BDM name & ID
-    const currentBdm1Name = primaryBdmName || 'Admin';
-    const matchedBdm1 = salesEmployees.find(e => e.name.toLowerCase() === currentBdm1Name.toLowerCase());
-    const bdm1Id = matchedBdm1?.id || matchedBdm1?.zohoId || deal.employeeZohoId || (typeof raw.Employee === 'object' ? raw.Employee?.id : '') || '';
+    let firstUnfilledTab = 1;
+    let foundFirstUnfilled = false;
 
-    // Partner BDM name & ID
-    const currentBdm2Name = hasPartnerBdm ? partnerBdmName : '';
-    const matchedBdm2 = salesEmployees.find(e => e.name.toLowerCase() === (currentBdm2Name || '').toLowerCase());
-    const bdm2Id = matchedBdm2?.id || matchedBdm2?.zohoId || deal.partnerBdmId || (typeof raw.Partner_BDM === 'object' ? raw.Partner_BDM?.id : '') || '';
+    PAYMENT_SLOTS.forEach((slot) => {
+      // Amount from deal, raw, or formData
+      let rawVal = deal[slot.amountField] ?? raw[slot.amountField] ?? deal.formData?.[slot.amountField];
+      // Fallback for slot 1 if R1 is unset but deal has overall received amount
+      if (slot.index === 1 && (rawVal === undefined || rawVal === null || rawVal === '' || rawVal === '0')) {
+        if (receivedAmountNum > 0) {
+          rawVal = String(receivedAmountNum);
+        }
+      }
+      const amtStr = (rawVal !== undefined && rawVal !== null && rawVal !== '') ? String(rawVal).replace(/[^0-9.]/g, '') : '';
 
-    setPaymentFormData({
-      receivedAmount: currentReceived,
-      paymentDate: currentPaymentDate ? new Date(currentPaymentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      bdm1Id: String(bdm1Id),
-      bdm1Name: currentBdm1Name,
-      bdm2Id: String(bdm2Id),
-      bdm2Name: currentBdm2Name,
-      paymentType: formatZohoValue(raw.Payment_Type || 'Online'),
-      screenshotFile: null,
-      screenshotPreview: null,
-      existingScreenshotName: deal.paymentScreenshotName || raw.Payment_Screenshot_Name || '',
-      existingScreenshotUrl: deal.paymentScreenshotUrl || '',
+      if (!foundFirstUnfilled && (!amtStr || parseNum(amtStr) === 0)) {
+        firstUnfilledTab = slot.index;
+        foundFirstUnfilled = true;
+      }
+
+      // Date from deal, raw, or formData
+      const rawDate = deal[slot.dateField] ?? raw[slot.dateField] ?? deal.formData?.[slot.dateField] ?? (slot.index === 1 ? (raw.Payment_received_date || raw.Payment_Date || today) : today);
+      const dateStr = rawDate ? String(rawDate).split('T')[0] : today;
+
+      // BDM 1
+      const rawBdm1 = deal[slot.bdm1Field] ?? raw[slot.bdm1Field] ?? deal.formData?.[slot.bdm1Field] ?? (primaryBdmName || 'Admin');
+      const bdm1Name = typeof rawBdm1 === 'object' ? (rawBdm1?.name || '') : String(rawBdm1 || primaryBdmName || 'Admin');
+      const matchedBdm1 = salesEmployees.find(e => e.name.toLowerCase() === bdm1Name.toLowerCase());
+      const bdm1Id = matchedBdm1?.id || matchedBdm1?.zohoId || '';
+
+      // BDM 2
+      const rawBdm2 = deal[slot.bdm2Field] ?? raw[slot.bdm2Field] ?? deal.formData?.[slot.bdm2Field] ?? (slot.index === 1 && hasPartnerBdm ? partnerBdmName : '');
+      const bdm2Name = typeof rawBdm2 === 'object' ? (rawBdm2?.name || '') : String(rawBdm2 || '');
+      const matchedBdm2 = salesEmployees.find(e => e.name.toLowerCase() === bdm2Name.toLowerCase());
+      const bdm2Id = matchedBdm2?.id || matchedBdm2?.zohoId || '';
+
+      // Screenshot name
+      const rawScreenshot = deal[slot.screenshotField] ?? raw[slot.screenshotField] ?? (slot.index === 1 ? (deal.paymentScreenshotName || raw.Payment_Screenshot_Name || '') : '');
+      const existingName = typeof rawScreenshot === 'string' ? rawScreenshot : '';
+
+      initialSlots[slot.index] = {
+        amount: amtStr,
+        date: dateStr,
+        bdm1Id,
+        bdm1Name: bdm1Name || primaryBdmName || 'Admin',
+        bdm2Id,
+        bdm2Name,
+        screenshotFile: null,
+        screenshotPreview: null,
+        existingScreenshotName: existingName,
+      };
     });
+
+    setPaymentSlotsData(initialSlots);
+    setActivePaymentTab(firstUnfilledTab);
     setIsPaymentModalOpen(true);
   };
 
@@ -1600,8 +1739,8 @@ export const DealDetails = () => {
     e.preventDefault();
     if (!deal) return;
 
-    const enteredReceived = parseNum(paymentFormData.receivedAmount);
-    if (enteredReceived < 0) {
+    const activeSlot = paymentSlotsData[activePaymentTab];
+    if (activeSlot && parseNum(activeSlot.amount) < 0) {
       setPaymentModalError('Received amount cannot be negative');
       return;
     }
@@ -1611,46 +1750,47 @@ export const DealDetails = () => {
 
     try {
       const targetZohoId = deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : null);
-      let screenshotName = paymentFormData.existingScreenshotName || deal.paymentScreenshotName || '';
-      let screenshotUrl = paymentFormData.existingScreenshotUrl || deal.paymentScreenshotUrl || '';
 
-      // 1. Upload screenshot if a new file is chosen
-      if (paymentFormData.screenshotFile) {
-        const file = paymentFormData.screenshotFile;
-        screenshotName = file.name;
-
-        // Save locally to IndexedDB so it appears under documents
-        try {
-          const docId = `${deal.id || id || 'deal'}_${Date.now()}_${file.name}`;
-          await saveDocument(docId, file);
-          screenshotUrl = URL.createObjectURL(file);
-        } catch (dbErr) {
-          console.warn('Could not save screenshot to IndexedDB:', dbErr);
-        }
-
-        // Upload to Zoho CRM Deals Attachments
-        if (targetZohoId) {
+      // 1. Process Screenshots for any slots with new files
+      const slotScreenshots: Record<number, string> = {};
+      for (const slot of PAYMENT_SLOTS) {
+        const item = paymentSlotsData[slot.index];
+        if (item.screenshotFile) {
+          const file = item.screenshotFile;
+          slotScreenshots[slot.index] = file.name;
           try {
-            await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
-            await loadAttachments(targetZohoId);
-          } catch (uploadErr) {
-            console.warn('Could not upload screenshot to Zoho CRM:', uploadErr);
+            const docId = `${deal.id || id || 'deal'}_${slot.tabName}_${Date.now()}_${file.name}`;
+            await saveDocument(docId, file);
+          } catch (dbErr) {
+            console.warn(`IndexedDB save error for ${slot.tabName}:`, dbErr);
+          }
+          if (targetZohoId) {
+            try {
+              await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
+            } catch (uErr) {
+              console.warn(`Zoho attachment error for ${slot.tabName}:`, uErr);
+            }
           }
         }
       }
+      if (targetZohoId && Object.keys(slotScreenshots).length > 0) {
+        await loadAttachments(targetZohoId);
+      }
 
-      // 2. Financial Calculations
-      const newTotal = totalAmountNum > 0 ? totalAmountNum : (enteredReceived > 0 ? enteredReceived : 0);
-      const newPending = Math.max(0, Number((newTotal - enteredReceived).toFixed(2)));
-      const newPreGstReceived = Number((enteredReceived / 1.18).toFixed(2));
+      // 2. Financial totals across all 8 slots
+      const totalRec = totalReceivedAllSlots;
+      const totalPend = totalPendingAllSlots;
+      const preGstTotal = Number((totalRec / 1.18).toFixed(2));
 
-      // 3. Partner BDM Resolution
-      const hasPartner = Boolean(paymentFormData.bdm2Name && paymentFormData.bdm2Name.trim() !== '' && paymentFormData.bdm2Name.toLowerCase() !== 'none');
-      const partnerShare = hasPartner ? Number((newPreGstReceived / 2).toFixed(2)) : 0;
-      const bdm1Name = paymentFormData.bdm1Name || primaryBdmName || 'Admin';
-      const bdm2Name = hasPartner ? paymentFormData.bdm2Name : '';
-      const bdm1Id = paymentFormData.bdm1Id || deal.employeeZohoId || '';
-      const bdm2Id = hasPartner ? paymentFormData.bdm2Id : '';
+      // 3. Check if any slot has a secondary BDM (Partner BDM deal)
+      const hasAnyPartnerBdm = PAYMENT_SLOTS.some(s => {
+        const item = paymentSlotsData[s.index];
+        return Boolean(item.bdm2Name && item.bdm2Name.trim() !== '' && item.bdm2Name.toLowerCase() !== 'none');
+      });
+      const primaryBdm = activeSlot?.bdm1Name || primaryBdmName || 'Admin';
+      const partnerSlotItem = hasAnyPartnerBdm ? Object.values(paymentSlotsData).find(it => it.bdm2Name && it.bdm2Name.trim() !== '' && it.bdm2Name.toLowerCase() !== 'none') : null;
+      const partnerBdm = partnerSlotItem?.bdm2Name || '';
+      const partnerShare = hasAnyPartnerBdm ? Number((preGstTotal / 2).toFixed(2)) : 0;
 
       // 4. Update Subform_1 service line items
       const existingSubforms = Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0
@@ -1658,48 +1798,76 @@ export const DealDetails = () => {
         : (deal.servicesData || []);
 
       const updatedServicesData = (deal.servicesData || []).map((s: any) => {
-        let itemRec = enteredReceived;
+        let itemRec = totalRec;
         if ((deal.servicesData || []).length > 1 && totalAmountNum > 0) {
           const itemTotal = Number(s.totalAmount) || 0;
-          itemRec = Number(((itemTotal / totalAmountNum) * enteredReceived).toFixed(2));
+          itemRec = Number(((itemTotal / totalAmountNum) * totalRec).toFixed(2));
         }
         const itemPend = Math.max(0, Number(((Number(s.totalAmount) || 0) - itemRec).toFixed(2)));
         return {
           ...s,
           receivedAmount: String(itemRec),
           pendingAmount: String(itemPend),
-          paymentStages: enteredReceived >= newTotal ? 'Full amount paid' : 'Partially paid',
-          paymentType: paymentFormData.paymentType || 'Online',
-          paymentDate: paymentFormData.paymentDate,
+          paymentStages: totalRec >= totalAmountNum ? 'Full amount paid' : 'Partially paid',
+          paymentDate: activeSlot?.date,
         };
       });
 
       const updatedSubform1 = existingSubforms.map((sf: any) => {
-        let itemRec = enteredReceived;
+        let itemRec = totalRec;
         if (existingSubforms.length > 1 && totalAmountNum > 0) {
           const itemTotal = Number(sf.Agreement_amount || sf.totalAmount || 0);
-          itemRec = Number(((itemTotal / totalAmountNum) * enteredReceived).toFixed(2));
+          itemRec = Number(((itemTotal / totalAmountNum) * totalRec).toFixed(2));
         }
         const itemPend = Math.max(0, Number(((Number(sf.Agreement_amount || sf.totalAmount || 0)) - itemRec).toFixed(2)));
         return {
           ...sf,
           Received_amount: itemRec,
           Pending_amount: itemPend,
-          Payment_type: enteredReceived >= newTotal ? 'Full amount paid' : 'Partially paid',
+          Payment_type: totalRec >= totalAmountNum ? 'Full amount paid' : 'Partially paid',
           Payment_stages: '.',
-          Payment_received_date: paymentFormData.paymentDate,
+          Payment_received_date: activeSlot?.date,
         };
       });
 
-      // 5. Build updated deal object with synchronized BDM 1 and BDM 2 fields
+      // 5. Construct mapped fields for R1 through R8
+      const rFieldsMap: Record<string, any> = {};
+      PAYMENT_SLOTS.forEach((slot) => {
+        const item = paymentSlotsData[slot.index];
+        const amtClean = item.amount ? String(item.amount).trim() : '';
+        rFieldsMap[slot.amountField] = amtClean;
+        rFieldsMap[slot.dateField] = item.date;
+        rFieldsMap[slot.bdm1Field] = item.bdm1Name;
+        rFieldsMap[slot.bdm2Field] = (item.bdm2Name && item.bdm2Name.toLowerCase() !== 'none') ? item.bdm2Name : '';
+        if (slotScreenshots[slot.index] || item.existingScreenshotName) {
+          rFieldsMap[slot.screenshotField] = slotScreenshots[slot.index] || item.existingScreenshotName;
+        }
+      });
+
+      // 5. Build updated deal object with synchronized BDM 1 and BDM 2 fields and 8-milestones
+      const bdm1Name = activeSlot?.bdm1Name || primaryBdm || 'Admin';
+      const matchedBdm1 = salesEmployees.find(e => e.name.toLowerCase() === bdm1Name.toLowerCase());
+      const bdm1Id = activeSlot?.bdm1Id || matchedBdm1?.id || matchedBdm1?.zohoId || deal.employeeZohoId || '';
+
+      const bdm2Name = (activeSlot?.bdm2Name && activeSlot.bdm2Name.toLowerCase() !== 'none') ? activeSlot.bdm2Name : (hasAnyPartnerBdm ? partnerBdm : '');
+      const matchedBdm2 = bdm2Name ? salesEmployees.find(e => e.name.toLowerCase() === bdm2Name.toLowerCase()) : null;
+      const bdm2Id = activeSlot?.bdm2Id || matchedBdm2?.id || matchedBdm2?.zohoId || '';
+      const hasPartner = Boolean(bdm2Name && bdm2Name.trim() !== '' && bdm2Name.toLowerCase() !== 'none');
+
+      const screenshotName = slotScreenshots[activePaymentTab] || activeSlot?.existingScreenshotName || deal.paymentScreenshotName || '';
+      const activeDate = activeSlot?.date || new Date().toISOString().split('T')[0];
+      const isFullPaid = totalRec >= totalAmountNum;
+
       const updatedDeal: any = {
         ...deal,
-        received: `₹${enteredReceived.toLocaleString('en-IN')}`,
-        rawReceived: enteredReceived,
-        pending: `₹${newPending.toLocaleString('en-IN')}`,
-        rawPending: newPending,
+        ...rFieldsMap,
+        rPaymentSlots: paymentSlotsData,
+        received: `₹${totalRec.toLocaleString('en-IN')}`,
+        rawReceived: totalRec,
+        pending: `₹${totalPend.toLocaleString('en-IN')}`,
+        rawPending: totalPend,
         paymentScreenshotName: screenshotName,
-        paymentScreenshotUrl: screenshotUrl || deal.paymentScreenshotUrl,
+        paymentScreenshotUrl: deal.paymentScreenshotUrl,
         employeeName: bdm1Name,
         salesEmployee: bdm1Name,
         employeeZohoId: bdm1Id || deal.employeeZohoId,
@@ -1720,17 +1888,18 @@ export const DealDetails = () => {
         servicesData: updatedServicesData.length > 0 ? updatedServicesData : deal.servicesData,
         totals: {
           ...(deal.totals || {}),
-          grandTotal: newTotal,
+          grandTotal: totalAmountNum,
           baseAmount: baseAmountNum,
           totalGst: gstAmountNum,
-          receivedAmount: enteredReceived,
-          pendingAmount: newPending,
+          receivedAmount: totalRec,
+          pendingAmount: totalPend,
           partnerBdmAmount: partnerShare,
         },
         formData: {
           ...(deal.formData || {}),
-          received: String(enteredReceived),
-          pending: String(newPending),
+          ...rFieldsMap,
+          received: String(totalRec),
+          pending: String(totalPend),
           employeeName: bdm1Name,
           salesEmployee: bdm1Name,
           employeeZohoId: bdm1Id || deal.formData?.employeeZohoId,
@@ -1746,17 +1915,18 @@ export const DealDetails = () => {
         },
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
-          Total_Received_Amount: enteredReceived,
-          Received_amount: enteredReceived,
-          Deal_Received_Amount: enteredReceived,
-          Amount_After_disbursement: enteredReceived,
-          Total_Pending_Amount: newPending,
-          Pending_amount: newPending,
-          Deal_Pending_Amount: newPending,
-          Payment_received_date: paymentFormData.paymentDate,
-          Payment_Date: paymentFormData.paymentDate,
-          Payment_Type: paymentFormData.paymentType || 'Online',
-          Payment_status: enteredReceived >= newTotal ? 'Full amount paid' : 'Partially paid',
+          ...rFieldsMap,
+          Total_Received_Amount: totalRec,
+          Received_amount: totalRec,
+          Deal_Received_Amount: totalRec,
+          Amount_After_disbursement: totalRec,
+          Total_Pending_Amount: totalPend,
+          Pending_amount: totalPend,
+          Deal_Pending_Amount: totalPend,
+          Payment_received_date: activeDate,
+          Payment_Date: activeDate,
+          Payment_Type: 'Online',
+          Payment_status: isFullPaid ? 'Full amount paid' : 'Partially paid',
           Employee: bdm1Id ? { id: bdm1Id, name: bdm1Name } : (typeof raw.Employee === 'object' ? raw.Employee : { name: bdm1Name }),
           BDM_names: bdm1Id ? { id: bdm1Id, name: bdm1Name } : (typeof raw.BDM_names === 'object' ? raw.BDM_names : { name: bdm1Name }),
           Has_Partner_BDM: hasPartner,
@@ -3258,6 +3428,52 @@ export const DealDetails = () => {
               </div>
             )}
 
+            {/* Milestone Payments Breakdown (R1 - R8) */}
+            {(() => {
+              const recordedSlots = PAYMENT_SLOTS.map(s => {
+                const rawVal = deal[s.amountField] ?? raw[s.amountField] ?? deal.formData?.[s.amountField];
+                const amt = parseNum(rawVal);
+                const rawDate = deal[s.dateField] ?? raw[s.dateField] ?? deal.formData?.[s.dateField];
+                const bdm1 = deal[s.bdm1Field] ?? raw[s.bdm1Field] ?? deal.formData?.[s.bdm1Field];
+                const bdm2 = deal[s.bdm2Field] ?? raw[s.bdm2Field] ?? deal.formData?.[s.bdm2Field];
+                return { ...s, amt, date: rawDate, bdm1, bdm2 };
+              }).filter(s => s.amt > 0);
+
+              if (recordedSlots.length === 0) return null;
+
+              return (
+                <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2 text-xs">
+                  <div className="flex items-center justify-between font-bold text-gray-800 border-b border-gray-200/60 pb-1.5">
+                    <span className="flex items-center gap-1.5">
+                      <CreditCard size={13} className="text-be-orange" />
+                      Recorded Milestone Payments
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                      {recordedSlots.length} Paid
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {recordedSlots.map(s => (
+                      <div key={s.tabName} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-b-0 text-[11px]">
+                        <div>
+                          <span className="font-bold text-gray-900 mr-1.5">{s.tabName}:</span>
+                          <span className="text-gray-500">
+                            {s.date ? new Date(s.date).toLocaleDateString('en-GB') : '—'}
+                          </span>
+                          {s.bdm1 && (
+                            <span className="text-gray-400 block text-[10px]">
+                              BDM: {formatZohoValue(s.bdm1)} {s.bdm2 ? `+ ${formatZohoValue(s.bdm2)}` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-extrabold text-emerald-700">₹{s.amt.toLocaleString('en-IN')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Payment Details (Method, Date, Verification) */}
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2 text-xs">
               <div className="flex justify-between items-center">
@@ -3563,7 +3779,7 @@ export const DealDetails = () => {
             </div>
 
             {/* Modal Body */}
-            <form onSubmit={handleRecordPaymentSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+            <form onSubmit={handleRecordPaymentSubmit} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
               {paymentModalError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
                   <AlertTriangle size={15} className="shrink-0 text-rose-500" />
@@ -3571,209 +3787,323 @@ export const DealDetails = () => {
                 </div>
               )}
 
-              <div className="divide-y divide-gray-100 text-xs">
-                {/* Row 1: Received Amount */}
-                <div className="flex flex-col sm:flex-row sm:items-start py-3 gap-2 sm:gap-4">
-                  <label className="sm:w-44 sm:pt-2 font-bold text-gray-700 shrink-0">
-                    Received Amount <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="flex-1">
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 font-bold text-sm">₹</span>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        required
-                        value={paymentFormData.receivedAmount}
-                        onChange={(e) => setPaymentFormData({ ...paymentFormData, receivedAmount: e.target.value })}
-                        placeholder="0.00"
-                        className="w-full pl-7 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
-                      />
-                    </div>
-                    <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-500">
-                      <span>Total: <strong className="text-gray-700">₹{totalAmountNum.toLocaleString('en-IN')}</strong></span>
-                      <span>•</span>
-                      <span>Pending: <strong className="text-orange-600">₹{Math.max(0, Number((totalAmountNum - (parseNum(paymentFormData.receivedAmount) || 0)).toFixed(2))).toLocaleString('en-IN')}</strong></span>
-                      <span>•</span>
-                      <span>Pre-GST: <strong className="text-gray-700">₹{((parseNum(paymentFormData.receivedAmount) || 0) / 1.18).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></span>
-                    </div>
-                  </div>
+              {/* 8-Milestone Payment Tabs (R1 through R8) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-700">Milestone Payment Slots</span>
+                  <span className="text-[11px] text-gray-500 font-medium">Select a tab to record milestone payments</span>
                 </div>
-
-                {/* Row 2: Payment Received Date */}
-                <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
-                  <label className="sm:w-44 font-bold text-gray-700 shrink-0">
-                    Payment Received Date <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="flex-1">
-                    <input
-                      type="date"
-                      required
-                      value={paymentFormData.paymentDate}
-                      onChange={(e) => setPaymentFormData({ ...paymentFormData, paymentDate: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
-                    />
-                  </div>
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 bg-gray-100 p-1.5 rounded-xl border border-gray-200/80">
+                  {PAYMENT_SLOTS.map((slot) => {
+                    const item = paymentSlotsData[slot.index];
+                    const hasAmt = item && item.amount && parseNum(item.amount) > 0;
+                    const isActive = activePaymentTab === slot.index;
+                    return (
+                      <button
+                        key={`tab-${slot.index}`}
+                        type="button"
+                        onClick={() => setActivePaymentTab(slot.index)}
+                        className={`py-2 px-1.5 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center cursor-pointer ${
+                          isActive
+                            ? 'bg-be-orange text-white shadow-xs scale-[1.02]'
+                            : hasAmt
+                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/60'
+                        }`}
+                        title={slot.label}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span>{slot.tabName}</span>
+                          {hasAmt && !isActive && <span className="text-[10px] text-emerald-600 font-extrabold">✓</span>}
+                        </div>
+                        <span className={`text-[9px] mt-0.5 truncate max-w-full font-semibold ${
+                          isActive ? 'text-orange-100' : hasAmt ? 'text-emerald-700' : 'text-gray-400'
+                        }`}>
+                          {hasAmt ? `₹${(parseNum(item.amount) / 1000).toFixed(0)}k` : 'Empty'}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
 
-                {/* Row 3: Received by BDM 1 */}
-                <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
-                  <label className="sm:w-44 font-bold text-gray-700 shrink-0">
-                    Received by BDM 1 <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="flex-1">
-                    <select
-                      required
-                      value={paymentFormData.bdm1Name}
-                      onChange={(e) => {
-                        const selectedName = e.target.value;
-                        const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
-                        setPaymentFormData({
-                          ...paymentFormData,
-                          bdm1Name: selectedName,
-                          bdm1Id: matched?.id || matched?.zohoId || '',
-                        });
-                      }}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
-                    >
-                      <option value="">-- Select Primary BDM --</option>
-                      {salesEmployees.map((emp) => (
-                        <option key={`bdm1-${emp.id}-${emp.name}`} value={emp.name}>
-                          {emp.name} {emp.dept ? `(${emp.dept})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              {/* Real-time Financial Balance Summary Bar */}
+              <div className="grid grid-cols-3 gap-2.5 p-3 bg-gradient-to-br from-gray-50 to-orange-50/30 rounded-xl border border-orange-100/80 text-xs">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-medium text-gray-500 block">Total Deal Value</span>
+                  <span className="font-extrabold text-gray-900 text-xs sm:text-sm">₹{totalAmountNum.toLocaleString('en-IN')}</span>
                 </div>
-
-                {/* Row 4: Received by BDM 2 */}
-                <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
-                  <label className="sm:w-44 font-bold text-gray-700 shrink-0">
-                    Received by BDM 2
-                  </label>
-                  <div className="flex-1">
-                    <select
-                      value={paymentFormData.bdm2Name}
-                      onChange={(e) => {
-                        const selectedName = e.target.value;
-                        const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
-                        setPaymentFormData({
-                          ...paymentFormData,
-                          bdm2Name: selectedName,
-                          bdm2Id: matched?.id || matched?.zohoId || '',
-                        });
-                      }}
-                      className="w-full px-3 py-2 bg-gray-50 border border-purple-200 rounded-lg text-xs font-semibold text-purple-950 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
-                    >
-                      <option value="">-- None / Single BDM Deal (100%) --</option>
-                      {salesEmployees.map((emp) => (
-                        <option key={`bdm2-${emp.id}-${emp.name}`} value={emp.name}>
-                          {emp.name} {emp.dept ? `(${emp.dept})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-medium text-emerald-600 block">Total Received (R1-R8)</span>
+                  <span className="font-extrabold text-emerald-700 text-xs sm:text-sm">₹{totalReceivedAllSlots.toLocaleString('en-IN')}</span>
                 </div>
-
-                {/* 50/50 Split Preview (Shown when BDM 2 is selected) */}
-                {Boolean(paymentFormData.bdm2Name && paymentFormData.bdm2Name.trim() !== '' && paymentFormData.bdm2Name !== 'none') && (
-                  <div className="flex flex-col sm:flex-row sm:items-center py-2.5 px-3 bg-purple-50/70 rounded-lg border border-purple-100 gap-2 sm:gap-4 my-1">
-                    <span className="sm:w-44 font-bold text-purple-900 shrink-0 flex items-center">
-                      <Users size={12} className="mr-1 text-purple-600" />
-                      50/50 Split (Pre-GST):
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-medium text-orange-600 block">Pending Balance</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`font-extrabold text-xs sm:text-sm ${totalPendingAllSlots === 0 ? 'text-emerald-700' : 'text-orange-600'}`}>
+                      ₹{totalPendingAllSlots.toLocaleString('en-IN')}
                     </span>
-                    <div className="flex-1 text-[11px] text-purple-800 flex flex-wrap gap-x-4 gap-y-1">
-                      <span><strong>BDM 1 ({paymentFormData.bdm1Name || 'Primary'}):</strong> ₹{(((parseNum(paymentFormData.receivedAmount) || 0) / 1.18) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      <span><strong>BDM 2 ({paymentFormData.bdm2Name}):</strong> ₹{(((parseNum(paymentFormData.receivedAmount) || 0) / 1.18) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Row 5: Payment Screenshot */}
-                <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
-                  <label className="sm:w-44 font-bold text-gray-700 shrink-0">
-                    Payment Screenshot
-                  </label>
-                  <div className="flex-1 flex items-center gap-2.5">
-                    <input
-                      ref={paymentScreenshotInputRef}
-                      type="file"
-                      accept="image/*,application/pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const isImg = file.type.startsWith('image/');
-                          setPaymentFormData({
-                            ...paymentFormData,
-                            screenshotFile: file,
-                            screenshotPreview: isImg ? URL.createObjectURL(file) : null,
-                          });
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => paymentScreenshotInputRef.current?.click()}
-                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 border border-gray-200"
-                    >
-                      <Upload size={13} />
-                      {paymentFormData.screenshotFile ? 'Change File' : 'Choose File'}
-                    </button>
-
-                    {paymentFormData.screenshotFile ? (
-                      <span className="text-xs text-gray-800 font-medium truncate flex items-center gap-1.5">
-                        <span className="font-semibold text-be-orange truncate max-w-xs">{paymentFormData.screenshotFile.name}</span>
-                        <span className="text-[10px] text-gray-400">({(paymentFormData.screenshotFile.size / 1024).toFixed(0)} KB)</span>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentFormData({ ...paymentFormData, screenshotFile: null, screenshotPreview: null })}
-                          className="text-gray-400 hover:text-rose-500 p-0.5 cursor-pointer"
-                          title="Remove"
-                        >
-                          <X size={14} />
-                        </button>
-                      </span>
-                    ) : paymentFormData.existingScreenshotName ? (
-                      <span className="text-xs text-emerald-700 font-medium flex items-center gap-1 truncate">
-                        <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
-                        Current: {paymentFormData.existingScreenshotName}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-400">No file chosen (Optional)</span>
+                    {totalPendingAllSlots === 0 && totalReceivedAllSlots > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded-full font-bold">Paid</span>
                     )}
                   </div>
                 </div>
               </div>
 
+              {/* Row-Wise Inputs for the Active Payment Tab */}
+              {(() => {
+                const activeSlot = paymentSlotsData[activePaymentTab] || {
+                  amount: '',
+                  date: '',
+                  bdm1Id: '',
+                  bdm1Name: '',
+                  bdm2Id: '',
+                  bdm2Name: '',
+                  screenshotFile: null,
+                  screenshotPreview: null,
+                  existingScreenshotName: '',
+                };
+                const activeSlotCfg = PAYMENT_SLOTS.find(s => s.index === activePaymentTab) || PAYMENT_SLOTS[0];
+
+                return (
+                  <div className="divide-y divide-gray-100 text-xs pt-1">
+                    {/* Active Tab Notice Header */}
+                    <div className="pb-2.5 flex items-center justify-between text-gray-600">
+                      <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-be-orange"></span>
+                        Editing: <span className="text-be-orange">{activeSlotCfg.label}</span>
+                      </span>
+                      <span className="text-[11px] text-gray-400">Field: {activeSlotCfg.amountField}</span>
+                    </div>
+
+                    {/* Row 1: Received Amount */}
+                    <div className="flex flex-col sm:flex-row sm:items-start py-3 gap-2 sm:gap-4">
+                      <label className="sm:w-44 sm:pt-2 font-bold text-gray-700 shrink-0">
+                        Received Amount ({activeSlotCfg.tabName})
+                      </label>
+                      <div className="flex-1">
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 font-bold text-sm">₹</span>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={activeSlot.amount}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPaymentSlotsData(prev => ({
+                                ...prev,
+                                [activePaymentTab]: { ...prev[activePaymentTab], amount: val }
+                              }));
+                            }}
+                            placeholder="0.00"
+                            className="w-full pl-7 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-500">
+                          <span>Pre-GST for {activeSlotCfg.tabName}: <strong className="text-gray-700">₹{((parseNum(activeSlot.amount) || 0) / 1.18).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></span>
+                          <span>•</span>
+                          <span>Pending After R1-R8: <strong className="text-orange-600">₹{totalPendingAllSlots.toLocaleString('en-IN')}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Payment Received Date */}
+                    <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
+                      <label className="sm:w-44 font-bold text-gray-700 shrink-0">
+                        Payment Received Date
+                      </label>
+                      <div className="flex-1">
+                        <input
+                          type="date"
+                          value={activeSlot.date}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setPaymentSlotsData(prev => ({
+                              ...prev,
+                              [activePaymentTab]: { ...prev[activePaymentTab], date: val }
+                            }));
+                          }}
+                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Row 3: Received by BDM 1 */}
+                    <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
+                      <label className="sm:w-44 font-bold text-gray-700 shrink-0">
+                        Received by BDM 1
+                      </label>
+                      <div className="flex-1">
+                        <select
+                          value={activeSlot.bdm1Name}
+                          onChange={(e) => {
+                            const selectedName = e.target.value;
+                            const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
+                            setPaymentSlotsData(prev => ({
+                              ...prev,
+                              [activePaymentTab]: {
+                                ...prev[activePaymentTab],
+                                bdm1Name: selectedName,
+                                bdm1Id: matched?.id || matched?.zohoId || '',
+                              }
+                            }));
+                          }}
+                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
+                        >
+                          <option value="">-- Select Primary BDM --</option>
+                          {salesEmployees.map((emp) => (
+                            <option key={`bdm1-${activePaymentTab}-${emp.id}-${emp.name}`} value={emp.name}>
+                              {emp.name} {emp.dept ? `(${emp.dept})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Row 4: Received by BDM 2 */}
+                    <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
+                      <label className="sm:w-44 font-bold text-gray-700 shrink-0">
+                        Received by BDM 2
+                      </label>
+                      <div className="flex-1">
+                        <select
+                          value={activeSlot.bdm2Name}
+                          onChange={(e) => {
+                            const selectedName = e.target.value;
+                            const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
+                            setPaymentSlotsData(prev => ({
+                              ...prev,
+                              [activePaymentTab]: {
+                                ...prev[activePaymentTab],
+                                bdm2Name: selectedName,
+                                bdm2Id: matched?.id || matched?.zohoId || '',
+                              }
+                            }));
+                          }}
+                          className="w-full px-3 py-2 bg-gray-50 border border-purple-200 rounded-lg text-xs font-semibold text-purple-950 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
+                        >
+                          <option value="">-- None / Single BDM Deal (100%) --</option>
+                          {salesEmployees.map((emp) => (
+                            <option key={`bdm2-${activePaymentTab}-${emp.id}-${emp.name}`} value={emp.name}>
+                              {emp.name} {emp.dept ? `(${emp.dept})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* 50/50 Split Preview (Shown when BDM 2 is selected) */}
+                    {Boolean(activeSlot.bdm2Name && activeSlot.bdm2Name.trim() !== '' && activeSlot.bdm2Name.toLowerCase() !== 'none') && (
+                      <div className="flex flex-col sm:flex-row sm:items-center py-2.5 px-3 bg-purple-50/70 rounded-lg border border-purple-100 gap-2 sm:gap-4 my-1">
+                        <span className="sm:w-44 font-bold text-purple-900 shrink-0 flex items-center">
+                          <Users size={12} className="mr-1 text-purple-600" />
+                          50/50 Split (Pre-GST):
+                        </span>
+                        <div className="flex-1 text-[11px] text-purple-800 flex flex-wrap gap-x-4 gap-y-1">
+                          <span><strong>BDM 1 ({activeSlot.bdm1Name || 'Primary'}):</strong> ₹{(((parseNum(activeSlot.amount) || 0) / 1.18) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span><strong>BDM 2 ({activeSlot.bdm2Name}):</strong> ₹{(((parseNum(activeSlot.amount) || 0) / 1.18) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Row 5: Payment Screenshot */}
+                    <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4">
+                      <label className="sm:w-44 font-bold text-gray-700 shrink-0">
+                        Payment Screenshot ({activeSlotCfg.tabName})
+                      </label>
+                      <div className="flex-1 flex items-center gap-2.5">
+                        <input
+                          ref={paymentScreenshotInputRef}
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const isImg = file.type.startsWith('image/');
+                              setPaymentSlotsData(prev => ({
+                                ...prev,
+                                [activePaymentTab]: {
+                                  ...prev[activePaymentTab],
+                                  screenshotFile: file,
+                                  screenshotPreview: isImg ? URL.createObjectURL(file) : null,
+                                }
+                              }));
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => paymentScreenshotInputRef.current?.click()}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 border border-gray-200"
+                        >
+                          <Upload size={13} />
+                          {activeSlot.screenshotFile ? 'Change File' : 'Choose File'}
+                        </button>
+
+                        {activeSlot.screenshotFile ? (
+                          <span className="text-xs text-gray-800 font-medium truncate flex items-center gap-1.5">
+                            <span className="font-semibold text-be-orange truncate max-w-xs">{activeSlot.screenshotFile.name}</span>
+                            <span className="text-[10px] text-gray-400">({(activeSlot.screenshotFile.size / 1024).toFixed(0)} KB)</span>
+                            <button
+                              type="button"
+                              onClick={() => setPaymentSlotsData(prev => ({
+                                ...prev,
+                                [activePaymentTab]: { ...prev[activePaymentTab], screenshotFile: null, screenshotPreview: null }
+                              }))}
+                              className="text-gray-400 hover:text-rose-500 p-0.5 cursor-pointer"
+                              title="Remove"
+                            >
+                              <X size={14} />
+                            </button>
+                          </span>
+                        ) : activeSlot.existingScreenshotName ? (
+                          <span className="text-xs text-emerald-700 font-medium flex items-center gap-1 truncate">
+                            <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+                            Current: {activeSlot.existingScreenshotName}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">No file chosen (Optional)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Modal Footer Actions */}
-              <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsPaymentModalOpen(false)}
-                  disabled={isSubmittingPayment}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingPayment}
-                  className="px-5 py-2 bg-be-orange hover:bg-be-orangeHover text-white text-xs font-bold rounded-lg transition-all shadow-sm hover:shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmittingPayment ? (
-                    <>
-                      <Loader2 size={13} className="animate-spin" />
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      <Check size={13} />
-                      Submit
-                    </>
-                  )}
-                </button>
+              <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-2.5">
+                <span className="text-[11px] text-gray-500 font-medium">
+                  Saving will synchronize all 8 milestone payment fields with Zoho CRM.
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPaymentModalOpen(false)}
+                    disabled={isSubmittingPayment}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingPayment}
+                    className="px-5 py-2 bg-be-orange hover:bg-be-orangeHover text-white text-xs font-bold rounded-lg transition-all shadow-sm hover:shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmittingPayment ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        Updating Zoho CRM...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={13} />
+                        Submit Payment
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

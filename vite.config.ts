@@ -1022,8 +1022,40 @@ function zohoApiPlugin(): Plugin {
       payload.Reminder_5 = rem5;
     }
 
-    return payload;
+  // 8-Milestone Payment Slots (R1 to R8) mapping to Zoho CRM API names
+  const rPaymentSlots = [
+    { amt: 'R1_Received_amount23', date: 'Closing_Date', bdm1: 'R1_Received_by_BDM1', bdm2: 'R1_Received_by_BDM2' },
+    { amt: 'R2_Received_amount12', date: 'DPR_status_change_date', bdm1: 'R2_Received_by_BDM1', bdm2: 'R2_Received_by_BDM2' },
+    { amt: 'R3_Received_amount', date: 'Date_of_status_change', bdm1: 'R3_Received_by_BDM1', bdm2: 'R3_Received_by_BDM2' },
+    { amt: 'R4_Received_amount', date: 'Date_of_status_change_f', bdm1: 'R4_Received_by_BDM1', bdm2: 'R4_Received_by_BDM2' },
+    { amt: 'R5_Received_amount', date: 'Document_collection_Pitch_deck_creation_DPR_date', bdm1: 'R5_Received_by_BDM1', bdm2: 'R5_Received_by_BDM2' },
+    { amt: 'R6_Received_amount', date: 'Document_sent_date', bdm1: 'R6_Received_BDM1', bdm2: 'R6_Received_BDM2' },
+    { amt: 'R7_Received_amount', date: 'Finance_status_change_date', bdm1: 'R7_Received_by_BDM1', bdm2: 'R7_Received_by_BDM2' },
+    { amt: 'R8_Received_amount', date: 'Date_of_financedate_change', bdm1: 'R8_Received_by_BDM1', bdm2: 'R8_Received_by_BDM2' },
+  ];
+
+  for (const s of rPaymentSlots) {
+    const rawAmt = deal[s.amt] ?? fd[s.amt] ?? deal.rawZohoDeal?.[s.amt];
+    if (rawAmt !== undefined && rawAmt !== null && String(rawAmt).trim() !== '') {
+      payload[s.amt] = String(rawAmt).trim();
+    }
+    const rawDate = deal[s.date] ?? fd[s.date] ?? deal.rawZohoDeal?.[s.date];
+    if (rawDate) {
+      const fDate = formatDateForZoho(rawDate);
+      if (fDate) payload[s.date] = fDate;
+    }
+    const rawBdm1 = deal[s.bdm1] ?? fd[s.bdm1] ?? deal.rawZohoDeal?.[s.bdm1];
+    if (rawBdm1 && String(rawBdm1).trim() !== '') {
+      payload[s.bdm1] = String(rawBdm1).trim();
+    }
+    const rawBdm2 = deal[s.bdm2] ?? fd[s.bdm2] ?? deal.rawZohoDeal?.[s.bdm2];
+    if (rawBdm2 && String(rawBdm2).trim() !== '' && String(rawBdm2).toLowerCase() !== 'none') {
+      payload[s.bdm2] = String(rawBdm2).trim();
+    }
   }
+
+  return payload;
+}
 
   function buildEmployeeZohoPayload(employee: any): Record<string, any> {
     const fd = employee.formData || {};
