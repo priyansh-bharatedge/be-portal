@@ -26,7 +26,7 @@ function zohoApiPlugin(): Plugin {
     const e = env || loadEnv('development', process.cwd(), '');
     const clientId = e.VITE_ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
     const clientSecret = e.VITE_ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
-    const refreshToken = e.VITE_ZOHO_REFRESH_TOKEN || '1000.bdf58bb9452babb83e6f001ec50ea44f.7c72197a07b2fb22502ce57112cbae91';
+    const refreshToken = e.VITE_ZOHO_REFRESH_TOKEN || '1000.b141fe7e5414313d6b2ba2744c90c4fe.dc33224ff49bf2843512fbe58dce982c';
 
     const now = Date.now();
     if (cachedToken && tokenExpiry > now + 60000) {
