@@ -72,30 +72,8 @@ export const isDealPartnerBdm = (d: any): boolean => {
 export const isDealPaymentVerified = (d: any): boolean => {
   if (!d) return false;
 
-  // 1. Deals in 'Sales', 'Draft', or 'New' stage are by definition NOT verified by Accounts yet
-  const stage = String(d.stage || d.Stage || d.rawZohoDeal?.Stage || '').toLowerCase().trim();
-  if (['sales', 'draft', 'new'].includes(stage)) {
-    return false;
-  }
-
-  // 2. If explicitly false or unverified in any flag, return false
-  if (d.paymentVerified === false || d.Payment_verifications === false) return false;
-  if (
-    d.rawZohoDeal?.Payment_verifications === false ||
-    d.rawZohoDeal?.Payment_verifications === 'false' ||
-    d.rawZohoDeal?.Payment_verifications === 'No' ||
-    d.rawZohoDeal?.Payment_verifications === 'Unverified' ||
-    d.rawZohoDeal?.Payment_verifications === null ||
-    d.rawZohoDeal?.Payment_verifications === undefined ||
-    d.rawZohoDeal?.Payment_verifications === ''
-  ) {
-    if (d.paymentVerified === true || d.Payment_verifications === true) {
-      return true;
-    }
-    return false;
-  }
-
-  return Boolean(
+  // 1. Explicitly verified flag on the deal object, form data, or Zoho CRM raw deal
+  const isExplicitlyVerified = Boolean(
     d.paymentVerified === true ||
     d.paymentVerified === 'true' ||
     d.paymentVerified === 'Verified' ||
@@ -109,6 +87,33 @@ export const isDealPaymentVerified = (d: any): boolean => {
     d.rawZohoDeal?.Payment_verifications === 'Verified' ||
     d.rawZohoDeal?.Payment_verifications === 'Yes'
   );
+
+  if (isExplicitlyVerified) {
+    return true;
+  }
+
+  // 2. Evaluate stage progression
+  const rawStage = String(d.stage || d.Stage || d.status || d.rawZohoDeal?.Stage || '').toLowerCase().trim();
+
+  // If deal is in Account(s) stage and payment verification is unchecked, it is strictly pending verification
+  if (rawStage.includes('account')) {
+    return false;
+  }
+
+  // Deals that have progressed beyond Account (Legal, Operations allocator, Operations executors, Quality, Won, Closed Won)
+  // have already passed the Accounts verification step in the workflow pipeline
+  if (
+    rawStage.includes('legal') ||
+    rawStage.includes('allocat') ||
+    rawStage.includes('execut') ||
+    rawStage.includes('qualit') ||
+    rawStage.includes('won')
+  ) {
+    return true;
+  }
+
+  // Sales / Draft / New deals that haven't been verified yet
+  return false;
 };
 
 export const getDealVerifiedReceivedAmount = (d: any): number => {

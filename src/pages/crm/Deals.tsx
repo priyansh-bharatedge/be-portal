@@ -1372,8 +1372,18 @@ export const Deals = () => {
         zohoId: zDeal.id,
         zohoStatus: 'synced',
         zohoSyncedAt: new Date().toISOString(),
-        Payment_verifications: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes' ? true : false,
-        paymentVerified: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes' ? true : false,
+        Payment_verifications: Boolean(
+          zDeal.Payment_verifications === true ||
+          zDeal.Payment_verifications === 'true' ||
+          zDeal.Payment_verifications === 'Verified' ||
+          zDeal.Payment_verifications === 'Yes'
+        ),
+        paymentVerified: Boolean(
+          zDeal.Payment_verifications === true ||
+          zDeal.Payment_verifications === 'true' ||
+          zDeal.Payment_verifications === 'Verified' ||
+          zDeal.Payment_verifications === 'Yes'
+        ),
         formData: {
           clientName: resolvedClientName,
           companyName: resolvedCompanyName,
@@ -2748,20 +2758,26 @@ export const Deals = () => {
                           )}
                         </td>
                         <td className="px-6 py-5 font-bold border-t border-b border-gray-100 group-hover:border-orange-100">
-                          <div className="flex items-center space-x-1.5">
-                            <span className={breakdown.isPaymentVerified ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
-                              {displayReceived}
-                            </span>
-                            {breakdown.isPaymentVerified ? (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Payment Verified by Accounts">
-                                <CheckCircle2 size={10} className="mr-0.5 text-emerald-600" /> Verified
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200" title="Payment Pending Verification">
-                                <Clock size={10} className="mr-0.5 text-rose-500" /> Pending Verif.
-                              </span>
-                            )}
-                          </div>
+                          {(() => {
+                            const rawStage = (deal.stage || deal.rawZohoDeal?.Stage || deal.status || 'Sales').toLowerCase().trim();
+                            const isAccounts = rawStage.includes('account');
+                            return (
+                              <div className="flex items-center space-x-1.5">
+                                <span className={breakdown.isPaymentVerified ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
+                                  {displayReceived}
+                                </span>
+                                {breakdown.isPaymentVerified ? (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Payment Verified by Accounts">
+                                    <CheckCircle2 size={10} className="mr-0.5 text-emerald-600" /> Verified
+                                  </span>
+                                ) : isAccounts ? (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200" title="Payment Pending Verification">
+                                    <Clock size={10} className="mr-0.5 text-rose-500" /> Pending Verif.
+                                  </span>
+                                ) : null}
+                              </div>
+                            );
+                          })()}
                           {breakdown.hasPartnerBdm && !isSuperAdmin && !isHOD && (
                             <div className="text-[10px] text-gray-400 font-normal">Pre-GST 50%</div>
                           )}
@@ -2803,12 +2819,15 @@ export const Deals = () => {
                       <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end space-x-1.5">
                           {(() => {
-                            const rawStage = (deal.stage || deal.rawZohoDeal?.Stage || 'Sales').toLowerCase().trim();
+                            const rawStage = (deal.stage || deal.rawZohoDeal?.Stage || deal.status || 'Sales').toLowerCase().trim();
                             const isAccountsStage = rawStage.includes('account');
                             const isLegalStage = rawStage.includes('legal');
                             const isAllocatorStage = rawStage.includes('allocat') && !rawStage.includes('execut');
                             const isExecutorsStage = rawStage.includes('execut');
-                            const isSalesOrDraft = !isAccountsStage && !isLegalStage && !isAllocatorStage && !isExecutorsStage;
+                            const isQualityStage = rawStage.includes('qualit');
+                            const isWonStage = rawStage.includes('won');
+                            const isLostStage = rawStage.includes('lost');
+                            const isSalesOrDraft = !isAccountsStage && !isLegalStage && !isAllocatorStage && !isExecutorsStage && !isQualityStage && !isWonStage && !isLostStage;
 
                             return (
                               <>

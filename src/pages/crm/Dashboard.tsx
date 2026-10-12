@@ -1750,9 +1750,15 @@ export const CrmDashboard = () => {
                             {dispRec}
                           </div>
                           <div className="flex items-center gap-1 mt-0.5">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${breakdown.isPaymentVerified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                              {breakdown.isPaymentVerified ? 'Verified' : 'Pending Verif.'}
-                            </span>
+                            {breakdown.isPaymentVerified ? (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                Verified
+                              </span>
+                            ) : String(deal.stage || deal.status || '').toLowerCase().includes('account') ? (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                Pending Verif.
+                              </span>
+                            ) : null}
                           </div>
                           {breakdown.hasPartnerBdm && !isSuperAdmin && !isHOD && (
                             <div className="text-[10px] text-gray-400 font-normal mt-0.5">Pre-GST 50%</div>

@@ -22,10 +22,11 @@ function zohoApiPlugin(): Plugin {
   let cachedToken: string | null = null;
   let tokenExpiry = 0;
 
-  async function getAccessToken(env: Record<string, string>): Promise<string> {
-    const clientId = env.VITE_ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
-    const clientSecret = env.VITE_ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
-    const refreshToken = env.VITE_ZOHO_REFRESH_TOKEN || '1000.bdf58bb9452babb83e6f001ec50ea44f.7c72197a07b2fb22502ce57112cbae91';
+  async function getAccessToken(env?: Record<string, string>): Promise<string> {
+    const e = env || loadEnv('development', process.cwd(), '');
+    const clientId = e.VITE_ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
+    const clientSecret = e.VITE_ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
+    const refreshToken = e.VITE_ZOHO_REFRESH_TOKEN || '1000.bdf58bb9452babb83e6f001ec50ea44f.7c72197a07b2fb22502ce57112cbae91';
 
     const now = Date.now();
     if (cachedToken && tokenExpiry > now + 60000) {
@@ -39,7 +40,7 @@ function zohoApiPlugin(): Plugin {
       grant_type: 'refresh_token',
     });
 
-    const accountsUrl = env.VITE_ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in';
+    const accountsUrl = e.VITE_ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in';
     const tokenUrl = `${accountsUrl}/oauth/v2/token?${params.toString()}`;
     const res = await fetch(tokenUrl, { method: 'POST' });
     const data: any = await res.json();
@@ -538,7 +539,7 @@ function zohoApiPlugin(): Plugin {
         },
       });
       if (res.status === 401) {
-        accessToken = await getAccessToken(env);
+        accessToken = await getAccessToken();
         res = await fetch(fetchUrl, {
           method: 'GET',
           headers: {
@@ -2099,7 +2100,7 @@ function zohoApiPlugin(): Plugin {
         }
 
         // Fetch / Get Deals endpoint (Module API Name: Deals)
-        if (pathname === '/api/zoho/get-deals' && req.method === 'GET') {
+        if ((pathname === '/api/zoho/get-deals' || pathname === '/api/deals') && req.method === 'GET') {
           try {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';

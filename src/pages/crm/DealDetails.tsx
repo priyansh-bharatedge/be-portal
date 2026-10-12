@@ -1482,12 +1482,15 @@ export const DealDetails = () => {
         <div className="flex flex-wrap items-center gap-2">
           {/* Action Workflow Buttons in Header */}
           {(() => {
-            const rawStage = (deal.stage || raw.Stage || 'Sales').toLowerCase().trim();
+            const rawStage = (deal.stage || raw.Stage || deal.status || 'Sales').toLowerCase().trim();
             const isAccountsStage = rawStage.includes('account');
             const isLegalStage = rawStage.includes('legal');
             const isAllocatorStage = rawStage.includes('allocat') && !rawStage.includes('execut');
             const isExecutorsStage = rawStage.includes('execut');
-            const isSalesOrDraft = !isAccountsStage && !isLegalStage && !isAllocatorStage && !isExecutorsStage;
+            const isQualityStage = rawStage.includes('qualit');
+            const isWonStage = rawStage.includes('won');
+            const isLostStage = rawStage.includes('lost');
+            const isSalesOrDraft = !isAccountsStage && !isLegalStage && !isAllocatorStage && !isExecutorsStage && !isQualityStage && !isWonStage && !isLostStage;
 
             return (
               <>
@@ -2796,6 +2799,9 @@ export const DealDetails = () => {
         {/* Right Column - Financials & Tracking (1 Col) */}
         <div className="space-y-6">
           {/* Financial Summary Card */}
+          {(() => {
+            const isSidebarAccountsStage = (deal.stage || raw.Stage || deal.status || '').toLowerCase().includes('account');
+            return (
           <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-5">
             <h2 className="text-base font-bold text-gray-900 flex items-center">
               <IndianRupee size={18} className="mr-2 text-be-orange" /> 
@@ -2822,7 +2828,7 @@ export const DealDetails = () => {
               <div className="flex justify-between text-xs font-semibold">
                 <span className="text-gray-600">Payment Collection</span>
                 <span className={splitBreakdown.isPaymentVerified ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
-                  {percentReceived}% {splitBreakdown.isPaymentVerified ? '' : '(Pending Verif.)'}
+                  {percentReceived}% {splitBreakdown.isPaymentVerified ? '' : isSidebarAccountsStage ? '(Pending Verif.)' : ''}
                 </span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
@@ -2846,8 +2852,10 @@ export const DealDetails = () => {
                 <div className="text-[10px] font-bold">
                   {splitBreakdown.isPaymentVerified ? (
                     <span className="text-emerald-700 flex items-center"><CheckCircle2 size={10} className="mr-0.5" /> Verified by Accounts</span>
-                  ) : (
+                  ) : isSidebarAccountsStage ? (
                     <span className="text-rose-600 flex items-center"><Clock size={10} className="mr-0.5" /> Pending Verification</span>
+                  ) : (
+                    <span className="text-gray-500 flex items-center">Unverified</span>
                   )}
                 </div>
               </div>
@@ -2889,8 +2897,8 @@ export const DealDetails = () => {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Payment Verification:</span>
-                <span className={`font-bold px-2 py-0.5 rounded-md ${splitBreakdown.isPaymentVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                  {splitBreakdown.isPaymentVerified ? 'Verified' : 'Pending Verification'}
+                <span className={`font-bold px-2 py-0.5 rounded-md ${splitBreakdown.isPaymentVerified ? 'bg-emerald-100 text-emerald-800' : isSidebarAccountsStage ? 'bg-rose-100 text-rose-800' : 'bg-gray-100 text-gray-700'}`}>
+                  {splitBreakdown.isPaymentVerified ? 'Verified' : isSidebarAccountsStage ? 'Pending Verification' : 'Unverified'}
                 </span>
               </div>
               {(raw.Payment_Type || raw.Payment_status || raw.Payment_stages) && (
@@ -2918,12 +2926,15 @@ export const DealDetails = () => {
             {/* Workflow Actions */}
             <div className="pt-2 border-t border-gray-100 space-y-2">
               {(() => {
-                const rawStage = (deal.stage || raw.Stage || 'Sales').toLowerCase().trim();
+                const rawStage = (deal.stage || raw.Stage || deal.status || 'Sales').toLowerCase().trim();
                 const isAccountsStage = rawStage.includes('account');
                 const isLegalStage = rawStage.includes('legal');
                 const isAllocatorStage = rawStage.includes('allocat') && !rawStage.includes('execut');
                 const isExecutorsStage = rawStage.includes('execut');
-                const isSalesOrDraft = !isAccountsStage && !isLegalStage && !isAllocatorStage && !isExecutorsStage;
+                const isQualityStage = rawStage.includes('qualit');
+                const isWonStage = rawStage.includes('won');
+                const isLostStage = rawStage.includes('lost');
+                const isSalesOrDraft = !isAccountsStage && !isLegalStage && !isAllocatorStage && !isExecutorsStage && !isQualityStage && !isWonStage && !isLostStage;
 
                 return (
                   <>
@@ -2998,6 +3009,8 @@ export const DealDetails = () => {
               </button>
             </div>
           </div>
+            );
+          })()}
 
           {/* Partner & BDM Card */}
           {(primaryBdmName || hasPartnerBdm || partnerBdmName || partnerBdmAmount > 0) && (
