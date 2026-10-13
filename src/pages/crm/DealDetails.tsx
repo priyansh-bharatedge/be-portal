@@ -7,7 +7,7 @@ import {
   Briefcase, Calendar, Layers, Tag, ExternalLink, User, RefreshCw, Loader2,
   AlertTriangle, Bell, Eye, Upload, Paperclip, X, FileSpreadsheet, Image as ImageIcon,
   Check, Maximize2, Minimize2, FileCode, HardDrive, CheckCircle, Users, Percent, Calculator, Info,
-  UserCheck, Scale, FileCheck2, Send, Save
+  UserCheck, Scale, FileCheck2, Send, Save, Lock
 } from 'lucide-react';
 import { getDocument, saveDocument, getAllDocuments } from '../../lib/db';
 import { 
@@ -30,7 +30,7 @@ import {
   fetchZohoEmployees
 } from '../../services/zohoService';
 import { useAuth } from '../../context/AuthContext';
-import { getDealSplitBreakdown, isDealPartnerBdm, isDealPaymentVerified } from '../../utils/dealSplitUtils';
+import { getDealSplitBreakdown, isDealPartnerBdm, isDealPaymentVerified, isUserPrimaryBdm } from '../../utils/dealSplitUtils';
 
 // Helper to scan IndexedDB for all documents matching this deal
 const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promise<any[]> => {
@@ -1510,6 +1510,20 @@ export const DealDetails = () => {
   const preGstReceivedNum = splitBreakdown.preGstReceived;
   const partnerBdmAmount = splitBreakdown.partnerAmount;
 
+  // Permission: Strictly only BDM 1 (Primary BDM) and Super Admin can record/edit remaining milestone payment entries (R1-R8)
+  const isBdm1 = Boolean(
+    splitBreakdown.isUserPrimary ||
+    isUserPrimaryBdm(deal, currentUser) ||
+    (currentUser?.name && primaryBdmName && (
+      currentUser.name.toLowerCase().trim() === primaryBdmName.toLowerCase().trim() ||
+      (currentUser.name.trim().length >= 3 && primaryBdmName.toLowerCase().includes(currentUser.name.toLowerCase().trim())) ||
+      (primaryBdmName.trim().length >= 3 && currentUser.name.toLowerCase().includes(primaryBdmName.toLowerCase().trim()))
+    )) ||
+    (currentUser?.id && splitBreakdown.primaryId && String(currentUser.id) === String(splitBreakdown.primaryId)) ||
+    (currentUser?.zohoId && splitBreakdown.primaryId && String(currentUser.zohoId) === String(splitBreakdown.primaryId))
+  );
+  const canEditRemainingPayment = Boolean(isBdm1 || isSuperAdmin);
+
   // Extract Legal Subform
   const legalSubform = deal.legalData || (Array.isArray(raw.Legal) && raw.Legal.length > 0
     ? raw.Legal.map((lg: any, i: number) => ({
@@ -1753,6 +1767,11 @@ export const DealDetails = () => {
   const handleRecordPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!deal) return;
+
+    if (!canEditRemainingPayment) {
+      setPaymentModalError(`Only Primary BDM (BDM 1: ${primaryBdmName}) can record or edit remaining payment entries.`);
+      return;
+    }
 
     const activeSlot = paymentSlotsData[activePaymentTab];
     if (activeSlot && parseNum(activeSlot.amount) < 0) {
@@ -2123,11 +2142,24 @@ export const DealDetails = () => {
 
           <button
             onClick={openPaymentModal}
-            className="flex items-center px-3.5 py-2 text-sm font-bold text-white bg-be-orange hover:bg-be-orangeHover rounded-xl transition-all shadow-xs cursor-pointer"
-            title="Record or update received payment, proof screenshot, and BDM allocation"
+            className={`flex items-center px-3.5 py-2 text-sm font-bold rounded-xl transition-all shadow-xs cursor-pointer ${
+              canEditRemainingPayment
+                ? 'text-white bg-be-orange hover:bg-be-orangeHover'
+                : 'text-gray-700 bg-white border border-gray-200 hover:bg-gray-50'
+            }`}
+            title={canEditRemainingPayment ? "Record or update received payment, proof screenshot, and BDM allocation" : "View milestone payments (Read-Only)"}
           >
-            <CreditCard size={15} className="mr-1.5" />
-            Record Payment
+            {canEditRemainingPayment ? (
+              <>
+                <CreditCard size={15} className="mr-1.5" />
+                Record Payment
+              </>
+            ) : (
+              <>
+                <Eye size={15} className="mr-1.5 text-gray-500" />
+                View Payments
+              </>
+            )}
           </button>
 
           <button 
@@ -3618,10 +3650,22 @@ export const DealDetails = () => {
               <button 
                 type="button"
                 onClick={openPaymentModal} 
-                className="w-full flex items-center justify-center px-4 py-2.5 bg-be-orange text-white rounded-xl text-xs font-bold hover:bg-be-orangeHover transition-all shadow-sm cursor-pointer"
-                title="Record or update received payment, proof screenshot, and BDM allocation"
+                className={`w-full flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                  canEditRemainingPayment
+                    ? 'bg-be-orange text-white hover:bg-be-orangeHover'
+                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                }`}
+                title={canEditRemainingPayment ? "Record or update received payment, proof screenshot, and BDM allocation" : "View milestone payments (Read-Only)"}
               >
-                <CreditCard size={14} className="mr-2" /> Record / Update Payment
+                {canEditRemainingPayment ? (
+                  <>
+                    <CreditCard size={14} className="mr-2" /> Record / Update Payment
+                  </>
+                ) : (
+                  <>
+                    <Eye size={14} className="mr-2 text-gray-500" /> View Milestone Payments
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -3791,7 +3835,16 @@ export const DealDetails = () => {
                   <CreditCard size={20} />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-gray-900">Record / Update Payment</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-extrabold text-gray-900">
+                      {canEditRemainingPayment ? 'Record / Update Payment' : 'Milestone Payments'}
+                    </h3>
+                    {!canEditRemainingPayment && (
+                      <span className="px-2 py-0.5 text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold flex items-center gap-1">
+                        <Lock size={10} /> Read-Only
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500 font-medium">
                     Deal #{deal.id} • <span className="text-gray-700 font-semibold">{formatZohoValue(clientName)}</span>
                   </p>
@@ -3813,6 +3866,18 @@ export const DealDetails = () => {
                 <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
                   <AlertTriangle size={15} className="shrink-0 text-rose-500" />
                   <span>{paymentModalError}</span>
+                </div>
+              )}
+
+              {!canEditRemainingPayment && (
+                <div className="p-3 bg-amber-50/90 border border-amber-200 text-amber-900 text-xs rounded-xl flex items-center gap-2.5">
+                  <Lock size={16} className="shrink-0 text-amber-600" />
+                  <div>
+                    <span className="font-bold block text-amber-900">Read-Only View</span>
+                    <span className="text-[11px] text-amber-800">
+                      Only Primary BDM (BDM 1: <strong>{primaryBdmName}</strong>) can record or edit remaining payment entries.
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -3904,8 +3969,12 @@ export const DealDetails = () => {
                     {/* Active Tab Notice Header */}
                     <div className="pb-2.5 flex items-center justify-between text-gray-600">
                       <span className="font-bold text-gray-800 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-be-orange"></span>
-                        Editing: <span className="text-be-orange">{activeSlotCfg.label}</span>
+                        <span className={`w-2 h-2 rounded-full ${canEditRemainingPayment ? 'bg-be-orange' : 'bg-gray-400'}`}></span>
+                        {canEditRemainingPayment ? (
+                          <>Editing: <span className="text-be-orange">{activeSlotCfg.label}</span></>
+                        ) : (
+                          <>Viewing: <span className="text-gray-800">{activeSlotCfg.label}</span> <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-semibold">(Read-Only)</span></>
+                        )}
                       </span>
                       <span className="text-[11px] text-gray-400">Field: {activeSlotCfg.amountField}</span>
                     </div>
@@ -3922,8 +3991,10 @@ export const DealDetails = () => {
                             type="number"
                             step="any"
                             min="0"
+                            disabled={!canEditRemainingPayment}
                             value={activeSlot.amount}
                             onChange={(e) => {
+                              if (!canEditRemainingPayment) return;
                               const val = e.target.value;
                               setPaymentSlotsData(prev => ({
                                 ...prev,
@@ -3931,7 +4002,11 @@ export const DealDetails = () => {
                               }));
                             }}
                             placeholder="0.00"
-                            className="w-full pl-7 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
+                            className={`w-full pl-7 pr-3 py-2 border rounded-lg text-xs font-bold outline-none transition-all ${
+                              !canEditRemainingPayment
+                                ? 'bg-gray-100 text-gray-600 border-gray-200 cursor-not-allowed select-none'
+                                : 'bg-gray-50 border-gray-200 text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange'
+                            }`}
                           />
                         </div>
                         <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-500">
@@ -3950,15 +4025,21 @@ export const DealDetails = () => {
                       <div className="flex-1">
                         <input
                           type="date"
+                          disabled={!canEditRemainingPayment}
                           value={activeSlot.date}
                           onChange={(e) => {
+                            if (!canEditRemainingPayment) return;
                             const val = e.target.value;
                             setPaymentSlotsData(prev => ({
                               ...prev,
                               [activePaymentTab]: { ...prev[activePaymentTab], date: val }
                             }));
                           }}
-                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-800 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
+                          className={`w-full px-3 py-2 border rounded-lg text-xs font-semibold outline-none transition-all ${
+                            !canEditRemainingPayment
+                              ? 'bg-gray-100 text-gray-600 border-gray-200 cursor-not-allowed select-none'
+                              : 'bg-gray-50 border-gray-200 text-gray-800 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange'
+                          }`}
                         />
                       </div>
                     </div>
@@ -3970,8 +4051,10 @@ export const DealDetails = () => {
                       </label>
                       <div className="flex-1">
                         <select
+                          disabled={!canEditRemainingPayment}
                           value={activeSlot.bdm1Name}
                           onChange={(e) => {
+                            if (!canEditRemainingPayment) return;
                             const selectedName = e.target.value;
                             const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
                             setPaymentSlotsData(prev => ({
@@ -3983,7 +4066,11 @@ export const DealDetails = () => {
                               }
                             }));
                           }}
-                          className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none transition-all"
+                          className={`w-full px-3 py-2 border rounded-lg text-xs font-semibold outline-none transition-all ${
+                            !canEditRemainingPayment
+                              ? 'bg-gray-100 text-gray-600 border-gray-200 cursor-not-allowed select-none'
+                              : 'bg-gray-50 border-gray-200 text-gray-900 focus:bg-white focus:border-be-orange focus:ring-1 focus:ring-be-orange'
+                          }`}
                         >
                           <option value="">-- Select Primary BDM --</option>
                           {salesEmployees.map((emp) => (
@@ -4002,8 +4089,10 @@ export const DealDetails = () => {
                       </label>
                       <div className="flex-1">
                         <select
+                          disabled={!canEditRemainingPayment}
                           value={activeSlot.bdm2Name}
                           onChange={(e) => {
+                            if (!canEditRemainingPayment) return;
                             const selectedName = e.target.value;
                             const matched = salesEmployees.find(emp => emp.name.toLowerCase() === selectedName.toLowerCase());
                             setPaymentSlotsData(prev => ({
@@ -4015,7 +4104,11 @@ export const DealDetails = () => {
                               }
                             }));
                           }}
-                          className="w-full px-3 py-2 bg-gray-50 border border-purple-200 rounded-lg text-xs font-semibold text-purple-950 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-400 outline-none transition-all"
+                          className={`w-full px-3 py-2 border rounded-lg text-xs font-semibold outline-none transition-all ${
+                            !canEditRemainingPayment
+                              ? 'bg-gray-100 text-gray-600 border-purple-200 cursor-not-allowed select-none'
+                              : 'bg-gray-50 border-purple-200 text-purple-950 focus:bg-white focus:border-purple-500 focus:ring-1 focus:ring-purple-400'
+                          }`}
                         >
                           <option value="">-- None / Single BDM Deal (100%) --</option>
                           {salesEmployees.map((emp) => (
@@ -4047,50 +4140,56 @@ export const DealDetails = () => {
                         Payment Screenshot ({activeSlotCfg.tabName})
                       </label>
                       <div className="flex-1 flex items-center gap-2.5">
-                        <input
-                          ref={paymentScreenshotInputRef}
-                          type="file"
-                          accept="image/*,application/pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const isImg = file.type.startsWith('image/');
-                              setPaymentSlotsData(prev => ({
-                                ...prev,
-                                [activePaymentTab]: {
-                                  ...prev[activePaymentTab],
-                                  screenshotFile: file,
-                                  screenshotPreview: isImg ? URL.createObjectURL(file) : null,
+                        {canEditRemainingPayment && (
+                          <>
+                            <input
+                              ref={paymentScreenshotInputRef}
+                              type="file"
+                              accept="image/*,application/pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const isImg = file.type.startsWith('image/');
+                                  setPaymentSlotsData(prev => ({
+                                    ...prev,
+                                    [activePaymentTab]: {
+                                      ...prev[activePaymentTab],
+                                      screenshotFile: file,
+                                      screenshotPreview: isImg ? URL.createObjectURL(file) : null,
+                                    }
+                                  }));
                                 }
-                              }));
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => paymentScreenshotInputRef.current?.click()}
-                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 border border-gray-200"
-                        >
-                          <Upload size={13} />
-                          {activeSlot.screenshotFile ? 'Change File' : 'Choose File'}
-                        </button>
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => paymentScreenshotInputRef.current?.click()}
+                              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 border border-gray-200"
+                            >
+                              <Upload size={13} />
+                              {activeSlot.screenshotFile ? 'Change File' : 'Choose File'}
+                            </button>
+                          </>
+                        )}
 
                         {activeSlot.screenshotFile ? (
                           <span className="text-xs text-gray-800 font-medium truncate flex items-center gap-1.5">
                             <span className="font-semibold text-be-orange truncate max-w-xs">{activeSlot.screenshotFile.name}</span>
                             <span className="text-[10px] text-gray-400">({(activeSlot.screenshotFile.size / 1024).toFixed(0)} KB)</span>
-                            <button
-                              type="button"
-                              onClick={() => setPaymentSlotsData(prev => ({
-                                ...prev,
-                                [activePaymentTab]: { ...prev[activePaymentTab], screenshotFile: null, screenshotPreview: null }
-                              }))}
-                              className="text-gray-400 hover:text-rose-500 p-0.5 cursor-pointer"
-                              title="Remove"
-                            >
-                              <X size={14} />
-                            </button>
+                            {canEditRemainingPayment && (
+                              <button
+                                type="button"
+                                onClick={() => setPaymentSlotsData(prev => ({
+                                  ...prev,
+                                  [activePaymentTab]: { ...prev[activePaymentTab], screenshotFile: null, screenshotPreview: null }
+                                }))}
+                                className="text-gray-400 hover:text-rose-500 p-0.5 cursor-pointer"
+                                title="Remove"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
                           </span>
                         ) : activeSlot.existingScreenshotName ? (
                           <span className="text-xs text-emerald-700 font-medium flex items-center gap-1 truncate">
@@ -4098,7 +4197,7 @@ export const DealDetails = () => {
                             Current: {activeSlot.existingScreenshotName}
                           </span>
                         ) : (
-                          <span className="text-xs text-gray-400">No file chosen (Optional)</span>
+                          <span className="text-xs text-gray-400 italic">No file {canEditRemainingPayment ? 'chosen (Optional)' : 'uploaded'}</span>
                         )}
                       </div>
                     </div>
@@ -4108,8 +4207,15 @@ export const DealDetails = () => {
 
               {/* Modal Footer Actions */}
               <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-2.5">
-                <span className="text-[11px] text-gray-500 font-medium">
-                  Saving will synchronize all 8 milestone payment fields with Zoho CRM.
+                <span className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5">
+                  {canEditRemainingPayment ? (
+                    'Saving will synchronize all 8 milestone payment fields with Zoho CRM.'
+                  ) : (
+                    <>
+                      <Lock size={12} className="text-amber-600 shrink-0" />
+                      Read-Only: Only Primary BDM (BDM 1: <strong className="text-gray-700">{primaryBdmName}</strong>) can modify milestone entries.
+                    </>
+                  )}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -4118,25 +4224,27 @@ export const DealDetails = () => {
                     disabled={isSubmittingPayment}
                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    Cancel
+                    {canEditRemainingPayment ? 'Cancel' : 'Close'}
                   </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmittingPayment}
-                    className="px-5 py-2 bg-be-orange hover:bg-be-orangeHover text-white text-xs font-bold rounded-lg transition-all shadow-sm hover:shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                  >
-                    {isSubmittingPayment ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin" />
-                        Updating Zoho CRM...
-                      </>
-                    ) : (
-                      <>
-                        <Check size={13} />
-                        Submit Payment
-                      </>
-                    )}
-                  </button>
+                  {canEditRemainingPayment && (
+                    <button
+                      type="submit"
+                      disabled={isSubmittingPayment}
+                      className="px-5 py-2 bg-be-orange hover:bg-be-orangeHover text-white text-xs font-bold rounded-lg transition-all shadow-sm hover:shadow flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSubmittingPayment ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" />
+                          Updating Zoho CRM...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={13} />
+                          Submit Payment
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </form>

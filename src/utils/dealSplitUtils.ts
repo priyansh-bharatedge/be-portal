@@ -294,11 +294,13 @@ export const getDealPartnerBdmId = (d: any): string => {
 
 export const getDealPrimaryBdmName = (d: any): string => {
   if (!d) return '';
+  const empName = typeof d.Employee === 'object' && d.Employee !== null ? d.Employee.name : (typeof d.Employee === 'string' ? d.Employee : '');
+  const rawEmpName = typeof d.rawZohoDeal?.Employee === 'object' && d.rawZohoDeal?.Employee !== null ? d.rawZohoDeal.Employee.name : (typeof d.rawZohoDeal?.Employee === 'string' ? d.rawZohoDeal.Employee : '');
   return (
     d.employeeName ||
     d.salesEmployee ||
-    (typeof d.Employee === 'object' && d.Employee !== null ? d.Employee.name : '') ||
-    (typeof d.rawZohoDeal?.Employee === 'object' && d.rawZohoDeal.Employee !== null ? d.rawZohoDeal.Employee.name : '') ||
+    empName ||
+    rawEmpName ||
     (typeof d.rawZohoDeal?.Owner === 'object' && d.rawZohoDeal.Owner !== null ? d.rawZohoDeal.Owner.name : '') ||
     d.owner ||
     d.rawZohoDeal?.Owner ||
@@ -311,11 +313,13 @@ export const getDealPrimaryBdmName = (d: any): string => {
 
 export const getDealPrimaryBdmId = (d: any): string => {
   if (!d) return '';
+  const empId = typeof d.Employee === 'object' && d.Employee !== null ? String(d.Employee.id || '') : (typeof d.Employee === 'string' && /^\d+$/.test(d.Employee) ? d.Employee : '');
+  const rawEmpId = typeof d.rawZohoDeal?.Employee === 'object' && d.rawZohoDeal?.Employee !== null ? String(d.rawZohoDeal.Employee.id || '') : '';
   return (
     d.employeeZohoId ||
     d.empId ||
-    (typeof d.Employee === 'object' && d.Employee !== null ? String(d.Employee.id || '') : '') ||
-    (typeof d.rawZohoDeal?.Employee === 'object' && d.rawZohoDeal.Employee !== null ? String(d.rawZohoDeal.Employee.id || '') : '') ||
+    empId ||
+    rawEmpId ||
     d.rawZohoDeal?.Employment_ID ||
     d.rawZohoDeal?.Employee_Code ||
     d.formData?.employeeZohoId ||
@@ -345,15 +349,32 @@ export const isUserPrimaryBdm = (d: any, user: any): boolean => {
   if (!d || !user) return false;
   const userName = (user.name || '').trim().toLowerCase();
   const userId = String(user.empId || user.id || user.zohoId || '').trim().toLowerCase();
+  const userEmail = String(user.email || '').trim().toLowerCase();
 
   const oName = getDealPrimaryBdmName(d).trim().toLowerCase();
   const oId = getDealPrimaryBdmId(d).trim().toLowerCase();
+  const oEmail = String(d.employeeEmail || d.formData?.employeeEmail || d.userEmail || d.formData?.userEmail || '').trim().toLowerCase();
 
   if (userId && oId && userId === oId) return true;
+  if (userEmail && oEmail && userEmail === oEmail) return true;
   if (userName && oName) {
     if (userName === oName) return true;
     if (userName.length >= 3 && oName.includes(userName)) return true;
     if (oName.length >= 3 && userName.includes(oName)) return true;
+  }
+  const altNames = [
+    d.salesEmployee,
+    d.employeeName,
+    d.formData?.salesEmployee,
+    d.formData?.employeeName,
+    typeof d.Employee === 'object' ? d.Employee?.name : d.Employee,
+    typeof d.rawZohoDeal?.Employee === 'object' ? d.rawZohoDeal.Employee?.name : d.rawZohoDeal?.Employee
+  ].filter(Boolean);
+  for (const alt of altNames) {
+    const a = String(alt).trim().toLowerCase();
+    if (a && userName && (userName === a || userName.includes(a) || a.includes(userName))) {
+      return true;
+    }
   }
   return false;
 };
