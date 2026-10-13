@@ -1037,29 +1037,61 @@ function zohoApiPlugin(): Plugin {
     { amt: 'R8_Received_amount', date: 'Date_of_financedate_change', bdm1: 'R8_Received_by_BDM1', bdm2: 'R8_Received_by_BDM2' },
   ];
 
-  for (const s of rPaymentSlots) {
-    const rawAmt = deal[s.amt] ?? fd[s.amt] ?? deal.rawZohoDeal?.[s.amt];
+  for (let idx = 0; idx < rPaymentSlots.length; idx++) {
+    const s = rPaymentSlots[idx];
+    const slotNum = idx + 1;
+    const rawAmt = deal[s.amt] ?? fd[s.amt] ?? deal.rawZohoDeal?.[s.amt] ??
+                   deal[`R${slotNum}_Received_Amount`] ?? deal[`R${slotNum}_Received_amount`] ??
+                   deal.rPaymentSlots?.[slotNum]?.amount;
     const hasAmt = rawAmt !== undefined && rawAmt !== null && String(rawAmt).trim() !== '' && Number(String(rawAmt).replace(/[^0-9.]/g, '')) > 0;
     if (hasAmt) {
-      payload[s.amt] = String(rawAmt).trim();
-      const rawDate = deal[s.date] ?? fd[s.date] ?? deal.rawZohoDeal?.[s.date];
+      const cleanAmt = String(rawAmt).trim();
+      payload[s.amt] = cleanAmt;
+      if (slotNum === 1) payload.R1_Received_Amount = cleanAmt;
+      if (slotNum === 2) payload.R2_Received_Amount = cleanAmt;
+
+      const rawDate = deal[s.date] ?? fd[s.date] ?? deal.rawZohoDeal?.[s.date] ??
+                      deal[`R${slotNum}_Payment_Date`] ?? deal.rPaymentSlots?.[slotNum]?.date;
       if (rawDate) {
         const fDate = formatDateForZoho(rawDate);
-        if (fDate) payload[s.date] = fDate;
+        if (fDate) {
+          payload[s.date] = fDate;
+          if (slotNum === 1) payload.R1_Payment_Date = fDate;
+          if (slotNum === 2) payload.R2_Payment_Date = fDate;
+        }
       }
-      const rawBdm1 = deal[s.bdm1] ?? fd[s.bdm1] ?? deal.rawZohoDeal?.[s.bdm1];
+
+      const rawBdm1 = deal[s.bdm1] ?? fd[s.bdm1] ?? deal.rawZohoDeal?.[s.bdm1] ??
+                      deal[`R${slotNum}_Received_by_BDM1`] ?? deal[`R${slotNum}_Received_BDM1`] ??
+                      deal.rPaymentSlots?.[slotNum]?.bdm1Name;
       if (rawBdm1 && String(rawBdm1).trim() !== '') {
-        payload[s.bdm1] = String(rawBdm1).trim();
+        const cleanBdm1 = String(rawBdm1).trim();
+        payload[s.bdm1] = cleanBdm1;
+        if (slotNum === 6) {
+          payload.R6_Received_BDM1 = cleanBdm1;
+          payload.R6_Received_by_BDM1 = cleanBdm1;
+        }
       }
-      const rawBdm2 = deal[s.bdm2] ?? fd[s.bdm2] ?? deal.rawZohoDeal?.[s.bdm2];
+
+      const rawBdm2 = deal[s.bdm2] ?? fd[s.bdm2] ?? deal.rawZohoDeal?.[s.bdm2] ??
+                      deal[`R${slotNum}_Received_by_BDM2`] ?? deal[`R${slotNum}_Received_BDM2`] ??
+                      deal.rPaymentSlots?.[slotNum]?.bdm2Name;
       if (rawBdm2 && String(rawBdm2).trim() !== '' && String(rawBdm2).toLowerCase() !== 'none') {
-        payload[s.bdm2] = String(rawBdm2).trim();
+        const cleanBdm2 = String(rawBdm2).trim();
+        payload[s.bdm2] = cleanBdm2;
+        if (slotNum === 6) {
+          payload.R6_Received_BDM2 = cleanBdm2;
+          payload.R6_Received_by_BDM2 = cleanBdm2;
+        }
       }
-    } else if (deal.zohoId || deal.id) {
-      // Clear unfilled remaining payment fields in Zoho CRM Deal record
+    } else if (deal[s.amt] === '' || deal[s.amt] === null || fd[s.amt] === '' || fd[s.amt] === null) {
+      // Explicitly cleared slot
       payload[s.amt] = null;
+      if (slotNum === 1) payload.R1_Received_Amount = null;
+      if (slotNum === 2) payload.R2_Received_Amount = null;
       if (s.date !== 'Closing_Date') {
         payload[s.date] = null;
+        if (slotNum === 2) payload.R2_Payment_Date = null;
       }
       payload[s.bdm1] = null;
       payload[s.bdm2] = null;
@@ -1068,17 +1100,23 @@ function zohoApiPlugin(): Plugin {
 
   // Milestone Payment Verifications & Bank Types (R1 to R8)
   for (let i = 1; i <= 8; i++) {
-    const verifVal = deal[`R${i}_Payment_Verification`] ?? fd[`R${i}_Payment_Verification`] ?? deal.rawZohoDeal?.[`R${i}_Payment_Verification`];
+    const verifVal = deal[`R${i}_Payment_Verification`] ?? fd[`R${i}_Payment_Verification`] ?? deal.rawZohoDeal?.[`R${i}_Payment_Verification`] ?? deal.rPaymentSlots?.[i]?.isVerified;
     if (verifVal !== undefined && verifVal !== null) {
       payload[`R${i}_Payment_Verification`] = Boolean(verifVal === true || verifVal === 'true');
       if (i === 1) payload.R1_Payment_verifications = Boolean(verifVal === true || verifVal === 'true');
       if (i === 2) payload.R2_Payment_verifications = Boolean(verifVal === true || verifVal === 'true');
     }
-    const bankVal = deal[`R${i}_Bank_type`] ?? fd[`R${i}_Bank_type`] ?? deal.rawZohoDeal?.[`R${i}_Bank_type`];
+    const bankVal = deal[`R${i}_Bank_type`] ?? fd[`R${i}_Bank_type`] ?? deal.rawZohoDeal?.[`R${i}_Bank_type`] ?? deal.rPaymentSlots?.[i]?.bankType;
     if (bankVal !== undefined && bankVal !== null && String(bankVal).trim() !== '') {
       payload[`R${i}_Bank_type`] = String(bankVal).trim();
       if (i === 1) payload.R1_Bank_details = String(bankVal).trim();
       if (i === 2) payload.R2_Bank_details = String(bankVal).trim();
+    }
+  }
+
+  if (payload.BDM_names) {
+    if (typeof payload.BDM_names === 'string' || !payload.BDM_names.id || !/^\d{15,}$/.test(String(payload.BDM_names.id))) {
+      delete payload.BDM_names;
     }
   }
 

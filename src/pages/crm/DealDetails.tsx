@@ -1895,7 +1895,13 @@ export const DealDetails = () => {
         const hasAmt = amtClean !== '' && parseNum(amtClean) > 0;
         if (hasAmt) {
           rFieldsMap[slot.amountField] = amtClean;
+          if (slot.index === 1) rFieldsMap.R1_Received_Amount = amtClean;
+          if (slot.index === 2) rFieldsMap.R2_Received_Amount = amtClean;
+
           rFieldsMap[slot.dateField] = item.date || new Date().toISOString().split('T')[0];
+          if (slot.index === 1) rFieldsMap.R1_Payment_Date = rFieldsMap[slot.dateField];
+          if (slot.index === 2) rFieldsMap.R2_Payment_Date = rFieldsMap[slot.dateField];
+
           rFieldsMap[slot.bdm1Field] = item.bdm1Name || primaryBdm || 'Admin';
           rFieldsMap[slot.bdm2Field] = (item.bdm2Name && item.bdm2Name.toLowerCase() !== 'none') ? item.bdm2Name : '';
           if (slotScreenshots[slot.index] || item.existingScreenshotName) {
@@ -1909,7 +1915,11 @@ export const DealDetails = () => {
         } else {
           // Unfilled slot - clear remaining payment fields so dummy dates/BDMs are never sent to Zoho
           rFieldsMap[slot.amountField] = '';
+          if (slot.index === 1) rFieldsMap.R1_Received_Amount = '';
+          if (slot.index === 2) rFieldsMap.R2_Received_Amount = '';
           rFieldsMap[slot.dateField] = '';
+          if (slot.index === 1) rFieldsMap.R1_Payment_Date = '';
+          if (slot.index === 2) rFieldsMap.R2_Payment_Date = '';
           rFieldsMap[slot.bdm1Field] = '';
           rFieldsMap[slot.bdm2Field] = '';
           rFieldsMap[slot.screenshotField] = '';
@@ -2002,8 +2012,8 @@ export const DealDetails = () => {
           Payment_Date: activeDate,
           Payment_Type: 'Online',
           Payment_status: isFullPaid ? 'Full amount paid' : 'Partially paid',
-          Employee: bdm1Id ? { id: bdm1Id, name: bdm1Name } : (typeof raw.Employee === 'object' ? raw.Employee : { name: bdm1Name }),
-          BDM_names: bdm1Id ? { id: bdm1Id, name: bdm1Name } : (typeof raw.BDM_names === 'object' ? raw.BDM_names : { name: bdm1Name }),
+          Employee: bdm1Id && /^\d{15,}$/.test(String(bdm1Id)) ? { id: String(bdm1Id), name: bdm1Name } : (typeof raw.Employee === 'object' && raw.Employee?.id ? raw.Employee : { name: bdm1Name }),
+          BDM_names: bdm1Id && /^\d{15,}$/.test(String(bdm1Id)) ? { id: String(bdm1Id), name: bdm1Name } : (typeof raw.BDM_names === 'object' && raw.BDM_names?.id && /^\d{15,}$/.test(String(raw.BDM_names.id)) ? raw.BDM_names : null),
           Has_Partner_BDM: hasPartner,
           Partner_BDM: hasPartner && bdm2Id ? { id: bdm2Id, name: bdm2Name } : (hasPartner ? { name: bdm2Name } : null),
           Partner_BDM_Name: bdm2Name,
@@ -2038,7 +2048,7 @@ export const DealDetails = () => {
       if (zohoRes.success) {
         setWorkflowToast({ type: 'success', message: 'Payment recorded and both BDM records synchronized with Zoho CRM successfully!' });
       } else {
-        setWorkflowToast({ type: 'success', message: 'Payment recorded locally. Changes queued for server sync.' });
+        setWorkflowToast({ type: 'error', message: zohoRes.message || 'Payment recorded locally, but failed to sync to Zoho CRM.' });
       }
 
       setIsPaymentModalOpen(false);
