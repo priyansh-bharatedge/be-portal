@@ -1311,7 +1311,7 @@ export async function verifyZohoMilestonePayment(
   bankType: 'BSPL' | 'BSAPL' | string,
   isVerified: boolean = true
 ): Promise<ZohoApiResponse> {
-  const payload: any = { id: dealZohoId, zohoId: dealZohoId };
+  const payload: any = { id: dealZohoId, zohoId: dealZohoId, isPartial: true };
 
   if (slotIndex === 1) {
     payload.R1_Payment_Verification = isVerified;
@@ -1370,7 +1370,7 @@ export async function updateZohoMilestoneBank(
   slotIndex: number,
   bankType: 'BSPL' | 'BSAPL' | string
 ): Promise<ZohoApiResponse> {
-  const payload: any = { id: dealZohoId, zohoId: dealZohoId };
+  const payload: any = { id: dealZohoId, zohoId: dealZohoId, isPartial: true };
   payload[`R${slotIndex}_Bank_type`] = bankType;
   if (slotIndex === 1) {
     payload.R1_Bank_details = bankType;

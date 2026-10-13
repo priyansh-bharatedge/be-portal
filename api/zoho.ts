@@ -1058,6 +1058,22 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
     }
   }
 
+  // Milestone Payment Verifications & Bank Types (R1 to R8)
+  for (let i = 1; i <= 8; i++) {
+    const verifVal = deal[`R${i}_Payment_Verification`] ?? fd[`R${i}_Payment_Verification`] ?? deal.rawZohoDeal?.[`R${i}_Payment_Verification`];
+    if (verifVal !== undefined && verifVal !== null) {
+      payload[`R${i}_Payment_Verification`] = Boolean(verifVal === true || verifVal === 'true');
+      if (i === 1) payload.R1_Payment_verifications = Boolean(verifVal === true || verifVal === 'true');
+      if (i === 2) payload.R2_Payment_verifications = Boolean(verifVal === true || verifVal === 'true');
+    }
+    const bankVal = deal[`R${i}_Bank_type`] ?? fd[`R${i}_Bank_type`] ?? deal.rawZohoDeal?.[`R${i}_Bank_type`];
+    if (bankVal !== undefined && bankVal !== null && String(bankVal).trim() !== '') {
+      payload[`R${i}_Bank_type`] = String(bankVal).trim();
+      if (i === 1) payload.R1_Bank_details = String(bankVal).trim();
+      if (i === 2) payload.R2_Bank_details = String(bankVal).trim();
+    }
+  }
+
   return payload;
 }
 
@@ -1905,8 +1921,24 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     // 3. Insert / Update Deal
     if ((action === 'insert-deal' || action === 'update-deal') && (method === 'POST' || method === 'PUT')) {
       const deal = await getRequestBody(req);
-      const payload = buildDealZohoPayload(deal);
-      let dealZohoId = deal.zohoId || payload.id;
+      const isPartial = Boolean(
+        deal.isPartial ||
+        (action === 'update-deal' && !deal.formData && !deal.servicesData && !deal.client && !deal.company && !deal.totals && !deal.service)
+      );
+
+      let dealZohoId = deal.zohoId || deal.id;
+      let payload: Record<string, any>;
+      if (isPartial) {
+        payload = { id: dealZohoId };
+        for (const [k, v] of Object.entries(deal)) {
+          if (k !== 'zohoId' && k !== 'isPartial' && k !== 'id') {
+            payload[k] = v;
+          }
+        }
+      } else {
+        payload = buildDealZohoPayload(deal);
+        if (payload.id) dealZohoId = payload.id;
+      }
       let isUpdate = Boolean(dealZohoId || action === 'update-deal');
 
       let accessToken = await getAccessToken();
@@ -1936,6 +1968,8 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
       const httpMethod = isUpdate ? 'PUT' : 'POST';
       const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
+
+      if (!isPartial) {
 
       // Dynamically resolve Company lookup to valid Zoho numeric record ID in custom Companies module
       const compLookupInfo = {
@@ -2018,6 +2052,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       if (isUpdate && (dealZohoId || deal.zohoId || payload.id)) {
         const targetZohoId = String(dealZohoId || deal.zohoId || payload.id);
         await reconcileDealSubformsWithZoho(targetZohoId, payload, accessToken, apiBase, moduleName);
+      }
       }
 
       let crmRes = await fetch(crmEndpoint, {
