@@ -1921,12 +1921,17 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     // 3. Insert / Update Deal
     if ((action === 'insert-deal' || action === 'update-deal') && (method === 'POST' || method === 'PUT')) {
       const deal = await getRequestBody(req);
+      let dealZohoId = (deal.zohoId && /^\d{15,}$/.test(String(deal.zohoId).trim()))
+        ? String(deal.zohoId).trim()
+        : (deal.id && /^\d{15,}$/.test(String(deal.id).trim()))
+        ? String(deal.id).trim()
+        : null;
+
       const isPartial = Boolean(
         deal.isPartial ||
-        (action === 'update-deal' && !deal.formData && !deal.servicesData && !deal.client && !deal.company && !deal.totals && !deal.service)
+        (dealZohoId && action === 'update-deal' && !deal.formData && !deal.servicesData && !deal.client && !deal.company && !deal.totals && !deal.service)
       );
 
-      let dealZohoId = deal.zohoId || deal.id;
       let payload: Record<string, any>;
       if (isPartial) {
         payload = { id: dealZohoId };
@@ -1937,9 +1942,16 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         }
       } else {
         payload = buildDealZohoPayload(deal);
-        if (payload.id) dealZohoId = payload.id;
+        if (payload.id && !dealZohoId && /^\d{15,}$/.test(String(payload.id).trim())) {
+          dealZohoId = String(payload.id).trim();
+        }
+        if (dealZohoId) {
+          payload.id = dealZohoId;
+        } else {
+          delete payload.id;
+        }
       }
-      let isUpdate = Boolean(dealZohoId || action === 'update-deal');
+      let isUpdate = Boolean(dealZohoId || (action === 'update-deal' && payload.id));
 
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';

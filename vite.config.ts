@@ -1779,12 +1779,17 @@ function zohoApiPlugin(): Plugin {
           req.on('end', async () => {
             try {
               const deal = JSON.parse(body);
+              let dealZohoId = (deal.zohoId && /^\d{15,}$/.test(String(deal.zohoId).trim()))
+                ? String(deal.zohoId).trim()
+                : (deal.id && /^\d{15,}$/.test(String(deal.id).trim()))
+                ? String(deal.id).trim()
+                : null;
+
               const isPartial = Boolean(
                 deal.isPartial ||
-                (pathname === '/api/zoho/update-deal' && !deal.formData && !deal.servicesData && !deal.client && !deal.company && !deal.totals && !deal.service)
+                (dealZohoId && pathname === '/api/zoho/update-deal' && !deal.formData && !deal.servicesData && !deal.client && !deal.company && !deal.totals && !deal.service)
               );
 
-              let dealZohoId = deal.zohoId || deal.id;
               let payload: Record<string, any>;
               if (isPartial) {
                 payload = { id: dealZohoId };
@@ -1795,9 +1800,16 @@ function zohoApiPlugin(): Plugin {
                 }
               } else {
                 payload = buildDealZohoPayload(deal);
-                if (payload.id) dealZohoId = payload.id;
+                if (payload.id && !dealZohoId && /^\d{15,}$/.test(String(payload.id).trim())) {
+                  dealZohoId = String(payload.id).trim();
+                }
+                if (dealZohoId) {
+                  payload.id = dealZohoId;
+                } else {
+                  delete payload.id;
+                }
               }
-              let isUpdate = Boolean(dealZohoId || pathname === '/api/zoho/update-deal');
+              let isUpdate = Boolean(dealZohoId || (pathname === '/api/zoho/update-deal' && payload.id));
 
               let accessToken = await getAccessToken(env);
               const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
