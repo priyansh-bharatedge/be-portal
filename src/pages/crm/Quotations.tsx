@@ -182,9 +182,7 @@ export const Quotations = () => {
         errors.email = 'Enter a valid email address';
       }
 
-      if (!formData.panCard) {
-        errors.panCard = 'PAN Card is required';
-      } else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(formData.panCard)) {
+      if (formData.panCard && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(formData.panCard)) {
         errors.panCard = 'Enter a valid PAN format (e.g., ABCDE1234F)';
       }
 
@@ -1523,7 +1521,7 @@ export const Quotations = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">PAN Card *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">PAN Card <span className="text-gray-400 font-normal">(Optional)</span></label>
                         <input type="text" value={formData.panCard} onChange={e => setFormData({ ...formData, panCard: e.target.value.toUpperCase() })} className={`w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-be-orange focus:border-be-orange outline-none uppercase ${formErrors.panCard ? 'border-red-500' : 'border-gray-300'}`} placeholder="ABCDE1234F" />
                         {formErrors.panCard && <p className="text-red-500 text-xs mt-1">{formErrors.panCard}</p>}
                       </div>

@@ -40,8 +40,8 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
   items.forEach((item: any) => {
     const qty = item.quantity || 1;
     const totalNum = item.totalAmount ? Number(item.totalAmount) : 0;
-    const unitPrice = totalNum > 0 
-      ? Number(((totalNum / 1.18) / qty).toFixed(2)) 
+    const unitPrice = totalNum > 0
+      ? Number(((totalNum / 1.18) / qty).toFixed(2))
       : (typeof item.baseAmount === 'number' ? item.baseAmount : Number(item.baseAmount) || 0);
     calculatedSubtotal += unitPrice * qty;
   });
@@ -50,8 +50,8 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
   const taxAmount = quotation.totals?.totalGst !== undefined ? quotation.totals.totalGst : Math.round(subtotal * 0.18);
   const grandTotal = quotation.totals?.grandTotal !== undefined ? quotation.totals.grandTotal : (subtotal + taxAmount);
 
-  const amountReceivedNum = quotation.totals?.amountReceived !== undefined 
-    ? Number(quotation.totals.amountReceived) || 0 
+  const amountReceivedNum = quotation.totals?.amountReceived !== undefined
+    ? Number(quotation.totals.amountReceived) || 0
     : (Number(String(quotation.received || '').replace(/[^0-9.-]+/g, '')) || 0);
 
   const pendingAmountNum = quotation.totals?.pendingAmount !== undefined
@@ -61,21 +61,21 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
   return (
     <div className={`relative max-w-4xl mx-auto bg-white rounded-xl shadow-lg border border-orange-200 overflow-hidden font-sans text-gray-800 ${className}`}>
       {/* Decorative corner geometric shapes */}
-      <div 
+      <div
         className="absolute top-0 right-0 w-0 h-0 border-solid border-t-0 border-r-[170px] border-b-[170px] border-l-0 border-t-transparent border-r-orange-300 border-b-transparent border-l-transparent opacity-80 pointer-events-none z-10"
         style={{ borderRightColor: '#fdba74' }}
       >
-        <div 
+        <div
           className="absolute top-0 right-[-170px] w-0 h-0 border-solid border-t-0 border-r-[125px] border-b-[125px] border-l-0 border-t-transparent border-b-transparent border-l-transparent opacity-95"
           style={{ borderRightColor: '#ea580c' }}
         />
       </div>
 
-      <div 
+      <div
         className="absolute bottom-0 left-0 w-0 h-0 border-solid border-t-[170px] border-r-0 border-b-0 border-l-[170px] border-t-transparent border-r-transparent border-b-transparent border-l-orange-300 opacity-80 pointer-events-none z-10"
         style={{ borderLeftColor: '#fdba74' }}
       >
-        <div 
+        <div
           className="absolute bottom-0 left-[-170px] w-0 h-0 border-solid border-t-[125px] border-r-0 border-b-0 border-l-[125px] border-t-transparent border-r-transparent border-b-transparent opacity-95"
           style={{ borderLeftColor: '#ffedd5' }}
         />
@@ -86,9 +86,9 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
         {/* Header Branding */}
         <div className="text-center mb-6">
           <div className="flex justify-center items-center mb-2">
-            <img 
-              src={BHARATEDGE_LOGO_BASE64} 
-              alt="BharatEdge Services" 
+            <img
+              src={BHARATEDGE_LOGO_BASE64}
+              alt="BharatEdge Services"
               className="h-20 sm:h-24 w-auto max-w-[340px] object-contain"
             />
           </div>
@@ -165,8 +165,8 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
                 {items.map((item: any, idx: number) => {
                   const qty = item.quantity || 1;
                   const totalNum = item.totalAmount ? Number(item.totalAmount) : 0;
-                  const unitPrice = totalNum > 0 
-                    ? Number(((totalNum / 1.18) / qty).toFixed(2)) 
+                  const unitPrice = totalNum > 0
+                    ? Number(((totalNum / 1.18) / qty).toFixed(2))
                     : (typeof item.baseAmount === 'number' ? item.baseAmount : Number(item.baseAmount) || 0);
                   const itemTotal = unitPrice * qty;
                   return (
@@ -215,9 +215,7 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
             TERMS AND CONDITIONS:
           </div>
           <ul className="list-disc pl-5 text-xs text-gray-600 space-y-1.5 leading-relaxed">
-            <li><span className="font-semibold text-gray-900">Payment Terms:</span> 50% advance upon quotation confirmation, remaining balance due prior to delivery or milestone sign-off.</li>
-            <li><span className="font-semibold text-gray-900">Delivery Time:</span> Estimated project onboarding & initiation within 2-5 business days upon receipt of required documentation.</li>
-            <li><span className="font-semibold text-gray-900">Validity:</span> This quotation is valid for 30 days from the date of issue.</li>
+            <li><span className="font-semibold text-gray-900">Validity:</span> This quotation is valid for 7 days from the date of issue.</li>
             <li><span className="font-semibold text-gray-900">Taxes & Fees:</span> GST @ 18% is applicable as per government statutory guidelines.</li>
             <li><span className="font-semibold text-gray-900">Confidentiality & Support:</span> All project discussions and data remain strictly confidential. For assistance, reach out to support@bharat-edge.com.</li>
           </ul>

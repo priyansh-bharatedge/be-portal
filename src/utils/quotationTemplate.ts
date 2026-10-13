@@ -119,8 +119,8 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
   const renderedRows = items.map((item) => {
     const qty = item.quantity || 1;
     const totalNum = item.totalAmount ? Number(item.totalAmount) : 0;
-    const unitPrice = totalNum > 0 
-      ? Number(((totalNum / 1.18) / qty).toFixed(2)) 
+    const unitPrice = totalNum > 0
+      ? Number(((totalNum / 1.18) / qty).toFixed(2))
       : (typeof item.baseAmount === 'number' ? item.baseAmount : Number(item.baseAmount) || 0);
     const totalPrice = unitPrice * qty;
     calculatedSubtotal += totalPrice;
@@ -138,9 +138,9 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
   const subtotal = q.totals?.subtotal !== undefined ? q.totals.subtotal : calculatedSubtotal;
   const taxAmount = q.totals?.totalGst !== undefined ? q.totals.totalGst : Math.round(subtotal * 0.18);
   const grandTotal = q.totals?.grandTotal !== undefined ? q.totals.grandTotal : (subtotal + taxAmount);
-  
-  const amountReceivedNum = q.totals?.amountReceived !== undefined 
-    ? Number(q.totals.amountReceived) || 0 
+
+  const amountReceivedNum = q.totals?.amountReceived !== undefined
+    ? Number(q.totals.amountReceived) || 0
     : (Number(String(q.received || '').replace(/[^0-9.-]+/g, '')) || 0);
 
   const pendingAmountNum = q.totals?.pendingAmount !== undefined
@@ -702,9 +702,7 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
       <div class="terms-section">
         <div class="section-heading">TERMS AND CONDITIONS:</div>
         <ul class="terms-list">
-          <li><strong>Payment Terms:</strong> 50% advance upon quotation confirmation, remaining balance due prior to delivery or milestone sign-off.</li>
-          <li><strong>Delivery Time:</strong> Estimated project onboarding & initiation within 2-5 business days upon receipt of required documentation.</li>
-          <li><strong>Validity:</strong> This quotation is valid for 30 days from the date of issue.</li>
+          <li><strong>Validity:</strong> This quotation is valid for 7 days from the date of issue.</li>
           <li><strong>Taxes & Fees:</strong> GST @ 18% is applicable as per government statutory guidelines.</li>
           <li><strong>Confidentiality & Support:</strong> All project discussions and data remain strictly confidential. For assistance, reach out to support@bharat-edge.com.</li>
         </ul>
@@ -736,13 +734,13 @@ export const downloadQuotationPDF = async (quotation: QuotationPrintData): Promi
   container.style.zIndex = '-9999';
   container.style.pointerEvents = 'none';
   container.style.background = '#ffffff';
-  
+
   const fullHtml = generateQuotationHTML(quotation);
   const parser = new DOMParser();
   const parsedDoc = parser.parseFromString(fullHtml, 'text/html');
   const styleElement = parsedDoc.querySelector('style');
   const documentWrapper = parsedDoc.querySelector('.document-wrapper');
-  
+
   if (styleElement) {
     container.appendChild(styleElement.cloneNode(true));
   }
@@ -751,17 +749,17 @@ export const downloadQuotationPDF = async (quotation: QuotationPrintData): Promi
   } else {
     container.innerHTML = fullHtml;
   }
-  
+
   document.body.appendChild(container);
-  
+
   try {
     if (document.fonts) {
       await document.fonts.ready;
     }
     await new Promise((resolve) => setTimeout(resolve, 350));
-    
+
     const targetElement = container.querySelector('.document-wrapper') as HTMLElement || container;
-    
+
     const canvas = await html2canvas(targetElement, {
       scale: 2,
       useCORS: true,
@@ -771,19 +769,19 @@ export const downloadQuotationPDF = async (quotation: QuotationPrintData): Promi
       width: 794,
       windowWidth: 794
     });
-    
+
     const imgData = canvas.toDataURL('image/jpeg', 0.98);
-    
+
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
     });
-    
+
     const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
     const pdfPageHeight = pdf.internal.pageSize.getHeight(); // 297mm
     const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-    
+
     pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, Math.min(imgHeight, pdfPageHeight));
     pdf.save(`Quotation_${quotation.id || 'QT'}.pdf`);
   } catch (err) {
@@ -820,13 +818,13 @@ export const generateQuotationPDFBlob = async (quotation: QuotationPrintData): P
   container.style.zIndex = '-9999';
   container.style.pointerEvents = 'none';
   container.style.background = '#ffffff';
-  
+
   const fullHtml = generateQuotationHTML(quotation);
   const parser = new DOMParser();
   const parsedDoc = parser.parseFromString(fullHtml, 'text/html');
   const styleElement = parsedDoc.querySelector('style');
   const documentWrapper = parsedDoc.querySelector('.document-wrapper');
-  
+
   if (styleElement) {
     container.appendChild(styleElement.cloneNode(true));
   }
@@ -835,17 +833,17 @@ export const generateQuotationPDFBlob = async (quotation: QuotationPrintData): P
   } else {
     container.innerHTML = fullHtml;
   }
-  
+
   document.body.appendChild(container);
-  
+
   try {
     if (document.fonts) {
       await document.fonts.ready;
     }
     await new Promise((resolve) => setTimeout(resolve, 350));
-    
+
     const targetElement = (container.querySelector('.document-wrapper') as HTMLElement) || container;
-    
+
     const canvas = await html2canvas(targetElement, {
       scale: 2,
       useCORS: true,
@@ -855,19 +853,19 @@ export const generateQuotationPDFBlob = async (quotation: QuotationPrintData): P
       width: 794,
       windowWidth: 794
     });
-    
+
     const imgData = canvas.toDataURL('image/jpeg', 0.98);
-    
+
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
     });
-    
+
     const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
     const pdfPageHeight = pdf.internal.pageSize.getHeight(); // 297mm
     const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-    
+
     pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, Math.min(imgHeight, pdfPageHeight));
     return pdf.output('blob');
   } catch (err) {
