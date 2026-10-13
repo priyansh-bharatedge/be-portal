@@ -1290,12 +1290,75 @@ export async function saveOrUpdateZohoDeal(deal: any): Promise<ZohoApiResponse> 
           deal.zohoId = zohoId;
         }
       }
-    } catch (_) {}
+    } catch (_) { }
   }
   if (zohoId) {
     return updateZohoDeal({ ...deal, zohoId });
   }
   return insertZohoDeal(deal);
+}
+
+/**
+ * Verifies a milestone remaining payment (R1 to R8) with payment verification boolean and bank entity (BSPL / BSAPL).
+ * Synchronizes with Zoho CRM Deal custom fields:
+ * - R1: R1_Payment_Verification, R1_Payment_verifications, R1_Bank_type, R1_Bank_details
+ * - R2: R2_Payment_Verification, R2_Payment_verifications, R2_Bank_type, R2_Bank_details
+ * - R3..R8: R{i}_Payment_Verification, R{i}_Bank_type
+ */
+export async function verifyZohoMilestonePayment(
+  dealZohoId: string,
+  slotIndex: number,
+  bankType: 'BSPL' | 'BSAPL' | string,
+  isVerified: boolean = true
+): Promise<ZohoApiResponse> {
+  const payload: any = { id: dealZohoId, zohoId: dealZohoId };
+
+  if (slotIndex === 1) {
+    payload.R1_Payment_Verification = isVerified;
+    payload.R1_Payment_verifications = isVerified;
+    if (bankType) {
+      payload.R1_Bank_type = bankType;
+      payload.R1_Bank_details = bankType;
+    }
+  } else if (slotIndex === 2) {
+    payload.R2_Payment_Verification = isVerified;
+    payload.R2_Payment_verifications = isVerified;
+    if (bankType) {
+      payload.R2_Bank_type = bankType;
+      payload.R2_Bank_details = bankType;
+    }
+  } else {
+    payload[`R${slotIndex}_Payment_Verification`] = isVerified;
+    if (bankType) {
+      payload[`R${slotIndex}_Bank_type`] = bankType;
+    }
+  }
+
+  // Update local storage cache as well
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('be_deals');
+      if (saved) {
+        const deals = JSON.parse(saved);
+        const updated = deals.map((d: any) => {
+          if (d.zohoId === dealZohoId || d.id === dealZohoId) {
+            return {
+              ...d,
+              ...payload,
+              rawZohoDeal: {
+                ...(d.rawZohoDeal || {}),
+                ...payload
+              }
+            };
+          }
+          return d;
+        });
+        localStorage.setItem('be_deals', JSON.stringify(updated));
+      }
+    } catch (_) {}
+  }
+
+  return updateZohoDeal(payload);
 }
 
 /**
@@ -1561,7 +1624,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     resolvedClient = existingDeal?.client || 'Client';
   }
 
-  const resolvedCompany = 
+  const resolvedCompany =
     (rawZoho.Company_name && !/^\(\d+\)$/.test(rawZoho.Company_name.trim()) ? rawZoho.Company_name.trim() : '') ||
     (rawZoho.Company_name_bp && !/^\(\d+\)$/.test(rawZoho.Company_name_bp.trim()) ? rawZoho.Company_name_bp.trim() : '') ||
     (rawZoho.Company_name_cs && !/^\(\d+\)$/.test(rawZoho.Company_name_cs.trim()) ? rawZoho.Company_name_cs.trim() : '') ||
@@ -1711,37 +1774,37 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   const gst = rawZoho.Gst_number || rawZoho.GST_Number || rawZoho.GSTIN || existingDeal?.formData?.gstNumber || '';
   const panVal = rawZoho.Pan_number || rawZoho.PAN_Number || rawZoho.PAN_Card || rawZoho.PAN || existingDeal?.formData?.panCard || '';
   const aadhVal = rawZoho.Aadhaar_Card || rawZoho.Aadhaar_number || rawZoho.Aadhaar_Number || rawZoho.Aadhar_Card || rawZoho.Aadhaar || existingDeal?.formData?.aadhaarCard || '';
-  
+
   const partnerBdmLookup = typeof rawZoho.Partner_BDM === 'object' && rawZoho.Partner_BDM !== null ? rawZoho.Partner_BDM : null;
 
-  const partnerBdmName = 
+  const partnerBdmName =
     partnerBdmLookup?.name ||
-    rawZoho.Partner_BDM_Name || 
-    rawZoho.Partner_BDM_name || 
-    rawZoho.Partner_BDM_Names || 
-    rawZoho.Partner_BDM_Names_bp || 
-    rawZoho.Partner_BDM_Names_st || 
+    rawZoho.Partner_BDM_Name ||
+    rawZoho.Partner_BDM_name ||
+    rawZoho.Partner_BDM_Names ||
+    rawZoho.Partner_BDM_Names_bp ||
+    rawZoho.Partner_BDM_Names_st ||
     rawZoho.partner_bdm_name ||
     existingDeal?.partnerBdmName ||
     existingDeal?.formData?.partnerBdmName ||
     '';
 
-  const partnerBdmId = 
+  const partnerBdmId =
     partnerBdmLookup?.id ? String(partnerBdmLookup.id) : (
-    rawZoho.Partner_BDM_ID || 
-    rawZoho.partner_bdm_id || 
-    (typeof rawZoho.Partner_BDM === 'string' && /^\d+$/.test(rawZoho.Partner_BDM) ? rawZoho.Partner_BDM : '') ||
-    existingDeal?.partnerBdmId ||
-    existingDeal?.formData?.partnerBdmId ||
-    '');
+      rawZoho.Partner_BDM_ID ||
+      rawZoho.partner_bdm_id ||
+      (typeof rawZoho.Partner_BDM === 'string' && /^\d+$/.test(rawZoho.Partner_BDM) ? rawZoho.Partner_BDM : '') ||
+      existingDeal?.partnerBdmId ||
+      existingDeal?.formData?.partnerBdmId ||
+      '');
 
   const hasPartnerBdm = Boolean(
     partnerBdmLookup?.id ||
     partnerBdmName ||
     partnerBdmId ||
-    rawZoho.Has_Partner_BDM || 
-    rawZoho.has_partner_bdm || 
-    (rawZoho.Partner_BDM && rawZoho.Partner_BDM !== 'false') || 
+    rawZoho.Has_Partner_BDM ||
+    rawZoho.has_partner_bdm ||
+    (rawZoho.Partner_BDM && rawZoho.Partner_BDM !== 'false') ||
     rawZoho.Partner_BDM_amount ||
     existingDeal?.hasPartnerBdm ||
     existingDeal?.formData?.hasPartnerBdm
@@ -1768,11 +1831,11 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     status = stage;
   }
 
-  const serviceTitle = servicesSubform.length > 0 
-    ? (servicesSubform.length === 1 ? servicesSubform[0].name : `${servicesSubform.length} Services`) 
+  const serviceTitle = servicesSubform.length > 0
+    ? (servicesSubform.length === 1 ? servicesSubform[0].name : `${servicesSubform.length} Services`)
     : extractZohoName(rawZoho.Choose_Wisely || rawZoho.Service_Name || (rawZoho.Deal_Name && rawZoho.Deal_Name.includes(' - ') ? rawZoho.Deal_Name.split(' - ').slice(1).join(' - ').trim() : (existingDeal?.service || 'Services')));
 
-  const employeeName = 
+  const employeeName =
     (rawZoho.Employee && typeof rawZoho.Employee === 'object' ? rawZoho.Employee.name : (typeof rawZoho.Employee === 'string' && !/^\d+$/.test(rawZoho.Employee) ? rawZoho.Employee : '')) ||
     rawZoho.employeeName ||
     rawZoho.salesEmployee ||
@@ -1781,13 +1844,13 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     existingDeal?.salesEmployee ||
     '';
 
-  const employeeZohoId = 
+  const employeeZohoId =
     (rawZoho.Employee && typeof rawZoho.Employee === 'object' ? rawZoho.Employee.id : (typeof rawZoho.Employee === 'string' && /^\d+$/.test(rawZoho.Employee) ? rawZoho.Employee : null)) ||
     rawZoho.employeeZohoId ||
     existingDeal?.employeeZohoId ||
     '';
 
-  const compZohoId = 
+  const compZohoId =
     (rawZoho.Company && typeof rawZoho.Company === 'object' ? rawZoho.Company.id : (typeof rawZoho.Company === 'string' && /^\d+$/.test(rawZoho.Company) ? rawZoho.Company : null)) ||
     (rawZoho.Companies && typeof rawZoho.Companies === 'object' ? rawZoho.Companies.id : (typeof rawZoho.Companies === 'string' && /^\d+$/.test(rawZoho.Companies) ? rawZoho.Companies : null)) ||
     (rawZoho.Account_Name && typeof rawZoho.Account_Name === 'object' ? rawZoho.Account_Name.id : null) ||
@@ -1795,7 +1858,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     existingDeal?.formData?.companyZohoId ||
     null;
 
-  const clientZohoId = 
+  const clientZohoId =
     (rawZoho.Clients && typeof rawZoho.Clients === 'object' ? rawZoho.Clients.id : (typeof rawZoho.Clients === 'string' && /^\d+$/.test(rawZoho.Clients) ? rawZoho.Clients : null)) ||
     (rawZoho.Client && typeof rawZoho.Client === 'object' ? rawZoho.Client.id : (typeof rawZoho.Client === 'string' && /^\d+$/.test(rawZoho.Client) ? rawZoho.Client : null)) ||
     (rawZoho.Contact_Name && typeof rawZoho.Contact_Name === 'object' ? rawZoho.Contact_Name.id : null) ||

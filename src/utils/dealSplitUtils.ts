@@ -474,3 +474,97 @@ export const getDealSplitBreakdown = (
     verifiedPrimaryAmount
   };
 };
+
+/**
+ * Milestone payment configuration for 8 milestone slots (R1 to R8).
+ * Matches Zoho CRM Deals module field API names for Amount, Date, Screenshots, Verification, and Bank Type.
+ */
+export interface DealMilestoneItem {
+  index: number;
+  label: string;
+  tabName: string;
+  amount: number;
+  date: string;
+  bdm1: string;
+  bdm2: string;
+  screenshot: string;
+  isVerified: boolean;
+  bankType: 'BSPL' | 'BSAPL' | string;
+  hasPayment: boolean;
+}
+
+export const MILESTONE_CONFIG = [
+  { index: 1, tabName: 'R1', label: '1st Payment (R1)', amtField: 'R1_Received_amount23', dateField: 'Closing_Date', ssField: 'R1_Received_Screenshot', bdm1Field: 'R1_Received_by_BDM1', bdm2Field: 'R1_Received_by_BDM2', verifField: 'R1_Payment_Verification', bankField: 'R1_Bank_type' },
+  { index: 2, tabName: 'R2', label: '2nd Payment (R2)', amtField: 'R2_Received_amount12', dateField: 'DPR_status_change_date', ssField: 'R2_Received_Screenshot', bdm1Field: 'R2_Received_by_BDM1', bdm2Field: 'R2_Received_by_BDM2', verifField: 'R2_Payment_Verification', bankField: 'R2_Bank_type' },
+  { index: 3, tabName: 'R3', label: '3rd Payment (R3)', amtField: 'R3_Received_amount', dateField: 'Date_of_status_change', ssField: 'R3_Received_Screenshot', bdm1Field: 'R3_Received_by_BDM1', bdm2Field: 'R3_Received_by_BDM2', verifField: 'R3_Payment_Verification', bankField: 'R3_Bank_type' },
+  { index: 4, tabName: 'R4', label: '4th Payment (R4)', amtField: 'R4_Received_amount', dateField: 'Date_of_status_change_f', ssField: 'R4_Received_Screenshot', bdm1Field: 'R4_Received_by_BDM1', bdm2Field: 'R4_Received_by_BDM2', verifField: 'R4_Payment_Verification', bankField: 'R4_Bank_type' },
+  { index: 5, tabName: 'R5', label: '5th Payment (R5)', amtField: 'R5_Received_amount', dateField: 'Document_collection_Pitch_deck_creation_DPR_date', ssField: 'R5_Received_Screenshot', bdm1Field: 'R5_Received_by_BDM1', bdm2Field: 'R5_Received_by_BDM2', verifField: 'R5_Payment_Verification', bankField: 'R5_Bank_type' },
+  { index: 6, tabName: 'R6', label: '6th Payment (R6)', amtField: 'R6_Received_amount', dateField: 'Document_sent_date', ssField: 'R6_Received_Screenshot', bdm1Field: 'R6_Received_BDM1', bdm2Field: 'R6_Received_BDM2', verifField: 'R6_Payment_Verification', bankField: 'R6_Bank_type' },
+  { index: 7, tabName: 'R7', label: '7th Payment (R7)', amtField: 'R7_Received_amount', dateField: 'Finance_status_change_date', ssField: 'R7_Received_Screenshot', bdm1Field: 'R7_Received_by_BDM1', bdm2Field: 'R7_Received_by_BDM2', verifField: 'R7_Payment_Verification', bankField: 'R7_Bank_type' },
+  { index: 8, tabName: 'R8', label: '8th Payment (R8)', amtField: 'R8_Received_amount', dateField: 'Date_of_financedate_change', ssField: 'R8_Received_Screenshot', bdm1Field: 'R8_Received_by_BDM1', bdm2Field: 'R8_Received_by_BDM2', verifField: 'R8_Payment_Verification', bankField: 'R8_Bank_type' },
+] as const;
+
+export const getDealMilestones = (d: any): DealMilestoneItem[] => {
+  if (!d) return [];
+  const raw = d.rawZohoDeal || {};
+  return MILESTONE_CONFIG.map(s => {
+    const rawAmt = d[s.amtField] ?? raw[s.amtField] ?? d.formData?.[s.amtField];
+    const amtStr = rawAmt !== undefined && rawAmt !== null && rawAmt !== '' ? String(rawAmt).replace(/[^0-9.]/g, '') : '';
+    const amt = parseFloat(amtStr) || 0;
+    const date = d[s.dateField] ?? raw[s.dateField] ?? '';
+    const ss = d[s.ssField] ?? raw[s.ssField];
+    const ssName = Array.isArray(ss) && ss.length > 0 
+      ? (ss[0]?.File_Name__s || ss[0]?.name || '') 
+      : (typeof ss === 'string' ? ss : '');
+    const bdm1Val = d[s.bdm1Field] ?? raw[s.bdm1Field];
+    const bdm1 = typeof bdm1Val === 'object' ? (bdm1Val?.name || '') : String(bdm1Val || '');
+    const bdm2Val = d[s.bdm2Field] ?? raw[s.bdm2Field];
+    const bdm2 = typeof bdm2Val === 'object' ? (bdm2Val?.name || '') : String(bdm2Val || '');
+    
+    // Verification boolean check
+    const isVerif = Boolean(
+      d[s.verifField] ?? raw[s.verifField] ?? 
+      (s.index === 1 ? (d.R1_Payment_verifications ?? raw.R1_Payment_verifications) : 
+       s.index === 2 ? (d.R2_Payment_verifications ?? raw.R2_Payment_verifications) : false)
+    );
+
+    // Bank type: BSPL or BSAPL
+    const bankVal = d[s.bankField] ?? raw[s.bankField] ?? 
+      (s.index === 1 ? (d.R1_Bank_details ?? raw.R1_Bank_details) : 
+       s.index === 2 ? (d.R2_Bank_details ?? raw.R2_Bank_details) : '') ?? 
+      d.Bank_details ?? raw.Bank_details ?? '';
+    const bankType = String(bankVal || '').trim();
+
+    return {
+      index: s.index,
+      label: s.label,
+      tabName: s.tabName,
+      amount: amt,
+      date: typeof date === 'string' ? date.split('T')[0] : '',
+      bdm1,
+      bdm2,
+      screenshot: ssName,
+      isVerified: isVerif,
+      bankType,
+      hasPayment: amt > 0,
+    };
+  });
+};
+
+export const hasDealRemainingPayments = (d: any): boolean => {
+  if (!d) return false;
+  const milestones = getDealMilestones(d);
+  return milestones.some(m => m.hasPayment);
+};
+
+export const getDealUnverifiedMilestonesCount = (d: any): number => {
+  if (!d) return 0;
+  const milestones = getDealMilestones(d);
+  return milestones.filter(m => m.hasPayment && !m.isVerified).length;
+};
+
+export const getDealVerifiedMilestonesCount = (d: any): number => {
+  if (!d) return 0;
+  const milestones = getDealMilestones(d);
+  return milestones.filter(m => m.hasPayment && m.isVerified).length;
+};

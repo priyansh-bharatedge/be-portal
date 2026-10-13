@@ -20,6 +20,7 @@ import {
   uploadZohoDealPhoto,
   uploadZohoDealImageField,
   saveOrUpdateZohoDeal,
+  verifyZohoMilestonePayment,
   transitionZohoDealBlueprint,
   moveDealToAccounts,
   moveDealToLegal,
@@ -30,7 +31,7 @@ import {
   fetchZohoEmployees
 } from '../../services/zohoService';
 import { useAuth } from '../../context/AuthContext';
-import { getDealSplitBreakdown, isDealPartnerBdm, isDealPaymentVerified, isUserPrimaryBdm } from '../../utils/dealSplitUtils';
+import { getDealSplitBreakdown, isDealPartnerBdm, isDealPaymentVerified, isUserPrimaryBdm, getDealMilestones, type DealMilestoneItem } from '../../utils/dealSplitUtils';
 
 // Helper to scan IndexedDB for all documents matching this deal
 const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promise<any[]> => {
@@ -278,6 +279,10 @@ export const DealDetails = () => {
     8: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
   });
   const paymentScreenshotInputRef = useRef<HTMLInputElement>(null);
+
+  // Accounts Remaining Payment Verification state
+  const [detailsBankSelections, setDetailsBankSelections] = useState<Record<number, 'BSPL' | 'BSAPL' | string>>({});
+  const [verifyingDetailsMilestone, setVerifyingDetailsMilestone] = useState<number | null>(null);
 
   // Load Sales Employees Directory for BDM 1 & BDM 2 Selectors
   useEffect(() => {
@@ -2023,6 +2028,105 @@ export const DealDetails = () => {
     }
   };
 
+  const handleVerifyDetailsMilestone = async (slotIndex: number, forcedBankType?: string) => {
+    if (!deal) return;
+    const targetZohoId = deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : null);
+    if (!targetZohoId) {
+      setWorkflowToast({ type: 'error', message: 'Cannot verify: Deal is not synced with Zoho CRM.' });
+      return;
+    }
+
+    const currentBank = forcedBankType || detailsBankSelections[slotIndex] || deal[`R${slotIndex}_Bank_type`] || deal.rawZohoDeal?.[`R${slotIndex}_Bank_type`] || 'BSPL';
+
+    setVerifyingDetailsMilestone(slotIndex);
+    try {
+      const res = await verifyZohoMilestonePayment(targetZohoId, slotIndex, currentBank, true);
+      if (res.success) {
+        setWorkflowToast({ type: 'success', message: `R${slotIndex} payment verified (${currentBank})` });
+        setDeal((prev: any) => {
+          if (!prev) return prev;
+          const patch: any = {};
+          if (slotIndex === 1) {
+            patch.R1_Payment_Verification = true;
+            patch.R1_Payment_verifications = true;
+            patch.R1_Bank_type = currentBank;
+            patch.R1_Bank_details = currentBank;
+          } else if (slotIndex === 2) {
+            patch.R2_Payment_Verification = true;
+            patch.R2_Payment_verifications = true;
+            patch.R2_Bank_type = currentBank;
+            patch.R2_Bank_details = currentBank;
+          } else {
+            patch[`R${slotIndex}_Payment_Verification`] = true;
+            patch[`R${slotIndex}_Bank_type`] = currentBank;
+          }
+          return {
+            ...prev,
+            ...patch,
+            rawZohoDeal: {
+              ...(prev.rawZohoDeal || {}),
+              ...patch
+            }
+          };
+        });
+      } else {
+        setWorkflowToast({ type: 'error', message: res.message || 'Verification failed in Zoho CRM' });
+      }
+    } catch (err: any) {
+      setWorkflowToast({ type: 'error', message: err?.message || 'Failed to communicate with Zoho CRM' });
+    } finally {
+      setVerifyingDetailsMilestone(null);
+    }
+  };
+
+  const handleViewMilestoneScreenshot = async (milestone: DealMilestoneItem) => {
+    // 1. Try local IndexedDB
+    try {
+      const allDbDocs = await getAllDocuments();
+      const found = allDbDocs.find((d: any) => 
+        (d.id && String(d.id).includes(String(deal?.id || id)) && String(d.id).includes(milestone.tabName)) ||
+        (d.name && d.name === milestone.screenshot)
+      );
+      if (found && found.file) {
+        const url = URL.createObjectURL(found.file);
+        setPreviewDoc({
+          url,
+          name: milestone.screenshot || `R${milestone.index}_Screenshot`,
+          isPdf: (milestone.screenshot || '').toLowerCase().endsWith('.pdf'),
+          isImage: true,
+          downloadUrl: url,
+          isZoho: false
+        });
+        return;
+      }
+    } catch (_) {}
+
+    // 2. Direct url or zoho attachments
+    if (milestone.screenshot) {
+      const att = zohoAttachments.find((a: any) => 
+        (a.File_Name && a.File_Name.toLowerCase() === milestone.screenshot.toLowerCase()) || 
+        (a.name && a.name.toLowerCase() === milestone.screenshot.toLowerCase())
+      );
+      if (att) {
+        handlePreviewZohoAttachment(att);
+        return;
+      }
+      if (milestone.screenshot.startsWith('http') || milestone.screenshot.startsWith('blob:')) {
+        setPreviewDoc({
+          url: milestone.screenshot,
+          name: milestone.screenshot,
+          isPdf: milestone.screenshot.toLowerCase().includes('.pdf'),
+          isImage: true,
+          downloadUrl: milestone.screenshot,
+          isZoho: false
+        });
+        return;
+      }
+    }
+
+    setWorkflowToast({ type: 'error', message: 'Screenshot file is not available in local cache or attachments.' });
+  };
+
   const percentReceived = totalAmountNum > 0 ? Math.min(100, Math.round((receivedAmountNum / totalAmountNum) * 100)) : 0;
 
   return (
@@ -2717,106 +2821,158 @@ export const DealDetails = () => {
             </div>
           )}
 
-          {/* Payment Rounds & Installment Cycles (R1 / R2 / R3) */}
-          {(raw.R1 || raw.R1_Received_Amount || raw.R1_application_status || raw.R1_Payment_Date || raw.R2 || raw.R2_Received_Amount || raw.R2_application_status || raw.R3 || raw.Remaining_1 || raw.Remaining_2) && (
-            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                <h2 className="text-base font-bold text-gray-900 flex items-center">
-                  <Receipt size={18} className="mr-2 text-be-orange" />
-                  Installment Rounds & Payment Cycles
-                </h2>
-                <div className="flex gap-2 text-[11px]">
-                  {Boolean(raw.Remaining_1) && <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md font-semibold">Remaining 1</span>}
-                  {Boolean(raw.Remaining_2) && <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded-md font-semibold">Remaining 2</span>}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-                {/* Round 1 */}
-                <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-100 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-gray-900">Round 1 (R1)</span>
-                    {raw.R1_Payment_verifications !== undefined && (
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${raw.R1_Payment_verifications ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 border border-rose-200'}`}>
-                        {raw.R1_Payment_verifications ? 'Verified' : 'Unverified'}
-                      </span>
-                    )}
-                  </div>
-                  {raw.R1_Received_Amount && (
-                    <div className={`text-base font-bold ${raw.R1_Payment_verifications ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      ₹{Number(raw.R1_Received_Amount).toLocaleString('en-IN')}
+          {/* Payment Rounds & Installment Cycles (R1 to R8) */}
+          {(() => {
+            const milestones = getDealMilestones(deal);
+            const recordedMilestones = milestones.filter(m => m.hasPayment);
+            const hasLegacyRounds = Boolean(raw.R1 || raw.R1_Received_Amount || raw.R2 || raw.R2_Received_Amount || raw.Remaining_1 || raw.Remaining_2);
+
+            if (recordedMilestones.length === 0 && !hasLegacyRounds) return null;
+
+            return (
+              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-orange-50 rounded-xl text-be-orange">
+                      <Receipt size={18} />
                     </div>
-                  )}
-                  {raw.R1_Payment_Date && (
-                    <div className="text-gray-500">Date: <span className="font-medium text-gray-800">{new Date(raw.R1_Payment_Date).toLocaleDateString('en-GB')}</span></div>
-                  )}
-                  {raw.R1_application_status && (
-                    <div className="text-gray-500">App Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R1_application_status)}</span></div>
-                  )}
-                  {raw.R1_DPR_status && (
-                    <div className="text-gray-500">DPR Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R1_DPR_status)}</span></div>
-                  )}
-                  {raw.R1_Bank_details && (
-                    <div className="text-gray-500">Bank: <span className="font-medium text-gray-800">{formatZohoValue(raw.R1_Bank_details)}</span></div>
-                  )}
-                  {raw.R1_Accounts_remark && (
-                    <p className="text-gray-600 text-[11px] italic pt-1 border-t border-gray-200/60">{formatZohoValue(raw.R1_Accounts_remark)}</p>
-                  )}
+                    <div>
+                      <h2 className="text-base font-bold text-gray-900">Installment Rounds & Payment Cycles</h2>
+                      <p className="text-xs text-gray-400">Recorded milestone payments and verification under BSPL / BSAPL</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 text-[11px]">
+                    {Boolean(raw.Remaining_1) && <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md font-semibold">Remaining 1</span>}
+                    {Boolean(raw.Remaining_2) && <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded-md font-semibold">Remaining 2</span>}
+                  </div>
                 </div>
 
-                {/* Round 2 */}
-                {(raw.R2 || raw.R2_Received_Amount || raw.R2_application_status || raw.R2_Payment_Date) && (
-                  <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-gray-900">Round 2 (R2)</span>
-                      {raw.R2_Payment_verifications !== undefined && (
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${raw.R2_Payment_verifications ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800 border border-rose-200'}`}>
-                          {raw.R2_Payment_verifications ? 'Verified' : 'Unverified'}
-                        </span>
-                      )}
-                    </div>
-                    {raw.R2_Received_Amount && (
-                      <div className={`text-base font-bold ${raw.R2_Payment_verifications ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        ₹{Number(raw.R2_Received_Amount).toLocaleString('en-IN')}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                  {recordedMilestones.map((m: DealMilestoneItem) => {
+                    const currentBank = detailsBankSelections[m.index] || m.bankType || 'BSPL';
+                    const isVerifying = verifyingDetailsMilestone === m.index;
+
+                    return (
+                      <div key={m.index} className="p-4 bg-gray-50/80 rounded-xl border border-gray-100 space-y-2.5 flex flex-col justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-sm text-gray-900">{m.label}</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              m.isVerified 
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                                : 'bg-rose-100 text-rose-800 border border-rose-200'
+                            }`}>
+                              {m.isVerified ? 'Verified' : 'Unverified'}
+                            </span>
+                          </div>
+
+                          <div className={`text-base font-bold ${m.isVerified ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            ₹{m.amount.toLocaleString('en-IN')}
+                          </div>
+
+                          {m.date && (
+                            <div className="text-gray-500">
+                              Date: <span className="font-medium text-gray-800">{m.date}</span>
+                            </div>
+                          )}
+
+                          {m.bdm1 && (
+                            <div className="text-gray-500">
+                              BDM 1: <span className="font-medium text-gray-800">{m.bdm1}</span>
+                            </div>
+                          )}
+
+                          {m.bdm2 && (
+                            <div className="text-gray-500">
+                              BDM 2: <span className="font-medium text-purple-700">{m.bdm2}</span>
+                            </div>
+                          )}
+
+                          {/* Screenshot */}
+                          <div className="pt-1">
+                            {m.screenshot ? (
+                              <button
+                                type="button"
+                                onClick={() => handleViewMilestoneScreenshot(m)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200 transition-colors cursor-pointer"
+                                title={`View screenshot: ${m.screenshot}`}
+                              >
+                                <ImageIcon size={12} />
+                                <span className="max-w-[120px] truncate">{m.screenshot}</span>
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-gray-400 italic">No screenshot attached</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Accounts verification controls (Accounts or SuperAdmin) */}
+                        {(isAccounts || isSuperAdmin) && (
+                          <div className="pt-2.5 mt-2 border-t border-gray-200/80 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-gray-500 uppercase">Bank Entity:</span>
+                              <select
+                                value={currentBank}
+                                disabled={isVerifying}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setDetailsBankSelections(prev => ({ ...prev, [m.index]: val }));
+                                }}
+                                className="px-2 py-1 bg-white border border-gray-300 rounded-md text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all"
+                              >
+                                <option value="BSPL">BSPL</option>
+                                <option value="BSAPL">BSAPL</option>
+                              </select>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-1">
+                              {m.isVerified ? (
+                                <div className="w-full flex items-center justify-between">
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                                    <CheckCircle2 size={13} className="text-emerald-600" />
+                                    Verified ({m.bankType || currentBank})
+                                  </span>
+                                  {currentBank !== (m.bankType || 'BSPL') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleVerifyDetailsMilestone(m.index, currentBank)}
+                                      disabled={isVerifying}
+                                      className="text-[10px] text-indigo-600 hover:text-indigo-800 underline font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                                    >
+                                      Update Bank
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyDetailsMilestone(m.index, currentBank)}
+                                  disabled={isVerifying}
+                                  className="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                                >
+                                  {isVerifying ? (
+                                    <>
+                                      <Loader2 size={12} className="animate-spin" />
+                                      Verifying...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 size={12} />
+                                      Verify Payment
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {raw.R2_Payment_Date && (
-                      <div className="text-gray-500">Date: <span className="font-medium text-gray-800">{new Date(raw.R2_Payment_Date).toLocaleDateString('en-GB')}</span></div>
-                    )}
-                    {raw.R2_application_status && (
-                      <div className="text-gray-500">App Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R2_application_status)}</span></div>
-                    )}
-                    {raw.R2_DPR_status && (
-                      <div className="text-gray-500">DPR Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R2_DPR_status)}</span></div>
-                    )}
-                    {raw.R2_Bank_details && (
-                      <div className="text-gray-500">Bank: <span className="font-medium text-gray-800">{formatZohoValue(raw.R2_Bank_details)}</span></div>
-                    )}
-                    {raw.R2_Accounts_remark && (
-                      <p className="text-gray-600 text-[11px] italic pt-1 border-t border-gray-200/60">{formatZohoValue(raw.R2_Accounts_remark)}</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Round 3 */}
-                {(raw.R3 || raw.R3_application_status || raw.R3_DPR_status || raw.R3_finance_status) && (
-                  <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-gray-900">Round 3 (R3)</span>
-                    </div>
-                    {raw.R3_application_status && (
-                      <div className="text-gray-500">App Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R3_application_status)}</span></div>
-                    )}
-                    {raw.R3_DPR_status && (
-                      <div className="text-gray-500">DPR Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R3_DPR_status)}</span></div>
-                    )}
-                    {raw.R3_finance_status && (
-                      <div className="text-gray-500">Finance Status: <span className="font-medium text-gray-800">{formatZohoValue(raw.R3_finance_status)}</span></div>
-                    )}
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Refund & Reassignment Card */}
           {(raw.Refund || raw.Refund_amount || raw.Reassignment_Reason || raw.Reason_for_complimentary || raw.Reason_For_Loss__s) && (

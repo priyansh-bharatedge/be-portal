@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink, Users, UserCheck, ArrowRight, Clock, Building2, ShieldCheck, CheckCircle } from 'lucide-react';
+import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, RefreshCw, Cloud, CheckCircle2, AlertCircle, Loader2, ExternalLink, Users, UserCheck, ArrowRight, Clock, Building2, ShieldCheck, CheckCircle, CreditCard, Image as ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { saveDocument } from '../../lib/db';
@@ -22,6 +22,7 @@ import {
   moveDealToLegal,
   moveDealToOperationsAllocator,
   moveDealToOperationsExecutors,
+  verifyZohoMilestonePayment,
   ZOHO_DEAL_BLUEPRINT_TRANSITIONS
 } from '../../services/zohoService';
 import { buildZohoRbacCriteria } from '../../services/zohoRbacService';
@@ -34,7 +35,11 @@ import {
   isDealPaymentVerified,
   getDealTotalAmount,
   getDealReceivedAmount,
-  getDealPendingAmount
+  getDealPendingAmount,
+  getDealMilestones,
+  hasDealRemainingPayments,
+  getDealUnverifiedMilestonesCount,
+  type DealMilestoneItem
 } from '../../utils/dealSplitUtils';
 
 interface DealService {
@@ -56,10 +61,10 @@ export const Deals = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
-    if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) return 'All Deals';
+    if ((tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments') && !isAccounts && !isSuperAdmin) return 'All Deals';
     if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) return 'All Deals';
     if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && (isAccounts || isLegal) && !isSuperAdmin) return 'All Deals';
-    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Legal Queue') return tabParam;
+    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments' || tabParam === 'Legal Queue') return tabParam;
     if (isLegal && !isSuperAdmin) return 'Legal Queue';
     if (isAccounts && !isSuperAdmin) return 'Account Queue';
     return 'All Deals';
@@ -73,11 +78,20 @@ export const Deals = () => {
     isDeleting: false
   });
 
+  // Accounts Remaining Payments Verification state
+  const [milestoneBankSelections, setMilestoneBankSelections] = useState<Record<string, 'BSPL' | 'BSAPL' | ''>>({});
+  const [verifyingMilestoneKey, setVerifyingMilestoneKey] = useState<string | null>(null);
+  const [previewScreenshotModal, setPreviewScreenshotModal] = useState<{ isOpen: boolean; url: string; title: string }>({
+    isOpen: false,
+    url: '',
+    title: ''
+  });
+
   // Sync state with URL params and navigation state
   useEffect(() => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
     if (tabParam) {
-      if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) {
+      if ((tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments') && !isAccounts && !isSuperAdmin) {
         setActiveTab('All Deals');
       } else if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) {
         setActiveTab('All Deals');
@@ -2481,6 +2495,115 @@ export const Deals = () => {
     }
   };
 
+  const handleVerifyMilestonePayment = async (deal: any, slotIndex: number, forcedBankType?: 'BSPL' | 'BSAPL' | string) => {
+    const dealZohoId = deal.zohoId || (/^\d{15,}$/.test(String(deal.id)) ? String(deal.id) : null);
+    if (!dealZohoId) {
+      setToast({
+        type: 'error',
+        message: 'Cannot verify payment',
+        submessage: 'This deal does not have a valid Zoho CRM ID.'
+      });
+      return;
+    }
+
+    const key = `${deal.id}_${slotIndex}`;
+    const selectedBank = forcedBankType || milestoneBankSelections[key] || deal[`R${slotIndex}_Bank_type`] || deal.rawZohoDeal?.[`R${slotIndex}_Bank_type`] || 'BSPL';
+
+    setVerifyingMilestoneKey(key);
+    try {
+      const res = await verifyZohoMilestonePayment(dealZohoId, slotIndex, selectedBank, true);
+      if (res.success) {
+        // Update local state deals
+        const patch: any = {};
+        if (slotIndex === 1) {
+          patch.R1_Payment_Verification = true;
+          patch.R1_Payment_verifications = true;
+          patch.R1_Bank_type = selectedBank;
+          patch.R1_Bank_details = selectedBank;
+        } else if (slotIndex === 2) {
+          patch.R2_Payment_Verification = true;
+          patch.R2_Payment_verifications = true;
+          patch.R2_Bank_type = selectedBank;
+          patch.R2_Bank_details = selectedBank;
+        } else {
+          patch[`R${slotIndex}_Payment_Verification`] = true;
+          patch[`R${slotIndex}_Bank_type`] = selectedBank;
+        }
+
+        const updatedList = deals.map((d: any) => {
+          if (d.id === deal.id || d.zohoId === dealZohoId) {
+            return {
+              ...d,
+              ...patch,
+              rawZohoDeal: {
+                ...(d.rawZohoDeal || {}),
+                ...patch
+              }
+            };
+          }
+          return d;
+        });
+
+        setDeals(updatedList);
+        safeSaveDealsToStorage(updatedList);
+
+        setToast({
+          type: 'success',
+          message: `R${slotIndex} Payment Verified`,
+          submessage: `Payment verified under ${selectedBank} for deal ${deal.id}.`
+        });
+      } else {
+        setToast({
+          type: 'error',
+          message: 'Payment verification failed',
+          submessage: res.message || 'Zoho CRM rejected the verification update.'
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: 'error',
+        message: 'Verification Error',
+        submessage: err?.message || 'Failed to update payment verification in Zoho CRM.'
+      });
+    } finally {
+      setVerifyingMilestoneKey(null);
+    }
+  };
+
+  const handlePreviewScreenshot = async (deal: any, milestone: DealMilestoneItem) => {
+    try {
+      const { getAllDocuments } = await import('../../lib/db');
+      const allDocs = await getAllDocuments();
+      if (Array.isArray(allDocs)) {
+        const found = allDocs.find((d: any) => 
+          (d.id && String(d.id).includes(String(deal.id)) && String(d.id).includes(milestone.tabName)) ||
+          (d.name && d.name === milestone.screenshot)
+        );
+        if (found && found.file) {
+          const url = URL.createObjectURL(found.file);
+          setPreviewScreenshotModal({
+            isOpen: true,
+            url,
+            title: `${deal.id} - ${milestone.label} Screenshot (${milestone.screenshot || 'File'})`
+          });
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (milestone.screenshot && (milestone.screenshot.startsWith('http') || milestone.screenshot.startsWith('blob:'))) {
+      setPreviewScreenshotModal({
+        isOpen: true,
+        url: milestone.screenshot,
+        title: `${deal.id} - ${milestone.label} Screenshot`
+      });
+      return;
+    }
+
+    // Otherwise, redirect to deal details where full attachments & files can be inspected
+    navigate(`/crm/deals/${deal.id}`);
+  };
+
   const accountQueueCount = useMemo(() => {
     return rbacDeals.filter((d: any) => {
       const st = String(d.stage || d.rawZohoDeal?.Stage || '').toLowerCase();
@@ -2499,6 +2622,14 @@ export const Deals = () => {
       const st = String(d.stage || d.rawZohoDeal?.Stage || '').toLowerCase();
       return st.includes('legal');
     }).length;
+  }, [rbacDeals]);
+
+  const remainingDealsCount = useMemo(() => {
+    return rbacDeals.filter((d: any) => hasDealRemainingPayments(d)).length;
+  }, [rbacDeals]);
+
+  const unverifiedRemainingPaymentsCount = useMemo(() => {
+    return rbacDeals.reduce((acc: number, d: any) => acc + getDealUnverifiedMilestonesCount(d), 0);
   }, [rbacDeals]);
 
   const isFiltered = Boolean(
@@ -2521,6 +2652,7 @@ export const Deals = () => {
       if (activeTab === 'Partner BDM Deals' && !isPartner) return false;
       if (activeTab === 'Account Queue' && (!isAccStage || isVerified)) return false;
       if (activeTab === 'Account Verified' && !isVerified) return false;
+      if (activeTab === 'Remaining Payments' && !hasDealRemainingPayments(deal)) return false;
       if (activeTab === 'Legal Queue' && !isLegalStage) return false;
 
       if (quickFilter === 'today' && !isDealToday(deal)) return false;
@@ -2631,6 +2763,7 @@ export const Deals = () => {
           ...((isAccounts || isSuperAdmin) ? [
             { id: 'Account Queue', label: 'Account Queue', count: accountQueueCount, isQueue: true },
             { id: 'Account Verified', label: 'Account Verified', count: accountVerifiedCount, isVerified: true },
+            { id: 'Remaining Payments', label: 'Remaining Payments', count: unverifiedRemainingPaymentsCount, isRemaining: true },
           ] : []),
           ...((isLegal || isSuperAdmin) ? [
             { id: 'Legal Queue', label: 'Legal Queue', count: legalQueueCount, isLegal: true },
@@ -2652,7 +2785,13 @@ export const Deals = () => {
           >
             <span>{tabItem.label}</span>
             {tabItem.count !== null && (
-              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${tabItem.isQueue && tabItem.count > 0 ? 'bg-amber-100 text-amber-800' : tabItem.isVerified ? 'bg-emerald-100 text-emerald-800' : tabItem.isLegal ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-600'}`}>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                tabItem.isQueue && tabItem.count > 0 ? 'bg-amber-100 text-amber-800' :
+                tabItem.isRemaining && tabItem.count > 0 ? 'bg-purple-100 text-purple-800 border border-purple-200' :
+                tabItem.isVerified ? 'bg-emerald-100 text-emerald-800' :
+                tabItem.isLegal ? 'bg-indigo-100 text-indigo-800' :
+                'bg-gray-100 text-gray-600'
+              }`}>
                 {tabItem.count}
               </span>
             )}
@@ -2710,10 +2849,270 @@ export const Deals = () => {
         </div>
       )}
 
-      {/* Deals Table */}
+      {/* Deals Table & Accounts Remaining Payments View */}
       {(() => {
         const totalDealsCount = isFiltered ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
         const paginatedDeals = isFiltered ? filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : filteredDeals;
+
+        if (activeTab === 'Remaining Payments') {
+          return (
+            <div className="space-y-4 mt-6">
+              {/* Summary / Stats Header for Accounts Remaining Payments */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium">Deals with Remaining Payments</p>
+                    <p className="text-xl font-bold text-gray-900 mt-1">{filteredDeals.length}</p>
+                  </div>
+                  <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
+                    <CreditCard size={20} />
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium">Pending Verifications</p>
+                    <p className="text-xl font-bold text-amber-600 mt-1">{unverifiedRemainingPaymentsCount}</p>
+                  </div>
+                  <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
+                    <Clock size={20} />
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium">Verification Status</p>
+                    <p className="text-xs font-semibold text-gray-600 mt-2">
+                      Verify payments under <span className="font-bold text-be-orange">BSPL</span> or <span className="font-bold text-indigo-600">BSAPL</span>
+                    </p>
+                  </div>
+                  <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+                    <ShieldCheck size={20} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Cards for each Deal with Remaining Payments */}
+              {paginatedDeals.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-500">
+                  <CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-lg font-bold text-gray-800">No Remaining Payments Recorded</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Deals with recorded milestone payments (R1 to R8) will show up here for Accounts verification.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {paginatedDeals.map((deal: any) => {
+                    const milestones = getDealMilestones(deal);
+                    const recordedMilestones = milestones.filter(m => m.hasPayment);
+                    const totalDealAmt = getDealAmount(deal);
+                    const recDealAmt = getDealReceived(deal);
+                    const pendDealAmt = getDealPending(deal);
+
+                    return (
+                      <div key={deal.id} className="bg-white rounded-2xl border border-gray-200/80 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                        {/* Deal Card Header */}
+                        <div className="p-4 bg-gradient-to-r from-gray-50/90 to-white border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span 
+                              onClick={() => navigate(`/crm/deals/${deal.id}`)}
+                              className="font-extrabold text-gray-900 hover:text-be-orange cursor-pointer transition-colors text-base"
+                            >
+                              {deal.id}
+                            </span>
+                            <span className="text-gray-300">|</span>
+                            <div>
+                              <span className="font-bold text-gray-800 text-sm">{deal.client || 'Client'}</span>
+                              {deal.company && (
+                                <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                  {deal.company}
+                                </span>
+                              )}
+                            </div>
+                            {deal.service && (
+                              <span className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md font-medium">
+                                {deal.service}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-4 text-xs">
+                            <div>
+                              <span className="text-gray-400">Total: </span>
+                              <span className="font-bold text-gray-900">₹{totalDealAmt.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Received: </span>
+                              <span className="font-bold text-emerald-600">₹{recDealAmt.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Pending: </span>
+                              <span className="font-bold text-rose-600">₹{pendDealAmt.toLocaleString('en-IN')}</span>
+                            </div>
+                            <button
+                              onClick={() => navigate(`/crm/deals/${deal.id}`)}
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-gray-600 hover:text-be-orange hover:bg-orange-50 rounded-lg transition-colors border border-gray-200 cursor-pointer"
+                            >
+                              <Eye size={13} /> View Deal
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Milestones / Remaining Payments List */}
+                        <div className="p-4 divide-y divide-gray-100">
+                          {recordedMilestones.length === 0 ? (
+                            <p className="text-xs text-gray-400 italic py-2">No remaining payment slots recorded yet for this deal.</p>
+                          ) : (
+                            recordedMilestones.map((milestone: DealMilestoneItem) => {
+                              const itemKey = `${deal.id}_${milestone.index}`;
+                              const selectedBank = milestoneBankSelections[itemKey] || milestone.bankType || 'BSPL';
+                              const isVerifying = verifyingMilestoneKey === itemKey;
+
+                              return (
+                                <div key={milestone.index} className="py-3.5 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                  {/* Left: Slot info */}
+                                  <div className="flex items-center gap-3 min-w-[240px]">
+                                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                                      milestone.isVerified 
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                                        : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    }`}>
+                                      {milestone.tabName}
+                                    </span>
+                                    <div>
+                                      <div className="text-sm font-extrabold text-gray-900">
+                                        ₹{milestone.amount.toLocaleString('en-IN')}
+                                      </div>
+                                      <div className="text-[11px] text-gray-500">
+                                        {milestone.label}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Center: Date & BDM & Screenshot */}
+                                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
+                                    <div>
+                                      <span className="text-gray-400">Date: </span>
+                                      <span className="font-semibold text-gray-800">{milestone.date || 'N/A'}</span>
+                                    </div>
+                                    {milestone.bdm1 && (
+                                      <div>
+                                        <span className="text-gray-400">BDM 1: </span>
+                                        <span className="font-semibold text-gray-800">{milestone.bdm1}</span>
+                                      </div>
+                                    )}
+                                    {milestone.bdm2 && (
+                                      <div>
+                                        <span className="text-gray-400">BDM 2: </span>
+                                        <span className="font-semibold text-purple-700">{milestone.bdm2}</span>
+                                      </div>
+                                    )}
+
+                                    {/* Screenshot Button */}
+                                    <div>
+                                      {milestone.screenshot ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handlePreviewScreenshot(deal, milestone)}
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold transition-colors cursor-pointer"
+                                          title={`View screenshot: ${milestone.screenshot}`}
+                                        >
+                                          <ImageIcon size={13} />
+                                          <span className="max-w-[120px] truncate">{milestone.screenshot}</span>
+                                        </button>
+                                      ) : (
+                                        <span className="text-[11px] text-gray-400 italic flex items-center gap-1">
+                                          <ImageIcon size={12} className="opacity-40" /> No screenshot
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Right: Bank Dropdown (BSPL / BSAPL) + Payment Verification Button */}
+                                  <div className="flex items-center gap-2.5 shrink-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <label className="text-[11px] font-bold text-gray-500 uppercase">Entity:</label>
+                                      <select
+                                        value={selectedBank}
+                                        disabled={isVerifying}
+                                        onChange={(e) => {
+                                          const val = e.target.value as 'BSPL' | 'BSAPL';
+                                          setMilestoneBankSelections(prev => ({
+                                            ...prev,
+                                            [itemKey]: val
+                                          }));
+                                        }}
+                                        className="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all shadow-xs"
+                                      >
+                                        <option value="BSPL">BSPL</option>
+                                        <option value="BSAPL">BSAPL</option>
+                                      </select>
+                                    </div>
+
+                                    {milestone.isVerified ? (
+                                      <div className="flex items-center gap-2">
+                                        <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-xs">
+                                          <CheckCircle2 size={14} className="text-emerald-600" />
+                                          Verified ({milestone.bankType || selectedBank})
+                                        </span>
+                                        {selectedBank !== (milestone.bankType || 'BSPL') && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
+                                            disabled={isVerifying}
+                                            className="text-[11px] text-indigo-600 hover:text-indigo-800 underline font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                                          >
+                                            Update Bank
+                                          </button>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
+                                        disabled={isVerifying}
+                                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                                      >
+                                        {isVerifying ? (
+                                          <>
+                                            <Loader2 size={13} className="animate-spin" />
+                                            Verifying...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <CheckCircle2 size={13} />
+                                            Verify Payment
+                                          </>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Pagination for Remaining Payments */}
+              {totalDealsCount > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={totalDealsCount}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={handlePageChange}
+                  onItemsPerPageChange={handleItemsPerPageChange}
+                  itemLabel="deals"
+                  hasMoreOnServer={false}
+                  isLoadingMoreServer={false}
+                />
+              )}
+            </div>
+          );
+        }
 
         return (
           <div className="bg-transparent mt-6">
@@ -3536,6 +3935,58 @@ export const Deals = () => {
                     )}
                   </button>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Screenshot Preview Modal */}
+      <AnimatePresence>
+        {previewScreenshotModal.isOpen && (
+          <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm"
+              onClick={() => setPreviewScreenshotModal({ isOpen: false, url: '', title: '' })}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative max-w-3xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] z-10"
+            >
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
+                <div className="flex items-center gap-2">
+                  <ImageIcon size={18} className="text-be-orange" />
+                  <h3 className="font-bold text-gray-900 text-sm truncate max-w-md">{previewScreenshotModal.title}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={previewScreenshotModal.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1.5 hover:bg-gray-100 text-gray-500 hover:text-gray-900 rounded-lg transition-colors text-xs font-semibold flex items-center gap-1"
+                    title="Open in new window"
+                  >
+                    <ExternalLink size={14} /> Open Full
+                  </a>
+                  <button
+                    onClick={() => setPreviewScreenshotModal({ isOpen: false, url: '', title: '' })}
+                    className="p-1.5 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded-lg cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4 overflow-auto flex items-center justify-center bg-gray-50/50 min-h-[350px]">
+                <img
+                  src={previewScreenshotModal.url}
+                  alt={previewScreenshotModal.title}
+                  className="max-h-[75vh] w-auto max-w-full rounded-lg shadow-sm object-contain"
+                />
               </div>
             </motion.div>
           </div>
