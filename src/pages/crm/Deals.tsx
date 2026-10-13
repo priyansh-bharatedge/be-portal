@@ -715,34 +715,129 @@ export const Deals = () => {
     setDocuments([]);
     loadSalesEmployees();
 
-    if (deal && deal.id && deal.id.startsWith('DL-')) {
-      setEditingDealId(deal.id);
-      setFormData(deal.formData || {
-        clientName: deal.client || '', mobile: '', email: '', gender: 'Male',
-        panCard: '', aadhaarCard: '', city: '', state: '',
-        companyName: deal.company || '', businessType: '', doi: '', gstNumber: ''
+    if (deal) {
+      const dealIdentifier = deal.id || deal.zohoId || '';
+      setEditingDealId(dealIdentifier);
+
+      const fd = deal.formData || {};
+      const rawZ = deal.rawZohoDeal || {};
+
+      // Match client from localStorage if available
+      let localClient: any = null;
+      try {
+        const storedClients = JSON.parse(localStorage.getItem('be_clients') || '[]');
+        localClient = storedClients.find((c: any) => 
+          (deal.clientZohoId && c.zohoId && String(c.zohoId) === String(deal.clientZohoId)) ||
+          (fd.clientZohoId && c.zohoId && String(c.zohoId) === String(fd.clientZohoId)) ||
+          (c.name && deal.client && c.name.trim().toLowerCase() === String(deal.client).trim().toLowerCase()) ||
+          (c.name && fd.clientName && c.name.trim().toLowerCase() === String(fd.clientName).trim().toLowerCase())
+        );
+      } catch (_) {}
+
+      // Match company from localStorage if available
+      let localComp: any = null;
+      try {
+        const storedComps = JSON.parse(localStorage.getItem('be_companies') || '[]');
+        localComp = storedComps.find((c: any) => 
+          (deal.companyZohoId && c.zohoId && String(c.zohoId) === String(deal.companyZohoId)) ||
+          (fd.companyZohoId && c.zohoId && String(c.zohoId) === String(fd.companyZohoId)) ||
+          (c.name && deal.company && c.name.trim().toLowerCase() === String(deal.company).trim().toLowerCase()) ||
+          (c.name && fd.companyName && c.name.trim().toLowerCase() === String(fd.companyName).trim().toLowerCase())
+        );
+      } catch (_) {}
+
+      const clientName = fd.clientName || deal.client || localClient?.name || (typeof rawZ.Contact_Name === 'object' ? rawZ.Contact_Name?.name : rawZ.Contact_Name) || rawZ.Client_Name || (typeof rawZ.Clients === 'object' ? rawZ.Clients?.name : '') || '';
+      const mobile = fd.mobile || deal.mobile || localClient?.phone || rawZ.Client_contact_detail || rawZ.Mobile || rawZ.Phone || rawZ.Client_contact_detail_cs || rawZ.Client_contact_detail_bp || '';
+      const email = fd.email || deal.email || localClient?.email || rawZ.Client_Email_address || rawZ.Email || rawZ.Client_Email_address_cs || rawZ.Client_Email_address_bp || '';
+      const gender = fd.gender || deal.gender || localClient?.gender || 'Male';
+      const panCard = fd.panCard || deal.panCard || localClient?.panCard || rawZ.Pan_number || rawZ.PAN_Number || rawZ.PAN_Card || rawZ.PAN || '';
+      const aadhaarCard = fd.aadhaarCard || deal.aadhaarCard || localClient?.aadhaarCard || rawZ.Aadhaar_Card || rawZ.Aadhaar_number || rawZ.Aadhaar_Number || '';
+      const city = fd.city || deal.city || localClient?.city || localComp?.city || rawZ.City || 'Ahmedabad';
+      const state = fd.state || deal.state || localClient?.state || localComp?.state || rawZ.State || 'Gujarat';
+
+      const companyName = fd.companyName || deal.company || localComp?.name || (typeof rawZ.Account_Name === 'object' ? rawZ.Account_Name?.name : rawZ.Account_Name) || rawZ.Company_Name || (typeof rawZ.Company === 'object' ? rawZ.Company?.name : '') || (typeof rawZ.Companies === 'object' ? rawZ.Companies?.name : '') || '';
+      const businessType = fd.businessType || deal.businessType || localComp?.type || rawZ.Company_Type || rawZ.Choose_Wisely || 'Private Limited';
+      const doi = fd.doi || deal.doi || localComp?.doi || rawZ.Date_of_incorporation || rawZ.DOI || '';
+      const gstNumber = fd.gstNumber || deal.gstNumber || localComp?.gstNumber || rawZ.Gst_number || rawZ.GST_Number || rawZ.GSTIN || '';
+      const companyPan = fd.companyPan || deal.companyPan || localComp?.companyPan || rawZ.Company_PAN_Number || panCard;
+      const sector = fd.sector || deal.sector || localComp?.sector || 'IT';
+      const industry = fd.industry || deal.industry || localComp?.industry || 'Software';
+
+      setFormData({
+        clientName,
+        mobile,
+        email,
+        gender,
+        panCard,
+        aadhaarCard,
+        city,
+        state,
+        companyName,
+        businessType,
+        doi,
+        gstNumber,
+        companyPan,
+        sector,
+        industry
       });
-      setDealServices((deal.servicesData || []).map((s: any) => {
-        const t = s.totalAmount !== undefined 
-          ? String(s.totalAmount) 
-          : (s.baseAmount ? String(Number((Number(s.baseAmount) * 1.18).toFixed(2))) : '');
-        const b = s.baseAmount !== undefined 
-          ? String(s.baseAmount) 
-          : (t ? String(Number((Number(t) / 1.18).toFixed(2))) : '');
-        return {
-          id: s.id || Math.random().toString(),
-          name: s.name || '',
-          totalAmount: t,
-          baseAmount: b,
-        };
-      }));
-      setAmountReceived(deal.totals?.amountReceived || (deal.received ? deal.received.replace(/[^0-9.]/g, '') : ''));
-      setPaymentScreenshotName(deal.paymentScreenshotName || '');
+
+      let services: DealService[] = [];
+      if (Array.isArray(deal.servicesData) && deal.servicesData.length > 0) {
+        services = deal.servicesData.map((s: any) => {
+          const t = s.totalAmount !== undefined 
+            ? String(s.totalAmount) 
+            : (s.baseAmount ? String(Number((Number(s.baseAmount) * 1.18).toFixed(2))) : '');
+          const b = s.baseAmount !== undefined 
+            ? String(s.baseAmount) 
+            : (t ? String(Number((Number(t) / 1.18).toFixed(2))) : '');
+          return {
+            id: s.id || Math.random().toString(),
+            name: s.name || s.Schemas || '',
+            totalAmount: t,
+            baseAmount: b,
+          };
+        });
+      } else if (Array.isArray(rawZ.Subform_1) && rawZ.Subform_1.length > 0) {
+        services = rawZ.Subform_1.map((sf: any, i: number) => {
+          const agreementAmount = Number(sf.Agreement_amount || sf.totalAmount || sf.Total || 0);
+          const withoutGst = Number(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? (agreementAmount / 1.18).toFixed(2) : 0));
+          const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
+          return {
+            id: String(sf.id || i + 1),
+            name: sf.Schemas || sf.Schema || sf.Service_Name || 'Service',
+            totalAmount: String(totalAmt || ''),
+            baseAmount: String(withoutGst || ''),
+          };
+        });
+      } else if (deal.service && deal.service !== 'Services') {
+        const rawAmt = Number(String(deal.rawAmount || deal.amount || '').replace(/[^0-9.]/g, '')) || 0;
+        const baseAmt = Number(String(deal.totals?.baseAmount || '').replace(/[^0-9.]/g, '')) || (rawAmt > 0 ? Number((rawAmt / 1.18).toFixed(2)) : 0);
+        services = [{
+          id: '1',
+          name: deal.service,
+          totalAmount: rawAmt > 0 ? String(rawAmt) : '',
+          baseAmount: baseAmt > 0 ? String(baseAmt) : '',
+        }];
+      }
+      setDealServices(services);
+
+      const rec = (deal.totals?.amountReceived !== undefined && deal.totals?.amountReceived !== null && String(deal.totals.amountReceived) !== '')
+        ? String(deal.totals.amountReceived)
+        : (deal.rawReceived !== undefined && deal.rawReceived !== null && String(deal.rawReceived) !== ''
+            ? String(deal.rawReceived)
+            : (deal.received ? String(deal.received).replace(/[^0-9.]/g, '') : ''));
+      setAmountReceived(rec);
+
+      setPaymentScreenshotName(deal.paymentScreenshotName || (Array.isArray(deal.Deal_payment_screenshot) && deal.Deal_payment_screenshot.length > 0 ? `${deal.Deal_payment_screenshot.length} Screenshots` : ''));
       setPaymentScreenshotFile(null);
       setPaymentScreenshotFiles([]);
-      setHasPartnerBdm(Boolean(deal.hasPartnerBdm || deal.has_partner_bdm || deal.formData?.hasPartnerBdm || deal.formData?.has_partner_bdm));
-      setPartnerBdmId(deal.partnerBdmId || deal.partner_bdm_id || deal.formData?.partnerBdmId || deal.formData?.partner_bdm_id || '');
-      setPartnerBdmName(deal.partnerBdmName || deal.partner_bdm_name || deal.formData?.partnerBdmName || deal.formData?.partner_bdm_name || '');
+
+      const hasPartner = Boolean(deal.hasPartnerBdm || deal.has_partner_bdm || fd.hasPartnerBdm || fd.has_partner_bdm || deal.Partner_BDM || rawZ.Partner_BDM || rawZ.Has_Partner_BDM);
+      setHasPartnerBdm(hasPartner);
+      const pId = deal.partnerBdmId || deal.partner_bdm_id || fd.partnerBdmId || fd.partner_bdm_id || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.id : '') || (typeof rawZ.Partner_BDM === 'object' ? rawZ.Partner_BDM?.id : '') || '';
+      const pName = deal.partnerBdmName || deal.partner_bdm_name || fd.partnerBdmName || fd.partner_bdm_name || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.name : '') || (typeof rawZ.Partner_BDM === 'object' ? rawZ.Partner_BDM?.name : '') || '';
+      setPartnerBdmId(pId);
+      setPartnerBdmName(pName);
     } else {
       setEditingDealId(null);
       setFormData({
@@ -1736,9 +1831,9 @@ export const Deals = () => {
   const handleCreateDeal = async () => {
     setIsSubmitting(true);
     try {
-      const dealId = editingDealId || `DL-${Math.floor(1000 + Math.random() * 9000)}`;
       const isEditing = Boolean(editingDealId);
-      const existingDeal = deals.find((d: any) => d.id === editingDealId);
+      const existingDeal = deals.find((d: any) => d.id === editingDealId || (d.zohoId && String(d.zohoId) === String(editingDealId)));
+      const dealId = existingDeal?.id || editingDealId || `DL-${Math.floor(1000 + Math.random() * 9000)}`;
 
       // 1. Save actual files to IndexedDB
       const docsToSave: any[] = existingDeal?.documentsData ? [...existingDeal.documentsData] : [];
@@ -1974,7 +2069,7 @@ export const Deals = () => {
         paymentScreenshotName: paymentScreenshotFiles.length > 1 ? `${paymentScreenshotFiles.length} Screenshots` : (paymentScreenshotFile?.name || paymentScreenshotName),
         paymentScreenshotNames: paymentScreenshotFiles.map(f => f.name),
         documentsData: docsToSave,
-        zohoId: existingDeal?.zohoId || undefined,
+        zohoId: existingDeal?.zohoId || (editingDealId && /^\d{15,}$/.test(String(editingDealId)) ? String(editingDealId) : undefined),
         zohoStatus: existingDeal?.zohoStatus || 'pending',
       };
 
@@ -2043,7 +2138,7 @@ export const Deals = () => {
       if (editingDealId) {
         // Retain old status/date/owner if editing
         newDealsList = deals.map((d: any) => {
-          if (d.id === editingDealId) {
+          if (d.id === editingDealId || (d.zohoId && String(d.zohoId) === String(editingDealId))) {
             return {
               ...dealData,
               status: d.status,
