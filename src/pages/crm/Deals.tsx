@@ -1890,9 +1890,11 @@ export const Deals = () => {
         partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
         partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
         partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
+        bookingAmount: Number(amountReceived) || 0,
         // Full details
         formData: {
           ...formData,
+          bookingAmount: Number(amountReceived) || 0,
           companyZohoId,
           clientZohoId,
           employeeZohoId: existingDeal?.employeeZohoId || currentUser?.zohoId,
@@ -1921,7 +1923,7 @@ export const Deals = () => {
             baseAmount: String(b || s.baseAmount || '')
           };
         }),
-        totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount },
+        totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount, bookingAmount: Number(amountReceived) || 0 },
         Payment_verifications: isEditing ? (existingDeal?.Payment_verifications ?? false) : false,
         paymentVerified: isEditing ? (existingDeal?.paymentVerified ?? false) : false,
         paymentScreenshotName: paymentScreenshotName,

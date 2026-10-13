@@ -22,7 +22,10 @@ let tokenExpiry = 0;
 async function getAccessToken(): Promise<string> {
   const clientId = process.env.VITE_ZOHO_CLIENT_ID || process.env.ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
   const clientSecret = process.env.VITE_ZOHO_CLIENT_SECRET || process.env.ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
-  const refreshToken = process.env.VITE_ZOHO_REFRESH_TOKEN || process.env.ZOHO_REFRESH_TOKEN || '1000.b141fe7e5414313d6b2ba2744c90c4fe.dc33224ff49bf2843512fbe58dce982c';
+  let refreshToken = process.env.VITE_ZOHO_REFRESH_TOKEN || process.env.ZOHO_REFRESH_TOKEN || '';
+  if (!refreshToken || refreshToken.includes('bdf58bb945')) {
+    refreshToken = '1000.b141fe7e5414313d6b2ba2744c90c4fe.dc33224ff49bf2843512fbe58dce982c';
+  }
 
   const now = Date.now();
   if (cachedToken && tokenExpiry > now + 60000) {
@@ -1028,21 +1031,30 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
 
   for (const s of rPaymentSlots) {
     const rawAmt = deal[s.amt] ?? fd[s.amt] ?? deal.rawZohoDeal?.[s.amt];
-    if (rawAmt !== undefined && rawAmt !== null && String(rawAmt).trim() !== '') {
+    const hasAmt = rawAmt !== undefined && rawAmt !== null && String(rawAmt).trim() !== '' && Number(String(rawAmt).replace(/[^0-9.]/g, '')) > 0;
+    if (hasAmt) {
       payload[s.amt] = String(rawAmt).trim();
-    }
-    const rawDate = deal[s.date] ?? fd[s.date] ?? deal.rawZohoDeal?.[s.date];
-    if (rawDate) {
-      const fDate = formatDateForZoho(rawDate);
-      if (fDate) payload[s.date] = fDate;
-    }
-    const rawBdm1 = deal[s.bdm1] ?? fd[s.bdm1] ?? deal.rawZohoDeal?.[s.bdm1];
-    if (rawBdm1 && String(rawBdm1).trim() !== '') {
-      payload[s.bdm1] = String(rawBdm1).trim();
-    }
-    const rawBdm2 = deal[s.bdm2] ?? fd[s.bdm2] ?? deal.rawZohoDeal?.[s.bdm2];
-    if (rawBdm2 && String(rawBdm2).trim() !== '' && String(rawBdm2).toLowerCase() !== 'none') {
-      payload[s.bdm2] = String(rawBdm2).trim();
+      const rawDate = deal[s.date] ?? fd[s.date] ?? deal.rawZohoDeal?.[s.date];
+      if (rawDate) {
+        const fDate = formatDateForZoho(rawDate);
+        if (fDate) payload[s.date] = fDate;
+      }
+      const rawBdm1 = deal[s.bdm1] ?? fd[s.bdm1] ?? deal.rawZohoDeal?.[s.bdm1];
+      if (rawBdm1 && String(rawBdm1).trim() !== '') {
+        payload[s.bdm1] = String(rawBdm1).trim();
+      }
+      const rawBdm2 = deal[s.bdm2] ?? fd[s.bdm2] ?? deal.rawZohoDeal?.[s.bdm2];
+      if (rawBdm2 && String(rawBdm2).trim() !== '' && String(rawBdm2).toLowerCase() !== 'none') {
+        payload[s.bdm2] = String(rawBdm2).trim();
+      }
+    } else if (deal.zohoId || deal.id) {
+      // Clear unfilled remaining payment fields in Zoho CRM Deal record
+      payload[s.amt] = null;
+      if (s.date !== 'Closing_Date') {
+        payload[s.date] = null;
+      }
+      payload[s.bdm1] = null;
+      payload[s.bdm2] = null;
     }
   }
 
@@ -4038,7 +4050,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         });
         let filesData: any = await filesRes.json().catch(() => null);
 
-        if (filesRes.status === 401 || filesData?.code === 'INVALID_TOKEN') {
+        if (filesRes.status === 401 || filesData?.code === 'INVALID_TOKEN' || filesData?.code === 'OAUTH_SCOPE_MISMATCH') {
           cachedToken = null;
           accessToken = await getAccessToken();
           filesRes = await fetch(`${apiBase}/crm/v8/files`, {

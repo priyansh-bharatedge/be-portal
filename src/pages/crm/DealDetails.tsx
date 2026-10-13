@@ -1454,6 +1454,25 @@ export const DealDetails = () => {
     deal.pending ? parseNum(deal.pending) : 0
   );
 
+  // Initial booking advance payment received at deal creation (distinct from R1-R8 remaining payments)
+  const resolvedBookingAmount = (() => {
+    if (deal.bookingAmount !== undefined && deal.bookingAmount !== null) {
+      return parseNum(deal.bookingAmount);
+    }
+    if (deal.formData?.bookingAmount !== undefined && deal.formData?.bookingAmount !== null) {
+      return parseNum(deal.formData.bookingAmount);
+    }
+    if (deal.totals?.bookingAmount !== undefined && deal.totals?.bookingAmount !== null) {
+      return parseNum(deal.totals.bookingAmount);
+    }
+    const overallRec = receivedAmountNum;
+    const existingRSum = PAYMENT_SLOTS.reduce((sum, s) => {
+      const v = deal[s.amountField] ?? raw[s.amountField] ?? deal.formData?.[s.amountField];
+      return sum + (v ? parseNum(v) : 0);
+    }, 0);
+    return Math.max(0, overallRec - existingRSum);
+  })();
+
   // Milestone payments calculation across 8 slots
   const totalReceivedAllSlots = PAYMENT_SLOTS.reduce((sum, slot) => {
     const item = paymentSlotsData[slot.index];
@@ -1461,9 +1480,11 @@ export const DealDetails = () => {
     return sum + val;
   }, 0);
 
+  const totalOverallReceived = resolvedBookingAmount + totalReceivedAllSlots;
+
   const totalPendingAllSlots = Math.max(
     0,
-    Number(((totalAmountNum > 0 ? totalAmountNum : (totalReceivedAllSlots > 0 ? totalReceivedAllSlots : 0)) - totalReceivedAllSlots).toFixed(2))
+    Number((totalAmountNum - totalOverallReceived).toFixed(2))
   );
 
   // If services array was still empty, create default single row with the resolved totals
@@ -1682,14 +1703,8 @@ export const DealDetails = () => {
     let foundFirstUnfilled = false;
 
     PAYMENT_SLOTS.forEach((slot) => {
-      // Amount from deal, raw, or formData
-      let rawVal = deal[slot.amountField] ?? raw[slot.amountField] ?? deal.formData?.[slot.amountField];
-      // Fallback for slot 1 if R1 is unset but deal has overall received amount
-      if (slot.index === 1 && (rawVal === undefined || rawVal === null || rawVal === '' || rawVal === '0')) {
-        if (receivedAmountNum > 0) {
-          rawVal = String(receivedAmountNum);
-        }
-      }
+      // Amount from deal, raw, or formData strictly for this milestone slot
+      const rawVal = deal[slot.amountField] ?? raw[slot.amountField] ?? deal.formData?.[slot.amountField];
       const amtStr = (rawVal !== undefined && rawVal !== null && rawVal !== '') ? String(rawVal).replace(/[^0-9.]/g, '') : '';
 
       if (!foundFirstUnfilled && (!amtStr || parseNum(amtStr) === 0)) {
@@ -1698,7 +1713,7 @@ export const DealDetails = () => {
       }
 
       // Date from deal, raw, or formData
-      const rawDate = deal[slot.dateField] ?? raw[slot.dateField] ?? deal.formData?.[slot.dateField] ?? (slot.index === 1 ? (raw.Payment_received_date || raw.Payment_Date || today) : today);
+      const rawDate = deal[slot.dateField] ?? raw[slot.dateField] ?? deal.formData?.[slot.dateField];
       const dateStr = rawDate ? String(rawDate).split('T')[0] : today;
 
       // BDM 1
@@ -1708,13 +1723,13 @@ export const DealDetails = () => {
       const bdm1Id = matchedBdm1?.id || matchedBdm1?.zohoId || '';
 
       // BDM 2
-      const rawBdm2 = deal[slot.bdm2Field] ?? raw[slot.bdm2Field] ?? deal.formData?.[slot.bdm2Field] ?? (slot.index === 1 && hasPartnerBdm ? partnerBdmName : '');
+      const rawBdm2 = deal[slot.bdm2Field] ?? raw[slot.bdm2Field] ?? deal.formData?.[slot.bdm2Field] ?? '';
       const bdm2Name = typeof rawBdm2 === 'object' ? (rawBdm2?.name || '') : String(rawBdm2 || '');
       const matchedBdm2 = salesEmployees.find(e => e.name.toLowerCase() === bdm2Name.toLowerCase());
       const bdm2Id = matchedBdm2?.id || matchedBdm2?.zohoId || '';
 
-      // Screenshot name
-      const rawScreenshot = deal[slot.screenshotField] ?? raw[slot.screenshotField] ?? (slot.index === 1 ? (deal.paymentScreenshotName || raw.Payment_Screenshot_Name || '') : '');
+      // Screenshot name strictly for this milestone
+      const rawScreenshot = deal[slot.screenshotField] ?? raw[slot.screenshotField];
       const existingName = typeof rawScreenshot === 'string' ? rawScreenshot : '';
 
       initialSlots[slot.index] = {
@@ -1777,8 +1792,9 @@ export const DealDetails = () => {
         }
       }
 
-      // 2. Financial totals across all 8 slots
-      const totalRec = totalReceivedAllSlots;
+      // 2. Financial totals across all 8 slots + booking advance
+      const sumRemainingPayments = totalReceivedAllSlots;
+      const totalRec = resolvedBookingAmount + sumRemainingPayments;
       const totalPend = totalPendingAllSlots;
       const preGstTotal = Number((totalRec / 1.18).toFixed(2));
 
@@ -1835,12 +1851,22 @@ export const DealDetails = () => {
       PAYMENT_SLOTS.forEach((slot) => {
         const item = paymentSlotsData[slot.index];
         const amtClean = item.amount ? String(item.amount).trim() : '';
-        rFieldsMap[slot.amountField] = amtClean;
-        rFieldsMap[slot.dateField] = item.date;
-        rFieldsMap[slot.bdm1Field] = item.bdm1Name;
-        rFieldsMap[slot.bdm2Field] = (item.bdm2Name && item.bdm2Name.toLowerCase() !== 'none') ? item.bdm2Name : '';
-        if (slotScreenshots[slot.index] || item.existingScreenshotName) {
-          rFieldsMap[slot.screenshotField] = slotScreenshots[slot.index] || item.existingScreenshotName;
+        const hasAmt = amtClean !== '' && parseNum(amtClean) > 0;
+        if (hasAmt) {
+          rFieldsMap[slot.amountField] = amtClean;
+          rFieldsMap[slot.dateField] = item.date || new Date().toISOString().split('T')[0];
+          rFieldsMap[slot.bdm1Field] = item.bdm1Name || primaryBdm || 'Admin';
+          rFieldsMap[slot.bdm2Field] = (item.bdm2Name && item.bdm2Name.toLowerCase() !== 'none') ? item.bdm2Name : '';
+          if (slotScreenshots[slot.index] || item.existingScreenshotName) {
+            rFieldsMap[slot.screenshotField] = slotScreenshots[slot.index] || item.existingScreenshotName;
+          }
+        } else {
+          // Unfilled slot - clear remaining payment fields so dummy dates/BDMs are never sent to Zoho
+          rFieldsMap[slot.amountField] = '';
+          rFieldsMap[slot.dateField] = '';
+          rFieldsMap[slot.bdm1Field] = '';
+          rFieldsMap[slot.bdm2Field] = '';
+          rFieldsMap[slot.screenshotField] = '';
         }
       });
 
@@ -1861,6 +1887,7 @@ export const DealDetails = () => {
       const updatedDeal: any = {
         ...deal,
         ...rFieldsMap,
+        bookingAmount: resolvedBookingAmount,
         rPaymentSlots: paymentSlotsData,
         received: `₹${totalRec.toLocaleString('en-IN')}`,
         rawReceived: totalRec,
@@ -1891,6 +1918,7 @@ export const DealDetails = () => {
           grandTotal: totalAmountNum,
           baseAmount: baseAmountNum,
           totalGst: gstAmountNum,
+          bookingAmount: resolvedBookingAmount,
           receivedAmount: totalRec,
           pendingAmount: totalPend,
           partnerBdmAmount: partnerShare,
@@ -1898,6 +1926,7 @@ export const DealDetails = () => {
         formData: {
           ...(deal.formData || {}),
           ...rFieldsMap,
+          bookingAmount: resolvedBookingAmount,
           received: String(totalRec),
           pending: String(totalPend),
           employeeName: bdm1Name,
@@ -3834,8 +3863,13 @@ export const DealDetails = () => {
                   <span className="font-extrabold text-gray-900 text-xs sm:text-sm">₹{totalAmountNum.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="space-y-0.5">
-                  <span className="text-[10px] font-medium text-emerald-600 block">Total Received (R1-R8)</span>
-                  <span className="font-extrabold text-emerald-700 text-xs sm:text-sm">₹{totalReceivedAllSlots.toLocaleString('en-IN')}</span>
+                  <span className="text-[10px] font-medium text-emerald-600 block">Total Received</span>
+                  <span className="font-extrabold text-emerald-700 text-xs sm:text-sm">₹{totalOverallReceived.toLocaleString('en-IN')}</span>
+                  {resolvedBookingAmount > 0 && (
+                    <span className="text-[9px] text-gray-400 block font-normal truncate">
+                      Advance: ₹{resolvedBookingAmount.toLocaleString('en-IN')}{totalReceivedAllSlots > 0 ? ` + R1-R8: ₹${totalReceivedAllSlots.toLocaleString('en-IN')}` : ''}
+                    </span>
+                  )}
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-medium text-orange-600 block">Pending Balance</span>
@@ -3843,7 +3877,7 @@ export const DealDetails = () => {
                     <span className={`font-extrabold text-xs sm:text-sm ${totalPendingAllSlots === 0 ? 'text-emerald-700' : 'text-orange-600'}`}>
                       ₹{totalPendingAllSlots.toLocaleString('en-IN')}
                     </span>
-                    {totalPendingAllSlots === 0 && totalReceivedAllSlots > 0 && (
+                    {totalPendingAllSlots === 0 && totalOverallReceived > 0 && (
                       <span className="text-[9px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded-full font-bold">Paid</span>
                     )}
                   </div>
