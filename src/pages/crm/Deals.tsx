@@ -138,7 +138,7 @@ export const Deals = () => {
     const now = new Date();
     const todayYMD = now.toISOString().split('T')[0];
     const todayDMY = now.toLocaleDateString('en-GB');
-    const raw = String(d.rawDate || d.date || d.Booking_Date || d.Closing_Date || '');
+    const raw = String(d.Payment_Date || d.rawDate || d.date || d.Booking_Date || d.Closing_Date || '');
     if (!raw) return false;
     if (raw.includes(todayYMD) || raw.includes(todayDMY)) return true;
     try {
@@ -155,7 +155,7 @@ export const Deals = () => {
     const now = new Date();
     const currentMonthIdx = now.getMonth();
     const currentYear = now.getFullYear();
-    const raw = String(d.rawDate || d.date || d.Booking_Date || d.Closing_Date || '');
+    const raw = String(d.Payment_Date || d.rawDate || d.date || d.Booking_Date || d.Closing_Date || '');
     if (!raw) return false;
     try {
       const parts = raw.split('/');
@@ -1381,8 +1381,9 @@ export const Deals = () => {
         employeeZohoId,
         employeeName,
         salesEmployee: employeeName || (existingIdx >= 0 ? updatedDeals[existingIdx]?.salesEmployee : ''),
-        empId: empCode,
-        date: zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (zDeal.Booking_Date ? new Date(zDeal.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingIdx >= 0 ? updatedDeals[existingIdx]?.date : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))),
+        date: zDeal.Payment_Date ? new Date(zDeal.Payment_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (zDeal.Booking_Date ? new Date(zDeal.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (zDeal.Closing_Date ? new Date(zDeal.Closing_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (existingIdx >= 0 ? updatedDeals[existingIdx]?.date : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })))),
+        Payment_Date: zDeal.Payment_Date || zDeal.Payment_received_date || (existingIdx >= 0 ? updatedDeals[existingIdx]?.Payment_Date : undefined),
+        paymentDate: zDeal.Payment_Date || zDeal.Payment_received_date || (existingIdx >= 0 ? updatedDeals[existingIdx]?.paymentDate : undefined),
         source: (existingIdx >= 0 ? updatedDeals[existingIdx]?.source : 'Cloud') || 'Cloud',
         Partner_BDM: zDeal.Partner_BDM || (partnerBdmId ? { id: partnerBdmId, name: partnerBdmName } : undefined),
         Partner_BDM_ID: partnerBdmId,
@@ -1915,6 +1916,9 @@ export const Deals = () => {
         empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
         salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
         date: existingDeal?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        Payment_Date: existingDeal?.Payment_Date || new Date().toISOString().split('T')[0],
+        paymentDate: existingDeal?.Payment_Date || new Date().toISOString().split('T')[0],
+        Closing_Date: isEditing ? (existingDeal?.Closing_Date || undefined) : undefined,
         source: existingDeal?.source || 'Manual',
         // Partner BDM split details & Employee Lookup
         Partner_BDM: (hasPartnerBdm && partnerBdmId && /^\d{15,}$/.test(String(partnerBdmId).trim()))
@@ -1932,6 +1936,9 @@ export const Deals = () => {
         // Full details
         formData: {
           ...formData,
+          Payment_Date: existingDeal?.Payment_Date || new Date().toISOString().split('T')[0],
+          paymentDate: existingDeal?.Payment_Date || new Date().toISOString().split('T')[0],
+          Closing_Date: isEditing ? (existingDeal?.Closing_Date || undefined) : undefined,
           bookingAmount: Number(amountReceived) || 0,
           companyZohoId,
           clientZohoId,

@@ -724,8 +724,8 @@ function zohoApiPlugin(): Plugin {
     const pendingAmountNum = to2Dec(Math.max(0, grandTotalNum - amountReceivedNum));
 
     const todayDate = new Date().toISOString().split('T')[0];
-    const closingDate = formatDateForZoho(deal.date || deal.closingDate) || todayDate;
     const bookingDate = formatDateForZoho(deal.date || deal.bookingDate) || todayDate;
+    const paymentDate = formatDateForZoho(deal.Payment_Date || deal.paymentDate || deal.payment_date || deal.date || deal.bookingDate) || bookingDate;
 
     // Build payload matching standard Zoho CRM Deals and custom layout API names
     const payload: Record<string, any> = {
@@ -746,16 +746,24 @@ function zohoApiPlugin(): Plugin {
       Total_Pending_Amount: pendingAmountNum,
       Pending_amount: pendingAmountNum,
       amount_if_you_have_kindly_put_0: 0,
-      Closing_Date: closingDate,
+      Payment_Date: paymentDate,
       Booking_Date: bookingDate,
       Sales_date: bookingDate,
       Account_date: bookingDate,
       CRM_date: bookingDate,
       CRM_filled: true,
       CRM_filled_date: bookingDate,
-      Payment_received_date: bookingDate,
+      Payment_received_date: paymentDate,
       Payment_Type: 'Online',
     };
+
+    // Only set Closing_Date if explicitly provided (e.g. for R1 milestone payment update), never on fresh deal creation
+    if (deal.Closing_Date || deal.closingDate) {
+      const explicitClosing = formatDateForZoho(deal.Closing_Date || deal.closingDate);
+      if (explicitClosing) {
+        payload.Closing_Date = explicitClosing;
+      }
+    }
 
     if (deal.zohoId) {
       payload.id = String(deal.zohoId);
@@ -2248,7 +2256,7 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications';
+            const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
             const milestoneFields = 'id,R1_Received_amount23,R1_Received_Screenshot,R1_Received_by_BDM1,R1_Received_by_BDM2,R1_Payment_Verification,R1_Bank_type,R1_Legal_verification,R2_Received_amount12,R2_Received_Screenshot,R2_Received_by_BDM1,R2_Received_by_BDM2,R2_Payment_Verification,R2_Bank_type,R2_Legal_verification,DPR_status_change_date,R3_Received_amount,R3_Received_Screenshot,R3_Received_by_BDM1,R3_Received_by_BDM2,R3_Payment_Verification,R3_Bank_type,R3_Legal_verification,Date_of_status_change,R4_Received_amount,R4_Received_Screenshot,R4_Payment_Verification,R4_Bank_type,R4_Legal_verification,Date_of_status_change_f,R5_Received_amount,R5_Payment_Verification,R5_Bank_type,R5_Legal_verification,Document_collection_Pitch_deck_creation_DPR_date,R6_Received_amount,R6_Payment_Verification,R6_Bank_type,R6_Legal_verification,Document_sent_date,R7_Received_amount,R7_Payment_Verification,R7_Bank_type,R7_Legal_verification,Finance_status_change_date,R8_Received_amount,R8_Payment_Verification,R8_Bank_type,R8_Legal_verification,Date_of_financedate_change';
             const criteria = urlObj.searchParams.get('criteria') || '';
             const paginationQuery = buildZohoPaginationQuery(urlObj);

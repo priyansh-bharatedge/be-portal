@@ -4107,11 +4107,11 @@ export const DealDetails = () => {
                   <span className="font-semibold text-gray-800">{formatZohoValue(raw.Payment_status || raw.Payment_stages || raw.Payment_Type)}</span>
                 </div>
               )}
-              {(raw.Payment_received_date || raw.Payment_Date) && (
+              {(raw.Payment_Date || raw.Payment_received_date) && (
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400">Payment Date:</span>
                   <span className="font-medium text-gray-800">
-                    {new Date(raw.Payment_received_date || raw.Payment_Date).toLocaleDateString('en-GB')}
+                    {new Date(raw.Payment_Date || raw.Payment_received_date).toLocaleDateString('en-GB')}
                   </span>
                 </div>
               )}

@@ -695,8 +695,8 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
   const pendingAmountNum = to2Dec(Math.max(0, grandTotalNum - amountReceivedNum));
 
   const todayDate = new Date().toISOString().split('T')[0];
-  const closingDate = formatDateForZoho(deal.date || deal.closingDate) || todayDate;
   const bookingDate = formatDateForZoho(deal.date || deal.bookingDate) || todayDate;
+  const paymentDate = formatDateForZoho(deal.Payment_Date || deal.paymentDate || deal.payment_date || deal.date || deal.bookingDate) || bookingDate;
 
   const payload: Record<string, any> = {
     Deal_Name: dealName,
@@ -716,16 +716,24 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
     Total_Pending_Amount: pendingAmountNum,
     Pending_amount: pendingAmountNum,
     amount_if_you_have_kindly_put_0: 0,
-    Closing_Date: closingDate,
+    Payment_Date: paymentDate,
     Booking_Date: bookingDate,
     Sales_date: bookingDate,
     Account_date: bookingDate,
     CRM_date: bookingDate,
     CRM_filled: true,
     CRM_filled_date: bookingDate,
-    Payment_received_date: bookingDate,
+    Payment_received_date: paymentDate,
     Payment_Type: 'Online',
   };
+
+  // Only set Closing_Date if explicitly provided (e.g. for R1 milestone payment update), never on fresh deal creation
+  if (deal.Closing_Date || deal.closingDate) {
+    const explicitClosing = formatDateForZoho(deal.Closing_Date || deal.closingDate);
+    if (explicitClosing) {
+      payload.Closing_Date = explicitClosing;
+    }
+  }
 
   if (deal.zohoId) {
     payload.id = String(deal.zohoId);
@@ -2383,7 +2391,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     if ((action === 'get-deals' || action === 'deals') && method === 'GET') {
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
-      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications';
+      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
       return executeZohoGet(apiBase, moduleName, dealFields, req, res, urlObj, 'deals');
     }
 
