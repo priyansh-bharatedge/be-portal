@@ -1411,6 +1411,45 @@ export async function updateZohoMilestoneBank(
 }
 
 /**
+ * Verifies a milestone remaining payment (R1 to R8) for Legal department in Zoho CRM.
+ * Synchronizes with Zoho CRM Deal custom Boolean fields:
+ * - R1_Legal_verification, R2_Legal_verification, ..., R8_Legal_verification
+ */
+export async function verifyZohoMilestoneLegal(
+  dealZohoId: string,
+  slotIndex: number,
+  isVerified: boolean = true
+): Promise<ZohoApiResponse> {
+  const payload: any = { id: dealZohoId, zohoId: dealZohoId, isPartial: true };
+  payload[`R${slotIndex}_Legal_verification`] = isVerified;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('be_deals');
+      if (saved) {
+        const deals = JSON.parse(saved);
+        const updated = deals.map((d: any) => {
+          if (d.zohoId === dealZohoId || d.id === dealZohoId) {
+            return {
+              ...d,
+              ...payload,
+              rawZohoDeal: {
+                ...(d.rawZohoDeal || {}),
+                ...payload
+              }
+            };
+          }
+          return d;
+        });
+        localStorage.setItem('be_deals', JSON.stringify(updated));
+      }
+    } catch (_) {}
+  }
+
+  return updateZohoDeal(payload);
+}
+
+/**
  * Transition ID Mapping for Zoho CRM Deal Blueprint:
  * - Sales to Account: "1078476000000489153"
  * - Account to Legal: "1078476000000492001"

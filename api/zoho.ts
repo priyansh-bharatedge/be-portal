@@ -1104,6 +1104,10 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
       if (i === 1) payload.R1_Bank_details = String(bankVal).trim();
       if (i === 2) payload.R2_Bank_details = String(bankVal).trim();
     }
+    const legalVal = deal[`R${i}_Legal_verification`] ?? fd[`R${i}_Legal_verification`] ?? deal.rawZohoDeal?.[`R${i}_Legal_verification`] ?? deal.rPaymentSlots?.[i]?.isLegalVerified;
+    if (legalVal !== undefined && legalVal !== null) {
+      payload[`R${i}_Legal_verification`] = Boolean(legalVal === true || legalVal === 'true');
+    }
   }
 
   if (payload.BDM_names) {

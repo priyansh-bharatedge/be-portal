@@ -22,6 +22,7 @@ import {
   saveOrUpdateZohoDeal,
   verifyZohoMilestonePayment,
   updateZohoMilestoneBank,
+  verifyZohoMilestoneLegal,
   transitionZohoDealBlueprint,
   moveDealToAccounts,
   moveDealToLegal,
@@ -283,9 +284,10 @@ export const DealDetails = () => {
   });
   const paymentScreenshotInputRef = useRef<HTMLInputElement>(null);
 
-  // Accounts Remaining Payment Verification state
+  // Accounts & Legal Remaining Payment Verification state
   const [detailsBankSelections, setDetailsBankSelections] = useState<Record<number, 'BSPL' | 'BSAPL' | string>>({});
   const [verifyingDetailsMilestone, setVerifyingDetailsMilestone] = useState<number | null>(null);
+  const [verifyingDetailsLegal, setVerifyingDetailsLegal] = useState<number | null>(null);
 
   // Load Sales Employees Directory for BDM 1 & BDM 2 Selectors
   useEffect(() => {
@@ -2150,6 +2152,45 @@ export const DealDetails = () => {
     }
   };
 
+  const handleVerifyDetailsLegal = async (slotIndex: number, isVerified: boolean = true) => {
+    if (!deal) return;
+    const targetZohoId = deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : null);
+    if (!targetZohoId) {
+      setWorkflowToast({ type: 'error', message: 'Cannot verify: Deal is not synced with Zoho CRM.' });
+      return;
+    }
+
+    setVerifyingDetailsLegal(slotIndex);
+    try {
+      const res = await verifyZohoMilestoneLegal(targetZohoId, slotIndex, isVerified);
+      if (res.success) {
+        setWorkflowToast({
+          type: 'success',
+          message: `R${slotIndex} Legal verification ${isVerified ? 'verified' : 'marked pending'}`
+        });
+        setDeal((prev: any) => {
+          if (!prev) return prev;
+          const patch: any = {};
+          patch[`R${slotIndex}_Legal_verification`] = isVerified;
+          return {
+            ...prev,
+            ...patch,
+            rawZohoDeal: {
+              ...(prev.rawZohoDeal || {}),
+              ...patch
+            }
+          };
+        });
+      } else {
+        setWorkflowToast({ type: 'error', message: res.message || 'Legal verification failed in Zoho CRM' });
+      }
+    } catch (err: any) {
+      setWorkflowToast({ type: 'error', message: err?.message || 'Failed to communicate with Zoho CRM' });
+    } finally {
+      setVerifyingDetailsLegal(null);
+    }
+  };
+
   const handleViewMilestoneScreenshot = async (milestone: DealMilestoneItem) => {
     // 1. Try local IndexedDB
     try {
@@ -2928,16 +2969,25 @@ export const DealDetails = () => {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-sm text-gray-900">{m.label}</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              m.isVerified 
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-                                : 'bg-rose-100 text-rose-800 border border-rose-200'
-                            }`}>
-                              {m.isVerified ? 'Verified' : 'Unverified'}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                m.isVerified 
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                                  : 'bg-rose-100 text-rose-800 border border-rose-200'
+                              }`}>
+                                Acc: {m.isVerified ? 'Verified' : 'Pending'}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                m.isLegalVerified 
+                                  ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' 
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              }`}>
+                                Legal: {m.isLegalVerified ? 'Verified' : 'Pending'}
+                              </span>
+                            </div>
                           </div>
 
-                          <div className={`text-base font-bold ${m.isVerified ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          <div className={`text-base font-bold ${m.isVerified && m.isLegalVerified ? 'text-emerald-600' : 'text-gray-900'}`}>
                             ₹{m.amount.toLocaleString('en-IN')}
                           </div>
 
@@ -2977,19 +3027,19 @@ export const DealDetails = () => {
                           </div>
                         </div>
 
-                        {/* Accounts verification controls (Accounts or SuperAdmin) */}
-                        {(isAccounts || isSuperAdmin) && (
-                          <div className="pt-2.5 mt-2 border-t border-gray-200/80 space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex flex-col">
-                                <span className="text-[11px] font-bold text-gray-700 flex items-center gap-1">
-                                  <Building2 size={12} className="text-be-orange" />
-                                  Bank Details
-                                </span>
-                                <span className="text-[9px] text-gray-400 font-mono">
-                                  R{m.index}_Bank_type
-                                </span>
-                              </div>
+                        {/* 1. Accounts Verification Section */}
+                        <div className="pt-2.5 mt-2 border-t border-gray-200/80 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex flex-col">
+                              <span className="text-[11px] font-bold text-gray-700 flex items-center gap-1">
+                                <Building2 size={12} className="text-be-orange" />
+                                Accounts
+                              </span>
+                              <span className="text-[9px] text-gray-400 font-mono">
+                                R{m.index}_Bank_type
+                              </span>
+                            </div>
+                            {(isAccounts || isSuperAdmin) ? (
                               <div className="flex items-center gap-1.5">
                                 <select
                                   value={currentBank}
@@ -3016,10 +3066,16 @@ export const DealDetails = () => {
                                   </button>
                                 )}
                               </div>
-                            </div>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-gray-700">
+                                {m.bankType || 'BSPL'}
+                              </span>
+                            )}
+                          </div>
 
-                            <div className="flex items-center justify-between pt-1">
-                              {m.isVerified ? (
+                          <div className="flex items-center justify-between pt-0.5">
+                            {(isAccounts || isSuperAdmin) ? (
+                              m.isVerified ? (
                                 <div className="w-full flex items-center justify-between">
                                   <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
                                     <CheckCircle2 size={13} className="text-emerald-600" />
@@ -3051,14 +3107,92 @@ export const DealDetails = () => {
                                   ) : (
                                     <>
                                       <CheckCircle2 size={12} />
-                                      Verify Payment
+                                      Verify Accounts Payment
                                     </>
                                   )}
                                 </button>
-                              )}
-                            </div>
+                              )
+                            ) : (
+                              m.isVerified ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                                  <CheckCircle2 size={13} className="text-emerald-600" />
+                                  Accounts Verified ({m.bankType || 'BSPL'})
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600">
+                                  <Clock size={13} className="text-amber-500" />
+                                  Accounts Pending
+                                </span>
+                              )
+                            )}
                           </div>
-                        )}
+                        </div>
+
+                        {/* 2. Legal Verification Section */}
+                        <div className="pt-2 mt-2 border-t border-gray-100 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-gray-700 flex items-center gap-1">
+                              <ShieldCheck size={12} className="text-indigo-600" />
+                              Legal Verification
+                            </span>
+                            <span className="text-[9px] text-gray-400 font-mono">
+                              R{m.index}_Legal_verification
+                            </span>
+                          </div>
+
+                          {(isLegal || isSuperAdmin) ? (
+                            m.isLegalVerified ? (
+                              <div className="w-full flex items-center justify-between py-1 px-2.5 rounded-lg bg-indigo-50 border border-indigo-100">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700">
+                                  <CheckCircle2 size={13} className="text-indigo-600" />
+                                  Legal Verified
+                                </span>
+                                {isSuperAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleVerifyDetailsLegal(m.index, false)}
+                                    disabled={verifyingDetailsLegal === m.index}
+                                    className="text-[10px] text-gray-400 hover:text-rose-600 underline font-medium transition-colors cursor-pointer"
+                                    title="Reset Legal verification"
+                                  >
+                                    Reset
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleVerifyDetailsLegal(m.index, true)}
+                                disabled={verifyingDetailsLegal === m.index}
+                                className="w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                              >
+                                {verifyingDetailsLegal === m.index ? (
+                                  <>
+                                    <Loader2 size={12} className="animate-spin" />
+                                    Verifying Legal...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ShieldCheck size={12} />
+                                    Verify Legal
+                                  </>
+                                )}
+                              </button>
+                            )
+                          ) : (
+                            m.isLegalVerified ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700">
+                                <CheckCircle2 size={13} className="text-indigo-600" />
+                                Legal Verified
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500">
+                                <Clock size={13} className="text-slate-400" />
+                                Legal Pending
+                              </span>
+                            )
+                          )}
+                        </div>
                       </div>
                     );
                   })}

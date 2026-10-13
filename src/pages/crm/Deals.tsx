@@ -24,6 +24,7 @@ import {
   moveDealToOperationsExecutors,
   verifyZohoMilestonePayment,
   updateZohoMilestoneBank,
+  verifyZohoMilestoneLegal,
   ZOHO_DEAL_BLUEPRINT_TRANSITIONS
 } from '../../services/zohoService';
 import { buildZohoRbacCriteria } from '../../services/zohoRbacService';
@@ -40,6 +41,8 @@ import {
   getDealMilestones,
   hasDealRemainingPayments,
   getDealUnverifiedMilestonesCount,
+  getDealUnverifiedLegalMilestonesCount,
+  getDealVerifiedLegalMilestonesCount,
   type DealMilestoneItem
 } from '../../utils/dealSplitUtils';
 
@@ -62,7 +65,8 @@ export const Deals = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
-    if ((tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments') && !isAccounts && !isSuperAdmin) return 'All Deals';
+    if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) return 'All Deals';
+    if (tabParam === 'Remaining Payments' && !isAccounts && !isLegal && !isSuperAdmin) return 'All Deals';
     if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) return 'All Deals';
     if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && (isAccounts || isLegal) && !isSuperAdmin) return 'All Deals';
     if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments' || tabParam === 'Legal Queue') return tabParam;
@@ -79,9 +83,10 @@ export const Deals = () => {
     isDeleting: false
   });
 
-  // Accounts Remaining Payments Verification state
+  // Accounts & Legal Remaining Payments Verification state
   const [milestoneBankSelections, setMilestoneBankSelections] = useState<Record<string, 'BSPL' | 'BSAPL' | ''>>({});
   const [verifyingMilestoneKey, setVerifyingMilestoneKey] = useState<string | null>(null);
+  const [verifyingMilestoneLegalKey, setVerifyingMilestoneLegalKey] = useState<string | null>(null);
   const [previewScreenshotModal, setPreviewScreenshotModal] = useState<{ isOpen: boolean; url: string; title: string }>({
     isOpen: false,
     url: '',
@@ -92,7 +97,9 @@ export const Deals = () => {
   useEffect(() => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
     if (tabParam) {
-      if ((tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments') && !isAccounts && !isSuperAdmin) {
+      if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) {
+        setActiveTab('All Deals');
+      } else if (tabParam === 'Remaining Payments' && !isAccounts && !isLegal && !isSuperAdmin) {
         setActiveTab('All Deals');
       } else if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) {
         setActiveTab('All Deals');
@@ -2628,6 +2635,67 @@ export const Deals = () => {
     }
   };
 
+  const handleVerifyMilestoneLegal = async (deal: any, slotIndex: number, isVerified: boolean = true) => {
+    const dealZohoId = deal.zohoId || (/^\d{15,}$/.test(String(deal.id)) ? String(deal.id) : null);
+    if (!dealZohoId) {
+      setToast({
+        type: 'error',
+        message: 'Cannot update legal verification',
+        submessage: 'This deal does not have a valid Zoho CRM ID.'
+      });
+      return;
+    }
+
+    const key = `${deal.id}_${slotIndex}`;
+    setVerifyingMilestoneLegalKey(key);
+    try {
+      const res = await verifyZohoMilestoneLegal(dealZohoId, slotIndex, isVerified);
+      if (res.success) {
+        const patch: any = {};
+        patch[`R${slotIndex}_Legal_verification`] = isVerified;
+
+        const updatedList = deals.map((d: any) => {
+          if (d.id === deal.id || d.zohoId === dealZohoId) {
+            return {
+              ...d,
+              ...patch,
+              rawZohoDeal: {
+                ...(d.rawZohoDeal || {}),
+                ...patch
+              }
+            };
+          }
+          return d;
+        });
+
+        setDeals(updatedList);
+        safeSaveDealsToStorage(updatedList);
+
+        setToast({
+          type: 'success',
+          message: `R${slotIndex} Legal Verification ${isVerified ? 'Verified' : 'Updated'}`,
+          submessage: isVerified
+            ? `Legal verification marked as Verified for deal ${deal.id} in Zoho CRM.`
+            : `Legal verification updated for deal ${deal.id} in Zoho CRM.`
+        });
+      } else {
+        setToast({
+          type: 'error',
+          message: 'Legal verification failed',
+          submessage: res.message || 'Zoho CRM rejected the verification update.'
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: 'error',
+        message: 'Verification Error',
+        submessage: err?.message || 'Failed to update legal verification in Zoho CRM.'
+      });
+    } finally {
+      setVerifyingMilestoneLegalKey(null);
+    }
+  };
+
   const handlePreviewScreenshot = async (deal: any, milestone: DealMilestoneItem) => {
     try {
       const { getAllDocuments } = await import('../../lib/db');
@@ -2688,6 +2756,10 @@ export const Deals = () => {
 
   const unverifiedRemainingPaymentsCount = useMemo(() => {
     return rbacDeals.reduce((acc: number, d: any) => acc + getDealUnverifiedMilestonesCount(d), 0);
+  }, [rbacDeals]);
+
+  const unverifiedLegalRemainingPaymentsCount = useMemo(() => {
+    return rbacDeals.reduce((acc: number, d: any) => acc + getDealUnverifiedLegalMilestonesCount(d), 0);
   }, [rbacDeals]);
 
   const isFiltered = Boolean(
@@ -2821,10 +2893,17 @@ export const Deals = () => {
           ...((isAccounts || isSuperAdmin) ? [
             { id: 'Account Queue', label: 'Account Queue', count: accountQueueCount, isQueue: true },
             { id: 'Account Verified', label: 'Account Verified', count: accountVerifiedCount, isVerified: true },
-            { id: 'Remaining Payments', label: 'Remaining Payments', count: unverifiedRemainingPaymentsCount, isRemaining: true },
           ] : []),
           ...((isLegal || isSuperAdmin) ? [
             { id: 'Legal Queue', label: 'Legal Queue', count: legalQueueCount, isLegal: true },
+          ] : []),
+          ...((isAccounts || isLegal || isSuperAdmin) ? [
+            { 
+              id: 'Remaining Payments', 
+              label: 'Remaining Payments', 
+              count: isLegal && !isAccounts && !isSuperAdmin ? unverifiedLegalRemainingPaymentsCount : unverifiedRemainingPaymentsCount, 
+              isRemaining: true 
+            },
           ] : []),
           ...(((!isAccounts && !isLegal) || isSuperAdmin) ? [
             { id: 'Manual Deals', label: 'Manual Deals', count: null },
@@ -2915,11 +2994,11 @@ export const Deals = () => {
         if (activeTab === 'Remaining Payments') {
           return (
             <div className="space-y-4 mt-6">
-              {/* Summary / Stats Header for Accounts Remaining Payments */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Summary / Stats Header for Accounts & Legal Remaining Payments */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">Deals with Remaining Payments</p>
+                    <p className="text-xs text-gray-500 font-medium">Remaining Deals</p>
                     <p className="text-xl font-bold text-gray-900 mt-1">{filteredDeals.length}</p>
                   </div>
                   <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
@@ -2928,7 +3007,7 @@ export const Deals = () => {
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">Pending Verifications</p>
+                    <p className="text-xs text-gray-500 font-medium">Accounts Pending</p>
                     <p className="text-xl font-bold text-amber-600 mt-1">{unverifiedRemainingPaymentsCount}</p>
                   </div>
                   <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
@@ -2937,13 +3016,22 @@ export const Deals = () => {
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">Verification Status</p>
-                    <p className="text-xs font-semibold text-gray-600 mt-2">
-                      Verify payments under <span className="font-bold text-be-orange">BSPL</span> or <span className="font-bold text-indigo-600">BSAPL</span>
+                    <p className="text-xs text-gray-500 font-medium">Legal Pending</p>
+                    <p className="text-xl font-bold text-indigo-600 mt-1">{unverifiedLegalRemainingPaymentsCount}</p>
+                  </div>
+                  <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600">
+                    <ShieldCheck size={20} />
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium">Mutual Verification</p>
+                    <p className="text-xs font-semibold text-gray-600 mt-1">
+                      Accounts: <span className="text-be-orange font-bold">BSPL/BSAPL</span> • Legal: <span className="text-indigo-600 font-bold">Verified</span>
                     </p>
                   </div>
                   <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
-                    <ShieldCheck size={20} />
+                    <CheckCircle2 size={20} />
                   </div>
                 </div>
               </div>
@@ -3024,15 +3112,18 @@ export const Deals = () => {
                               const itemKey = `${deal.id}_${milestone.index}`;
                               const selectedBank = milestoneBankSelections[itemKey] || milestone.bankType || 'BSPL';
                               const isVerifying = verifyingMilestoneKey === itemKey;
+                              const isVerifyingLegal = verifyingMilestoneLegalKey === itemKey;
 
                               return (
-                                <div key={milestone.index} className="py-3.5 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                <div key={milestone.index} className="py-3.5 first:pt-0 last:pb-0 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
                                   {/* Left: Slot info */}
-                                  <div className="flex items-center gap-3 min-w-[240px]">
+                                  <div className="flex items-center gap-3 min-w-[220px]">
                                     <span className={`px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
-                                      milestone.isVerified 
+                                      milestone.isVerified && milestone.isLegalVerified
                                         ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-                                        : 'bg-amber-100 text-amber-800 border border-amber-200'
+                                        : milestone.isVerified || milestone.isLegalVerified
+                                          ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                          : 'bg-amber-100 text-amber-800 border border-amber-200'
                                     }`}>
                                       {milestone.tabName}
                                     </span>
@@ -3085,79 +3176,164 @@ export const Deals = () => {
                                     </div>
                                   </div>
 
-                                  {/* Right: Bank Dropdown (BSPL / BSAPL) + Payment Verification Button */}
-                                  <div className="flex items-center gap-2.5 shrink-0">
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                  {/* Right: Department Verification Statuses & Actions (Accounts & Legal) */}
+                                  <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                                    {/* 1. Accounts Department Section */}
+                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50/60">
                                       <div className="flex items-center gap-1.5">
                                         <label className="text-[11px] font-bold text-gray-700 uppercase flex items-center gap-1">
                                           <Building2 size={12} className="text-be-orange" />
-                                          Bank Details:
+                                          Accounts:
                                         </label>
-                                        <select
-                                          value={selectedBank}
-                                          disabled={isVerifying}
-                                          onChange={(e) => {
-                                            const val = e.target.value as 'BSPL' | 'BSAPL';
-                                            setMilestoneBankSelections(prev => ({
-                                              ...prev,
-                                              [itemKey]: val
-                                            }));
-                                          }}
-                                          className="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all shadow-xs"
-                                          title={`Zoho CRM Pick List field: R${milestone.index}_Bank_type`}
-                                        >
-                                          <option value="BSPL">BSPL</option>
-                                          <option value="BSAPL">BSAPL</option>
-                                        </select>
-                                        {selectedBank !== (milestone.bankType || 'BSPL') && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSaveMilestoneBank(deal, milestone.index, selectedBank)}
-                                            disabled={isVerifying}
-                                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md text-[11px] font-bold transition-colors cursor-pointer"
-                                            title={`Save R${milestone.index}_Bank_type as ${selectedBank} in Zoho CRM`}
-                                          >
-                                            Save Bank
-                                          </button>
+                                        {(isAccounts || isSuperAdmin) ? (
+                                          <>
+                                            <select
+                                              value={selectedBank}
+                                              disabled={isVerifying}
+                                              onChange={(e) => {
+                                                const val = e.target.value as 'BSPL' | 'BSAPL';
+                                                setMilestoneBankSelections(prev => ({
+                                                  ...prev,
+                                                  [itemKey]: val
+                                                }));
+                                              }}
+                                              className="px-2 py-0.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all shadow-xs"
+                                              title={`Zoho CRM Pick List field: R${milestone.index}_Bank_type`}
+                                            >
+                                              <option value="BSPL">BSPL</option>
+                                              <option value="BSAPL">BSAPL</option>
+                                            </select>
+                                            {selectedBank !== (milestone.bankType || 'BSPL') && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleSaveMilestoneBank(deal, milestone.index, selectedBank)}
+                                                disabled={isVerifying}
+                                                className="px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[10px] font-bold transition-colors cursor-pointer"
+                                                title={`Save R${milestone.index}_Bank_type as ${selectedBank} in Zoho CRM`}
+                                              >
+                                                Save
+                                              </button>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <span className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-gray-700">
+                                            {milestone.bankType || 'BSPL'}
+                                          </span>
                                         )}
                                       </div>
 
-                                      {milestone.isVerified ? (
-                                        <div className="flex items-center gap-2">
-                                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-xs">
-                                            <CheckCircle2 size={14} className="text-emerald-600" />
-                                            Verified ({milestone.bankType || selectedBank})
-                                          </span>
-                                          {selectedBank !== (milestone.bankType || 'BSPL') && (
-                                            <button
-                                              type="button"
-                                              onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
-                                              disabled={isVerifying}
-                                              className="text-[11px] text-indigo-600 hover:text-indigo-800 underline font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                                            >
-                                              Re-verify
-                                            </button>
-                                          )}
-                                        </div>
+                                      {/* Accounts Action / Status */}
+                                      {(isAccounts || isSuperAdmin) ? (
+                                        milestone.isVerified ? (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-xs">
+                                              <CheckCircle2 size={13} className="text-emerald-600" />
+                                              Verified ({milestone.bankType || selectedBank})
+                                            </span>
+                                            {selectedBank !== (milestone.bankType || 'BSPL') && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
+                                                disabled={isVerifying}
+                                                className="text-[10px] text-indigo-600 hover:text-indigo-800 underline font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                                              >
+                                                Re-verify
+                                              </button>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
+                                            disabled={isVerifying}
+                                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1 transition-all disabled:opacity-50 cursor-pointer"
+                                          >
+                                            {isVerifying ? (
+                                              <>
+                                                <Loader2 size={12} className="animate-spin" />
+                                                Verifying...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <CheckCircle2 size={12} />
+                                                Verify Payment
+                                              </>
+                                            )}
+                                          </button>
+                                        )
                                       ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
-                                          disabled={isVerifying}
-                                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
-                                        >
-                                          {isVerifying ? (
-                                            <>
-                                              <Loader2 size={13} className="animate-spin" />
-                                              Verifying...
-                                            </>
-                                          ) : (
-                                            <>
-                                              <CheckCircle2 size={13} />
-                                              Verify Payment
-                                            </>
-                                          )}
-                                        </button>
+                                        milestone.isVerified ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-xs" title="Payment Verified by Accounts">
+                                            <CheckCircle2 size={13} className="text-emerald-600" />
+                                            Verified
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 font-bold border border-amber-200 text-xs" title="Pending Accounts Verification">
+                                            <Clock size={13} className="text-amber-500" />
+                                            Pending
+                                          </span>
+                                        )
+                                      )}
+                                    </div>
+
+                                    {/* 2. Legal Department Section */}
+                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 bg-gray-50/60">
+                                      <span className="text-[11px] font-bold text-gray-700 uppercase flex items-center gap-1">
+                                        <ShieldCheck size={12} className="text-indigo-600" />
+                                        Legal:
+                                      </span>
+
+                                      {(isLegal || isSuperAdmin) ? (
+                                        milestone.isLegalVerified ? (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 text-xs">
+                                              <CheckCircle2 size={13} className="text-indigo-600" />
+                                              Verified
+                                            </span>
+                                            {isSuperAdmin && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleVerifyMilestoneLegal(deal, milestone.index, false)}
+                                                disabled={isVerifyingLegal}
+                                                className="text-[10px] text-gray-400 hover:text-rose-600 underline font-medium transition-colors cursor-pointer"
+                                                title="Reset Legal verification"
+                                              >
+                                                Reset
+                                              </button>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleVerifyMilestoneLegal(deal, milestone.index, true)}
+                                            disabled={isVerifyingLegal}
+                                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1 transition-all disabled:opacity-50 cursor-pointer"
+                                          >
+                                            {isVerifyingLegal ? (
+                                              <>
+                                                <Loader2 size={12} className="animate-spin" />
+                                                Verifying...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <ShieldCheck size={12} />
+                                                Verify Legal
+                                              </>
+                                            )}
+                                          </button>
+                                        )
+                                      ) : (
+                                        milestone.isLegalVerified ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 text-xs" title="Verified by Legal Department">
+                                            <CheckCircle2 size={13} className="text-indigo-600" />
+                                            Verified
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-bold border border-slate-200 text-xs" title="Pending Legal Verification">
+                                            <Clock size={13} className="text-slate-400" />
+                                            Pending
+                                          </span>
+                                        )
                                       )}
                                     </div>
                                   </div>

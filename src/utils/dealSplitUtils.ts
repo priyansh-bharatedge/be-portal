@@ -491,17 +491,18 @@ export interface DealMilestoneItem {
   isVerified: boolean;
   bankType: 'BSPL' | 'BSAPL' | string;
   hasPayment: boolean;
+  isLegalVerified: boolean;
 }
 
 export const MILESTONE_CONFIG = [
-  { index: 1, tabName: 'R1', label: '1st Payment (R1)', amtField: 'R1_Received_amount23', dateField: 'Closing_Date', ssField: 'R1_Received_Screenshot', bdm1Field: 'R1_Received_by_BDM1', bdm2Field: 'R1_Received_by_BDM2', verifField: 'R1_Payment_Verification', bankField: 'R1_Bank_type' },
-  { index: 2, tabName: 'R2', label: '2nd Payment (R2)', amtField: 'R2_Received_amount12', dateField: 'DPR_status_change_date', ssField: 'R2_Received_Screenshot', bdm1Field: 'R2_Received_by_BDM1', bdm2Field: 'R2_Received_by_BDM2', verifField: 'R2_Payment_Verification', bankField: 'R2_Bank_type' },
-  { index: 3, tabName: 'R3', label: '3rd Payment (R3)', amtField: 'R3_Received_amount', dateField: 'Date_of_status_change', ssField: 'R3_Received_Screenshot', bdm1Field: 'R3_Received_by_BDM1', bdm2Field: 'R3_Received_by_BDM2', verifField: 'R3_Payment_Verification', bankField: 'R3_Bank_type' },
-  { index: 4, tabName: 'R4', label: '4th Payment (R4)', amtField: 'R4_Received_amount', dateField: 'Date_of_status_change_f', ssField: 'R4_Received_Screenshot', bdm1Field: 'R4_Received_by_BDM1', bdm2Field: 'R4_Received_by_BDM2', verifField: 'R4_Payment_Verification', bankField: 'R4_Bank_type' },
-  { index: 5, tabName: 'R5', label: '5th Payment (R5)', amtField: 'R5_Received_amount', dateField: 'Document_collection_Pitch_deck_creation_DPR_date', ssField: 'R5_Received_Screenshot', bdm1Field: 'R5_Received_by_BDM1', bdm2Field: 'R5_Received_by_BDM2', verifField: 'R5_Payment_Verification', bankField: 'R5_Bank_type' },
-  { index: 6, tabName: 'R6', label: '6th Payment (R6)', amtField: 'R6_Received_amount', dateField: 'Document_sent_date', ssField: 'R6_Received_Screenshot', bdm1Field: 'R6_Received_BDM1', bdm2Field: 'R6_Received_BDM2', verifField: 'R6_Payment_Verification', bankField: 'R6_Bank_type' },
-  { index: 7, tabName: 'R7', label: '7th Payment (R7)', amtField: 'R7_Received_amount', dateField: 'Finance_status_change_date', ssField: 'R7_Received_Screenshot', bdm1Field: 'R7_Received_by_BDM1', bdm2Field: 'R7_Received_by_BDM2', verifField: 'R7_Payment_Verification', bankField: 'R7_Bank_type' },
-  { index: 8, tabName: 'R8', label: '8th Payment (R8)', amtField: 'R8_Received_amount', dateField: 'Date_of_financedate_change', ssField: 'R8_Received_Screenshot', bdm1Field: 'R8_Received_by_BDM1', bdm2Field: 'R8_Received_by_BDM2', verifField: 'R8_Payment_Verification', bankField: 'R8_Bank_type' },
+  { index: 1, tabName: 'R1', label: '1st Payment (R1)', amtField: 'R1_Received_amount23', dateField: 'Closing_Date', ssField: 'R1_Received_Screenshot', bdm1Field: 'R1_Received_by_BDM1', bdm2Field: 'R1_Received_by_BDM2', verifField: 'R1_Payment_Verification', bankField: 'R1_Bank_type', legalVerifField: 'R1_Legal_verification' },
+  { index: 2, tabName: 'R2', label: '2nd Payment (R2)', amtField: 'R2_Received_amount12', dateField: 'DPR_status_change_date', ssField: 'R2_Received_Screenshot', bdm1Field: 'R2_Received_by_BDM1', bdm2Field: 'R2_Received_by_BDM2', verifField: 'R2_Payment_Verification', bankField: 'R2_Bank_type', legalVerifField: 'R2_Legal_verification' },
+  { index: 3, tabName: 'R3', label: '3rd Payment (R3)', amtField: 'R3_Received_amount', dateField: 'Date_of_status_change', ssField: 'R3_Received_Screenshot', bdm1Field: 'R3_Received_by_BDM1', bdm2Field: 'R3_Received_by_BDM2', verifField: 'R3_Payment_Verification', bankField: 'R3_Bank_type', legalVerifField: 'R3_Legal_verification' },
+  { index: 4, tabName: 'R4', label: '4th Payment (R4)', amtField: 'R4_Received_amount', dateField: 'Date_of_status_change_f', ssField: 'R4_Received_Screenshot', bdm1Field: 'R4_Received_by_BDM1', bdm2Field: 'R4_Received_by_BDM2', verifField: 'R4_Payment_Verification', bankField: 'R4_Bank_type', legalVerifField: 'R4_Legal_verification' },
+  { index: 5, tabName: 'R5', label: '5th Payment (R5)', amtField: 'R5_Received_amount', dateField: 'Document_collection_Pitch_deck_creation_DPR_date', ssField: 'R5_Received_Screenshot', bdm1Field: 'R5_Received_by_BDM1', bdm2Field: 'R5_Received_by_BDM2', verifField: 'R5_Payment_Verification', bankField: 'R5_Bank_type', legalVerifField: 'R5_Legal_verification' },
+  { index: 6, tabName: 'R6', label: '6th Payment (R6)', amtField: 'R6_Received_amount', dateField: 'Document_sent_date', ssField: 'R6_Received_Screenshot', bdm1Field: 'R6_Received_BDM1', bdm2Field: 'R6_Received_BDM2', verifField: 'R6_Payment_Verification', bankField: 'R6_Bank_type', legalVerifField: 'R6_Legal_verification' },
+  { index: 7, tabName: 'R7', label: '7th Payment (R7)', amtField: 'R7_Received_amount', dateField: 'Finance_status_change_date', ssField: 'R7_Received_Screenshot', bdm1Field: 'R7_Received_by_BDM1', bdm2Field: 'R7_Received_by_BDM2', verifField: 'R7_Payment_Verification', bankField: 'R7_Bank_type', legalVerifField: 'R7_Legal_verification' },
+  { index: 8, tabName: 'R8', label: '8th Payment (R8)', amtField: 'R8_Received_amount', dateField: 'Date_of_financedate_change', ssField: 'R8_Received_Screenshot', bdm1Field: 'R8_Received_by_BDM1', bdm2Field: 'R8_Received_by_BDM2', verifField: 'R8_Payment_Verification', bankField: 'R8_Bank_type', legalVerifField: 'R8_Legal_verification' },
 ] as const;
 
 export const getDealMilestones = (d: any): DealMilestoneItem[] => {
@@ -521,11 +522,20 @@ export const getDealMilestones = (d: any): DealMilestoneItem[] => {
     const bdm2Val = d[s.bdm2Field] ?? raw[s.bdm2Field];
     const bdm2 = typeof bdm2Val === 'object' ? (bdm2Val?.name || '') : String(bdm2Val || '');
     
-    // Verification boolean check
+    // Accounts payment verification boolean check
     const isVerif = Boolean(
       d[s.verifField] ?? raw[s.verifField] ?? 
       (s.index === 1 ? (d.R1_Payment_verifications ?? raw.R1_Payment_verifications) : 
        s.index === 2 ? (d.R2_Payment_verifications ?? raw.R2_Payment_verifications) : false)
+    );
+
+    // Legal verification boolean check (Zoho field: R{i}_Legal_verification)
+    const rawLegalVal = d[s.legalVerifField] ?? raw[s.legalVerifField] ?? d.formData?.[s.legalVerifField];
+    const isLegalVerif = Boolean(
+      rawLegalVal === true ||
+      rawLegalVal === 'true' ||
+      rawLegalVal === 'Verified' ||
+      rawLegalVal === 'Yes'
     );
 
     // Bank type: BSPL or BSAPL
@@ -545,6 +555,7 @@ export const getDealMilestones = (d: any): DealMilestoneItem[] => {
       bdm2,
       screenshot: ssName,
       isVerified: isVerif,
+      isLegalVerified: isLegalVerif,
       bankType,
       hasPayment: amt > 0,
     };
@@ -567,4 +578,16 @@ export const getDealVerifiedMilestonesCount = (d: any): number => {
   if (!d) return 0;
   const milestones = getDealMilestones(d);
   return milestones.filter(m => m.hasPayment && m.isVerified).length;
+};
+
+export const getDealUnverifiedLegalMilestonesCount = (d: any): number => {
+  if (!d) return 0;
+  const milestones = getDealMilestones(d);
+  return milestones.filter(m => m.hasPayment && !m.isLegalVerified).length;
+};
+
+export const getDealVerifiedLegalMilestonesCount = (d: any): number => {
+  if (!d) return 0;
+  const milestones = getDealMilestones(d);
+  return milestones.filter(m => m.hasPayment && m.isLegalVerified).length;
 };
