@@ -19,6 +19,7 @@ import {
   uploadZohoAttachmentToDeal,
   uploadZohoDealPhoto,
   uploadZohoDealImageField,
+  getZohoFieldAttachmentUrl,
   saveOrUpdateZohoDeal,
   verifyZohoMilestonePayment,
   updateZohoMilestoneBank,
@@ -52,6 +53,9 @@ const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promis
     if (Array.isArray(dealObj?.documentsData)) {
       for (const d of dealObj.documentsData) {
         if (d && d.name) {
+          const isPmtScreenshot = (d.id && (d.id.includes('payment_screenshot') || d.id.includes('_payment_'))) ||
+            (d.name && d.name.toLowerCase().includes('payment_screenshot'));
+          if (isPmtScreenshot) continue;
           matchedLocal.push(d);
           seenKeys.add((d.id || d.name).toLowerCase());
         }
@@ -63,6 +67,9 @@ const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promis
       const key = item.id;
       const file = item.file;
       const fileName = file?.name || key.split('_').slice(1).join('_') || key;
+
+      const isPaymentScreenshotKey = key.includes('payment_screenshot') || key.includes('_payment_');
+      if (isPaymentScreenshotKey) continue;
 
       const isMatch = 
         (dealDlId && (key.startsWith(`${dealDlId}_`) || key.toLowerCase().includes(dealDlId.toLowerCase()))) ||
@@ -288,6 +295,104 @@ export const DealDetails = () => {
   const [detailsBankSelections, setDetailsBankSelections] = useState<Record<number, 'BSPL' | 'BSAPL' | string>>({});
   const [verifyingDetailsMilestone, setVerifyingDetailsMilestone] = useState<number | null>(null);
   const [verifyingDetailsLegal, setVerifyingDetailsLegal] = useState<number | null>(null);
+
+  // Payment Screenshots (Deal_payment_screenshot) State
+  const [dealPaymentScreenshots, setDealPaymentScreenshots] = useState<{
+    id: string;
+    name: string;
+    url: string;
+    size?: string;
+  }[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const extractScreenshots = async () => {
+      if (!deal) {
+        setDealPaymentScreenshots([]);
+        return;
+      }
+      const raw = deal.rawZohoDeal || {};
+      const zohoFieldScreenshots = Array.isArray(raw.Deal_payment_screenshot)
+        ? raw.Deal_payment_screenshot
+        : (Array.isArray(deal.Deal_payment_screenshot)
+          ? deal.Deal_payment_screenshot
+          : (Array.isArray(deal.paymentScreenshots) ? deal.paymentScreenshots : []));
+
+      const list: { id: string; name: string; url: string; size?: string }[] = [];
+      const seenNames = new Set<string>();
+
+      // 1. From Zoho CRM Deal_payment_screenshot
+      const targetZohoId = String(deal.zohoId || (id && /^\d+$/.test(id) ? id : '') || '');
+      for (const item of zohoFieldScreenshots) {
+        if (!item) continue;
+        const attId = item.id || item.fields_attachment_id || '';
+        const fileId = item.File_Id__s || '';
+        const fileName = item.File_Name__s || 'payment_screenshot.png';
+        const url = getZohoFieldAttachmentUrl(targetZohoId, attId, fileId, 'Deals');
+        const sizeNum = Number(item.Size__s) || 0;
+        const sizeText = sizeNum > 0 ? (sizeNum < 1024 * 1024 ? `${(sizeNum / 1024).toFixed(1)} KB` : `${(sizeNum / (1024 * 1024)).toFixed(2)} MB`) : '';
+
+        list.push({
+          id: String(attId || fileId || Math.random()),
+          name: fileName,
+          url,
+          size: sizeText,
+        });
+        seenNames.add(fileName.toLowerCase());
+      }
+
+      // 2. Scan IndexedDB for locally saved payment screenshots for this deal
+      try {
+        const allDbDocs = await getAllDocuments();
+        const dealDlId = (deal?.id?.startsWith('DL-') ? deal.id : '') ||
+          (id?.startsWith('DL-') ? id : '') ||
+          (raw.Deal_Name ? (String(raw.Deal_Name).match(/\b(DL-\d+)\b/i)?.[1]?.toUpperCase() || '') : '') ||
+          '';
+
+        for (const doc of allDbDocs) {
+          const key = doc.id;
+          const isMatch =
+            (dealDlId && key.includes(dealDlId) && key.includes('payment_screenshot')) ||
+            (targetZohoId && key.includes(targetZohoId) && key.includes('payment_screenshot')) ||
+            (deal?.id && key.includes(deal.id) && key.includes('payment_screenshot'));
+
+          if (isMatch && doc.file) {
+            const fileName = doc.file.name || 'payment_screenshot.png';
+            if (!seenNames.has(fileName.toLowerCase())) {
+              const blobUrl = URL.createObjectURL(doc.file);
+              const sizeNum = doc.file.size || 0;
+              const sizeText = sizeNum > 0 ? (sizeNum < 1024 * 1024 ? `${(sizeNum / 1024).toFixed(1)} KB` : `${(sizeNum / (1024 * 1024)).toFixed(2)} MB`) : '';
+              list.push({
+                id: key,
+                name: fileName,
+                url: blobUrl,
+                size: sizeText,
+              });
+              seenNames.add(fileName.toLowerCase());
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading local payment screenshots:', e);
+      }
+
+      // 3. Fallback: single payment screenshot from deal if not already captured
+      if (list.length === 0 && deal.paymentScreenshotUrl) {
+        list.push({
+          id: 'deal_screenshot_url',
+          name: deal.paymentScreenshotName || 'Payment Screenshot',
+          url: deal.paymentScreenshotUrl,
+        });
+      }
+
+      if (isMounted) {
+        setDealPaymentScreenshots(list);
+      }
+    };
+
+    extractScreenshots();
+    return () => { isMounted = false; };
+  }, [deal, id]);
 
   // Load Sales Employees Directory for BDM 1 & BDM 2 Selectors
   useEffect(() => {
@@ -3854,6 +3959,70 @@ export const DealDetails = () => {
                   ₹{pendingAmountNum.toLocaleString('en-IN')}
                 </div>
               </div>
+            </div>
+
+            {/* Payment Screenshots Card (Zoho CRM Field: Deal_payment_screenshot) */}
+            <div className="p-3.5 bg-gradient-to-br from-emerald-50/50 via-white to-teal-50/30 rounded-xl border border-emerald-100 shadow-2xs space-y-2.5">
+              <div className="flex items-center justify-between border-b border-emerald-100/70 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                    <ImageIcon size={12} />
+                  </div>
+                  <span className="text-xs font-bold text-gray-900">Payment Screenshots</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded-full">
+                    {dealPaymentScreenshots.length}
+                  </span>
+                </div>
+                <span className="text-[9px] font-mono font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
+                  Deal_payment_screenshot
+                </span>
+              </div>
+
+              {dealPaymentScreenshots.length > 0 ? (
+                <div className="space-y-2">
+                  <div className={`grid ${dealPaymentScreenshots.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
+                    {dealPaymentScreenshots.map((ps, idx) => (
+                      <div
+                        key={ps.id || idx}
+                        onClick={() => {
+                          setPreviewDoc({
+                            url: ps.url,
+                            name: ps.name,
+                            sizeText: ps.size,
+                            isPdf: ps.name.toLowerCase().endsWith('.pdf'),
+                            isImage: true,
+                            downloadUrl: ps.url,
+                            isZoho: true,
+                          });
+                        }}
+                        className="group relative cursor-pointer rounded-lg overflow-hidden border border-gray-200/80 hover:border-emerald-500 bg-gray-50 aspect-video flex items-center justify-center transition-all shadow-2xs hover:shadow-sm"
+                        title={`Click to view: ${ps.name}`}
+                      >
+                        <img
+                          src={ps.url}
+                          alt={ps.name}
+                          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                          loading="lazy"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white">
+                          <Eye size={13} className="drop-shadow" />
+                          <span className="text-[10px] font-bold drop-shadow">View</span>
+                        </div>
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/75 to-transparent p-1">
+                          <p className="text-[9px] font-medium text-white truncate px-0.5">{ps.name}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-gray-400 italic text-right">
+                    Click thumbnail to open full screenshot
+                  </p>
+                </div>
+              ) : (
+                <div className="py-2.5 text-center bg-white/70 rounded-lg border border-dashed border-gray-200">
+                  <p className="text-[11px] text-gray-400 italic">No payment screenshots in Deal_payment_screenshot</p>
+                </div>
+              )}
             </div>
 
             {/* 50/50 Split Breakdown Card if Partner BDM is active */}

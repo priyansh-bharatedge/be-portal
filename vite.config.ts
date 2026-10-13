@@ -4665,6 +4665,73 @@ function zohoApiPlugin(): Plugin {
           }
         }
 
+        // Download Custom Field Attachment (e.g. Deal_payment_screenshot)
+        if ((pathname === '/api/zoho/download-field-attachment' || pathname === '/api/zoho/download-fields-attachment') && req.method === 'GET') {
+          try {
+            const recordId = urlObj.searchParams.get('recordId') || urlObj.searchParams.get('id') || '';
+            const attachmentId = urlObj.searchParams.get('attachmentId') || urlObj.searchParams.get('fields_attachment_id') || '';
+            const fileId = urlObj.searchParams.get('fileId') || urlObj.searchParams.get('File_Id__s') || '';
+            const moduleName = urlObj.searchParams.get('module') || 'Deals';
+            const isPreview = urlObj.searchParams.get('preview') !== 'false';
+
+            if (!fileId && (!recordId || !attachmentId)) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: 'Either "fileId" or both "recordId" and "attachmentId" are required' }));
+            }
+
+            let accessToken = await getAccessToken(env);
+            const domain = env.VITE_ZOHO_DOMAIN || 'in';
+            const apiBase = env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
+
+            let crmEndpoint = '';
+            if (recordId && attachmentId) {
+              crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/actions/download_fields_attachment?fields_attachment_id=${attachmentId}`;
+            } else {
+              crmEndpoint = `${apiBase}/crm/v8/files?id=${fileId}`;
+            }
+
+            let crmRes = await fetch(crmEndpoint, {
+              method: 'GET',
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            });
+
+            if (crmRes.status === 401) {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              crmRes = await fetch(crmEndpoint, {
+                method: 'GET',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+              });
+            }
+
+            if (!crmRes.ok) {
+              const errText = await crmRes.text();
+              res.statusCode = crmRes.status;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: false, message: 'Failed to download field attachment from Zoho CRM', details: errText }));
+            }
+
+            const contentType = crmRes.headers.get('content-type') || 'image/png';
+            const contentDisp = crmRes.headers.get('content-disposition') || (isPreview ? 'inline' : `attachment; filename="screenshot-${attachmentId || fileId}.png"`);
+            const contentLength = crmRes.headers.get('content-length');
+
+            res.statusCode = 200;
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Content-Disposition', isPreview ? 'inline' : contentDisp);
+            if (contentLength) res.setHeader('Content-Length', contentLength);
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+
+            const arrayBuf = await crmRes.arrayBuffer();
+            return res.end(Buffer.from(arrayBuf));
+          } catch (err: any) {
+            console.error('[Vite Zoho Plugin] Download field attachment error:', err);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
         // Upload attachment endpoint (v8 Attachments API)
         // e.g. POST https://www.zohoapis.com/crm/v8/Leads/{recordId}/Attachments or Quotations/{recordId}/Attachments
         if (pathname === '/api/zoho/upload-attachment' && req.method === 'POST') {
@@ -4877,17 +4944,18 @@ function zohoApiPlugin(): Plugin {
             });
 
             const formData = await webReq.formData();
-            const file = formData.get('file') as File | null;
+            const rawFiles = (formData.getAll('files') as any[]).concat(formData.getAll('file') as any[]);
+            const files: File[] = rawFiles.filter((f): f is File => f && typeof f === 'object' && typeof (f as any).name === 'string');
             const recordId = (formData.get('recordId') as string) || '';
             const fieldApiName = (formData.get('field_api_name') as string) || 'R1_Received_Screenshot';
             const moduleName = (formData.get('module') as string) || 'Deals';
 
-            if (!file || !recordId || !fieldApiName) {
+            if (files.length === 0 || !recordId || !fieldApiName) {
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json');
               return res.end(JSON.stringify({
                 success: false,
-                message: '"file", "recordId", and "field_api_name" are required to upload into an image field.',
+                message: '"file" (or "files"), "recordId", and "field_api_name" are required to upload into an image field.',
               }));
             }
 
@@ -4895,40 +4963,46 @@ function zohoApiPlugin(): Plugin {
             const domain = env.VITE_ZOHO_DOMAIN || 'in';
             const apiBase = env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
 
-            console.log(`[Vite Zoho Plugin] Uploading image (${file.name}) to ZFS for field ${fieldApiName} on ${recordId}`);
+            console.log(`[Vite Zoho Plugin] Uploading ${files.length} image(s) to ZFS for field ${fieldApiName} on ${recordId}`);
 
-            // Step 1: Upload to /crm/v8/files
-            const filesForm = new FormData();
-            filesForm.append('file', file, file.name);
+            // Step 1: Upload all files to /crm/v8/files
+            const fileIds: string[] = [];
+            for (const file of files) {
+              const filesForm = new FormData();
+              filesForm.append('file', file, file.name);
 
-            let filesRes = await fetch(`${apiBase}/crm/v8/files`, {
-              method: 'POST',
-              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-              body: filesForm,
-            });
-            let filesData: any = await filesRes.json().catch(() => null);
-
-            if (filesRes.status === 401 || filesData?.code === 'INVALID_TOKEN' || filesData?.code === 'OAUTH_SCOPE_MISMATCH') {
-              cachedToken = null;
-              accessToken = await getAccessToken(env);
-              filesRes = await fetch(`${apiBase}/crm/v8/files`, {
+              let filesRes = await fetch(`${apiBase}/crm/v8/files`, {
                 method: 'POST',
                 headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
                 body: filesForm,
               });
-              filesData = await filesRes.json().catch(() => null);
+              let filesData: any = await filesRes.json().catch(() => null);
+
+              if (filesRes.status === 401 || filesData?.code === 'INVALID_TOKEN' || filesData?.code === 'OAUTH_SCOPE_MISMATCH') {
+                cachedToken = null;
+                accessToken = await getAccessToken(env);
+                filesRes = await fetch(`${apiBase}/crm/v8/files`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                  body: filesForm,
+                });
+                filesData = await filesRes.json().catch(() => null);
+              }
+
+              const fileId = filesData?.data?.[0]?.details?.id;
+              if (fileId) {
+                fileIds.push(fileId);
+              } else {
+                console.warn('[Vite Zoho Plugin] Single file upload warning:', file.name, filesData);
+              }
             }
 
-            const fileId = filesData?.data?.[0]?.details?.id;
-            if (!fileId) {
-              console.warn('[Vite Zoho Plugin] Files API upload failed:', filesRes.status, filesData);
-              res.statusCode = filesRes.status >= 400 ? filesRes.status : 400;
+            if (fileIds.length === 0) {
+              res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json');
               return res.end(JSON.stringify({
                 success: false,
-                code: filesData?.code,
-                message: filesData?.message || 'Failed to upload image to Zoho File System',
-                errorDetails: filesData,
+                message: 'Failed to upload image file(s) to Zoho File System',
               }));
             }
 
@@ -4937,11 +5011,9 @@ function zohoApiPlugin(): Plugin {
               data: [
                 {
                   id: recordId,
-                  [fieldApiName]: [
-                    {
-                      File_Id__s: fileId,
-                    },
-                  ],
+                  [fieldApiName]: fileIds.map(fid => ({
+                    File_Id__s: fid,
+                  })),
                 },
               ],
             };
@@ -4961,7 +5033,8 @@ function zohoApiPlugin(): Plugin {
               console.log(`[Vite Zoho Plugin] Image linked to ${fieldApiName} successfully!`);
               return res.end(JSON.stringify({
                 success: true,
-                fileId,
+                fileId: fileIds[0],
+                fileIds,
                 message: `Image successfully uploaded into ${fieldApiName} field on Zoho deal`,
                 data: updateData.data[0],
               }));

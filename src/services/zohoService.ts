@@ -400,15 +400,22 @@ export async function uploadZohoDealPhoto(
  */
 export async function uploadZohoDealImageField(
   recordId: string,
-  file: File | Blob,
+  file: File | Blob | (File | Blob)[],
   fieldApiName: string,
   fileName?: string,
   module: string = 'Deals'
 ): Promise<ZohoApiResponse> {
   try {
     const formData = new FormData();
-    const resolvedName = fileName || (file instanceof File ? file.name : 'screenshot.png');
-    formData.append('file', file, resolvedName);
+    if (Array.isArray(file)) {
+      file.forEach((f, idx) => {
+        const resolvedName = (f instanceof File ? f.name : `screenshot_${idx + 1}.png`);
+        formData.append('files', f, resolvedName);
+      });
+    } else {
+      const resolvedName = fileName || (file instanceof File ? file.name : 'screenshot.png');
+      formData.append('file', file, resolvedName);
+    }
     formData.append('recordId', recordId);
     formData.append('field_api_name', fieldApiName);
     formData.append('module', module);
@@ -423,13 +430,13 @@ export async function uploadZohoDealImageField(
       return {
         success: true,
         zohoId: recordId,
-        message: data.message || `Image successfully set in field ${fieldApiName}`,
+        message: data.message || `Image(s) successfully set in field ${fieldApiName}`,
         data: data.data,
       };
     } else {
       return {
         success: false,
-        message: data.message || `Failed to set image in field ${fieldApiName}`,
+        message: data.message || `Failed to set image(s) in field ${fieldApiName}`,
         errorDetails: data.errorDetails || data,
       };
     }
@@ -441,6 +448,24 @@ export async function uploadZohoDealImageField(
       errorDetails: error,
     };
   }
+}
+
+/**
+ * Generates an authenticated field attachment stream/preview URL
+ */
+export function getZohoFieldAttachmentUrl(
+  recordId: string,
+  attachmentId?: string,
+  fileId?: string,
+  module: string = 'Deals'
+): string {
+  const params = new URLSearchParams();
+  if (module) params.set('module', module);
+  if (recordId) params.set('recordId', recordId);
+  if (attachmentId) params.set('attachmentId', attachmentId);
+  if (fileId) params.set('fileId', fileId);
+  params.set('preview', 'true');
+  return `/api/zoho/download-field-attachment?${params.toString()}`;
 }
 
 /**
@@ -2003,6 +2028,8 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     documentsData: existingDeal?.documentsData || [],
     paymentScreenshotName: existingDeal?.paymentScreenshotName || rawZoho.Payment_Screenshot_Name || '',
     paymentScreenshotUrl: existingDeal?.paymentScreenshotUrl || '',
+    Deal_payment_screenshot: rawZoho.Deal_payment_screenshot || existingDeal?.Deal_payment_screenshot || [],
+    paymentScreenshots: rawZoho.Deal_payment_screenshot || existingDeal?.paymentScreenshots || existingDeal?.Deal_payment_screenshot || [],
     formData: {
       clientName: resolvedClient,
       companyName: resolvedCompany,

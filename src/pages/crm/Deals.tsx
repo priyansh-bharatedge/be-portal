@@ -12,6 +12,7 @@ import {
   fetchZohoDealById,
   enrichDealFromZohoRecord,
   uploadZohoAttachment,
+  uploadZohoDealImageField,
   saveOrUpdateZohoCompany,
   saveOrUpdateZohoClient,
   deleteZohoRecord,
@@ -664,6 +665,7 @@ export const Deals = () => {
   const [amountReceived, setAmountReceived] = useState<string>('');
   const [paymentScreenshotName, setPaymentScreenshotName] = useState<string>('');
   const [paymentScreenshotFile, setPaymentScreenshotFile] = useState<File | null>(null);
+  const [paymentScreenshotFiles, setPaymentScreenshotFiles] = useState<File[]>([]);
 
   // Document Upload State
   const [documents, setDocuments] = useState<File[]>([]);
@@ -737,6 +739,7 @@ export const Deals = () => {
       setAmountReceived(deal.totals?.amountReceived || (deal.received ? deal.received.replace(/[^0-9.]/g, '') : ''));
       setPaymentScreenshotName(deal.paymentScreenshotName || '');
       setPaymentScreenshotFile(null);
+      setPaymentScreenshotFiles([]);
       setHasPartnerBdm(Boolean(deal.hasPartnerBdm || deal.has_partner_bdm || deal.formData?.hasPartnerBdm || deal.formData?.has_partner_bdm));
       setPartnerBdmId(deal.partnerBdmId || deal.partner_bdm_id || deal.formData?.partnerBdmId || deal.formData?.partner_bdm_id || '');
       setPartnerBdmName(deal.partnerBdmName || deal.partner_bdm_name || deal.formData?.partnerBdmName || deal.formData?.partner_bdm_name || '');
@@ -752,6 +755,7 @@ export const Deals = () => {
       setAmountReceived('');
       setPaymentScreenshotName('');
       setPaymentScreenshotFile(null);
+      setPaymentScreenshotFiles([]);
       setHasPartnerBdm(false);
       setPartnerBdmId('');
       setPartnerBdmName('');
@@ -821,7 +825,7 @@ export const Deals = () => {
       if (dealServices.length === 0) errors.services = 'Add at least one service';
       if (dealServices.some(s => !s.totalAmount && !s.baseAmount)) errors.totalAmount = 'Enter total amounts for all selected services';
       if (!amountReceived || amountReceived.trim() === '') errors.amountReceived = 'Amount Received is required';
-      if (!paymentScreenshotFile && !paymentScreenshotName) errors.paymentScreenshot = 'Payment Screenshot is required';
+      if (paymentScreenshotFiles.length === 0 && !paymentScreenshotFile && !paymentScreenshotName) errors.paymentScreenshot = 'Payment Screenshot is required';
       if (hasPartnerBdm && (!partnerBdmId || !partnerBdmName)) {
         errors.partnerBdm = 'Please select a Partner BDM from the Sales department.';
       }
@@ -1738,8 +1742,18 @@ export const Deals = () => {
       // 1. Save actual files to IndexedDB
       const docsToSave: any[] = existingDeal?.documentsData ? [...existingDeal.documentsData] : [];
 
-      if (paymentScreenshotFile) {
-        const docId = `${dealId || 'ID'}_payment_${paymentScreenshotFile.name}`;
+      if (paymentScreenshotFiles.length > 0) {
+        for (let idx = 0; idx < paymentScreenshotFiles.length; idx++) {
+          const pFile = paymentScreenshotFiles[idx];
+          const docId = `${dealId}_payment_screenshot_${idx}_${pFile.name}`;
+          try {
+            await saveDocument(docId, pFile);
+          } catch (e) {
+            console.error('Failed to save payment screenshot', e);
+          }
+        }
+      } else if (paymentScreenshotFile) {
+        const docId = `${dealId}_payment_screenshot_0_${paymentScreenshotFile.name}`;
         try {
           await saveDocument(docId, paymentScreenshotFile);
         } catch (e) {
@@ -1950,7 +1964,8 @@ export const Deals = () => {
         totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount, bookingAmount: Number(amountReceived) || 0 },
         Payment_verifications: isEditing ? (existingDeal?.Payment_verifications ?? false) : false,
         paymentVerified: isEditing ? (existingDeal?.paymentVerified ?? false) : false,
-        paymentScreenshotName: paymentScreenshotName,
+        paymentScreenshotName: paymentScreenshotFiles.length > 1 ? `${paymentScreenshotFiles.length} Screenshots` : (paymentScreenshotFile?.name || paymentScreenshotName),
+        paymentScreenshotNames: paymentScreenshotFiles.map(f => f.name),
         documentsData: docsToSave,
         zohoId: existingDeal?.zohoId || undefined,
         zohoStatus: existingDeal?.zohoStatus || 'pending',
@@ -1966,12 +1981,16 @@ export const Deals = () => {
           dealData.zohoStatus = 'synced';
           dealData.zohoSyncedAt = new Date().toISOString();
 
-          // Upload attached payment screenshot & documents to Zoho CRM record if any
-          if (paymentScreenshotFile) {
+          // Upload attached payment screenshot(s) to Zoho CRM Deal Image Upload field: Deal_payment_screenshot
+          const screenshotsToUpload = paymentScreenshotFiles.length > 0
+            ? paymentScreenshotFiles
+            : (paymentScreenshotFile ? [paymentScreenshotFile] : []);
+
+          if (screenshotsToUpload.length > 0) {
             try {
-              await uploadZohoAttachment(finalZohoId, paymentScreenshotFile, paymentScreenshotFile.name, 'Deals');
+              await uploadZohoDealImageField(finalZohoId, screenshotsToUpload, 'Deal_payment_screenshot');
             } catch (attErr) {
-              console.warn('[Zoho CRM] Payment screenshot attachment failed:', attErr);
+              console.warn('[Zoho CRM] Deal_payment_screenshot upload failed:', attErr);
             }
           }
           for (const docFile of documents) {
@@ -3924,29 +3943,77 @@ export const Deals = () => {
                         </div>
                       </div>
                       {formErrors.amountReceived && <div className="text-red-500 text-xs text-right mt-1">{formErrors.amountReceived}</div>}
-                      <div className="flex justify-between items-center pt-3 border-t border-gray-200">
-                        <span className="font-medium text-gray-700">Payment Screenshot *</span>
-                        <div className="relative w-64 flex justify-end">
-                          <input
-                            type="file"
-                            id="paymentScreenshot"
-                            className="hidden"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files[0]) {
-                                setPaymentScreenshotFile(e.target.files[0]);
-                                setPaymentScreenshotName(e.target.files[0].name);
-                              }
-                            }}
-                          />
-                          <label
-                            htmlFor="paymentScreenshot"
-                            className={`cursor-pointer inline-flex items-center px-3 py-1.5 border rounded-lg text-sm font-medium ${formErrors.paymentScreenshot ? 'border-red-500 text-red-600 bg-red-50' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                          >
-                            <UploadCloud size={14} className="mr-2" />
-                            <span className="truncate max-w-[150px]">{paymentScreenshotName || 'Upload Image/PDF'}</span>
-                          </label>
+                      <div className="pt-3 border-t border-gray-200 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <span className="font-medium text-gray-700 block">Payment Screenshot *</span>
+                            <span className="text-[11px] text-gray-400">Upload multiple image receipts (Deal_payment_screenshot)</span>
+                          </div>
+                          <div className="relative flex justify-end">
+                            <input
+                              type="file"
+                              id="paymentScreenshot"
+                              className="hidden"
+                              multiple
+                              accept="image/*,.png,.jpg,.jpeg,.webp,.pdf"
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                  const selected = Array.from(e.target.files);
+                                  setPaymentScreenshotFiles(prev => {
+                                    const combined = [...prev, ...selected];
+                                    setPaymentScreenshotFile(combined[0] || null);
+                                    setPaymentScreenshotName(combined.length === 1 ? combined[0].name : `${combined.length} Screenshots`);
+                                    return combined;
+                                  });
+                                }
+                                e.target.value = '';
+                              }}
+                            />
+                            <label
+                              htmlFor="paymentScreenshot"
+                              className={`cursor-pointer inline-flex items-center px-3 py-1.5 border rounded-lg text-sm font-medium transition-colors ${formErrors.paymentScreenshot ? 'border-red-500 text-red-600 bg-red-50' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                            >
+                              <UploadCloud size={14} className="mr-2" />
+                              <span className="truncate max-w-[150px]">
+                                {paymentScreenshotFiles.length > 0 
+                                  ? `+ Add (${paymentScreenshotFiles.length})` 
+                                  : (paymentScreenshotName || 'Upload Image(s)')}
+                              </span>
+                            </label>
+                          </div>
                         </div>
+
+                        {/* Selected payment screenshots chips */}
+                        {paymentScreenshotFiles.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {paymentScreenshotFiles.map((file, idx) => (
+                              <div
+                                key={idx}
+                                className="group relative flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-medium"
+                              >
+                                <ImageIcon size={12} className="text-emerald-600 shrink-0" />
+                                <span className="truncate max-w-[130px]" title={file.name}>{file.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setPaymentScreenshotFiles(prev => {
+                                      const next = prev.filter((_, i) => i !== idx);
+                                      setPaymentScreenshotFile(next[0] || null);
+                                      setPaymentScreenshotName(next.length === 0 ? '' : (next.length === 1 ? next[0].name : `${next.length} Screenshots`));
+                                      return next;
+                                    });
+                                  }}
+                                  className="text-emerald-700 hover:text-rose-600 ml-0.5 p-0.5 rounded cursor-pointer transition-colors"
+                                  title="Remove screenshot"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       {formErrors.paymentScreenshot && <div className="text-red-500 text-xs text-right mt-1">{formErrors.paymentScreenshot}</div>}
                       <div className="flex justify-between text-orange-600 font-semibold items-center">
