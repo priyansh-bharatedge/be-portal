@@ -1794,7 +1794,15 @@ function zohoApiPlugin(): Plugin {
               if (isPartial) {
                 payload = { id: dealZohoId };
                 for (const [k, v] of Object.entries(deal)) {
-                  if (k !== 'zohoId' && k !== 'isPartial' && k !== 'id') {
+                  if (
+                    k !== 'zohoId' &&
+                    k !== 'isPartial' &&
+                    k !== 'id' &&
+                    k !== 'BDM_names' &&
+                    k !== 'Department_Name' &&
+                    k !== 'Employee_Name' &&
+                    k !== 'Employee_ID'
+                  ) {
                     payload[k] = v;
                   }
                 }
@@ -1808,6 +1816,9 @@ function zohoApiPlugin(): Plugin {
                 } else {
                   delete payload.id;
                 }
+              }
+              if (payload.BDM_names && typeof payload.BDM_names === 'string') {
+                delete payload.BDM_names;
               }
               let isUpdate = Boolean(dealZohoId || (pathname === '/api/zoho/update-deal' && payload.id));
 

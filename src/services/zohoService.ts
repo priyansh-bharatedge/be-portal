@@ -1202,6 +1202,9 @@ export async function fetchZohoClients(options?: ZohoFetchOptions): Promise<Zoho
 export async function insertZohoDeal(deal: any): Promise<ZohoApiResponse> {
   try {
     const payload = injectEmployeeLookup('Deals', deal);
+    if (payload.BDM_names && typeof payload.BDM_names === 'string') {
+      delete payload.BDM_names;
+    }
     const response = await fetch('/api/zoho/insert-deal', {
       method: 'POST',
       headers: {
@@ -1240,7 +1243,10 @@ export async function insertZohoDeal(deal: any): Promise<ZohoApiResponse> {
  */
 export async function updateZohoDeal(deal: any): Promise<ZohoApiResponse> {
   try {
-    const payload = injectEmployeeLookup('Deals', deal);
+    const payload = deal.isPartial ? { ...deal } : injectEmployeeLookup('Deals', deal);
+    if (payload.BDM_names && typeof payload.BDM_names === 'string') {
+      delete payload.BDM_names;
+    }
     const response = await fetch('/api/zoho/update-deal', {
       method: 'PUT',
       headers: {
