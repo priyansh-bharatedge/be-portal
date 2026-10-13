@@ -4336,7 +4336,7 @@ export const DealDetails = () => {
 
               {/* Row-Wise Inputs for the Active Payment Tab */}
               {(() => {
-                const activeSlot = paymentSlotsData[activePaymentTab] || {
+                const activeSlot: PaymentSlotItem = paymentSlotsData[activePaymentTab] || {
                   amount: '',
                   date: '',
                   bdm1Id: '',
@@ -4346,6 +4346,8 @@ export const DealDetails = () => {
                   screenshotFile: null,
                   screenshotPreview: null,
                   existingScreenshotName: '',
+                  bankType: 'BSPL',
+                  isVerified: false,
                 };
                 const activeSlotCfg = PAYMENT_SLOTS.find(s => s.index === activePaymentTab) || PAYMENT_SLOTS[0];
 
