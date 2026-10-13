@@ -218,6 +218,7 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
             <li><span className="font-semibold text-gray-900">Validity:</span> This quotation is valid for 7 days from the date of issue.</li>
             <li><span className="font-semibold text-gray-900">Taxes & Fees:</span> GST @ 18% is applicable as per government statutory guidelines.</li>
             <li><span className="font-semibold text-gray-900">Confidentiality & Support:</span> All project discussions and data remain strictly confidential. For assistance, reach out to support@bharat-edge.com.</li>
+            <li><span className="font-semibold text-gray-900">Confidentiality & Support:</span> We provide consultancy services in areas such as pitch deck preparation, financial reporting, business incorporation, certification assistance, funding support, and other professional services related to start-up consultation. Bharatedge Services private limited understand the evolving needs of today's enterprises and strive to offer guidance tailored to their growth. However, we are solely a consultancy service provider and are not affiliated, associated, or in collaboration with any Government or Non-Government Agency, Institution, Organization, or Department.</li>
           </ul>
         </div>
 
