@@ -1728,7 +1728,9 @@ export const DealDetails = () => {
 
     PAYMENT_SLOTS.forEach((slot) => {
       // Amount from deal, raw, or formData strictly for this milestone slot
-      const rawVal = deal[slot.amountField] ?? raw[slot.amountField] ?? deal.formData?.[slot.amountField];
+      const rawVal = deal[slot.amountField] ?? raw[slot.amountField] ?? deal.formData?.[slot.amountField] ??
+        deal[`R${slot.index}_Received_Amount`] ?? raw[`R${slot.index}_Received_Amount`] ??
+        deal[`R${slot.index}_Received_amount`] ?? raw[`R${slot.index}_Received_amount`];
       const amtStr = (rawVal !== undefined && rawVal !== null && rawVal !== '') ? String(rawVal).replace(/[^0-9.]/g, '') : '';
 
       if (!foundFirstUnfilled && (!amtStr || parseNum(amtStr) === 0)) {

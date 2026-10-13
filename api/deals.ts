@@ -110,10 +110,16 @@ export default async function dealsHandler(req: any, res: any) {
     const pageParam = searchParams.get('page') || req.query?.page || '1';
     const perPageParam = searchParams.get('per_page') || req.query?.per_page || '100';
     const pageToken = searchParams.get('page_token') || req.query?.page_token || null;
-    const fields =
-      searchParams.get('fields') ||
-      req.query?.fields ||
+
+    const DEFAULT_DEAL_FIELDS =
       'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications';
+
+    const MILESTONE_DEAL_FIELDS =
+      'id,R1_Received_amount23,R1_Received_Screenshot,R1_Received_by_BDM1,R1_Received_by_BDM2,R1_Payment_Verification,R1_Bank_type,R1_Legal_verification,R2_Received_amount12,R2_Received_Screenshot,R2_Received_by_BDM1,R2_Received_by_BDM2,R2_Payment_Verification,R2_Bank_type,R2_Legal_verification,DPR_status_change_date,R3_Received_amount,R3_Received_Screenshot,R3_Received_by_BDM1,R3_Received_by_BDM2,R3_Payment_Verification,R3_Bank_type,R3_Legal_verification,Date_of_status_change,R4_Received_amount,R4_Received_Screenshot,R4_Payment_Verification,R4_Bank_type,R4_Legal_verification,Date_of_status_change_f,R5_Received_amount,R5_Payment_Verification,R5_Bank_type,R5_Legal_verification,Document_collection_Pitch_deck_creation_DPR_date,R6_Received_amount,R6_Payment_Verification,R6_Bank_type,R6_Legal_verification,Document_sent_date,R7_Received_amount,R7_Payment_Verification,R7_Bank_type,R7_Legal_verification,Finance_status_change_date,R8_Received_amount,R8_Payment_Verification,R8_Bank_type,R8_Legal_verification,Date_of_financedate_change';
+
+    const rawFields = searchParams.get('fields') || req.query?.fields || null;
+    const isCustomFields = rawFields && rawFields !== DEFAULT_DEAL_FIELDS;
+    const fields = isCustomFields ? rawFields : DEFAULT_DEAL_FIELDS;
 
     const page = parseInt(String(pageParam), 10) || 1;
     const perPage = Math.min(
@@ -207,15 +213,23 @@ export default async function dealsHandler(req: any, res: any) {
     }
 
     zohoApiUrl.searchParams.set('per_page', perPage.toString());
+    zohoApiUrl.searchParams.set('fields', fields);
 
-    if (fields) {
-      zohoApiUrl.searchParams.set('fields', fields);
+    // Parallel Milestone URL to fetch R1-R8 payment slots within Zoho's 50-field limit
+    let zohoMilestoneUrl: URL | null = null;
+    if (!isCustomFields) {
+      zohoMilestoneUrl = new URL(criteria ? `${apiBase}/crm/v8/Deals/search` : `${apiBase}/crm/v8/Deals`);
+      if (criteria) zohoMilestoneUrl.searchParams.set('criteria', String(criteria));
+      if (pageToken) zohoMilestoneUrl.searchParams.set('page_token', String(pageToken));
+      else zohoMilestoneUrl.searchParams.set('page', page.toString());
+      zohoMilestoneUrl.searchParams.set('per_page', perPage.toString());
+      zohoMilestoneUrl.searchParams.set('fields', MILESTONE_DEAL_FIELDS);
     }
 
     // 3. Fetch Total Record Count from Zoho CRM API (actions/count) in parallel if unfiltered
     const countUrl = `${apiBase}/crm/v8/Deals/actions/count`;
 
-    const [crmFetchResult, countFetchResult] = await Promise.all([
+    const [crmFetchResult, milestoneFetchResult, countFetchResult] = await Promise.all([
       fetch(zohoApiUrl.toString(), {
         method: 'GET',
         headers: {
@@ -223,6 +237,18 @@ export default async function dealsHandler(req: any, res: any) {
           'Content-Type': 'application/json',
         },
       }),
+      zohoMilestoneUrl
+        ? fetch(zohoMilestoneUrl.toString(), {
+            method: 'GET',
+            headers: {
+              Authorization: `Zoho-oauthtoken ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }).catch((err) => {
+            console.warn('[Zoho Deals] Milestone fetch error:', err);
+            return null;
+          })
+        : Promise.resolve(null),
       !criteria
         ? fetch(countUrl, {
             method: 'GET',
@@ -238,6 +264,7 @@ export default async function dealsHandler(req: any, res: any) {
     ]);
 
     let crmResponse = crmFetchResult;
+    let milestoneResponse = milestoneFetchResult;
     let countResponse = countFetchResult;
 
     // Retry once if token expired
@@ -263,7 +290,7 @@ export default async function dealsHandler(req: any, res: any) {
         accessToken = retryTokenData.access_token;
         cachedToken = accessToken;
         tokenExpiry = now + (Number(retryTokenData.expires_in) || 3600) * 1000;
-        const [retryCrm, retryCount] = await Promise.all([
+        const [retryCrm, retryMilestone, retryCount] = await Promise.all([
           fetch(zohoApiUrl.toString(), {
             method: 'GET',
             headers: {
@@ -271,6 +298,15 @@ export default async function dealsHandler(req: any, res: any) {
               'Content-Type': 'application/json',
             },
           }),
+          zohoMilestoneUrl
+            ? fetch(zohoMilestoneUrl.toString(), {
+                method: 'GET',
+                headers: {
+                  Authorization: `Zoho-oauthtoken ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+              }).catch(() => null)
+            : Promise.resolve(null),
           !criteria
             ? fetch(countUrl, {
                 method: 'GET',
@@ -282,6 +318,7 @@ export default async function dealsHandler(req: any, res: any) {
             : Promise.resolve(null),
         ]);
         crmResponse = retryCrm;
+        milestoneResponse = retryMilestone;
         countResponse = retryCount;
       }
     }
@@ -293,12 +330,31 @@ export default async function dealsHandler(req: any, res: any) {
       if (pageToken) fallbackUrl.searchParams.set('page_token', String(pageToken));
       else fallbackUrl.searchParams.set('page', page.toString());
       fallbackUrl.searchParams.set('per_page', perPage.toString());
-      if (fields) fallbackUrl.searchParams.set('fields', fields);
-      const fallbackRes = await fetch(fallbackUrl.toString(), {
-        headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
-      });
+      fallbackUrl.searchParams.set('fields', fields);
+
+      let fallbackMilestoneUrl: URL | null = null;
+      if (zohoMilestoneUrl) {
+        fallbackMilestoneUrl = new URL(`${apiBase}/crm/v8/Deals`);
+        if (pageToken) fallbackMilestoneUrl.searchParams.set('page_token', String(pageToken));
+        else fallbackMilestoneUrl.searchParams.set('page', page.toString());
+        fallbackMilestoneUrl.searchParams.set('per_page', perPage.toString());
+        fallbackMilestoneUrl.searchParams.set('fields', MILESTONE_DEAL_FIELDS);
+      }
+
+      const [fallbackRes, fallbackMilestoneRes] = await Promise.all([
+        fetch(fallbackUrl.toString(), {
+          headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+        }),
+        fallbackMilestoneUrl
+          ? fetch(fallbackMilestoneUrl.toString(), {
+              headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+            }).catch(() => null)
+          : Promise.resolve(null)
+      ]);
+
       if (fallbackRes.ok || fallbackRes.status === 204) {
         crmResponse = fallbackRes;
+        if (fallbackMilestoneRes) milestoneResponse = fallbackMilestoneRes;
       }
     }
 
@@ -340,6 +396,29 @@ export default async function dealsHandler(req: any, res: any) {
         error: 'Failed to fetch deal records from Zoho CRM',
         details: crmData.message || crmData.code || 'Zoho API returned an error status.',
       });
+    }
+
+    // Parse milestone response and merge into core deal records
+    if (milestoneResponse && milestoneResponse.ok && milestoneResponse.status === 200) {
+      try {
+        const milestoneData: any = await milestoneResponse.json();
+        if (Array.isArray(crmData?.data) && Array.isArray(milestoneData?.data)) {
+          const milestoneMap = new Map<string, any>();
+          milestoneData.data.forEach((m: any) => {
+            if (m && m.id) milestoneMap.set(String(m.id), m);
+          });
+          crmData.data.forEach((deal: any) => {
+            if (deal && deal.id) {
+              const m = milestoneMap.get(String(deal.id));
+              if (m) {
+                Object.assign(deal, m);
+              }
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[Zoho Deals] Error merging milestone data:', e);
+      }
     }
 
     // Combine info object with total_records

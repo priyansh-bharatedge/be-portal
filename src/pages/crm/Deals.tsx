@@ -1450,6 +1450,8 @@ export const Deals = () => {
           pendingAmount: pendingAmountNum,
           partnerBdmAmount: partnerBdmAmount,
         },
+        // Ensure all milestone payment keys (R1-R8) and dates from zDeal are explicitly preserved on dealObj
+        ...Object.fromEntries(Object.entries(zDeal).filter(([k]) => /^R[1-8]_/.test(k) || k.includes('status_change'))),
         rawAmount: totalAmountNum,
         rawReceived: receivedAmountNum,
         rawPending: pendingAmountNum,

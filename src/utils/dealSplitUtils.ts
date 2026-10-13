@@ -502,35 +502,46 @@ export const MILESTONE_CONFIG = [
   { index: 5, tabName: 'R5', label: '5th Payment (R5)', amtField: 'R5_Received_amount', dateField: 'Document_collection_Pitch_deck_creation_DPR_date', ssField: 'R5_Received_Screenshot', bdm1Field: 'R5_Received_by_BDM1', bdm2Field: 'R5_Received_by_BDM2', verifField: 'R5_Payment_Verification', bankField: 'R5_Bank_type', legalVerifField: 'R5_Legal_verification' },
   { index: 6, tabName: 'R6', label: '6th Payment (R6)', amtField: 'R6_Received_amount', dateField: 'Document_sent_date', ssField: 'R6_Received_Screenshot', bdm1Field: 'R6_Received_BDM1', bdm2Field: 'R6_Received_BDM2', verifField: 'R6_Payment_Verification', bankField: 'R6_Bank_type', legalVerifField: 'R6_Legal_verification' },
   { index: 7, tabName: 'R7', label: '7th Payment (R7)', amtField: 'R7_Received_amount', dateField: 'Finance_status_change_date', ssField: 'R7_Received_Screenshot', bdm1Field: 'R7_Received_by_BDM1', bdm2Field: 'R7_Received_by_BDM2', verifField: 'R7_Payment_Verification', bankField: 'R7_Bank_type', legalVerifField: 'R7_Legal_verification' },
-  { index: 8, tabName: 'R8', label: '8th Payment (R8)', amtField: 'R8_Received_amount', dateField: 'Date_of_financedate_change', ssField: 'R8_Received_Screenshot', bdm1Field: 'R8_Received_by_BDM1', bdm2Field: 'R8_Received_by_BDM2', verifField: 'R8_Payment_Verification', bankField: 'R8_Bank_type', legalVerifField: 'R8_Legal_verification' },
 ] as const;
 
 export const getDealMilestones = (d: any): DealMilestoneItem[] => {
   if (!d) return [];
   const raw = d.rawZohoDeal || {};
   return MILESTONE_CONFIG.map(s => {
-    const rawAmt = d[s.amtField] ?? raw[s.amtField] ?? d.formData?.[s.amtField];
+    const rawAmt = d[s.amtField] ?? raw[s.amtField] ?? d.formData?.[s.amtField] ??
+      d[`R${s.index}_Received_amount`] ?? raw[`R${s.index}_Received_amount`] ??
+      d[`R${s.index}_Received_Amount`] ?? raw[`R${s.index}_Received_Amount`] ??
+      (s.index === 1 ? (d.R1_Received_amount ?? raw.R1_Received_amount ?? d.R1_Received_Amount ?? raw.R1_Received_Amount) : undefined) ??
+      (s.index === 2 ? (d.R2_Received_amount ?? raw.R2_Received_amount ?? d.R2_Received_Amount ?? raw.R2_Received_Amount) : undefined);
+
     const amtStr = rawAmt !== undefined && rawAmt !== null && rawAmt !== '' ? String(rawAmt).replace(/[^0-9.]/g, '') : '';
     const amt = parseFloat(amtStr) || 0;
-    const date = d[s.dateField] ?? raw[s.dateField] ?? '';
-    const ss = d[s.ssField] ?? raw[s.ssField];
+
+    const date = d[s.dateField] ?? raw[s.dateField] ?? d.formData?.[s.dateField] ??
+      (s.index === 1 ? (d.Closing_Date ?? raw.Closing_Date ?? d.R1_Payment_Date ?? raw.R1_Payment_Date) : undefined) ??
+      (s.index === 2 ? (d.DPR_status_change_date ?? raw.DPR_status_change_date ?? d.R2_Payment_Date ?? raw.R2_Payment_Date) : undefined) ?? '';
+
+    const ss = d[s.ssField] ?? raw[s.ssField] ?? d.formData?.[s.ssField];
     const ssName = Array.isArray(ss) && ss.length > 0 
       ? (ss[0]?.File_Name__s || ss[0]?.name || '') 
       : (typeof ss === 'string' ? ss : '');
-    const bdm1Val = d[s.bdm1Field] ?? raw[s.bdm1Field];
+
+    const bdm1Val = d[s.bdm1Field] ?? raw[s.bdm1Field] ?? d.formData?.[s.bdm1Field];
     const bdm1 = typeof bdm1Val === 'object' ? (bdm1Val?.name || '') : String(bdm1Val || '');
-    const bdm2Val = d[s.bdm2Field] ?? raw[s.bdm2Field];
+    const bdm2Val = d[s.bdm2Field] ?? raw[s.bdm2Field] ?? d.formData?.[s.bdm2Field];
     const bdm2 = typeof bdm2Val === 'object' ? (bdm2Val?.name || '') : String(bdm2Val || '');
     
     // Accounts payment verification boolean check
     const isVerif = Boolean(
-      d[s.verifField] ?? raw[s.verifField] ?? 
-      (s.index === 1 ? (d.R1_Payment_verifications ?? raw.R1_Payment_verifications) : 
-       s.index === 2 ? (d.R2_Payment_verifications ?? raw.R2_Payment_verifications) : false)
+      d[s.verifField] === true || d[s.verifField] === 'true' || d[s.verifField] === 'Verified' || d[s.verifField] === 'Yes' ||
+      raw[s.verifField] === true || raw[s.verifField] === 'true' || raw[s.verifField] === 'Verified' || raw[s.verifField] === 'Yes' ||
+      (s.index === 1 && (d.R1_Payment_verifications === true || d.R1_Payment_verifications === 'true' || raw.R1_Payment_verifications === true || raw.R1_Payment_verifications === 'true')) ||
+      (s.index === 2 && (d.R2_Payment_verifications === true || d.R2_Payment_verifications === 'true' || raw.R2_Payment_verifications === true || raw.R2_Payment_verifications === 'true'))
     );
 
     // Legal verification boolean check (Zoho field: R{i}_Legal_verification)
-    const rawLegalVal = d[s.legalVerifField] ?? raw[s.legalVerifField] ?? d.formData?.[s.legalVerifField];
+    const rawLegalVal = d[s.legalVerifField] ?? raw[s.legalVerifField] ?? d.formData?.[s.legalVerifField] ??
+      d[`R${s.index}_Legal_verification`] ?? raw[`R${s.index}_Legal_verification`];
     const isLegalVerif = Boolean(
       rawLegalVal === true ||
       rawLegalVal === 'true' ||
@@ -539,9 +550,9 @@ export const getDealMilestones = (d: any): DealMilestoneItem[] => {
     );
 
     // Bank type: BSPL or BSAPL
-    const bankVal = d[s.bankField] ?? raw[s.bankField] ?? 
-      (s.index === 1 ? (d.R1_Bank_details ?? raw.R1_Bank_details) : 
-       s.index === 2 ? (d.R2_Bank_details ?? raw.R2_Bank_details) : '') ?? 
+    const bankVal = d[s.bankField] ?? raw[s.bankField] ?? d.formData?.[s.bankField] ??
+      (s.index === 1 ? (d.R1_Bank_details ?? raw.R1_Bank_details) : undefined) ??
+      (s.index === 2 ? (d.R2_Bank_details ?? raw.R2_Bank_details) : undefined) ??
       d.Bank_details ?? raw.Bank_details ?? '';
     const bankType = String(bankVal || '').trim();
 
