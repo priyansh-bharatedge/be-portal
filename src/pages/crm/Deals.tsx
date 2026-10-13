@@ -23,6 +23,7 @@ import {
   moveDealToOperationsAllocator,
   moveDealToOperationsExecutors,
   verifyZohoMilestonePayment,
+  updateZohoMilestoneBank,
   ZOHO_DEAL_BLUEPRINT_TRANSITIONS
 } from '../../services/zohoService';
 import { buildZohoRbacCriteria } from '../../services/zohoRbacService';
@@ -2495,6 +2496,63 @@ export const Deals = () => {
     }
   };
 
+  const handleSaveMilestoneBank = async (deal: any, slotIndex: number, bankType: 'BSPL' | 'BSAPL' | string) => {
+    const dealZohoId = deal.zohoId || (/^\d{15,}$/.test(String(deal.id)) ? String(deal.id) : null);
+    if (!dealZohoId) {
+      setToast({
+        type: 'error',
+        message: 'Cannot save bank details',
+        submessage: 'This deal does not have a valid Zoho CRM ID.'
+      });
+      return;
+    }
+    const key = `${deal.id}_${slotIndex}`;
+    setVerifyingMilestoneKey(key);
+    try {
+      const res = await updateZohoMilestoneBank(dealZohoId, slotIndex, bankType);
+      if (res.success) {
+        const patch: any = {};
+        patch[`R${slotIndex}_Bank_type`] = bankType;
+        if (slotIndex === 1) patch.R1_Bank_details = bankType;
+        if (slotIndex === 2) patch.R2_Bank_details = bankType;
+
+        const updatedList = deals.map((d: any) => {
+          if (d.id === deal.id || d.zohoId === dealZohoId) {
+            return {
+              ...d,
+              ...patch,
+              rawZohoDeal: { ...(d.rawZohoDeal || {}), ...patch }
+            };
+          }
+          return d;
+        });
+
+        setDeals(updatedList);
+        safeSaveDealsToStorage(updatedList);
+
+        setToast({
+          type: 'success',
+          message: `R${slotIndex} Bank Details Saved`,
+          submessage: `Updated to ${bankType} (Zoho field: R${slotIndex}_Bank_type).`
+        });
+      } else {
+        setToast({
+          type: 'error',
+          message: 'Failed to update bank details',
+          submessage: res.message || 'Zoho CRM rejected the update.'
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: 'error',
+        message: 'Error updating bank details',
+        submessage: err?.message || 'Failed to update bank details in Zoho CRM.'
+      });
+    } finally {
+      setVerifyingMilestoneKey(null);
+    }
+  };
+
   const handleVerifyMilestonePayment = async (deal: any, slotIndex: number, forcedBankType?: 'BSPL' | 'BSAPL' | string) => {
     const dealZohoId = deal.zohoId || (/^\d{15,}$/.test(String(deal.id)) ? String(deal.id) : null);
     if (!dealZohoId) {
@@ -3029,62 +3087,79 @@ export const Deals = () => {
 
                                   {/* Right: Bank Dropdown (BSPL / BSAPL) + Payment Verification Button */}
                                   <div className="flex items-center gap-2.5 shrink-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <label className="text-[11px] font-bold text-gray-500 uppercase">Entity:</label>
-                                      <select
-                                        value={selectedBank}
-                                        disabled={isVerifying}
-                                        onChange={(e) => {
-                                          const val = e.target.value as 'BSPL' | 'BSAPL';
-                                          setMilestoneBankSelections(prev => ({
-                                            ...prev,
-                                            [itemKey]: val
-                                          }));
-                                        }}
-                                        className="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all shadow-xs"
-                                      >
-                                        <option value="BSPL">BSPL</option>
-                                        <option value="BSAPL">BSAPL</option>
-                                      </select>
-                                    </div>
-
-                                    {milestone.isVerified ? (
-                                      <div className="flex items-center gap-2">
-                                        <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-xs">
-                                          <CheckCircle2 size={14} className="text-emerald-600" />
-                                          Verified ({milestone.bankType || selectedBank})
-                                        </span>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <label className="text-[11px] font-bold text-gray-700 uppercase flex items-center gap-1">
+                                          <Building2 size={12} className="text-be-orange" />
+                                          Bank Details:
+                                        </label>
+                                        <select
+                                          value={selectedBank}
+                                          disabled={isVerifying}
+                                          onChange={(e) => {
+                                            const val = e.target.value as 'BSPL' | 'BSAPL';
+                                            setMilestoneBankSelections(prev => ({
+                                              ...prev,
+                                              [itemKey]: val
+                                            }));
+                                          }}
+                                          className="px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all shadow-xs"
+                                          title={`Zoho CRM Pick List field: R${milestone.index}_Bank_type`}
+                                        >
+                                          <option value="BSPL">BSPL</option>
+                                          <option value="BSAPL">BSAPL</option>
+                                        </select>
                                         {selectedBank !== (milestone.bankType || 'BSPL') && (
                                           <button
                                             type="button"
-                                            onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
+                                            onClick={() => handleSaveMilestoneBank(deal, milestone.index, selectedBank)}
                                             disabled={isVerifying}
-                                            className="text-[11px] text-indigo-600 hover:text-indigo-800 underline font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md text-[11px] font-bold transition-colors cursor-pointer"
+                                            title={`Save R${milestone.index}_Bank_type as ${selectedBank} in Zoho CRM`}
                                           >
-                                            Update Bank
+                                            Save Bank
                                           </button>
                                         )}
                                       </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
-                                        disabled={isVerifying}
-                                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
-                                      >
-                                        {isVerifying ? (
-                                          <>
-                                            <Loader2 size={13} className="animate-spin" />
-                                            Verifying...
-                                          </>
-                                        ) : (
-                                          <>
-                                            <CheckCircle2 size={13} />
-                                            Verify Payment
-                                          </>
-                                        )}
-                                      </button>
-                                    )}
+
+                                      {milestone.isVerified ? (
+                                        <div className="flex items-center gap-2">
+                                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-xs">
+                                            <CheckCircle2 size={14} className="text-emerald-600" />
+                                            Verified ({milestone.bankType || selectedBank})
+                                          </span>
+                                          {selectedBank !== (milestone.bankType || 'BSPL') && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
+                                              disabled={isVerifying}
+                                              className="text-[11px] text-indigo-600 hover:text-indigo-800 underline font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                                            >
+                                              Re-verify
+                                            </button>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleVerifyMilestonePayment(deal, milestone.index, selectedBank)}
+                                          disabled={isVerifying}
+                                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                                        >
+                                          {isVerifying ? (
+                                            <>
+                                              <Loader2 size={13} className="animate-spin" />
+                                              Verifying...
+                                            </>
+                                          ) : (
+                                            <>
+                                              <CheckCircle2 size={13} />
+                                              Verify Payment
+                                            </>
+                                          )}
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               );

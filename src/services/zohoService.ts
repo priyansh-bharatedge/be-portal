@@ -1362,6 +1362,49 @@ export async function verifyZohoMilestonePayment(
 }
 
 /**
+ * Updates the bank details / bank type field (R1_Bank_type to R8_Bank_type) for Accounts in Zoho CRM.
+ * Pick List values: 'BSPL' | 'BSAPL'
+ */
+export async function updateZohoMilestoneBank(
+  dealZohoId: string,
+  slotIndex: number,
+  bankType: 'BSPL' | 'BSAPL' | string
+): Promise<ZohoApiResponse> {
+  const payload: any = { id: dealZohoId, zohoId: dealZohoId };
+  payload[`R${slotIndex}_Bank_type`] = bankType;
+  if (slotIndex === 1) {
+    payload.R1_Bank_details = bankType;
+  } else if (slotIndex === 2) {
+    payload.R2_Bank_details = bankType;
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('be_deals');
+      if (saved) {
+        const deals = JSON.parse(saved);
+        const updated = deals.map((d: any) => {
+          if (d.zohoId === dealZohoId || d.id === dealZohoId) {
+            return {
+              ...d,
+              ...payload,
+              rawZohoDeal: {
+                ...(d.rawZohoDeal || {}),
+                ...payload
+              }
+            };
+          }
+          return d;
+        });
+        localStorage.setItem('be_deals', JSON.stringify(updated));
+      }
+    } catch (_) {}
+  }
+
+  return updateZohoDeal(payload);
+}
+
+/**
  * Transition ID Mapping for Zoho CRM Deal Blueprint:
  * - Sales to Account: "1078476000000489153"
  * - Account to Legal: "1078476000000492001"

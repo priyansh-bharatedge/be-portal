@@ -21,6 +21,7 @@ import {
   uploadZohoDealImageField,
   saveOrUpdateZohoDeal,
   verifyZohoMilestonePayment,
+  updateZohoMilestoneBank,
   transitionZohoDealBlueprint,
   moveDealToAccounts,
   moveDealToLegal,
@@ -250,6 +251,8 @@ export interface PaymentSlotItem {
   screenshotFile: File | null;
   screenshotPreview: string | null;
   existingScreenshotName: string;
+  bankType: 'BSPL' | 'BSAPL' | string;
+  isVerified: boolean;
 }
 
 export const DealDetails = () => {
@@ -269,14 +272,14 @@ export const DealDetails = () => {
   const [salesEmployees, setSalesEmployees] = useState<any[]>([]);
   const [activePaymentTab, setActivePaymentTab] = useState<number>(1);
   const [paymentSlotsData, setPaymentSlotsData] = useState<Record<number, PaymentSlotItem>>({
-    1: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
-    2: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
-    3: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
-    4: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
-    5: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
-    6: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
-    7: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
-    8: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '' },
+    1: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '', bankType: 'BSPL', isVerified: false },
+    2: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '', bankType: 'BSPL', isVerified: false },
+    3: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '', bankType: 'BSPL', isVerified: false },
+    4: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '', bankType: 'BSPL', isVerified: false },
+    5: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '', bankType: 'BSPL', isVerified: false },
+    6: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '', bankType: 'BSPL', isVerified: false },
+    7: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '', bankType: 'BSPL', isVerified: false },
+    8: { amount: '', date: '', bdm1Id: '', bdm1Name: '', bdm2Id: '', bdm2Name: '', screenshotFile: null, screenshotPreview: null, existingScreenshotName: '', bankType: 'BSPL', isVerified: false },
   });
   const paymentScreenshotInputRef = useRef<HTMLInputElement>(null);
 
@@ -1751,6 +1754,18 @@ export const DealDetails = () => {
       const rawScreenshot = deal[slot.screenshotField] ?? raw[slot.screenshotField];
       const existingName = typeof rawScreenshot === 'string' ? rawScreenshot : '';
 
+      // Bank type from R{i}_Bank_type
+      const rawBank = deal[`R${slot.index}_Bank_type`] ?? raw[`R${slot.index}_Bank_type`] ?? deal.formData?.[`R${slot.index}_Bank_type`] ?? 
+        (slot.index <= 2 ? (deal[`R${slot.index}_Bank_details`] ?? raw[`R${slot.index}_Bank_details`]) : '') ?? 
+        deal.Bank_details ?? raw.Bank_details ?? 'BSPL';
+      const slotBankType = String(rawBank || 'BSPL').trim();
+
+      const slotIsVerif = Boolean(
+        deal[`R${slot.index}_Payment_Verification`] ?? raw[`R${slot.index}_Payment_Verification`] ??
+        (slot.index === 1 ? (deal.R1_Payment_verifications ?? raw.R1_Payment_verifications) :
+         slot.index === 2 ? (deal.R2_Payment_verifications ?? raw.R2_Payment_verifications) : false)
+      );
+
       initialSlots[slot.index] = {
         amount: amtStr,
         date: dateStr,
@@ -1761,6 +1776,8 @@ export const DealDetails = () => {
         screenshotFile: null,
         screenshotPreview: null,
         existingScreenshotName: existingName,
+        bankType: slotBankType,
+        isVerified: slotIsVerif,
       };
     });
 
@@ -1773,8 +1790,8 @@ export const DealDetails = () => {
     e.preventDefault();
     if (!deal) return;
 
-    if (!canEditRemainingPayment) {
-      setPaymentModalError(`Only Primary BDM (BDM 1: ${primaryBdmName}) can record or edit remaining payment entries.`);
+    if (!canEditRemainingPayment && !isAccounts && !isSuperAdmin) {
+      setPaymentModalError(`Only Primary BDM (BDM 1: ${primaryBdmName}) or Accounts department can edit payment entries.`);
       return;
     }
 
@@ -1883,6 +1900,11 @@ export const DealDetails = () => {
           rFieldsMap[slot.bdm2Field] = (item.bdm2Name && item.bdm2Name.toLowerCase() !== 'none') ? item.bdm2Name : '';
           if (slotScreenshots[slot.index] || item.existingScreenshotName) {
             rFieldsMap[slot.screenshotField] = slotScreenshots[slot.index] || item.existingScreenshotName;
+          }
+          if (item.bankType) {
+            rFieldsMap[`R${slot.index}_Bank_type`] = item.bankType;
+            if (slot.index === 1) rFieldsMap.R1_Bank_details = item.bankType;
+            if (slot.index === 2) rFieldsMap.R2_Bank_details = item.bankType;
           }
         } else {
           // Unfilled slot - clear remaining payment fields so dummy dates/BDMs are never sent to Zoho
@@ -2074,6 +2096,45 @@ export const DealDetails = () => {
       }
     } catch (err: any) {
       setWorkflowToast({ type: 'error', message: err?.message || 'Failed to communicate with Zoho CRM' });
+    } finally {
+      setVerifyingDetailsMilestone(null);
+    }
+  };
+
+  const handleSaveDetailsMilestoneBank = async (slotIndex: number, bankVal: string) => {
+    if (!deal) return;
+    const targetZohoId = deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : null);
+    if (!targetZohoId) {
+      setWorkflowToast({ type: 'error', message: 'Cannot save: Deal is not synced with Zoho CRM.' });
+      return;
+    }
+
+    setVerifyingDetailsMilestone(slotIndex);
+    try {
+      const res = await updateZohoMilestoneBank(targetZohoId, slotIndex, bankVal);
+      if (res.success) {
+        setWorkflowToast({ type: 'success', message: `R${slotIndex} Bank Details saved as ${bankVal} (Zoho field: R${slotIndex}_Bank_type)` });
+        setDeal((prev: any) => {
+          if (!prev) return prev;
+          const patch: any = {};
+          patch[`R${slotIndex}_Bank_type`] = bankVal;
+          if (slotIndex === 1) patch.R1_Bank_details = bankVal;
+          if (slotIndex === 2) patch.R2_Bank_details = bankVal;
+
+          return {
+            ...prev,
+            ...patch,
+            rawZohoDeal: {
+              ...(prev.rawZohoDeal || {}),
+              ...patch
+            }
+          };
+        });
+      } else {
+        setWorkflowToast({ type: 'error', message: res.message || 'Failed to update Bank Details' });
+      }
+    } catch (err: any) {
+      setWorkflowToast({ type: 'error', message: err?.message || 'Error updating Bank Details' });
     } finally {
       setVerifyingDetailsMilestone(null);
     }
@@ -2910,19 +2971,41 @@ export const DealDetails = () => {
                         {(isAccounts || isSuperAdmin) && (
                           <div className="pt-2.5 mt-2 border-t border-gray-200/80 space-y-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-bold text-gray-500 uppercase">Bank Entity:</span>
-                              <select
-                                value={currentBank}
-                                disabled={isVerifying}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setDetailsBankSelections(prev => ({ ...prev, [m.index]: val }));
-                                }}
-                                className="px-2 py-1 bg-white border border-gray-300 rounded-md text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all"
-                              >
-                                <option value="BSPL">BSPL</option>
-                                <option value="BSAPL">BSAPL</option>
-                              </select>
+                              <div className="flex flex-col">
+                                <span className="text-[11px] font-bold text-gray-700 flex items-center gap-1">
+                                  <Building2 size={12} className="text-be-orange" />
+                                  Bank Details
+                                </span>
+                                <span className="text-[9px] text-gray-400 font-mono">
+                                  R{m.index}_Bank_type
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  value={currentBank}
+                                  disabled={isVerifying}
+                                  onChange={(e) => {
+                                    const val = e.target.value as 'BSPL' | 'BSAPL';
+                                    setDetailsBankSelections(prev => ({ ...prev, [m.index]: val }));
+                                  }}
+                                  className="px-2 py-1 bg-white border border-gray-300 rounded-md text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all shadow-xs"
+                                  title={`Zoho CRM Pick List field: R${m.index}_Bank_type`}
+                                >
+                                  <option value="BSPL">BSPL</option>
+                                  <option value="BSAPL">BSAPL</option>
+                                </select>
+                                {currentBank !== (m.bankType || 'BSPL') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveDetailsMilestoneBank(m.index, currentBank)}
+                                    disabled={isVerifying}
+                                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[10px] font-bold transition-colors cursor-pointer"
+                                    title={`Save R${m.index}_Bank_type as ${currentBank} in Zoho CRM`}
+                                  >
+                                    Save Bank
+                                  </button>
+                                )}
+                              </div>
                             </div>
 
                             <div className="flex items-center justify-between pt-1">
@@ -2939,7 +3022,7 @@ export const DealDetails = () => {
                                       disabled={isVerifying}
                                       className="text-[10px] text-indigo-600 hover:text-indigo-800 underline font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                                     >
-                                      Update Bank
+                                      Re-verify
                                     </button>
                                   )}
                                 </div>
@@ -4357,6 +4440,39 @@ export const DealDetails = () => {
                         )}
                       </div>
                     </div>
+
+                    {/* Row 6: Bank Details / Bank Type (Accounts Department Only) */}
+                    {(isAccounts || isSuperAdmin) && (
+                      <div className="flex flex-col sm:flex-row sm:items-center py-3 gap-2 sm:gap-4 bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 my-1">
+                        <label className="sm:w-44 font-bold text-gray-800 shrink-0 flex items-center gap-1.5 text-xs">
+                          <Building2 size={14} className="text-emerald-600" />
+                          Bank Details ({activeSlotCfg.tabName} Bank type)
+                        </label>
+                        <div className="flex-1 flex items-center gap-3">
+                          <select
+                            value={activeSlot.bankType || 'BSPL'}
+                            onChange={(e) => {
+                              const val = e.target.value as 'BSPL' | 'BSAPL';
+                              setPaymentSlotsData(prev => ({
+                                ...prev,
+                                [activePaymentTab]: {
+                                  ...prev[activePaymentTab],
+                                  bankType: val
+                                }
+                              }));
+                            }}
+                            className="px-3 py-2 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-gray-900 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 shadow-xs"
+                            title={`Zoho CRM Pick List field: ${activeSlotCfg.tabName}_Bank_type`}
+                          >
+                            <option value="BSPL">BSPL</option>
+                            <option value="BSAPL">BSAPL</option>
+                          </select>
+                          <span className="text-[11px] text-gray-500">
+                            Zoho API: <code className="text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200 font-mono text-[10px]">{activeSlotCfg.tabName}_Bank_type</code>
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -4364,12 +4480,12 @@ export const DealDetails = () => {
               {/* Modal Footer Actions */}
               <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-2.5">
                 <span className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5">
-                  {canEditRemainingPayment ? (
+                  {(canEditRemainingPayment || isAccounts || isSuperAdmin) ? (
                     'Saving will synchronize all 8 milestone payment fields with Zoho CRM.'
                   ) : (
                     <>
                       <Lock size={12} className="text-amber-600 shrink-0" />
-                      Read-Only: Only Primary BDM (BDM 1: <strong className="text-gray-700">{primaryBdmName}</strong>) can modify milestone entries.
+                      Read-Only: Only Primary BDM (BDM 1: <strong className="text-gray-700">{primaryBdmName}</strong>) or Accounts can modify milestone entries.
                     </>
                   )}
                 </span>
@@ -4380,9 +4496,9 @@ export const DealDetails = () => {
                     disabled={isSubmittingPayment}
                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    {canEditRemainingPayment ? 'Cancel' : 'Close'}
+                    {(canEditRemainingPayment || isAccounts || isSuperAdmin) ? 'Cancel' : 'Close'}
                   </button>
-                  {canEditRemainingPayment && (
+                  {(canEditRemainingPayment || isAccounts || isSuperAdmin) && (
                     <button
                       type="submit"
                       disabled={isSubmittingPayment}
