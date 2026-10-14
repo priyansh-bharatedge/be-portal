@@ -98,7 +98,11 @@ export function isSubordinateOfTL(employee: any, tl: any): boolean {
     employee.teamLeader_Id,
     employee.reporting_manager_id,
     employee.Who_is_the_Team_Leader_TL_id,
-    employee.Reporting_Manager_id
+    employee.Reporting_Manager_id,
+    typeof employee.Who_is_the_Team_Leader_TL === 'object' ? employee.Who_is_the_Team_Leader_TL?.id : (typeof employee.Who_is_the_Team_Leader_TL === 'string' && /^\d+$/.test(employee.Who_is_the_Team_Leader_TL) ? employee.Who_is_the_Team_Leader_TL : null),
+    typeof employee.Reporting_Manager === 'object' ? employee.Reporting_Manager?.id : (typeof employee.Reporting_Manager === 'string' && /^\d+$/.test(employee.Reporting_Manager) ? employee.Reporting_Manager : null),
+    typeof employee.formData?.Who_is_the_Team_Leader_TL === 'object' ? employee.formData?.Who_is_the_Team_Leader_TL?.id : null,
+    typeof employee.formData?.Reporting_Manager === 'object' ? employee.formData?.Reporting_Manager?.id : null
   ].filter(Boolean).map(v => String(v).trim().toLowerCase());
 
   for (const mId of memberMgrIds) {
@@ -119,7 +123,9 @@ export function isSubordinateOfTL(employee: any, tl: any): boolean {
     employee.formData?.Who_is_the_Team_Leader_TL,
     employee.formData?.Reporting_Manager,
     employee.formData?.teamLeader,
-    employee.formData?.reportingManager
+    employee.formData?.reportingManager,
+    employee.Who_is_the_Team_Leader_TL_name,
+    employee.Reporting_Manager_name
   ].filter(Boolean);
 
   for (const candName of candidateNames) {

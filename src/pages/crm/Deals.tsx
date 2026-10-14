@@ -2974,7 +2974,7 @@ export const Deals = () => {
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-bold text-gray-900">Deals</h1>
             <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              {(isFiltered ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records ?? rbacDeals.length))).toLocaleString()} Deals
+              {((isFiltered || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records ?? rbacDeals.length))).toLocaleString()} Deals
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">Manage all active deals with live synchronization and pagination.</p>
@@ -3111,7 +3111,7 @@ export const Deals = () => {
 
       {/* Deals Table & Accounts Remaining Payments View */}
       {(() => {
-        const totalDealsCount = isFiltered ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
+        const totalDealsCount = (isFiltered || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
         const paginatedDeals = isFiltered ? filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : filteredDeals;
 
         if (activeTab === 'Remaining Payments') {

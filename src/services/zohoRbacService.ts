@@ -1,7 +1,7 @@
 import type { AuthUser, SystemRole, RbacCriteriaResult } from '../types/roles';
 import { ZOHO_MODULE_LOOKUP_MAP } from '../types/roles';
 import type { ZohoApiResponse, ZohoFetchOptions, ZohoFetchResult } from './zohoService';
-import { isSubordinateOfTL } from '../utils/employeeUtils';
+import { isSubordinateOfTL, isMatchingName } from '../utils/employeeUtils';
 
 /**
  * Retrieves the currently active user from local storage
@@ -22,15 +22,36 @@ export function getActiveAuthUser(): AuthUser | null {
  * Helper to get all registered employees from local storage or memory
  */
 export function getAllEmployeesList(): any[] {
+  const mergedMap = new Map<string, any>();
   try {
     const raw = localStorage.getItem('be_employees');
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((e: any) => {
+          const key = String(e.id || e.zohoId || e.empId || e.email || Math.random());
+          mergedMap.set(key, e);
+        });
+      }
     }
   } catch (err) {
     console.warn('[RBAC Service] Failed to load employees list:', err);
   }
-  return [];
+  try {
+    const rawSales = localStorage.getItem('be_sales_employees');
+    if (rawSales) {
+      const parsed = JSON.parse(rawSales);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((e: any) => {
+          const key = String(e.id || e.zohoId || e.empId || e.email || Math.random());
+          if (!mergedMap.has(key)) {
+            mergedMap.set(key, e);
+          }
+        });
+      }
+    }
+  } catch (err) {}
+  return Array.from(mergedMap.values());
 }
 
 /**
@@ -65,23 +86,35 @@ export function resolveAccessibleEmployeeIds(
     return { employeeIds: [], zohoIds: [], isAll: true };
   }
 
-  // 3. Team Leader (TL) - Self + Team (direct reports via Reporting_Manager or Team Leader)
+  // 3. Team Leader (TL) - Self + Team (direct reports via Reporting_Manager or Team Leader across all departments)
   if (role === 'TL') {
     const empIds = new Set<string>();
     const zIds = new Set<string>();
 
     if (userEmpId) empIds.add(userEmpId);
     if (userZohoId) zIds.add(userZohoId);
-    if (user.id) empIds.add(String(user.id).toLowerCase());
+    if (user.id) {
+      empIds.add(String(user.id).toLowerCase());
+      if (/^\d{10,}$/.test(String(user.id))) {
+        zIds.add(String(user.id));
+      }
+    }
 
     allEmployees.forEach((e: any) => {
       const isSubordinate = isSubordinateOfTL(e, user);
 
       if (isSubordinate) {
-        if (e.id) empIds.add(String(e.id).toLowerCase());
+        if (e.id) {
+          empIds.add(String(e.id).toLowerCase());
+          if (/^\d{10,}$/.test(String(e.id))) {
+            zIds.add(String(e.id));
+          }
+        }
         if (e.empId) empIds.add(String(e.empId).toLowerCase());
         if (e.zohoId) zIds.add(String(e.zohoId));
         if (e.Employment_ID) empIds.add(String(e.Employment_ID).toLowerCase());
+        if (e.Employee_Code) empIds.add(String(e.Employee_Code).toLowerCase());
+        if (e.zohoUserId) zIds.add(String(e.zohoUserId));
       }
     });
 
@@ -338,6 +371,19 @@ export function buildZohoRbacCriteria(
   }
 
   if (moduleName === 'Deals' || moduleName === 'Deal') {
+    // If user is a TL or targetIds > 5, sending large criteria or-clauses exceeds Zoho's 10-clause limit
+    // and causes Zoho API to reject the search request. We allow the query to complete and let
+    // filterRecordsByRbac enforce airtight subordinate-only security.
+    if (user.role === 'TL' || targetIds.length > 5) {
+      return {
+        criteria: '',
+        coqlWhereClause: '',
+        accessibleEmployeeIds: targetIds,
+        isUnfiltered: false,
+        role: user.role
+      };
+    }
+
     // Include both primary Employee and Partner_BDM lookup in criteria & COQL
     let empCriteria = `(Employee.id:equals:${targetIds[0]})`;
     let partnerCriteria = `(Partner_BDM.id:equals:${targetIds[0]})`;
@@ -433,15 +479,87 @@ export function filterRecordsByRbac<T = any>(
   const userName = (user.name || '').trim().toLowerCase();
   const userEmail = (user.email || '').trim().toLowerCase();
 
+  const accessibleNames: string[] = [];
+  const accessibleEmails = new Set<string>();
+
+  if (userName) accessibleNames.push(userName);
+  if (userEmail) accessibleEmails.add(userEmail);
+
+  // If user is a Team Leader (TL), gather all subordinates' names, emails, and IDs across all departments
+  if (user.role === 'TL') {
+    allEmployees.forEach((e: any) => {
+      if (isSubordinateOfTL(e, user)) {
+        // Collect subordinate IDs into idSet
+        [
+          e.id,
+          e.empId,
+          e.zohoId,
+          e.Employment_ID,
+          e.Employee_Code,
+          e.zohoUserId,
+          e.formData?.empId,
+          e.formData?.zohoId,
+          e.formData?.employeeId
+        ].forEach(val => {
+          if (val) idSet.add(String(val).trim().toLowerCase());
+        });
+
+        // Collect subordinate names
+        const fullName = (e.name || [e.Name, e.Middle_Name, e.Last_Name].filter(Boolean).join(' ') || '').trim();
+        if (fullName) {
+          accessibleNames.push(fullName);
+          idSet.add(fullName.toLowerCase());
+        }
+        if (e.firstName && typeof e.firstName === 'string') {
+          accessibleNames.push(e.firstName.trim());
+        }
+        if (e.Name && typeof e.Name === 'string') {
+          accessibleNames.push(e.Name.trim());
+        }
+        if (e.formData?.firstName) {
+          accessibleNames.push(String(e.formData.firstName).trim());
+        }
+
+        // Collect subordinate emails
+        [
+          e.email,
+          e.workEmail,
+          e.Personal_Email_Address,
+          e.formData?.email,
+          e.formData?.workEmail
+        ].forEach(val => {
+          if (val) accessibleEmails.add(String(val).trim().toLowerCase());
+        });
+      }
+    });
+  }
+
+  // Unified person matcher that checks against both TL and all subordinates
+  const isAccessiblePerson = (candidateNameOrId?: any, candidateEmail?: any): boolean => {
+    if (candidateNameOrId) {
+      if (typeof candidateNameOrId === 'object' && candidateNameOrId !== null) {
+        const objId = String(candidateNameOrId.id || '').trim().toLowerCase();
+        const objName = String(candidateNameOrId.name || '').trim();
+        if (objId && idSet.has(objId)) return true;
+        if (objName && isAccessiblePerson(objName)) return true;
+      } else {
+        const val = String(candidateNameOrId).trim();
+        const valLower = val.toLowerCase();
+        if (valLower && idSet.has(valLower)) return true;
+        if (val && accessibleNames.some(n => isMatchingName(val, n))) return true;
+      }
+    }
+    if (candidateEmail) {
+      const em = String(candidateEmail).trim().toLowerCase();
+      if (em && accessibleEmails.has(em)) return true;
+    }
+    return false;
+  };
+
   return records.filter((rec: any) => {
     // 1. Check direct Employee lookup object
     const empLookup = rec.Employee || rec.rawZohoDeal?.Employee;
-    if (empLookup && typeof empLookup === 'object') {
-      const empId = String(empLookup.id || '').trim().toLowerCase();
-      const empName = String(empLookup.name || '').trim().toLowerCase();
-      if (empId && idSet.has(empId)) return true;
-      if (empName && userName && (empName === userName || (empName.length >= 3 && userName.includes(empName)) || (userName.length >= 3 && empName.includes(userName)) || idSet.has(empName))) return true;
-    }
+    if (empLookup && isAccessiblePerson(empLookup)) return true;
 
     // 2. Check string Employee ID fields
     const directEmpId = String(rec.Employee || rec.employeeId || rec.empId || rec.Employment_ID || rec.Employee_Code || rec.Employee_ID || rec.rawZohoDeal?.Employment_ID || rec.rawZohoDeal?.Employee_Code || '').trim().toLowerCase();
@@ -449,34 +567,20 @@ export function filterRecordsByRbac<T = any>(
 
     // 3. Check Owner / BDM / Creator fields
     const ownerLookup = rec.Owner || rec.rawZohoDeal?.Owner;
-    if (ownerLookup && typeof ownerLookup === 'object') {
-      const ownerId = String(ownerLookup.id || '').trim().toLowerCase();
-      const ownerName = String(ownerLookup.name || '').trim().toLowerCase();
-      if (ownerId && idSet.has(ownerId)) return true;
-      if (ownerName && userName && (ownerName === userName || (ownerName.length >= 3 && userName.includes(ownerName)) || (userName.length >= 3 && ownerName.includes(userName)) || idSet.has(ownerName))) return true;
-    }
+    if (ownerLookup && isAccessiblePerson(ownerLookup)) return true;
 
-    const ownerStr = String(rec.owner || rec.Owner || rec.Created_By || rec.salesEmployee || rec.BDM_names || rec.rawZohoDeal?.Owner?.name || rec.rawZohoDeal?.salesEmployee || '').trim().toLowerCase();
-    if (ownerStr && userName && (ownerStr === userName || (ownerStr.length >= 3 && userName.includes(ownerStr)) || (userName.length >= 3 && ownerStr.includes(userName)) || idSet.has(ownerStr))) {
-      return true;
-    }
-    if (ownerStr && userEmail && ownerStr === userEmail) {
-      return true;
-    }
+    const ownerStr = String(rec.owner || rec.Owner || rec.Created_By || rec.salesEmployee || rec.BDM_names || rec.rawZohoDeal?.Owner?.name || rec.rawZohoDeal?.salesEmployee || '').trim();
+    if (ownerStr && (isAccessiblePerson(ownerStr) || isAccessiblePerson(undefined, ownerStr))) return true;
 
     // 4. Check Partner BDM (Lookup object, ID, Name, or Form Data)
     const partnerLookup = rec.Partner_BDM || rec.rawZohoDeal?.Partner_BDM;
-    if (partnerLookup && typeof partnerLookup === 'object') {
-      const pId = String(partnerLookup.id || '').trim().toLowerCase();
-      const pName = String(partnerLookup.name || '').trim().toLowerCase();
-      if (pId && idSet.has(pId)) return true;
-      if (pName && userName && (pName === userName || (pName.length >= 3 && userName.includes(pName)) || (userName.length >= 3 && pName.includes(userName)) || idSet.has(pName))) return true;
-    }
+    if (partnerLookup && isAccessiblePerson(partnerLookup)) return true;
 
     const bdmId = String(rec.partnerBdmId || rec.partner_bdm_id || rec.Partner_BDM_ID || rec.rawZohoDeal?.Partner_BDM_ID || rec.rawZohoDeal?.partner_bdm_id || rec.formData?.partnerBdmId || rec.formData?.partner_bdm_id || (typeof partnerLookup === 'string' ? partnerLookup : '') || '').trim().toLowerCase();
     if (bdmId && idSet.has(bdmId)) return true;
-    const bdmName = String(rec.partnerBdmName || rec.partner_bdm_name || rec.Partner_BDM_Name || rec.rawZohoDeal?.Partner_BDM_Name || rec.rawZohoDeal?.Partner_BDM_name || rec.rawZohoDeal?.Partner_BDM_Names || rec.rawZohoDeal?.Partner_BDM_Names_bp || rec.rawZohoDeal?.Partner_BDM_Names_st || rec.formData?.partnerBdmName || rec.formData?.partner_bdm_name || '').trim().toLowerCase();
-    if (bdmName && userName && (bdmName === userName || (bdmName.length >= 3 && userName.includes(bdmName)) || (userName.length >= 3 && bdmName.includes(userName)) || idSet.has(bdmName))) return true;
+
+    const bdmName = String(rec.partnerBdmName || rec.partner_bdm_name || rec.Partner_BDM_Name || rec.rawZohoDeal?.Partner_BDM_Name || rec.rawZohoDeal?.Partner_BDM_name || rec.rawZohoDeal?.Partner_BDM_Names || rec.rawZohoDeal?.Partner_BDM_Names_bp || rec.rawZohoDeal?.Partner_BDM_Names_st || rec.formData?.partnerBdmName || rec.formData?.partner_bdm_name || '').trim();
+    if (bdmName && isAccessiblePerson(bdmName)) return true;
 
     // 5. For HOD role, check if record's department matches HOD's department
     if (user.role === 'HOD') {
@@ -484,21 +588,34 @@ export function filterRecordsByRbac<T = any>(
       if (recDept && userDept && (recDept === userDept || userDept === 'management' || (userDept === 'sales' && (recDept.includes('sale') || recDept.includes('bdm'))))) return true;
     }
 
-    // 6. Check if associated employee name belongs to accessible employees
-    const recEmpName = String(rec.employeeName || rec.Employee_Name || '').trim().toLowerCase();
-    if (recEmpName && userName && (recEmpName === userName || (recEmpName.length >= 3 && userName.includes(recEmpName)) || (userName.length >= 3 && recEmpName.includes(userName)) || idSet.has(recEmpName))) return true;
+    // 6. Check if associated employee name/email belongs to accessible employees
+    const recEmpName = String(rec.employeeName || rec.Employee_Name || rec.salesRepresentative || rec.createdBy || '').trim();
+    const recEmpEmail = String(rec.employeeEmail || rec.userEmail || rec.empEmail || '').trim();
+    if (recEmpName && isAccessiblePerson(recEmpName, recEmpEmail)) return true;
+    if (recEmpEmail && isAccessiblePerson(undefined, recEmpEmail)) return true;
 
     // 7. Check embedded formData employee identifiers
-    const fdEmpName = String(rec.formData?.employeeName || rec.formData?.salesEmployee || rec.formData?.empName || '').trim().toLowerCase();
-    if (fdEmpName && userName && (fdEmpName === userName || (fdEmpName.length >= 3 && userName.includes(fdEmpName)) || (userName.length >= 3 && fdEmpName.includes(userName)) || idSet.has(fdEmpName))) return true;
-
-    const fdEmpEmail = String(rec.formData?.employeeEmail || rec.formData?.userEmail || rec.employeeEmail || rec.userEmail || rec.empEmail || '').trim().toLowerCase();
-    if (fdEmpEmail && userEmail && fdEmpEmail === userEmail) return true;
+    const fdEmpName = String(rec.formData?.employeeName || rec.formData?.salesEmployee || rec.formData?.empName || '').trim();
+    const fdEmpEmail = String(rec.formData?.employeeEmail || rec.formData?.userEmail || '').trim();
+    if (fdEmpName && isAccessiblePerson(fdEmpName, fdEmpEmail)) return true;
+    if (fdEmpEmail && isAccessiblePerson(undefined, fdEmpEmail)) return true;
 
     const fdEmpId = String(rec.formData?.empId || rec.formData?.employeeId || rec.formData?.employeeZohoId || rec.empId || rec.employeeId || '').trim().toLowerCase();
     if (fdEmpId && idSet.has(fdEmpId)) return true;
 
-    // 8. Legal Department access: If user is in Legal department, allow access to all deals in Legal stage or with Legal department/subforms
+    // 8. Check Subforms (e.g. Legal subform rows) for assigned subordinates in any department
+    if (Array.isArray(rec.legalData) && rec.legalData.length > 0) {
+      const hasSubordinateInLegal = rec.legalData.some((row: any) =>
+        isAccessiblePerson(row.dprMember) ||
+        isAccessiblePerson(row.dprTl) ||
+        isAccessiblePerson(row.financeMember) ||
+        isAccessiblePerson(row.financeTl) ||
+        isAccessiblePerson(row.dataChecker)
+      );
+      if (hasSubordinateInLegal) return true;
+    }
+
+    // 9. Legal Department access: If user is in Legal department, allow access to all deals in Legal stage or with Legal department/subforms
     if (userDept.includes('legal') && (moduleName === 'Deals' || moduleName === 'Deal' || moduleName === 'CRM')) {
       const dealStage = String(rec.stage || rec.Stage || rec.status || rec.Status || rec.rawZohoDeal?.Stage || '').toLowerCase().trim();
       const recDept = String(rec.Department || rec.department || rec.Department_Name || '').toLowerCase().trim();
@@ -507,7 +624,7 @@ export function filterRecordsByRbac<T = any>(
       }
     }
 
-    // 9. Special fallback for Quotations: if created locally or before employee metadata was linked
+    // 10. Special fallback for Quotations: if created locally or before employee metadata was linked
     if (moduleName === 'Quotations' || moduleName === 'quotation' || moduleName === 'CRM') {
       const isUnassigned = (!rec.Employee || (typeof rec.Employee === 'object' && !rec.Employee.id && !rec.Employee.name)) &&
                            !rec.employeeId && !rec.empId && !rec.employeeName &&
