@@ -21,8 +21,14 @@ export function getActiveAuthUser(): AuthUser | null {
 /**
  * Helper to get all registered employees from local storage or memory
  */
-export function getAllEmployeesList(): any[] {
+export function getAllEmployeesList(additionalUsers?: any[]): any[] {
   const mergedMap = new Map<string, any>();
+  if (Array.isArray(additionalUsers)) {
+    additionalUsers.forEach((e: any) => {
+      const key = String(e.id || e.zohoId || e.empId || e.email || Math.random());
+      mergedMap.set(key, e);
+    });
+  }
   try {
     const raw = localStorage.getItem('be_employees');
     if (raw) {
@@ -30,7 +36,9 @@ export function getAllEmployeesList(): any[] {
       if (Array.isArray(parsed)) {
         parsed.forEach((e: any) => {
           const key = String(e.id || e.zohoId || e.empId || e.email || Math.random());
-          mergedMap.set(key, e);
+          if (!mergedMap.has(key)) {
+            mergedMap.set(key, e);
+          }
         });
       }
     }

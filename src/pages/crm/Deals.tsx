@@ -28,7 +28,8 @@ import {
   verifyZohoMilestoneLegal,
   ZOHO_DEAL_BLUEPRINT_TRANSITIONS
 } from '../../services/zohoService';
-import { buildZohoRbacCriteria } from '../../services/zohoRbacService';
+import { buildZohoRbacCriteria, getAllEmployeesList } from '../../services/zohoRbacService';
+import { isSubordinateOfTL, isMatchingName } from '../../utils/employeeUtils';
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 import { Layers, DownloadCloud } from 'lucide-react';
@@ -44,6 +45,8 @@ import {
   getDealUnverifiedMilestonesCount,
   getDealUnverifiedLegalMilestonesCount,
   getDealVerifiedLegalMilestonesCount,
+  isUserPartnerBdm,
+  isUserPrimaryBdm,
   type DealMilestoneItem
 } from '../../utils/dealSplitUtils';
 
@@ -54,11 +57,79 @@ interface DealService {
   baseAmount?: string;
 }
 
+interface DealSubordinateInfo {
+  member: any;
+  role: string;
+  name: string;
+}
+
+const isDealOwnedByTL = (d: any, user: any): boolean => {
+  if (!d || !user) return false;
+  if (isUserPrimaryBdm(d, user) || isUserPartnerBdm(d, user)) return true;
+  const ownerName = String(d.owner || d.employeeName || d.salesEmployee || d.Owner?.name || d.rawZohoDeal?.Owner?.name || '').trim();
+  if (ownerName && isMatchingName(ownerName, user.name || user.Name || '')) return true;
+  const partnerName = String(d.partnerBdmName || d.Partner_BDM_Name || d.Partner_BDM?.name || '').trim();
+  if (partnerName && isMatchingName(partnerName, user.name || user.Name || '')) return true;
+  return false;
+};
+
+const getDealSubordinateMember = (d: any, user: any, employees: any[]): DealSubordinateInfo | null => {
+  if (!d || !user || !Array.isArray(employees)) return null;
+  const subordinates = employees.filter((e: any) => isSubordinateOfTL(e, user));
+  if (subordinates.length === 0) return null;
+
+  for (const sub of subordinates) {
+    if (isUserPrimaryBdm(d, sub)) {
+      return { member: sub, role: 'Primary BDM', name: sub.name || sub.Name || '' };
+    }
+  }
+
+  const ownerName = String(d.owner || d.employeeName || d.salesEmployee || d.Owner?.name || d.rawZohoDeal?.Owner?.name || '').trim();
+  if (ownerName) {
+    for (const sub of subordinates) {
+      if (isMatchingName(ownerName, sub.name || sub.Name || '')) {
+        return { member: sub, role: 'Owner', name: sub.name || sub.Name || ownerName };
+      }
+    }
+  }
+
+  for (const sub of subordinates) {
+    if (isUserPartnerBdm(d, sub)) {
+      return { member: sub, role: 'Partner BDM', name: sub.name || sub.Name || '' };
+    }
+  }
+
+  const partnerName = String(d.partnerBdmName || d.Partner_BDM_Name || d.Partner_BDM?.name || '').trim();
+  if (partnerName) {
+    for (const sub of subordinates) {
+      if (isMatchingName(partnerName, sub.name || sub.Name || '')) {
+        return { member: sub, role: 'Partner BDM', name: sub.name || sub.Name || partnerName };
+      }
+    }
+  }
+
+  return null;
+};
+
+const isDealOwnedBySubordinate = (d: any, user: any, employees: any[]): boolean => {
+  return getDealSubordinateMember(d, user, employees) !== null;
+};
+
 export const Deals = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, isSuperAdmin, isHR, isHOD, isAccounts, isLegal, isSales, availableUsers, filterRecords } = useAuth();
+  const { currentUser, isSuperAdmin, isHR, isHOD, isTL, isAccounts, isLegal, isSales, availableUsers, filterRecords } = useAuth();
+  const isUserTL = !isSuperAdmin && !isHR && !isHOD && !isAccounts && !isLegal && Boolean(
+    isTL ||
+    currentUser?.role === 'TL' ||
+    (currentUser as any)?.systemRole === 'TL'
+  );
+
+  const allEmployees = useMemo(() => {
+    return getAllEmployeesList(availableUsers);
+  }, [availableUsers]);
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState('');
@@ -69,8 +140,8 @@ export const Deals = () => {
     if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) return 'All Deals';
     if (tabParam === 'Remaining Payments' && !isAccounts && !isLegal && !isSuperAdmin) return 'All Deals';
     if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) return 'All Deals';
-    if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && (isAccounts || isLegal) && !isSuperAdmin) return 'All Deals';
-    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments' || tabParam === 'Legal Queue') return tabParam;
+    if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals') && (isAccounts || isLegal) && !isSuperAdmin) return 'All Deals';
+    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments' || tabParam === 'Legal Queue') return tabParam;
     if (isLegal && !isSuperAdmin) return 'Legal Queue';
     if (isAccounts && !isSuperAdmin) return 'Account Queue';
     return 'All Deals';
@@ -104,7 +175,7 @@ export const Deals = () => {
         setActiveTab('All Deals');
       } else if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) {
         setActiveTab('All Deals');
-      } else if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals') && (isAccounts || isLegal) && !isSuperAdmin) {
+      } else if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals') && (isAccounts || isLegal) && !isSuperAdmin) {
         setActiveTab('All Deals');
       } else {
         setActiveTab(tabParam);
@@ -1751,6 +1822,13 @@ export const Deals = () => {
   useEffect(() => {
     // Filter deals based on activeTab, quickFilter, statusFilter and searchQuery to get active page slice
     const filtered = deals.filter(deal => {
+      if (isUserTL) {
+        if (activeTab === 'My Team Deals') {
+          if (!isDealOwnedBySubordinate(deal, currentUser, allEmployees)) return false;
+        } else {
+          if (!isDealOwnedByTL(deal, currentUser)) return false;
+        }
+      }
       const isFromQt = isDealFromQuotation(deal);
       if (activeTab === 'Manual Deals' && isFromQt) return false;
       if (activeTab === 'From Quotations' && !isFromQt) return false;
@@ -1773,7 +1851,10 @@ export const Deals = () => {
         const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
         const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
         const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
-        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchStatus && !matchAmount && !matchEmpCode) return false;
+        const subMember = isUserTL ? getDealSubordinateMember(deal, currentUser, allEmployees) : null;
+        const matchSubMember = subMember?.name && subMember.name.toLowerCase().includes(q);
+
+        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchStatus && !matchAmount && !matchEmpCode && !matchSubMember) return false;
       }
       return true;
     });
@@ -1815,7 +1896,7 @@ export const Deals = () => {
     return () => {
       isCancelled = true;
     };
-  }, [deals, currentPage, itemsPerPage, activeTab, searchQuery]);
+  }, [deals, currentPage, itemsPerPage, activeTab, searchQuery, isUserTL, currentUser, allEmployees]);
 
   const getStatusColor = (status: string) => {
     const s = (status || '').toLowerCase();
@@ -2885,6 +2966,16 @@ export const Deals = () => {
     return rbacDeals.reduce((acc: number, d: any) => acc + getDealUnverifiedLegalMilestonesCount(d), 0);
   }, [rbacDeals]);
 
+  const myOwnDealsCount = useMemo(() => {
+    if (!isUserTL) return 0;
+    return rbacDeals.filter((d: any) => isDealOwnedByTL(d, currentUser)).length;
+  }, [rbacDeals, isUserTL, currentUser]);
+
+  const myTeamDealsCount = useMemo(() => {
+    if (!isUserTL) return 0;
+    return rbacDeals.filter((d: any) => isDealOwnedBySubordinate(d, currentUser, allEmployees)).length;
+  }, [rbacDeals, isUserTL, currentUser, allEmployees]);
+
   const isFiltered = Boolean(
     (quickFilter && quickFilter !== 'all') ||
     Boolean(searchQuery) ||
@@ -2894,6 +2985,18 @@ export const Deals = () => {
 
   const filteredDeals = useMemo(() => {
     return rbacDeals.filter((deal: any) => {
+      // TL Tab Separation:
+      // If user is TL:
+      // - "My Team Deals" tab: shows ONLY subordinate deals
+      // - "All Deals" and other personal tabs: shows ONLY TL's own deals (not team members')
+      if (isUserTL) {
+        if (activeTab === 'My Team Deals') {
+          if (!isDealOwnedBySubordinate(deal, currentUser, allEmployees)) return false;
+        } else {
+          if (!isDealOwnedByTL(deal, currentUser)) return false;
+        }
+      }
+
       const isFromQt = isDealFromQuotation(deal);
       const isPartner = isDealPartnerBdm(deal);
       const isVerified = isDealPaymentVerified(deal);
@@ -2928,12 +3031,14 @@ export const Deals = () => {
         const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
         const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
         const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
+        const subMember = isUserTL ? getDealSubordinateMember(deal, currentUser, allEmployees) : null;
+        const matchSubMember = subMember?.name && subMember.name.toLowerCase().includes(q);
 
-        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchPartnerBdm && !matchStatus && !matchAmount && !matchEmpCode) return false;
+        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchPartnerBdm && !matchStatus && !matchAmount && !matchEmpCode && !matchSubMember) return false;
       }
       return true;
     });
-  }, [rbacDeals, activeTab, quickFilter, statusFilter, searchQuery]);
+  }, [rbacDeals, isUserTL, activeTab, currentUser, allEmployees, quickFilter, statusFilter, searchQuery]);
 
   return (
     <div className="space-y-6 relative">
@@ -2974,7 +3079,7 @@ export const Deals = () => {
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-bold text-gray-900">Deals</h1>
             <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              {((isFiltered || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records ?? rbacDeals.length))).toLocaleString()} Deals
+              {((isFiltered || isUserTL || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records ?? rbacDeals.length))).toLocaleString()} Deals
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">Manage all active deals with live synchronization and pagination.</p>
@@ -3012,7 +3117,10 @@ export const Deals = () => {
 
       <div className="flex border-b border-gray-200 mb-4 overflow-x-auto">
         {[
-          { id: 'All Deals', label: 'All Deals', count: null },
+          { id: 'All Deals', label: 'All Deals', count: isUserTL ? myOwnDealsCount : null },
+          ...(isUserTL ? [
+            { id: 'My Team Deals', label: 'My Team Deals', count: myTeamDealsCount, isTeam: true },
+          ] : []),
           ...((isAccounts || isSuperAdmin) ? [
             { id: 'Account Queue', label: 'Account Queue', count: accountQueueCount, isQueue: true },
             { id: 'Account Verified', label: 'Account Verified', count: accountVerifiedCount, isVerified: true },
@@ -3046,6 +3154,7 @@ export const Deals = () => {
             <span>{tabItem.label}</span>
             {tabItem.count !== null && (
               <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                tabItem.isTeam ? 'bg-blue-100 text-blue-800 border border-blue-200' :
                 tabItem.isQueue && tabItem.count > 0 ? 'bg-amber-100 text-amber-800' :
                 tabItem.isRemaining && tabItem.count > 0 ? 'bg-purple-100 text-purple-800 border border-purple-200' :
                 tabItem.isVerified ? 'bg-emerald-100 text-emerald-800' :
@@ -3111,8 +3220,8 @@ export const Deals = () => {
 
       {/* Deals Table & Accounts Remaining Payments View */}
       {(() => {
-        const totalDealsCount = (isFiltered || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
-        const paginatedDeals = isFiltered ? filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : filteredDeals;
+        const totalDealsCount = (isFiltered || isUserTL || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
+        const paginatedDeals = (isFiltered || isUserTL || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : filteredDeals;
 
         if (activeTab === 'Remaining Payments') {
           return (
@@ -3202,6 +3311,15 @@ export const Deals = () => {
                                 {deal.service}
                               </span>
                             )}
+                            {(() => {
+                              const subMember = isUserTL ? getDealSubordinateMember(deal, currentUser, allEmployees) : null;
+                              if (!subMember) return null;
+                              return (
+                                <span className="text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1">
+                                  <Users size={12} /> {subMember.name} (Team Member)
+                                </span>
+                              );
+                            })()}
                           </div>
 
                           <div className="flex items-center gap-4 text-xs">
@@ -3502,7 +3620,7 @@ export const Deals = () => {
                     <th className="px-6 py-3">Received</th>
                     <th className="px-6 py-3">Pending</th>
                     <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3">Owner</th>
+                    <th className="px-6 py-3">{activeTab === 'My Team Deals' ? 'Team Member' : 'Owner'}</th>
                     <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -3565,32 +3683,58 @@ export const Deals = () => {
                         </span>
                       </td>
                       <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">
-                        <div className="flex items-center space-x-2">
-                          <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">
-                            {breakdown.primaryName ? breakdown.primaryName.charAt(0) : '?'}
-                          </div>
-                          <span className="font-semibold text-gray-900">{breakdown.primaryName || 'Admin'}</span>
-                        </div>
-                        {breakdown.hasPartnerBdm && (
-                          <div className="mt-1 text-[11px]">
-                            {breakdown.isUserPartner ? (
-                              <div className="flex items-center text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100 w-fit">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5"></span>
-                                You: Partner BDM (₹{breakdown.partnerAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })})
+                        {(() => {
+                          const subMember = isUserTL ? getDealSubordinateMember(deal, currentUser, allEmployees) : null;
+                          const displayName = (activeTab === 'My Team Deals' && subMember?.name) ? subMember.name : (breakdown.primaryName || deal.owner || 'Admin');
+                          const isTeamMemberDeal = Boolean(subMember);
+
+                          return (
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                  isTeamMemberDeal ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gradient-to-tr from-gray-200 to-gray-100 text-gray-600'
+                                }`}>
+                                  {displayName ? displayName.charAt(0).toUpperCase() : '?'}
+                                </div>
+                                <div className="flex flex-col">
+                                  <div className="flex items-center space-x-1.5">
+                                    <span className="font-semibold text-gray-900">{displayName}</span>
+                                    {isTeamMemberDeal && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200" title="Team Member under TL">
+                                        Team Member
+                                      </span>
+                                    )}
+                                  </div>
+                                  {subMember?.member?.department && (
+                                    <span className="text-[10px] text-gray-400 font-normal">
+                                      {subMember.member.department}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            ) : breakdown.isUserPrimary ? (
-                              <div className="flex items-center text-orange-700 font-medium">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5"></span>
-                                Partner: {breakdown.partnerName} (50% Split: ₹{breakdown.partnerAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })})
-                              </div>
-                            ) : (
-                              <div className="flex items-center text-purple-700 font-medium">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5"></span>
-                                Partner: {breakdown.partnerName} (50/50 Split: ₹{breakdown.partnerAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} each)
-                              </div>
-                            )}
-                          </div>
-                        )}
+                              {breakdown.hasPartnerBdm && (
+                                <div className="mt-1 text-[11px]">
+                                  {breakdown.isUserPartner ? (
+                                    <div className="flex items-center text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100 w-fit">
+                                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5"></span>
+                                      You: Partner BDM (₹{breakdown.partnerAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })})
+                                    </div>
+                                  ) : breakdown.isUserPrimary ? (
+                                    <div className="flex items-center text-orange-700 font-medium">
+                                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5"></span>
+                                      Partner: {breakdown.partnerName} (50% Split: ₹{breakdown.partnerAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })})
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center text-purple-700 font-medium">
+                                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5"></span>
+                                      Partner: {breakdown.partnerName} (50/50 Split: ₹{breakdown.partnerAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} each)
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end space-x-1.5">
