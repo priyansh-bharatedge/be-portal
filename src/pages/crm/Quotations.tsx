@@ -10,6 +10,7 @@ import { isSubordinateOfTL, mapZohoRecordToEmployee, isRecordOwnedByTL, getRecor
 import { downloadQuotationPDF, downloadQuotationHTML, printQuotation, generateQuotationPDFBlob } from '../../utils/quotationTemplate';
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
+import { ALL_SERVICES } from '../../utils/servicesList';
 
 interface DealService {
   id: string;
@@ -90,29 +91,7 @@ export const Quotations = () => {
   const [fileError, setFileError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const allServices = [
-    'Private Limited Company', 'One Person Company Registration', 'Limited Liability Partnership',
-    'Partnership Firm Registration (ROF)', 'Section 8 Company', '12A and 80G Registration', 'NGO Darpan',
-    'Trademark Registration', 'Patent', 'Copyright Registration',
-    'Shram Suvidha Registration', 'START-UP India Certificate', 'GeM Registration',
-    'Tax Exemption Certificate', 'ZED Certificate', 'ISO Certificate',
-    'GST Registration & Certificate', 'FSSAI Certificate', 'IEC Certificate',
-    'Udhyam Registration', 'Psara Certificate', 'MSME Certificate',
-    'Surge Growth Fund', 'Global Innovation Fund', 'Seed Support Scheme',
-    'Agri Preneurs', 'MSME Design', 'Gujarat Innovators', 'iStart Rajasthan',
-    'Animal Husbandry (AHIDF)', 'Credit Guarantee (CGSS)', 'Gujarat Samriddhi Yojana',
-    'Venture Capital', 'Working Capital (CGTMSE Loan)', 'NAIFF', 'PMEGP LOAN',
-    'MUDRA LOAN', 'PMFME', 'Maha Udyog Yojana (CMEGP)',
-    'Rajasthan Investment Promotion Scheme', 'Rajasthan MSME Policy 2024',
-    'RIICO Scheme', 'MSME Innovation & Loan Scheme (RSFC)', 'IPO Consulting Services',
-    'Bhaskar ID', 'Financial Model', 'Company Valuation', 'Detailed Project Report (DPR)',
-    'Investor deck', 'Performance PPC', 'High-Impact SEO', 'Content Strategy',
-    'Website Development', 'CRM Solutions', 'Logo Designing', 'Graphic Designing',
-    'AI Agents',
-    'Annual Based Compliance for Pvt Ltd', 'Event Based Compliance for Pvt Ltd',
-    'Annual Based Compliance for Sec 8', 'Event Based Compliance for Sec 8',
-    'Annual Based Compliance for LLP', 'Event Based Compliance for LLP'
-  ].sort();
+  const allServices = ALL_SERVICES;
 
   const handleOpenModal = (deal?: any) => {
     setIsCreateModalOpen(true);
