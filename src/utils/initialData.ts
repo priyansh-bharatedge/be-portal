@@ -27,6 +27,8 @@ export interface EmployeeData {
   zohoError?: string;
   monthlyTarget?: string | number;
   target?: string | number;
+  Who_is_the_Team_Leader_TL?: any;
+  Reporting_Manager?: any;
 }
 
 export const INITIAL_EMPLOYEES: EmployeeData[] = [];

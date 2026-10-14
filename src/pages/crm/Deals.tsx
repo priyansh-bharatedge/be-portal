@@ -28,8 +28,8 @@ import {
   verifyZohoMilestoneLegal,
   ZOHO_DEAL_BLUEPRINT_TRANSITIONS
 } from '../../services/zohoService';
-import { buildZohoRbacCriteria, getAllEmployeesList } from '../../services/zohoRbacService';
-import { isSubordinateOfTL, isMatchingName } from '../../utils/employeeUtils';
+import { buildZohoRbacCriteria, getAllEmployeesList, filterRecordsByRbac } from '../../services/zohoRbacService';
+import { isSubordinateOfTL, isMatchingName, mapZohoRecordToEmployee } from '../../utils/employeeUtils';
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 import { Layers, DownloadCloud } from 'lucide-react';
@@ -129,6 +129,9 @@ export const Deals = () => {
   const allEmployees = useMemo(() => {
     return getAllEmployeesList(availableUsers);
   }, [availableUsers]);
+
+  const [liveEmployees, setLiveEmployees] = useState<any[]>(() => allEmployees);
+  const effectiveEmployees = liveEmployees.length > allEmployees.length ? liveEmployees : allEmployees;
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -270,8 +273,8 @@ export const Deals = () => {
   });
 
   const rbacDeals = useMemo(() => {
-    return filterRecords ? filterRecords(deals, 'Deals') : deals;
-  }, [deals, filterRecords, currentUser]);
+    return filterRecordsByRbac(deals, 'Deals', currentUser, effectiveEmployees);
+  }, [deals, currentUser, effectiveEmployees]);
 
   const parseZohoNum = (val: any): number => {
     if (val === null || val === undefined || val === '') return 0;
@@ -1543,6 +1546,7 @@ export const Deals = () => {
         status: statusName,
         stage: stageName,
         owner: zDeal.Owner?.name || (existingIdx >= 0 ? updatedDeals[existingIdx]?.owner : 'Admin') || 'Admin',
+        Owner: zDeal.Owner,
         Employee: zDeal.Employee || (employeeZohoId ? { id: employeeZohoId, name: employeeName } : undefined),
         employeeZohoId,
         employeeName,
@@ -1657,9 +1661,27 @@ export const Deals = () => {
           queryParams.set('page_token', pageTokenToFetch);
         }
 
+        // Auto-load employees if directory is not loaded yet or if active user is TL
+        let currentEmployeesList = effectiveEmployees;
+        if (currentEmployeesList.length <= 2 || (isUserTL && currentEmployeesList.filter((e: any) => isSubordinateOfTL(e, currentUser)).length === 0)) {
+          try {
+            const empRes = await fetchZohoEmployees();
+            if (empRes.success && Array.isArray(empRes.data) && empRes.data.length > 0) {
+              currentEmployeesList = empRes.data.map(mapZohoRecordToEmployee);
+              try {
+                localStorage.setItem('be_employees', JSON.stringify(currentEmployeesList));
+                window.dispatchEvent(new Event('be_employees_updated'));
+              } catch (e) {}
+              setLiveEmployees(currentEmployeesList);
+            }
+          } catch (empErr) {
+            console.warn('Could not auto-fetch employees for deals RBAC:', empErr);
+          }
+        }
+
         // Apply RBAC criteria for role-scoped visibility
         if (currentUser && currentUser.role !== 'Super Admin' && currentUser.role !== 'HOD' && currentUser.role !== 'HR' && currentUser.email !== 'superadmin@be.com' && currentUser.email !== 'md@bharat-edge.com') {
-          const { criteria, isUnfiltered } = buildZohoRbacCriteria('Deals', currentUser, availableUsers);
+          const { criteria, isUnfiltered } = buildZohoRbacCriteria('Deals', currentUser, currentEmployeesList);
           if (!isUnfiltered && criteria) {
             queryParams.set('criteria', criteria);
           }
@@ -1824,7 +1846,7 @@ export const Deals = () => {
     const filtered = deals.filter(deal => {
       if (isUserTL) {
         if (activeTab === 'My Team Deals') {
-          if (!isDealOwnedBySubordinate(deal, currentUser, allEmployees)) return false;
+          if (!isDealOwnedBySubordinate(deal, currentUser, effectiveEmployees)) return false;
         } else {
           if (!isDealOwnedByTL(deal, currentUser)) return false;
         }
@@ -2973,8 +2995,8 @@ export const Deals = () => {
 
   const myTeamDealsCount = useMemo(() => {
     if (!isUserTL) return 0;
-    return rbacDeals.filter((d: any) => isDealOwnedBySubordinate(d, currentUser, allEmployees)).length;
-  }, [rbacDeals, isUserTL, currentUser, allEmployees]);
+    return rbacDeals.filter((d: any) => isDealOwnedBySubordinate(d, currentUser, effectiveEmployees)).length;
+  }, [rbacDeals, isUserTL, currentUser, effectiveEmployees]);
 
   const isFiltered = Boolean(
     (quickFilter && quickFilter !== 'all') ||
@@ -2991,7 +3013,7 @@ export const Deals = () => {
       // - "All Deals" and other personal tabs: shows ONLY TL's own deals (not team members')
       if (isUserTL) {
         if (activeTab === 'My Team Deals') {
-          if (!isDealOwnedBySubordinate(deal, currentUser, allEmployees)) return false;
+          if (!isDealOwnedBySubordinate(deal, currentUser, effectiveEmployees)) return false;
         } else {
           if (!isDealOwnedByTL(deal, currentUser)) return false;
         }
@@ -3031,14 +3053,14 @@ export const Deals = () => {
         const matchStatus = (deal.status || deal.stage) && String(deal.status || deal.stage).toLowerCase().includes(q);
         const matchAmount = (deal.amount || deal.received || deal.pending) && String(deal.amount || deal.received || deal.pending).toLowerCase().includes(q);
         const matchEmpCode = deal.empId && String(deal.empId).toLowerCase().includes(q);
-        const subMember = isUserTL ? getDealSubordinateMember(deal, currentUser, allEmployees) : null;
+        const subMember = isUserTL ? getDealSubordinateMember(deal, currentUser, effectiveEmployees) : null;
         const matchSubMember = subMember?.name && subMember.name.toLowerCase().includes(q);
 
         if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchOwner && !matchEmpName && !matchPartnerBdm && !matchStatus && !matchAmount && !matchEmpCode && !matchSubMember) return false;
       }
       return true;
     });
-  }, [rbacDeals, isUserTL, activeTab, currentUser, allEmployees, quickFilter, statusFilter, searchQuery]);
+  }, [rbacDeals, isUserTL, activeTab, currentUser, effectiveEmployees, quickFilter, statusFilter, searchQuery]);
 
   return (
     <div className="space-y-6 relative">
@@ -3684,7 +3706,7 @@ export const Deals = () => {
                       </td>
                       <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">
                         {(() => {
-                          const subMember = isUserTL ? getDealSubordinateMember(deal, currentUser, allEmployees) : null;
+                          const subMember = isUserTL ? getDealSubordinateMember(deal, currentUser, effectiveEmployees) : null;
                           const displayName = (activeTab === 'My Team Deals' && subMember?.name) ? subMember.name : (breakdown.primaryName || deal.owner || 'Admin');
                           const isTeamMemberDeal = Boolean(subMember);
 
@@ -3861,8 +3883,27 @@ export const Deals = () => {
                           </div>
                         ) : (
                           <>
-                            <p className="text-lg font-medium text-gray-900">No deals found</p>
-                            <p className="text-xs text-gray-400 mt-1">Create a new deal or refresh live records.</p>
+                            {isUserTL && activeTab === 'All Deals' && myTeamDealsCount > 0 ? (
+                              <div className="flex flex-col items-center justify-center py-4 space-y-2">
+                                <p className="text-base font-semibold text-gray-900">No personal deals found</p>
+                                <p className="text-sm text-gray-500">
+                                  You have <span className="font-bold text-be-orange">{myTeamDealsCount}</span> active deal{myTeamDealsCount > 1 ? 's' : ''} submitted by your team members.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveTab('My Team Deals')}
+                                  className="mt-2 inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-be-orange rounded-xl hover:bg-orange-600 transition shadow-sm"
+                                >
+                                  <Users className="w-4 h-4 mr-2" />
+                                  View My Team Deals ({myTeamDealsCount})
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="text-lg font-medium text-gray-900">No deals found</p>
+                                <p className="text-xs text-gray-400 mt-1">Create a new deal or refresh live records.</p>
+                              </>
+                            )}
                           </>
                         )}
                       </td>

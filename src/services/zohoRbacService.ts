@@ -108,6 +108,19 @@ export function resolveAccessibleEmployeeIds(
       }
     }
 
+    // Match TL themselves in allEmployees to retrieve their live Zoho record ID and User ID
+    const selfInEmployees = allEmployees.find((e: any) => 
+      (e.email && userEmail && e.email.toLowerCase() === userEmail) ||
+      (e.name && userName && isMatchingName(e.name, userName)) ||
+      (e.Name && userName && isMatchingName(e.Name, userName))
+    );
+    if (selfInEmployees) {
+      if (selfInEmployees.id && /^\d{10,}$/.test(String(selfInEmployees.id))) zIds.add(String(selfInEmployees.id));
+      if (selfInEmployees.zohoId && /^\d{10,}$/.test(String(selfInEmployees.zohoId))) zIds.add(String(selfInEmployees.zohoId));
+      if (selfInEmployees.zohoUserId && /^\d{10,}$/.test(String(selfInEmployees.zohoUserId))) zIds.add(String(selfInEmployees.zohoUserId));
+      if (selfInEmployees.empId) empIds.add(String(selfInEmployees.empId).toLowerCase());
+    }
+
     allEmployees.forEach((e: any) => {
       const isSubordinate = isSubordinateOfTL(e, user);
 
@@ -119,10 +132,10 @@ export function resolveAccessibleEmployeeIds(
           }
         }
         if (e.empId) empIds.add(String(e.empId).toLowerCase());
-        if (e.zohoId) zIds.add(String(e.zohoId));
+        if (e.zohoId && /^\d{10,}$/.test(String(e.zohoId))) zIds.add(String(e.zohoId));
+        if (e.zohoUserId && /^\d{10,}$/.test(String(e.zohoUserId))) zIds.add(String(e.zohoUserId));
         if (e.Employment_ID) empIds.add(String(e.Employment_ID).toLowerCase());
         if (e.Employee_Code) empIds.add(String(e.Employee_Code).toLowerCase());
-        if (e.zohoUserId) zIds.add(String(e.zohoUserId));
       }
     });
 
@@ -379,32 +392,11 @@ export function buildZohoRbacCriteria(
   }
 
   if (moduleName === 'Deals' || moduleName === 'Deal') {
-    // If user is a TL or targetIds > 5, sending large criteria or-clauses exceeds Zoho's 10-clause limit
-    // and causes Zoho API to reject the search request. We allow the query to complete and let
-    // filterRecordsByRbac enforce airtight subordinate-only security.
-    if (user.role === 'TL' || targetIds.length > 5) {
-      return {
-        criteria: '',
-        coqlWhereClause: '',
-        accessibleEmployeeIds: targetIds,
-        isUnfiltered: false,
-        role: user.role
-      };
-    }
-
-    // Include both primary Employee and Partner_BDM lookup in criteria & COQL
-    let empCriteria = `(Employee.id:equals:${targetIds[0]})`;
-    let partnerCriteria = `(Partner_BDM.id:equals:${targetIds[0]})`;
-    for (let i = 1; i < targetIds.length; i++) {
-      empCriteria = `(${empCriteria}or(Employee.id:equals:${targetIds[i]}))`;
-      partnerCriteria = `(${partnerCriteria}or(Partner_BDM.id:equals:${targetIds[i]}))`;
-    }
-    const combinedCriteria = `(${empCriteria}or${partnerCriteria})`;
+    const idList = targetIds.join(',');
+    const combinedCriteria = `(((Employee.id:in:${idList})or(Partner_BDM.id:in:${idList}))or(Owner.id:in:${idList}))`;
 
     const formattedCoqlIds = targetIds.map(id => `'${id}'`).join(', ');
-    const coqlWhereClause = targetIds.length === 1 
-      ? `(Employee.id = '${targetIds[0]}' or Partner_BDM.id = '${targetIds[0]}')` 
-      : `(Employee.id in (${formattedCoqlIds}) or Partner_BDM.id in (${formattedCoqlIds}))`;
+    const coqlWhereClause = `(Employee.id in (${formattedCoqlIds}) or Partner_BDM.id in (${formattedCoqlIds}) or Owner.id in (${formattedCoqlIds}))`;
 
     return {
       criteria: combinedCriteria,

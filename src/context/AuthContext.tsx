@@ -24,6 +24,7 @@ import {
   resolveAccessibleEmployeeIds,
   getAllEmployeesList
 } from '../services/zohoRbacService';
+import { mapZohoRecordToEmployee } from '../utils/employeeUtils';
 
 interface AuthContextType {
   currentUser: AuthUser;
@@ -195,9 +196,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isActivated: e.isActivated || e.formData?.isActivated || false,
             passwordSet: e.passwordSet || e.formData?.passwordSet || false,
             reportingManagerId: e.reportingManagerId || e.formData?.reportingManagerId,
-            reportingManagerName: e.reportingManagerName || e.formData?.reportingManagerName,
+            reportingManagerName: e.reportingManagerName || e.formData?.reportingManagerName || (typeof e.Reporting_Manager === 'object' ? e.Reporting_Manager?.name : e.Reporting_Manager),
             teamLeaderId: e.teamLeaderId || e.formData?.teamLeaderId,
-            teamLeaderName: e.teamLeaderName || e.formData?.teamLeaderName,
+            teamLeaderName: e.teamLeaderName || e.formData?.teamLeaderName || (typeof e.Who_is_the_Team_Leader_TL === 'object' ? e.Who_is_the_Team_Leader_TL?.name : e.Who_is_the_Team_Leader_TL),
+            Who_is_the_Team_Leader_TL: e.Who_is_the_Team_Leader_TL || e.formData?.Who_is_the_Team_Leader_TL || e.teamLeaderName,
+            Reporting_Manager: e.Reporting_Manager || e.formData?.Reporting_Manager || e.reportingManagerName,
             monthlyTarget: e.monthlyTarget || e.formData?.monthlyTarget || e.target || e.formData?.target || '',
             target: e.target || e.formData?.target || e.monthlyTarget || e.formData?.monthlyTarget || ''
           };
@@ -230,6 +233,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadUsers();
     window.addEventListener('storage', loadUsers);
     window.addEventListener('be_employees_updated', loadUsers);
+
+    // Initial background sync of full employee directory from Zoho CRM
+    const syncEmployeesFromZoho = async () => {
+      try {
+        const rawEmps = localStorage.getItem('be_employees');
+        let count = 0;
+        if (rawEmps) {
+          try {
+            const parsed = JSON.parse(rawEmps);
+            if (Array.isArray(parsed)) count = parsed.length;
+          } catch (_) {}
+        }
+        if (count <= 2) {
+          const res = await fetchZohoEmployees();
+          if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+            const mapped = res.data.map(mapZohoRecordToEmployee);
+            localStorage.setItem('be_employees', JSON.stringify(mapped));
+            window.dispatchEvent(new Event('be_employees_updated'));
+            setAvailableUsers(getAllUsersFromStorage());
+          }
+        }
+      } catch (err) {
+        console.warn('Initial employee directory sync error:', err);
+      }
+    };
+    syncEmployeesFromZoho();
+
     return () => {
       window.removeEventListener('storage', loadUsers);
       window.removeEventListener('be_employees_updated', loadUsers);

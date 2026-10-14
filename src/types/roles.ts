@@ -93,6 +93,8 @@ export interface AuthUser {
   zohoId?: string;
   monthlyTarget?: string | number;
   target?: string | number;
+  Who_is_the_Team_Leader_TL?: any;
+  Reporting_Manager?: any;
 }
 
 export type ZohoModuleSection = 'CRM' | 'HRMS' | 'Quality';
