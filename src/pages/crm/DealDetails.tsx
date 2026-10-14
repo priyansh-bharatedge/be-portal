@@ -763,12 +763,13 @@ export const DealDetails = () => {
     }
   };
 
-  const handleSaveAccountsDetails = async () => {
+  const saveAccountsDetailsToZoho = async (bankVal: string, remarkVal: string) => {
     if (!deal) return;
     setIsSavingAccountsDetails(true);
     try {
-      const finalBank = bankDetails || deal.Bank_details || deal.bankDetails || 'BSPL';
-      const finalRemark = accountsRemark !== undefined ? accountsRemark : (deal.Accounts_remark || '');
+      const targetZohoId = String(deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : '') || deal.id || '').trim();
+      const finalBank = bankVal || 'BSPL';
+      const finalRemark = remarkVal ?? '';
 
       const updatedDeal = {
         ...deal,
@@ -791,12 +792,22 @@ export const DealDetails = () => {
       };
       setDeal(updatedDeal);
 
+      // Save to localStorage immediately so a page reload never loses the selection
       try {
         const saved = localStorage.getItem('be_deals');
         if (saved) {
           const allDeals = JSON.parse(saved);
-          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
-          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
+          const isMatch = (d: any) =>
+            (deal.id && String(d.id) === String(deal.id)) ||
+            (deal.zohoId && String(d.zohoId) === String(deal.zohoId)) ||
+            (targetZohoId && (String(d.id) === String(targetZohoId) || String(d.zohoId) === String(targetZohoId)));
+          const idx = allDeals.findIndex(isMatch);
+          if (idx >= 0) {
+            allDeals[idx] = { ...allDeals[idx], ...updatedDeal };
+          } else {
+            allDeals.unshift(updatedDeal);
+          }
+          localStorage.setItem('be_deals', JSON.stringify(allDeals));
         }
       } catch (e) {}
 
@@ -804,26 +815,39 @@ export const DealDetails = () => {
         window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
       } catch (e) {}
 
-      const targetZohoId = deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : '');
-      const zohoRes = await saveOrUpdateZohoDeal({
-        ...updatedDeal,
-        id: targetZohoId || updatedDeal.id,
+      // Clean, minimal partial payload directly to /api/zoho/update-deal
+      const cleanPayload = {
+        id: targetZohoId,
         zohoId: targetZohoId,
         Bank_details: finalBank,
         Accounts_remark: finalRemark,
         isPartial: true,
+      };
+
+      const response = await fetch('/api/zoho/update-deal', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(cleanPayload),
       });
 
-      if (zohoRes.success) {
-        setWorkflowToast({ type: 'success', message: 'Bank Details and Account Remarks updated in Zoho CRM deal record successfully.' });
+      const zohoRes = await response.json().catch(() => ({ success: response.ok }));
+
+      if (response.ok && zohoRes.success) {
+        setWorkflowToast({ type: 'success', message: `Bank Details (${finalBank}) & Remarks updated in Zoho CRM deal record successfully!` });
       } else {
-        setWorkflowToast({ type: 'success', message: 'Account details saved locally. (Zoho sync: ' + (zohoRes.message || 'pending') + ')' });
+        setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to update Zoho CRM' });
       }
     } catch (e: any) {
       setWorkflowToast({ type: 'error', message: e?.message || 'Failed to update account details in Zoho CRM' });
     } finally {
       setIsSavingAccountsDetails(false);
     }
+  };
+
+  const handleSaveAccountsDetails = async () => {
+    await saveAccountsDetailsToZoho(bankDetails, accountsRemark);
   };
 
   const handleVerifyPayment = async () => {
@@ -876,13 +900,25 @@ export const DealDetails = () => {
         window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
       } catch (e) {}
 
-      // 1. Sync updated payment verification, bank details & accounts remark to Zoho CRM
-      const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
+      // 1. Direct targeted update of payment verification, bank details & accounts remark to Zoho CRM
+      const targetZohoId = String(deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : '') || deal.id || '').trim();
+      await fetch('/api/zoho/update-deal', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: targetZohoId,
+          zohoId: targetZohoId,
+          Bank_details: finalBank,
+          Accounts_remark: finalRemark,
+          Payment_verifications: true,
+          isPartial: true
+        })
+      });
 
       // 2. Automatically execute Zoho CRM Blueprint Transition: Account to Legal ("1078476000000492001")
-      const blueprintRes = await moveDealToLegal(deal.zohoId || deal.id || id || '');
+      const blueprintRes = await moveDealToLegal(targetZohoId);
 
-      if (zohoRes.success || blueprintRes.success) {
+      if (blueprintRes.success) {
         setWorkflowToast({ type: 'success', message: 'Payment successfully verified, account details saved, and deal automatically moved to Legal Department.' });
       } else {
         setWorkflowToast({ type: 'success', message: 'Payment verified and deal moved to Legal stage locally.' });
@@ -939,11 +975,22 @@ export const DealDetails = () => {
         window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
       } catch (e) {}
 
-      // 1. Sync updated bank details & account remarks to Zoho CRM Deal record
-      await saveOrUpdateZohoDeal(updatedDeal);
+      // 1. Direct targeted update of bank details & accounts remark to Zoho CRM Deal record
+      const targetZohoId = String(deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : '') || deal.id || '').trim();
+      await fetch('/api/zoho/update-deal', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: targetZohoId,
+          zohoId: targetZohoId,
+          Bank_details: finalBank,
+          Accounts_remark: finalRemark,
+          isPartial: true
+        })
+      });
 
       // 2. Execute Zoho CRM Blueprint Transition: Account to Legal ("1078476000000492001")
-      const zohoRes = await moveDealToLegal(deal.zohoId || deal.id || id || '');
+      const zohoRes = await moveDealToLegal(targetZohoId);
       if (zohoRes.success) {
         setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Legal department via Zoho Blueprint.' });
       } else {
@@ -4161,14 +4208,23 @@ export const DealDetails = () => {
                   {/* Field 1: Bank Details (Zoho CRM Deal Field: Bank_details) */}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <label className="text-[11px] font-semibold text-gray-700">
-                        Bank Details <span className="text-red-500">*</span>
+                      <label className="text-[11px] font-semibold text-gray-700 flex items-center gap-1.5">
+                        <span>Bank Details</span>
+                        <span className="text-red-500">*</span>
+                        {isSavingAccountsDetails && <Loader2 size={10} className="animate-spin text-amber-500" />}
                       </label>
                       <span className="text-[9px] font-mono text-gray-400">Bank_details</span>
                     </div>
                     <select
                       value={bankDetails}
-                      onChange={(e) => setBankDetails(e.target.value)}
+                      disabled={isSavingAccountsDetails}
+                      onChange={(e) => {
+                        const newVal = e.target.value;
+                        setBankDetails(newVal);
+                        if (newVal) {
+                          saveAccountsDetailsToZoho(newVal, accountsRemark);
+                        }
+                      }}
                       className="w-full text-xs px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-800 font-medium focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange transition-colors"
                     >
                       <option value="">Select Bank Details</option>
@@ -4189,6 +4245,9 @@ export const DealDetails = () => {
                       type="text"
                       value={accountsRemark}
                       onChange={(e) => setAccountsRemark(e.target.value)}
+                      onBlur={(e) => {
+                        saveAccountsDetailsToZoho(bankDetails, e.target.value);
+                      }}
                       placeholder="Enter account remarks..."
                       className="w-full text-xs px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange transition-colors"
                     />
@@ -4197,7 +4256,7 @@ export const DealDetails = () => {
                   {/* Save Button */}
                   <button
                     type="button"
-                    onClick={handleSaveAccountsDetails}
+                    onClick={() => saveAccountsDetailsToZoho(bankDetails, accountsRemark)}
                     disabled={isSavingAccountsDetails}
                     className="w-full mt-1 flex items-center justify-center px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs disabled:opacity-50 gap-1.5 cursor-pointer"
                   >
