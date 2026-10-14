@@ -407,6 +407,26 @@ export function buildZohoRbacCriteria(
     };
   }
 
+  if (
+    moduleName === 'Quotations' || moduleName === 'Quotation' ||
+    moduleName === 'Companies' || moduleName === 'Company' ||
+    moduleName === 'Clients' || moduleName === 'Client'
+  ) {
+    const idList = targetIds.join(',');
+    const combinedCriteria = `((Employee.id:in:${idList})or(Owner.id:in:${idList}))`;
+
+    const formattedCoqlIds = targetIds.map(id => `'${id}'`).join(', ');
+    const coqlWhereClause = `(Employee.id in (${formattedCoqlIds}) or Owner.id in (${formattedCoqlIds}))`;
+
+    return {
+      criteria: combinedCriteria,
+      coqlWhereClause,
+      accessibleEmployeeIds: targetIds,
+      isUnfiltered: false,
+      role: user.role
+    };
+  }
+
   const searchFieldName = lookupField === 'id' ? 'id' : `${lookupField}.id`;
   let criteria = `(${searchFieldName}:equals:${targetIds[0]})`;
   for (let i = 1; i < targetIds.length; i++) {

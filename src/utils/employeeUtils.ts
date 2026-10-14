@@ -147,6 +147,98 @@ export function isSubordinateOfTL(employee: any, tl: any): boolean {
   return false;
 }
 
+export interface SubordinateMemberMatch {
+  member: any;
+  role: string;
+  name: string;
+}
+
+/**
+ * Checks whether a generic CRM record (Quotation, Company, Client, Deal) is owned by the active TL.
+ */
+export function isRecordOwnedByTL(rec: any, user: any): boolean {
+  if (!rec || !user) return false;
+  const userZohoId = String(user.zohoId || '').trim();
+  const userEmpId = String(user.empId || user.id || '').trim().toLowerCase();
+
+  // 1. Direct ID checks
+  const rEmpId = String(rec.employeeId || rec.employeeZohoId || (typeof rec.Employee === 'object' ? rec.Employee?.id : rec.Employee) || '').trim().toLowerCase();
+  if (userZohoId && rEmpId && (rEmpId === userZohoId || rEmpId.includes(userZohoId))) return true;
+  if (userEmpId && rEmpId && rEmpId === userEmpId) return true;
+
+  const rOwnerId = String(rec.Owner?.id || rec.Created_By?.id || '').trim();
+  if (userZohoId && rOwnerId && rOwnerId === userZohoId) return true;
+
+  // 2. Name checks
+  const names = [
+    rec.owner,
+    rec.employeeName,
+    rec.salesEmployee,
+    typeof rec.Employee === 'object' ? rec.Employee?.name : null,
+    rec.Owner?.name,
+    rec.Created_By?.name,
+    rec.formData?.salesEmployee,
+    rec.formData?.employeeName
+  ].filter(Boolean);
+
+  for (const n of names) {
+    if (isMatchingName(String(n), user.name || '')) return true;
+  }
+  return false;
+}
+
+/**
+ * Determines which subordinate of the active TL owns or created this generic CRM record.
+ */
+export function getRecordSubordinateMember(rec: any, user: any, employees: any[]): SubordinateMemberMatch | null {
+  if (!rec || !user || !Array.isArray(employees)) return null;
+  const subordinates = employees.filter((e: any) => isSubordinateOfTL(e, user));
+  if (subordinates.length === 0) return null;
+
+  // 1. Check by subordinate IDs
+  const rEmpId = String(rec.employeeId || rec.employeeZohoId || (typeof rec.Employee === 'object' ? rec.Employee?.id : rec.Employee) || '').trim().toLowerCase();
+  const rOwnerId = String(rec.Owner?.id || rec.Created_By?.id || '').trim().toLowerCase();
+
+  for (const sub of subordinates) {
+    const sZohoId = String(sub.zohoId || sub.id || '').trim().toLowerCase();
+    const sEmpId = String(sub.empId || sub.id || '').trim().toLowerCase();
+    const sUserId = String(sub.zohoUserId || '').trim().toLowerCase();
+
+    if (rEmpId && (rEmpId === sZohoId || rEmpId === sEmpId || (sUserId && rEmpId === sUserId))) {
+      return { member: sub, role: 'Team Member', name: sub.name || sub.Name || '' };
+    }
+    if (rOwnerId && (rOwnerId === sZohoId || rOwnerId === sUserId)) {
+      return { member: sub, role: 'Team Member', name: sub.name || sub.Name || '' };
+    }
+  }
+
+  // 2. Check by subordinate Names
+  const names = [
+    rec.employeeName,
+    rec.salesEmployee,
+    typeof rec.Employee === 'object' ? rec.Employee?.name : null,
+    rec.Owner?.name,
+    rec.Created_By?.name,
+    rec.owner,
+    rec.formData?.salesEmployee,
+    rec.formData?.employeeName
+  ].filter(Boolean).map(n => String(n).trim());
+
+  for (const qn of names) {
+    for (const sub of subordinates) {
+      if (isMatchingName(qn, sub.name || sub.Name || '')) {
+        return { member: sub, role: 'Team Member', name: sub.name || sub.Name || qn };
+      }
+    }
+  }
+
+  return null;
+}
+
+export function isRecordOwnedBySubordinate(rec: any, user: any, employees: any[]): boolean {
+  return getRecordSubordinateMember(rec, user, employees) !== null;
+}
+
 /**
  * Standard mapper from raw Zoho CRM Employee record to Portal EmployeeData
  */

@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, Filter, Edit, Trash2, Building2, FileText, Calendar, CheckCircle2, X, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, Mail, Eye, Phone, Tag, User } from 'lucide-react';
+import { Search, Plus, Filter, Edit, Trash2, Building2, FileText, Calendar, CheckCircle2, X, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, Mail, Eye, Phone, Tag, User, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { saveOrUpdateZohoCompany, deleteZohoCompany, insertZohoCompany, fetchZohoCompanies } from '../../services/zohoService';
+import { saveOrUpdateZohoCompany, deleteZohoCompany, insertZohoCompany, fetchZohoCompanies, fetchZohoEmployees } from '../../services/zohoService';
+import { filterRecordsByRbac, getAllEmployeesList } from '../../services/zohoRbacService';
+import { isSubordinateOfTL, mapZohoRecordToEmployee, isRecordOwnedByTL, getRecordSubordinateMember, isRecordOwnedBySubordinate } from '../../utils/employeeUtils';
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
@@ -28,12 +30,56 @@ export interface Company {
   empId?: string;
   salesEmployee?: string;
   Employee?: { id: string; name?: string };
+  Owner?: { id: string; name?: string };
+  owner?: string;
+  Created_By?: { id: string; name?: string };
 }
 
 export const Companies = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const { currentUser, filterRecords } = useAuth();
+  const { currentUser, filterRecords, isSuperAdmin, isHR, isHOD, isTL, isAccounts, isLegal, availableUsers } = useAuth();
+  const isUserTL = !isSuperAdmin && !isHR && !isHOD && !isAccounts && !isLegal && Boolean(
+    isTL ||
+    currentUser?.role === 'TL' ||
+    (currentUser as any)?.systemRole === 'TL'
+  );
+
+  const allEmployees = useMemo(() => {
+    return getAllEmployeesList(availableUsers);
+  }, [availableUsers]);
+
+  const [liveEmployees, setLiveEmployees] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_employees');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const effectiveEmployees = useMemo(() => {
+    return liveEmployees.length > 0 ? liveEmployees : allEmployees;
+  }, [liveEmployees, allEmployees]);
+
+  useEffect(() => {
+    const onEmpsUpdated = () => {
+      try {
+        const saved = localStorage.getItem('be_employees');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLiveEmployees(parsed);
+          }
+        }
+      } catch (_) {}
+    };
+    window.addEventListener('be_employees_updated', onEmpsUpdated);
+    return () => window.removeEventListener('be_employees_updated', onEmpsUpdated);
+  }, []);
+
   const [companies, setCompanies] = useState<Company[]>([]);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -78,8 +124,18 @@ export const Companies = () => {
   }, [searchParams, location.state]);
 
   const rbacCompanies = useMemo(() => {
-    return filterRecords ? filterRecords(companies, 'Companies') : companies;
-  }, [companies, filterRecords, currentUser]);
+    return filterRecordsByRbac(companies, 'Companies', currentUser, effectiveEmployees);
+  }, [companies, currentUser, effectiveEmployees]);
+
+  const myOwnCompaniesCount = useMemo(() => {
+    if (!isUserTL) return rbacCompanies.length;
+    return rbacCompanies.filter((c: any) => isRecordOwnedByTL(c, currentUser)).length;
+  }, [rbacCompanies, isUserTL, currentUser]);
+
+  const myTeamCompaniesCount = useMemo(() => {
+    if (!isUserTL) return 0;
+    return rbacCompanies.filter((c: any) => isRecordOwnedBySubordinate(c, currentUser, effectiveEmployees)).length;
+  }, [rbacCompanies, isUserTL, currentUser, effectiveEmployees]);
 
   // Form State
   const initialFormData = {
@@ -280,6 +336,19 @@ export const Companies = () => {
   const handleFetchZohoCompanies = async (showNotification = true) => {
     setIsFetchingZoho(true);
     try {
+      // Auto-load employee directory if needed for TL subordinate scoping
+      if (effectiveEmployees.length <= 2 || isUserTL) {
+        try {
+          const empRes = await fetchZohoEmployees();
+          if (empRes.success && Array.isArray(empRes.data) && empRes.data.length > 0) {
+            const mapped = empRes.data.map(mapZohoRecordToEmployee);
+            localStorage.setItem('be_employees', JSON.stringify(mapped));
+            window.dispatchEvent(new Event('be_employees_updated'));
+            setLiveEmployees(mapped);
+          }
+        } catch (_) {}
+      }
+
       const res = await fetchZohoCompanies();
       if (res.success && Array.isArray(res.data)) {
         // Map live Zoho records into our company interface
@@ -300,6 +369,9 @@ export const Companies = () => {
           employeeZohoId: r.Employee?.id ? String(r.Employee.id) : (r.employeeZohoId || ''),
           employeeName: r.Employee?.name || r.Employee_Name || r.employeeName || '',
           Employee: r.Employee ? { id: String(r.Employee.id), name: r.Employee.name } : undefined,
+          Owner: r.Owner ? { id: String(r.Owner.id), name: r.Owner.name } : undefined,
+          owner: r.Owner?.name || (typeof r.Owner === 'string' ? r.Owner : '') || r.Employee?.name || '',
+          Created_By: r.Created_By ? { id: String(r.Created_By.id), name: r.Created_By.name } : undefined,
         }));
 
         setCompanies(prev => {
@@ -409,12 +481,24 @@ export const Companies = () => {
 
   const filteredCompanies = useMemo(() => {
     return rbacCompanies.filter(c => {
+      // TL Tab Separation:
+      if (isUserTL) {
+        if (activeTab === 'My Team Companies') {
+          if (!isRecordOwnedBySubordinate(c, currentUser, effectiveEmployees)) return false;
+        } else if (activeTab === 'All Companies') {
+          if (!isRecordOwnedByTL(c, currentUser)) return false;
+        }
+      }
+
       const source = c.source || 'Live Zoho';
       if (activeTab === 'Manual Companies' && source !== 'Manual') return false;
       if (activeTab === 'Live Zoho Companies' && source !== 'Live Zoho' && source !== 'Cloud') return false;
       
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase().trim();
+      const subMember = isUserTL ? getRecordSubordinateMember(c, currentUser, effectiveEmployees) : null;
+      const matchSubMember = subMember?.name && subMember.name.toLowerCase().includes(q);
+
       return (c.name && String(c.name).toLowerCase().includes(q)) || 
              (c.gstNumber && String(c.gstNumber).toLowerCase().includes(q)) ||
              (c.type && String(c.type).toLowerCase().includes(q)) ||
@@ -423,14 +507,19 @@ export const Companies = () => {
              (c.id && String(c.id).toLowerCase().includes(q)) ||
              (c.zohoId && String(c.zohoId).toLowerCase().includes(q)) ||
              (c.status && String(c.status).toLowerCase().includes(q)) ||
-             ((c.employeeName || c.salesEmployee) && String(c.employeeName || c.salesEmployee).toLowerCase().includes(q));
+             ((c.employeeName || c.salesEmployee || c.owner) && String(c.employeeName || c.salesEmployee || c.owner).toLowerCase().includes(q)) ||
+             Boolean(matchSubMember);
     });
-  }, [rbacCompanies, activeTab, searchQuery]);
+  }, [rbacCompanies, activeTab, searchQuery, isUserTL, currentUser, effectiveEmployees]);
 
   const totalCompaniesCount = filteredCompanies.length;
   const paginatedCompanies = useMemo(() => {
     return filteredCompanies.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   }, [filteredCompanies, currentPage, itemsPerPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeTab]);
 
   return (
     <div className="space-y-6">
@@ -503,18 +592,37 @@ export const Companies = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-        {['All Companies', 'Live Zoho Companies', 'Manual Companies'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-6 py-3 font-medium text-sm transition-colors relative whitespace-nowrap ${activeTab === tab ? 'text-be-orange' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            {tab}
-            {activeTab === tab && (
-              <motion.div layoutId="activeCompanyTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-be-orange" />
-            )}
-          </button>
-        ))}
+        {(isUserTL 
+          ? ['All Companies', 'My Team Companies', 'Live Zoho Companies', 'Manual Companies'] 
+          : ['All Companies', 'Live Zoho Companies', 'Manual Companies']
+        ).map(tab => {
+          let badgeCount: number | null = null;
+          if (isUserTL) {
+            if (tab === 'All Companies') badgeCount = myOwnCompaniesCount;
+            else if (tab === 'My Team Companies') badgeCount = myTeamCompaniesCount;
+          }
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-3 font-medium text-sm transition-colors relative whitespace-nowrap flex items-center gap-2 ${activeTab === tab ? 'text-be-orange' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <span>{tab}</span>
+              {badgeCount !== null && (
+                <span className={`px-2 py-0.5 text-xs rounded-full font-bold ${
+                  activeTab === tab
+                    ? 'bg-orange-100 text-be-orange'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {badgeCount}
+                </span>
+              )}
+              {activeTab === tab && (
+                <motion.div layoutId="activeCompanyTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-be-orange" />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -545,6 +653,7 @@ export const Companies = () => {
                 <th className="px-6 py-3">Business Type</th>
                 <th className="px-6 py-3">Tax & Contact Info</th>
                 <th className="px-6 py-3">Status</th>
+                <th className="px-6 py-3">{activeTab === 'My Team Companies' ? 'Team Member' : 'Owner'}</th>
                 <th className="px-6 py-3">Added On</th>
                 <th className="px-6 py-3 text-right">Actions</th>
               </tr>
@@ -600,6 +709,40 @@ export const Companies = () => {
                       {company.status}
                     </span>
                   </td>
+                  <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
+                    {(() => {
+                      const subMember = isUserTL ? getRecordSubordinateMember(company, currentUser, effectiveEmployees) : null;
+                      const displayName = (activeTab === 'My Team Companies' && subMember?.name)
+                        ? subMember.name
+                        : (company.owner || company.employeeName || company.salesEmployee || company.Employee?.name || company.Owner?.name || 'Admin');
+                      const isTeamMemberCompany = Boolean(subMember);
+
+                      return (
+                        <div className="flex items-center space-x-2">
+                          <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            isTeamMemberCompany ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gradient-to-tr from-gray-200 to-gray-100 text-gray-600'
+                          }`}>
+                            {displayName ? displayName.charAt(0).toUpperCase() : '?'}
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-semibold text-gray-900">{displayName}</span>
+                              {isTeamMemberCompany && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200" title="Team Member under TL">
+                                  Team Member
+                                </span>
+                              )}
+                            </div>
+                            {subMember?.member?.department && (
+                              <span className="text-[10px] text-gray-400 font-normal">
+                                {subMember.member.department}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </td>
                   <td className="px-6 py-5 text-gray-600 font-medium whitespace-nowrap border-t border-b border-gray-100 group-hover:border-orange-100">
                     {company.addedOn}
                   </td>
@@ -632,12 +775,26 @@ export const Companies = () => {
               ))}
               {filteredCompanies.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     {isFetchingZoho ? (
                       <div className="flex flex-col items-center justify-center py-6">
                         <Loader2 className="w-8 h-8 animate-spin text-be-orange mb-3" />
                         <p className="text-sm font-semibold text-gray-800">Fetching live company records from server...</p>
                         <p className="text-xs text-gray-400 mt-1">Connecting to server API</p>
+                      </div>
+                    ) : isUserTL && activeTab === 'All Companies' && myTeamCompaniesCount > 0 ? (
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <Building2 size={48} className="mx-auto text-blue-300 mb-3" />
+                        <p className="text-base font-semibold text-gray-900">You don't have personal companies</p>
+                        <p className="text-xs text-gray-500 mt-1 max-w-md">
+                          Your team members have registered <span className="font-semibold text-blue-600">{myTeamCompaniesCount}</span> compan{myTeamCompaniesCount > 1 ? 'ies' : 'y'}. Switch to the team tab to review them.
+                        </p>
+                        <button
+                          onClick={() => setActiveTab('My Team Companies')}
+                          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
+                        >
+                          <Users size={14} /> View My Team Companies ({myTeamCompaniesCount})
+                        </button>
                       </div>
                     ) : (
                       <>

@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, Download, Send, Cloud, CloudOff, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Loader2, Printer } from 'lucide-react';
+import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, Download, Send, Cloud, CloudOff, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Loader2, Printer, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { saveDocument } from '../../lib/db';
-import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal, fetchZohoQuotations } from '../../services/zohoService';
+import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal, fetchZohoQuotations, fetchZohoEmployees } from '../../services/zohoService';
+import { buildZohoRbacCriteria, getAllEmployeesList, filterRecordsByRbac } from '../../services/zohoRbacService';
+import { isSubordinateOfTL, mapZohoRecordToEmployee, isRecordOwnedByTL, getRecordSubordinateMember, isRecordOwnedBySubordinate } from '../../utils/employeeUtils';
 import { downloadQuotationPDF, downloadQuotationHTML, printQuotation, generateQuotationPDFBlob } from '../../utils/quotationTemplate';
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
@@ -20,7 +22,20 @@ export const Quotations = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const { currentUser, filterRecords } = useAuth();
+  const { currentUser, isSuperAdmin, isHR, isHOD, isTL, isAccounts, isLegal, availableUsers } = useAuth();
+  const isUserTL = !isSuperAdmin && !isHR && !isHOD && !isAccounts && !isLegal && Boolean(
+    isTL ||
+    currentUser?.role === 'TL' ||
+    (currentUser as any)?.systemRole === 'TL'
+  );
+
+  const allEmployees = useMemo(() => {
+    return getAllEmployeesList(availableUsers);
+  }, [availableUsers]);
+
+  const [liveEmployees, setLiveEmployees] = useState<any[]>(() => allEmployees);
+  const effectiveEmployees = liveEmployees.length > allEmployees.length ? liveEmployees : allEmployees;
+
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || location.state?.tab || 'All Quotations');
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -443,21 +458,47 @@ export const Quotations = () => {
   }, [searchParams, location.state]);
 
   const rbacQuotations = useMemo(() => {
-    return filterRecords ? filterRecords(quotations, 'Quotations') : quotations;
-  }, [quotations, filterRecords, currentUser]);
+    return filterRecordsByRbac(quotations, 'Quotations', currentUser, effectiveEmployees);
+  }, [quotations, currentUser, effectiveEmployees]);
+
+  const myOwnQuotationsCount = useMemo(() => {
+    if (!isUserTL) return rbacQuotations.length;
+    return rbacQuotations.filter((q: any) => isRecordOwnedByTL(q, currentUser)).length;
+  }, [rbacQuotations, isUserTL, currentUser]);
+
+  const myTeamQuotationsCount = useMemo(() => {
+    if (!isUserTL) return 0;
+    return rbacQuotations.filter((q: any) => isRecordOwnedBySubordinate(q, currentUser, effectiveEmployees)).length;
+  }, [rbacQuotations, isUserTL, currentUser, effectiveEmployees]);
 
   const tabCounts = useMemo(() => {
+    const base = isUserTL
+      ? (activeTab === 'My Team Quotations'
+          ? rbacQuotations.filter((q: any) => isRecordOwnedBySubordinate(q, currentUser, effectiveEmployees))
+          : rbacQuotations.filter((q: any) => isRecordOwnedByTL(q, currentUser)))
+      : rbacQuotations;
+
     return {
-      all: rbacQuotations.length,
-      sent: rbacQuotations.filter((q: any) => q.status === 'Sent').length,
-      draft: rbacQuotations.filter((q: any) => q.status === 'Draft').length,
+      all: isUserTL ? myOwnQuotationsCount : rbacQuotations.length,
+      team: myTeamQuotationsCount,
+      sent: base.filter((q: any) => q.status === 'Sent').length,
+      draft: base.filter((q: any) => q.status === 'Draft').length,
     };
-  }, [rbacQuotations]);
+  }, [rbacQuotations, isUserTL, activeTab, currentUser, effectiveEmployees, myOwnQuotationsCount, myTeamQuotationsCount]);
 
   const isFiltered = !!(searchQuery || (activeTab && activeTab !== 'All Quotations'));
 
   const filteredQuotations = useMemo(() => {
     return rbacQuotations.filter((deal: any) => {
+      // TL Tab Separation:
+      if (isUserTL) {
+        if (activeTab === 'My Team Quotations') {
+          if (!isRecordOwnedBySubordinate(deal, currentUser, effectiveEmployees)) return false;
+        } else {
+          if (!isRecordOwnedByTL(deal, currentUser)) return false;
+        }
+      }
+
       // Tab filter
       if (activeTab === 'Sent' && deal.status !== 'Sent') return false;
       if (activeTab === 'Draft' && deal.status !== 'Draft') return false;
@@ -474,12 +515,14 @@ export const Quotations = () => {
         const matchOwner = (deal.owner || deal.employeeName || deal.salesEmployee) && String(deal.owner || deal.employeeName || deal.salesEmployee).toLowerCase().includes(q);
         const matchEmail = deal.formData?.email && String(deal.formData.email).toLowerCase().includes(q);
         const matchMobile = deal.formData?.mobile && String(deal.formData.mobile).includes(q);
+        const subMember = isUserTL ? getRecordSubordinateMember(deal, currentUser, effectiveEmployees) : null;
+        const matchSubMember = subMember?.name && subMember.name.toLowerCase().includes(q);
 
-        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchAmount && !matchStatus && !matchOwner && !matchEmail && !matchMobile) return false;
+        if (!matchClient && !matchCompany && !matchService && !matchId && !matchZohoId && !matchAmount && !matchStatus && !matchOwner && !matchEmail && !matchMobile && !matchSubMember) return false;
       }
       return true;
     });
-  }, [rbacQuotations, searchQuery, activeTab]);
+  }, [rbacQuotations, searchQuery, activeTab, isUserTL, currentUser, effectiveEmployees]);
 
   const totalQuotationsCount = filteredQuotations.length;
   const paginatedQuotations = useMemo(() => {
@@ -489,6 +532,19 @@ export const Quotations = () => {
   const handleFetchFromZoho = async (showNotification = true) => {
     setIsFetchingZoho(true);
     try {
+      // Auto-load employee directory if needed for TL subordinate scoping
+      if (effectiveEmployees.length <= 2 || isUserTL) {
+        try {
+          const empRes = await fetchZohoEmployees();
+          if (empRes.success && Array.isArray(empRes.data) && empRes.data.length > 0) {
+            const mapped = empRes.data.map(mapZohoRecordToEmployee);
+            localStorage.setItem('be_employees', JSON.stringify(mapped));
+            window.dispatchEvent(new Event('be_employees_updated'));
+            setLiveEmployees(mapped);
+          }
+        } catch (_) {}
+      }
+
       const res = await fetchZohoQuotations();
       if (res.success && Array.isArray(res.data)) {
         if (res.data.length === 0) {
@@ -1256,24 +1312,30 @@ export const Quotations = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 space-x-8">
-        {(['All Quotations', 'Sent', 'Draft'] as const).map((tab) => {
-          const count = tab === 'All Quotations' ? tabCounts.all : tab === 'Sent' ? tabCounts.sent : tabCounts.draft;
+      <div className="flex border-b border-gray-200 space-x-6 overflow-x-auto mb-4">
+        {[
+          { id: 'All Quotations', label: 'All Quotations', count: isUserTL ? myOwnQuotationsCount : tabCounts.all },
+          ...(isUserTL ? [
+            { id: 'My Team Quotations', label: 'My Team Quotations', count: myTeamQuotationsCount, isTeam: true }
+          ] : []),
+          { id: 'Sent', label: 'Sent', count: tabCounts.sent },
+          { id: 'Draft', label: 'Draft', count: tabCounts.draft },
+        ].map((tab) => {
           return (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-4 text-sm font-bold flex items-center transition-all relative ${
-                activeTab === tab
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`pb-4 text-sm font-bold flex items-center transition-all relative whitespace-nowrap ${
+                activeTab === tab.id
                   ? 'text-be-orange border-b-2 border-be-orange'
                   : 'text-gray-500 hover:text-gray-900 border-b-2 border-transparent'
               }`}
             >
-              {tab}
+              {tab.label}
               <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                activeTab === tab ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
+                activeTab === tab.id ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
               }`}>
-                {count}
+                {tab.count}
               </span>
             </button>
           );
@@ -1331,7 +1393,7 @@ export const Quotations = () => {
                 <th className="px-6 py-3">Received</th>
                 <th className="px-6 py-3">Pending</th>
                 <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Owner</th>
+                <th className="px-6 py-3">{activeTab === 'My Team Quotations' ? 'Team Member' : 'Owner'}</th>
                 <th className="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -1358,11 +1420,39 @@ export const Quotations = () => {
                       <option value="Sent" className="bg-white text-gray-900 text-sm">Sent</option>
                     </select>
                   </td>
-                  <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100 flex items-center space-x-2">
-                    <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-gray-200 to-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">
-                      {deal.owner ? deal.owner.charAt(0) : '?'}
-                    </div>
-                    <span>{deal.owner || 'Admin'}</span>
+                  <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">
+                    {(() => {
+                      const subMember = isUserTL ? getRecordSubordinateMember(deal, currentUser, effectiveEmployees) : null;
+                      const displayName = (activeTab === 'My Team Quotations' && subMember?.name)
+                        ? subMember.name
+                        : (deal.employeeName || deal.salesEmployee || deal.owner || deal.Owner?.name || deal.Created_By?.name || 'Admin');
+                      const isTeamMemberItem = Boolean(subMember);
+
+                      return (
+                        <div className="flex items-center space-x-2">
+                          <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            isTeamMemberItem ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gradient-to-tr from-gray-200 to-gray-100 text-gray-600'
+                          }`}>
+                            {displayName ? displayName.charAt(0).toUpperCase() : '?'}
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-semibold text-gray-900">{displayName}</span>
+                              {isTeamMemberItem && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200" title="Team Member under TL">
+                                  Team Member
+                                </span>
+                              )}
+                            </div>
+                            {subMember?.member?.department && (
+                              <span className="text-[10px] text-gray-400 font-normal">
+                                {subMember.member.department}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-5 text-right rounded-r-xl border-t border-b border-r border-gray-100 group-hover:border-orange-100">
                     <div className="flex items-center justify-end space-x-2">
@@ -1425,6 +1515,19 @@ export const Quotations = () => {
                       <div className="flex flex-col items-center justify-center py-4">
                         <Loader2 className="w-7 h-7 animate-spin text-be-orange mb-2" />
                         <p className="text-sm font-semibold text-gray-800">Fetching live quotation records...</p>
+                      </div>
+                    ) : isUserTL && activeTab === 'All Quotations' && myTeamQuotationsCount > 0 ? (
+                      <div className="flex flex-col items-center justify-center py-2">
+                        <p className="text-base font-semibold text-gray-900">You don't have personal quotations</p>
+                        <p className="text-xs text-gray-500 mt-1 max-w-md">
+                          Your team members have created <span className="font-semibold text-blue-600">{myTeamQuotationsCount}</span> quotation{myTeamQuotationsCount > 1 ? 's' : ''}. Switch to the team tab to review them.
+                        </p>
+                        <button
+                          onClick={() => setActiveTab('My Team Quotations')}
+                          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
+                        >
+                          <Users size={14} /> View My Team Quotations ({myTeamQuotationsCount})
+                        </button>
                       </div>
                     ) : (
                       <>

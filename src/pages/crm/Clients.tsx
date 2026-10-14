@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, Filter, X, UserCircle, Building2, Phone, Mail, Edit, Trash2, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, CheckCircle2, Eye, Calendar, User, Shield, Tag } from 'lucide-react';
+import { Search, Plus, Filter, X, UserCircle, Building2, Phone, Mail, Edit, Trash2, Cloud, CloudOff, RefreshCw, AlertCircle, Loader2, CheckCircle2, Eye, Calendar, User, Shield, Tag, Users } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Pagination } from '../../components/ui/Pagination';
-import { saveOrUpdateZohoClient, deleteZohoClient, insertZohoClient, fetchZohoClients } from '../../services/zohoService';
+import { saveOrUpdateZohoClient, deleteZohoClient, insertZohoClient, fetchZohoClients, fetchZohoEmployees } from '../../services/zohoService';
+import { filterRecordsByRbac, getAllEmployeesList } from '../../services/zohoRbacService';
+import { isSubordinateOfTL, mapZohoRecordToEmployee, isRecordOwnedByTL, getRecordSubordinateMember, isRecordOwnedBySubordinate } from '../../utils/employeeUtils';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 
 export interface Client {
@@ -27,12 +29,56 @@ export interface Client {
   empId?: string;
   salesEmployee?: string;
   Employee?: { id: string; name?: string };
+  Owner?: { id: string; name?: string };
+  owner?: string;
+  Created_By?: { id: string; name?: string };
 }
 
 export const Clients = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const { currentUser, filterRecords } = useAuth();
+  const { currentUser, filterRecords, isSuperAdmin, isHR, isHOD, isTL, isAccounts, isLegal, availableUsers } = useAuth();
+  const isUserTL = !isSuperAdmin && !isHR && !isHOD && !isAccounts && !isLegal && Boolean(
+    isTL ||
+    currentUser?.role === 'TL' ||
+    (currentUser as any)?.systemRole === 'TL'
+  );
+
+  const allEmployees = useMemo(() => {
+    return getAllEmployeesList(availableUsers);
+  }, [availableUsers]);
+
+  const [liveEmployees, setLiveEmployees] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('be_employees');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const effectiveEmployees = useMemo(() => {
+    return liveEmployees.length > 0 ? liveEmployees : allEmployees;
+  }, [liveEmployees, allEmployees]);
+
+  useEffect(() => {
+    const onEmpsUpdated = () => {
+      try {
+        const saved = localStorage.getItem('be_employees');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLiveEmployees(parsed);
+          }
+        }
+      } catch (_) {}
+    };
+    window.addEventListener('be_employees_updated', onEmpsUpdated);
+    return () => window.removeEventListener('be_employees_updated', onEmpsUpdated);
+  }, []);
+
   const [clients, setClients] = useState<Client[]>([]);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,8 +123,18 @@ export const Clients = () => {
   }, [searchParams, location.state]);
 
   const rbacClients = useMemo(() => {
-    return filterRecords ? filterRecords(clients, 'Clients') : clients;
-  }, [clients, filterRecords, currentUser]);
+    return filterRecordsByRbac(clients, 'Clients', currentUser, effectiveEmployees);
+  }, [clients, currentUser, effectiveEmployees]);
+
+  const myOwnClientsCount = useMemo(() => {
+    if (!isUserTL) return rbacClients.length;
+    return rbacClients.filter((c: any) => isRecordOwnedByTL(c, currentUser)).length;
+  }, [rbacClients, isUserTL, currentUser]);
+
+  const myTeamClientsCount = useMemo(() => {
+    if (!isUserTL) return 0;
+    return rbacClients.filter((c: any) => isRecordOwnedBySubordinate(c, currentUser, effectiveEmployees)).length;
+  }, [rbacClients, isUserTL, currentUser, effectiveEmployees]);
 
   // Form State
   const initialFormData = {
@@ -282,6 +338,19 @@ export const Clients = () => {
   const handleFetchZohoClients = async (showNotification = true) => {
     setIsFetchingZoho(true);
     try {
+      // Auto-load employee directory if needed for TL subordinate scoping
+      if (effectiveEmployees.length <= 2 || isUserTL) {
+        try {
+          const empRes = await fetchZohoEmployees();
+          if (empRes.success && Array.isArray(empRes.data) && empRes.data.length > 0) {
+            const mapped = empRes.data.map(mapZohoRecordToEmployee);
+            localStorage.setItem('be_employees', JSON.stringify(mapped));
+            window.dispatchEvent(new Event('be_employees_updated'));
+            setLiveEmployees(mapped);
+          }
+        } catch (_) {}
+      }
+
       const res = await fetchZohoClients();
       if (res.success && Array.isArray(res.data)) {
         // Map live Zoho records into our client interface
@@ -301,6 +370,9 @@ export const Clients = () => {
           employeeZohoId: r.Employee?.id ? String(r.Employee.id) : (r.employeeZohoId || ''),
           employeeName: r.Employee?.name || r.Employee_Name || r.employeeName || '',
           Employee: r.Employee ? { id: String(r.Employee.id), name: r.Employee.name } : undefined,
+          Owner: r.Owner ? { id: String(r.Owner.id), name: r.Owner.name } : undefined,
+          owner: r.Owner?.name || (typeof r.Owner === 'string' ? r.Owner : '') || r.Employee?.name || '',
+          Created_By: r.Created_By ? { id: String(r.Created_By.id), name: r.Created_By.name } : undefined,
         }));
 
         setClients(prev => {
@@ -409,12 +481,24 @@ export const Clients = () => {
 
   const filteredClients = useMemo(() => {
     return rbacClients.filter(c => {
+      // TL Tab Separation:
+      if (isUserTL) {
+        if (activeTab === 'My Team Clients') {
+          if (!isRecordOwnedBySubordinate(c, currentUser, effectiveEmployees)) return false;
+        } else if (activeTab === 'All Clients') {
+          if (!isRecordOwnedByTL(c, currentUser)) return false;
+        }
+      }
+
       const source = c.source || 'Live Zoho';
       if (activeTab === 'Manual Clients' && source !== 'Manual') return false;
       if (activeTab === 'Live Zoho Clients' && source !== 'Live Zoho' && source !== 'Cloud') return false;
       
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase().trim();
+      const subMember = isUserTL ? getRecordSubordinateMember(c, currentUser, effectiveEmployees) : null;
+      const matchSubMember = subMember?.name && subMember.name.toLowerCase().includes(q);
+
       return (c.name && String(c.name).toLowerCase().includes(q)) || 
              (c.company && String(c.company).toLowerCase().includes(q)) ||
              (c.email && String(c.email).toLowerCase().includes(q)) ||
@@ -423,9 +507,10 @@ export const Clients = () => {
              (c.id && String(c.id).toLowerCase().includes(q)) ||
              (c.zohoId && String(c.zohoId).toLowerCase().includes(q)) ||
              (c.status && String(c.status).toLowerCase().includes(q)) ||
-             ((c.employeeName || c.salesEmployee) && String(c.employeeName || c.salesEmployee).toLowerCase().includes(q));
+             ((c.employeeName || c.salesEmployee || c.owner) && String(c.employeeName || c.salesEmployee || c.owner).toLowerCase().includes(q)) ||
+             Boolean(matchSubMember);
     });
-  }, [rbacClients, activeTab, searchQuery]);
+  }, [rbacClients, activeTab, searchQuery, isUserTL, currentUser, effectiveEmployees]);
 
   const totalClientsCount = filteredClients.length;
   const paginatedClients = useMemo(() => {
@@ -503,18 +588,37 @@ export const Clients = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-        {['All Clients', 'Live Zoho Clients', 'Manual Clients'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-6 py-3 font-medium text-sm transition-colors relative whitespace-nowrap ${activeTab === tab ? 'text-be-orange' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            {tab}
-            {activeTab === tab && (
-              <motion.div layoutId="activeClientTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-be-orange" />
-            )}
-          </button>
-        ))}
+        {(isUserTL 
+          ? ['All Clients', 'My Team Clients', 'Live Zoho Clients', 'Manual Clients'] 
+          : ['All Clients', 'Live Zoho Clients', 'Manual Clients']
+        ).map(tab => {
+          let badgeCount: number | null = null;
+          if (isUserTL) {
+            if (tab === 'All Clients') badgeCount = myOwnClientsCount;
+            else if (tab === 'My Team Clients') badgeCount = myTeamClientsCount;
+          }
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-3 font-medium text-sm transition-colors relative whitespace-nowrap flex items-center gap-2 ${activeTab === tab ? 'text-be-orange' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <span>{tab}</span>
+              {badgeCount !== null && (
+                <span className={`px-2 py-0.5 text-xs rounded-full font-bold ${
+                  activeTab === tab
+                    ? 'bg-orange-100 text-be-orange'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {badgeCount}
+                </span>
+              )}
+              {activeTab === tab && (
+                <motion.div layoutId="activeClientTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-be-orange" />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -544,6 +648,7 @@ export const Clients = () => {
                 <th className="px-6 py-3">Client Name</th>
                 <th className="px-6 py-3">Contact Info</th>
                 <th className="px-6 py-3">Company</th>
+                <th className="px-6 py-3">{activeTab === 'My Team Clients' ? 'Team Member' : 'Owner'}</th>
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3">Added On</th>
                 <th className="px-6 py-3 text-right">Actions</th>
@@ -580,6 +685,40 @@ export const Clients = () => {
                       <Building2 size={16} className="mr-2 text-gray-400" />
                       {client.company || '—'}
                     </div>
+                  </td>
+                  <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
+                    {(() => {
+                      const subMember = isUserTL ? getRecordSubordinateMember(client, currentUser, effectiveEmployees) : null;
+                      const displayName = (activeTab === 'My Team Clients' && subMember?.name)
+                        ? subMember.name
+                        : (client.owner || client.employeeName || client.salesEmployee || client.Employee?.name || client.Owner?.name || 'Admin');
+                      const isTeamMemberClient = Boolean(subMember);
+
+                      return (
+                        <div className="flex items-center space-x-2">
+                          <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            isTeamMemberClient ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gradient-to-tr from-gray-200 to-gray-100 text-gray-600'
+                          }`}>
+                            {displayName ? displayName.charAt(0).toUpperCase() : '?'}
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-semibold text-gray-900">{displayName}</span>
+                              {isTeamMemberClient && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200" title="Team Member under TL">
+                                  Team Member
+                                </span>
+                              )}
+                            </div>
+                            {subMember?.member?.department && (
+                              <span className="text-[10px] text-gray-400 font-normal">
+                                {subMember.member.department}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold shadow-sm ${
@@ -620,12 +759,26 @@ export const Clients = () => {
               ))}
               {filteredClients.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     {isFetchingZoho ? (
                       <div className="flex flex-col items-center justify-center py-6">
                         <Loader2 className="w-8 h-8 animate-spin text-be-orange mb-3" />
                         <p className="text-sm font-semibold text-gray-800">Fetching live client records from server...</p>
                         <p className="text-xs text-gray-400 mt-1">Connecting to server API v8</p>
+                      </div>
+                    ) : isUserTL && activeTab === 'All Clients' && myTeamClientsCount > 0 ? (
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <UserCircle size={48} className="mx-auto text-blue-300 mb-3" />
+                        <p className="text-base font-semibold text-gray-900">You don't have personal clients</p>
+                        <p className="text-xs text-gray-500 mt-1 max-w-md">
+                          Your team members have created <span className="font-semibold text-blue-600">{myTeamClientsCount}</span> client{myTeamClientsCount > 1 ? 's' : ''}. Switch to the team tab to review them.
+                        </p>
+                        <button
+                          onClick={() => setActiveTab('My Team Clients')}
+                          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
+                        >
+                          <Users size={14} /> View My Team Clients ({myTeamClientsCount})
+                        </button>
                       </div>
                     ) : (
                       <>

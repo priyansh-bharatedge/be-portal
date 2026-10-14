@@ -3230,7 +3230,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     // 10. Get Companies
     if (action === 'get-companies' && method === 'GET') {
       const moduleName = process.env.VITE_ZOHO_COMPANIES_MODULE_NAME || 'Companies';
-      const companyFields = 'id,Name,Business_Type,Date_of_Incorporation,GST_Number,Email,Secondary_Email,Employee,Status,Tag,Created_Time,Modified_Time';
+      const companyFields = 'id,Name,Business_Type,Date_of_Incorporation,GST_Number,Email,Secondary_Email,Employee,Status,Tag,Created_Time,Modified_Time,Owner';
       return executeZohoGet(apiBase, moduleName, companyFields, req, res, urlObj, 'companies');
     }
 
@@ -3310,7 +3310,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     // 12. Get Clients
     if (action === 'get-clients' && method === 'GET') {
       const moduleName = process.env.VITE_ZOHO_CLIENTS_MODULE_NAME || 'Clients';
-      const clientFields = 'id,Name,Company_Name,Email,Mobile_Number,Secondary_Email,Employee,Status,Tag,Created_Time,Modified_Time';
+      const clientFields = 'id,Name,Company_Name,Email,Mobile_Number,Secondary_Email,Employee,Status,Tag,Created_Time,Modified_Time,Owner';
       return executeZohoGet(apiBase, moduleName, clientFields, req, res, urlObj, 'clients');
     }
 
