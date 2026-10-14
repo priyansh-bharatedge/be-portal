@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { saveOrUpdateZohoLeave, deleteZohoLeave, updateZohoLeave, insertZohoLeave, fetchZohoLeaves } from '../../services/zohoService';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
+import { isSubordinateOfTL, isMatchingName } from '../../utils/employeeUtils';
 
 interface LeaveRequest {
   id: string;
@@ -205,7 +206,7 @@ export const Leaves = () => {
 
     const isDirectTL = (myId && tlId === myId) ||
       (myEmpId && tlId === myEmpId) ||
-      (tlName && myName && tlName.includes(myName));
+      (tlName && myName && isMatchingName(tlName, myName));
 
     // Check employee record
     const emp = employees.find((e: any) =>
@@ -213,14 +214,7 @@ export const Leaves = () => {
       (e.name && l.empName && (e.name ?? '').trim().toLowerCase() === (l.empName ?? '').trim().toLowerCase())
     );
 
-    const empReportsToTL = emp && (
-      (myId && (emp.teamLeaderId === myId || emp.formData?.teamLeaderId === myId)) ||
-      (myEmpId && (emp.teamLeaderId === myEmpId || emp.formData?.teamLeaderId === myEmpId)) ||
-      (myName && (
-        (emp.teamLeaderName && emp.teamLeaderName.toLowerCase().includes(myName)) ||
-        (emp.formData?.teamLeaderName && emp.formData.teamLeaderName.toLowerCase().includes(myName))
-      ))
-    );
+    const empReportsToTL = emp && isSubordinateOfTL(emp, currentUser);
 
     const isSameDept = l.dept && currentUser.department && (l.dept ?? '').toLowerCase() === (currentUser.department ?? '').toLowerCase();
 

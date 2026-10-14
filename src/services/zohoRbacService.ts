@@ -1,6 +1,7 @@
 import type { AuthUser, SystemRole, RbacCriteriaResult } from '../types/roles';
 import { ZOHO_MODULE_LOOKUP_MAP } from '../types/roles';
 import type { ZohoApiResponse, ZohoFetchOptions, ZohoFetchResult } from './zohoService';
+import { isSubordinateOfTL } from '../utils/employeeUtils';
 
 /**
  * Retrieves the currently active user from local storage
@@ -74,17 +75,7 @@ export function resolveAccessibleEmployeeIds(
     if (user.id) empIds.add(String(user.id).toLowerCase());
 
     allEmployees.forEach((e: any) => {
-      const tlId = (e.teamLeaderId || e.formData?.teamLeaderId || '').trim().toLowerCase();
-      const tlName = (e.teamLeaderName || e.Who_is_the_Team_Leader_TL || e.formData?.teamLeaderName || '').trim().toLowerCase();
-      const rmId = (e.reportingManagerId || e.formData?.reportingManagerId || '').trim().toLowerCase();
-      const rmName = (e.reportingManagerName || e.Reporting_Manager || e.formData?.reportingManagerName || '').trim().toLowerCase();
-
-      const isSubordinate = (
-        (tlId && (tlId === userEmpId || tlId === userZohoId.toLowerCase())) ||
-        (rmId && (rmId === userEmpId || rmId === userZohoId.toLowerCase())) ||
-        (tlName && userName && (tlName === userName || userName.includes(tlName))) ||
-        (rmName && userName && (rmName === userName || userName.includes(rmName)))
-      );
+      const isSubordinate = isSubordinateOfTL(e, user);
 
       if (isSubordinate) {
         if (e.id) empIds.add(String(e.id).toLowerCase());

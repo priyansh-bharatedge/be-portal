@@ -10,6 +10,7 @@ import { INITIAL_EMPLOYEES } from '../../utils/initialData';
 import type { EmployeeData } from '../../utils/initialData';
 import { saveOrUpdateZohoEmployee, uploadZohoAttachment, deleteZohoEmployee, fetchZohoEmployees } from '../../services/zohoService';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
+import { isSubordinateOfTL, isMatchingName } from '../../utils/employeeUtils';
 
 export const OPTIONAL_DOCUMENT_FIELDS = [
   {
@@ -872,6 +873,15 @@ export const Employees = () => {
 
   const matchedEmployees = (isFullAdmin || isHodUser)
     ? employees
+    : isTeamLead
+    ? employees.filter(e =>
+      e.id === currentUser.id ||
+      e.id === currentUser.empId ||
+      (currentUser.id && e.id && String(e.id).trim().toLowerCase() === String(currentUser.id).trim().toLowerCase()) ||
+      (currentUser.empId && e.id && String(e.id).trim().toLowerCase() === String(currentUser.empId).trim().toLowerCase()) ||
+      (e.name && currentUser.name && isMatchingName(e.name, currentUser.name)) ||
+      isSubordinateOfTL(e, currentUser)
+    )
     : employees.filter(e =>
       e.id === currentUser.id ||
       e.id === currentUser.empId ||

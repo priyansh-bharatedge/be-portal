@@ -11,15 +11,30 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import type { EmployeeData } from '../../utils/initialData';
-import { saveOrUpdateZohoEmployee } from '../../services/zohoService';
+import { 
+  saveOrUpdateZohoEmployee,
+  fetchZohoEmployees,
+  fetchZohoAttendance,
+  fetchZohoLeaves
+} from '../../services/zohoService';
+import { 
+  isSubordinateOfTL, 
+  isMatchingName, 
+  mapZohoRecordToEmployee 
+} from '../../utils/employeeUtils';
 
 export const MyTeam = () => {
   const navigate = useNavigate();
   const { currentUser, isTL, isSuperAdmin, isHR, isHOD } = useAuth();
+  const isUserTL = isTL || (currentUser.role as string) === 'TL' || ((currentUser as any).systemRole as string) === 'TL';
+  const isUserHOD = isHOD || (currentUser.role as string) === 'HOD';
+  const isExecutiveAdmin = isSuperAdmin || (currentUser.role as string) === 'Super Admin' || isHR;
+
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // 3-Level Hierarchy Drilldown States
   const [selectedHOD, setSelectedHOD] = useState<EmployeeData | null>(null);
@@ -31,8 +46,6 @@ export const MyTeam = () => {
   const [targetInputVal, setTargetInputVal] = useState<string>('');
   const [isSavingTarget, setIsSavingTarget] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string; submessage?: string } | null>(null);
-
-  const isExecutiveAdmin = isSuperAdmin || (currentUser.role as string) === 'Super Admin' || isHR;
 
   const openTargetModal = (employee: EmployeeData) => {
     setTargetModalEmployee(employee);
@@ -80,6 +93,59 @@ export const MyTeam = () => {
     closeTargetModal();
   };
 
+  const syncLiveData = async () => {
+    setIsRefreshing(true);
+    try {
+      const [empsRes, attRes, leavesRes] = await Promise.allSettled([
+        fetchZohoEmployees(),
+        fetchZohoAttendance(),
+        fetchZohoLeaves()
+      ]);
+
+      if (empsRes.status === 'fulfilled' && empsRes.value.success && Array.isArray(empsRes.value.data) && empsRes.value.data.length > 0) {
+        const mappedEmps = empsRes.value.data.map(mapZohoRecordToEmployee);
+        const saved = localStorage.getItem('be_employees');
+        const localList: EmployeeData[] = saved ? JSON.parse(saved) : [];
+        const seenIds = new Set<string>();
+        const merged: EmployeeData[] = [];
+
+        // Add live mapped Zoho employees first
+        for (const e of mappedEmps) {
+          const idKey = (e.id || '').toLowerCase();
+          if (idKey && !seenIds.has(idKey)) {
+            seenIds.add(idKey);
+            merged.push(e);
+          }
+        }
+        // Preserve local draft employees
+        for (const l of localList) {
+          const idKey = (l.id || '').toLowerCase();
+          if (idKey && !seenIds.has(idKey)) {
+            seenIds.add(idKey);
+            merged.push(l);
+          }
+        }
+        setEmployees(merged);
+        localStorage.setItem('be_employees', JSON.stringify(merged));
+        window.dispatchEvent(new Event('be_employees_updated'));
+      }
+
+      if (attRes.status === 'fulfilled' && attRes.value.success && Array.isArray(attRes.value.data)) {
+        setAttendance(attRes.value.data);
+        localStorage.setItem('be_attendance', JSON.stringify(attRes.value.data));
+      }
+
+      if (leavesRes.status === 'fulfilled' && leavesRes.value.success && Array.isArray(leavesRes.value.data)) {
+        setLeaves(leavesRes.value.data);
+        localStorage.setItem('be_leaves', JSON.stringify(leavesRes.value.data));
+      }
+    } catch (err) {
+      console.warn('[MyTeam] Error syncing live data:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     const loadData = () => {
       const savedEmps = localStorage.getItem('be_employees');
@@ -116,6 +182,8 @@ export const MyTeam = () => {
     };
 
     loadData();
+    syncLiveData();
+
     window.addEventListener('be_employees_updated', loadData);
     window.addEventListener('storage', loadData);
     return () => {
@@ -154,7 +222,7 @@ export const MyTeam = () => {
     // Direct reporting ID/Name match
     if (hodId && (tlMgrId === hodId || tlFormMgrId === hodId)) return true;
     if (hodEmpId && (tlMgrId === hodEmpId || tlFormMgrId === hodEmpId)) return true;
-    if (hodName && (tlMgrName.includes(hodName) || tlFormMgrName.includes(hodName))) return true;
+    if (hodName && (isMatchingName(tlMgrName, hodName) || isMatchingName(tlFormMgrName, hodName))) return true;
 
     // Same Department match
     if (tl.dept && hod.dept && (tl.dept ?? '').toLowerCase().trim() === (hod.dept ?? '').toLowerCase().trim()) return true;
@@ -162,35 +230,9 @@ export const MyTeam = () => {
     return false;
   };
 
-  // Helper: check if a member reports to a given TL
+  // Helper: check if a member reports to a given TL (uses robust subordinate matcher)
   const isMemberOfTL = (member: EmployeeData, tl: EmployeeData) => {
-    if (member.id === tl.id || member.id === tl.formData?.empId) return false;
-    // HODs, HR, Super Admin are never team members under a TL
-    if (member.systemRole === 'HOD' || member.systemRole === 'Super Admin' || member.systemRole === 'HR') return false;
-
-    const tlId = tl.id ? String(tl.id).trim().toLowerCase() : '';
-    const tlEmpId = tl.formData?.empId ? String(tl.formData.empId).trim().toLowerCase() : '';
-    const tlName = tl.name ? (tl.name ?? '').trim().toLowerCase() : '';
-
-    const mTLId = member.teamLeaderId ? String(member.teamLeaderId).trim().toLowerCase() : '';
-    const mFormTLId = member.formData?.teamLeaderId ? String(member.formData.teamLeaderId).trim().toLowerCase() : '';
-    const mTLName = member.teamLeaderName ? member.teamLeaderName.trim().toLowerCase() : '';
-    const mFormTLName = member.formData?.teamLeaderName ? member.formData.teamLeaderName.trim().toLowerCase() : '';
-
-    const matchId = (tlId && (mTLId === tlId || mFormTLId === tlId)) ||
-                    (tlEmpId && (mTLId === tlEmpId || mFormTLId === tlEmpId));
-    const matchName = (tlName && (mTLName.includes(tlName) || mFormTLName.includes(tlName)));
-
-    if (matchId || matchName) return true;
-
-    // Fallback by department if not explicitly assigned to another TL
-    if (!mTLId && !mFormTLId && !mTLName && !mFormTLName) {
-      if (member.dept && tl.dept && (member.dept ?? '').toLowerCase().trim() === (tl.dept ?? '').toLowerCase().trim() && (member.systemRole === 'TM' || !member.systemRole)) {
-        return true;
-      }
-    }
-
-    return false;
+    return isSubordinateOfTL(member, tl);
   };
 
   // Helper: check if an employee belongs to an HOD's departmental sphere
@@ -213,7 +255,7 @@ export const MyTeam = () => {
     // If member explicitly assigned HOD as leader/manager
     if (hodId && (mMgrId === hodId || mFormMgrId === hodId || mTLId === hodId)) return true;
     if (hodEmpId && (mMgrId === hodEmpId || mFormMgrId === hodEmpId || mTLId === hodEmpId)) return true;
-    if (hodName && (mMgrName.includes(hodName) || mFormMgrName.includes(hodName) || mTLName.includes(hodName))) return true;
+    if (hodName && (isMatchingName(mMgrName, hodName) || isMatchingName(mFormMgrName, hodName) || isMatchingName(mTLName, hodName))) return true;
 
     // Check if member's TL reports to this HOD
     const memberTL = allTeamLeadersList.find(tl => isMemberOfTL(member, tl));
@@ -239,16 +281,13 @@ export const MyTeam = () => {
   // Extract all Team Leaders (STRICT: Must be systemRole === 'TL', NEVER HOD or HR)
   const allTeamLeadersList = useMemo(() => {
     return employees.filter(e => {
-      const isSelfAdmin = e.id === currentUser.id || e.id === currentUser.empId || e.systemRole === 'Super Admin';
-      if (isSelfAdmin) return false;
-
       // An HOD or HR Admin is NEVER a Team Leader!
       if (e.systemRole === 'HOD' || e.systemRole === 'HR' || e.systemRole === 'Super Admin') return false;
 
       const isTLRole = e.systemRole === 'TL';
       return isTLRole;
     });
-  }, [employees, currentUser]);
+  }, [employees]);
 
   // Direct TLs (Real TLs who don't have an intermediate HOD in their department)
   const directTLsUnderMD = useMemo(() => {
@@ -258,8 +297,8 @@ export const MyTeam = () => {
 
   // For logged-in HOD, automatically lock HOD scope
   useEffect(() => {
-    if (isHOD && !selectedHOD) {
-      const myHOD = employees.find(e => e.id === currentUser.id || e.id === currentUser.empId) || {
+    if (isUserHOD && !selectedHOD) {
+      const myHOD = employees.find(e => e.id === currentUser.id || e.id === currentUser.empId || isMatchingName(e.name, currentUser.name)) || {
         id: currentUser.id || currentUser.empId,
         name: currentUser.name,
         dept: currentUser.department || 'Operations',
@@ -268,7 +307,25 @@ export const MyTeam = () => {
       } as EmployeeData;
       setSelectedHOD(myHOD);
     }
-  }, [isHOD, employees, currentUser, selectedHOD]);
+  }, [isUserHOD, employees, currentUser, selectedHOD]);
+
+  // For logged-in Team Leader, automatically lock TL scope
+  useEffect(() => {
+    if (isUserTL && !selectedTL) {
+      const myTL = employees.find(e => 
+        e.id === currentUser.id || 
+        e.id === currentUser.empId ||
+        isMatchingName(e.name, currentUser.name)
+      ) || {
+        id: currentUser.id || currentUser.empId || 'EMP-TL',
+        name: currentUser.name,
+        dept: currentUser.department || 'Operations',
+        systemRole: 'TL',
+        role: currentUser.designation || 'Team Leader'
+      } as EmployeeData;
+      setSelectedTL(myTL);
+    }
+  }, [isUserTL, employees, currentUser, selectedTL]);
 
   // TLs for the currently active HOD
   const activeTLsList = useMemo(() => {
@@ -292,23 +349,35 @@ export const MyTeam = () => {
     });
   }, [employees, selectedHOD, activeTLsList]);
 
+  // Resolved current TL object (handles both state and active user session)
+  const resolvedCurrentTL = useMemo(() => {
+    if (selectedTL) return selectedTL;
+    if (isUserTL) {
+      return employees.find(e => 
+        e.id === currentUser.id || 
+        e.id === currentUser.empId ||
+        isMatchingName(e.name, currentUser.name)
+      ) || {
+        id: currentUser.id || currentUser.empId || 'EMP-TL',
+        name: currentUser.name,
+        dept: currentUser.department || 'Operations',
+        systemRole: 'TL',
+        role: currentUser.designation || 'Team Leader'
+      } as EmployeeData;
+    }
+    return null;
+  }, [selectedTL, isUserTL, employees, currentUser]);
+
   // Team Members for currently active TL (or HOD/MD scope)
   const activeMembersList = useMemo(() => {
-    if (selectedTL) {
-      return employees.filter(e => isMemberOfTL(e, selectedTL));
+    if (resolvedCurrentTL) {
+      return employees.filter(e => isMemberOfTL(e, resolvedCurrentTL));
     }
     if (selectedHOD) {
       return employees.filter(e => isMemberOfHOD(e, selectedHOD));
     }
-    if (isTL) {
-      const currentTL = employees.find(e => e.id === currentUser.id || e.id === currentUser.empId) || {
-        id: currentUser.id || currentUser.empId,
-        name: currentUser.name,
-      } as EmployeeData;
-      return employees.filter(e => isMemberOfTL(e, currentTL));
-    }
     return employees.filter(e => e.systemRole !== 'Super Admin');
-  }, [employees, selectedTL, selectedHOD, isTL, currentUser]);
+  }, [employees, resolvedCurrentTL, selectedHOD]);
 
   // Filtered lists based on search query
   const filteredHODs = useMemo(() => {
@@ -366,8 +435,8 @@ export const MyTeam = () => {
   const totalTLsCount = allTeamLeadersList.length;
   const totalMembersCount = employees.filter(e => e.systemRole !== 'Super Admin').length;
 
-  const currentLevelMembers = selectedTL
-    ? employees.filter(e => isMemberOfTL(e, selectedTL))
+  const currentLevelMembers = (isUserTL || selectedTL)
+    ? activeMembersList
     : selectedHOD
     ? employees.filter(e => isMemberOfHOD(e, selectedHOD))
     : employees.filter(e => e.systemRole !== 'Super Admin');
@@ -382,8 +451,8 @@ export const MyTeam = () => {
     return record?.status === 'Present' || record?.status === 'Late';
   }).length;
 
-  // Determine current active level in the 3-Tier Hierarchy
-  const currentHierarchyLevel = selectedTL ? 3 : selectedHOD ? 2 : 1;
+  // Determine current active level in the 3-Tier Hierarchy (Team Leader is always Level 3)
+  const currentHierarchyLevel = (isUserTL || selectedTL) ? 3 : (isUserHOD || selectedHOD) ? 2 : 1;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -406,18 +475,22 @@ export const MyTeam = () => {
                       : 'Managing Director Team Hub')
                   : isHOD
                   ? (selectedTL ? `${selectedTL.name}'s Team` : `${currentUser.name} (Department Team Hub)`)
+                  : isUserTL
+                  ? `${resolvedCurrentTL?.name || currentUser.name}'s Team Hub`
                   : 'My Team Management Hub'}
               </h1>
             </div>
             
             <p className="text-gray-500 text-sm font-medium">
-              Manage organization reporting structure, department team leaders, and team members.
+              {isUserTL
+                ? 'Review team attendance, manage monthly targets, and approve leave requests for your team members.'
+                : 'Manage organization reporting structure, department team leaders, and team members.'}
             </p>
           </div>
 
           {/* Top Actions / Back Navigation */}
           <div className="flex items-center space-x-2 shrink-0">
-            {selectedTL && (
+            {selectedTL && !isUserTL && (
               <button
                 onClick={() => {
                   setSelectedTL(null);
@@ -430,7 +503,7 @@ export const MyTeam = () => {
               </button>
             )}
 
-            {!selectedTL && selectedHOD && !isHOD && (
+            {!selectedTL && selectedHOD && !isHOD && !isUserTL && (
               <button
                 onClick={() => {
                   setSelectedHOD(null);
@@ -442,6 +515,16 @@ export const MyTeam = () => {
                 Back to All HODs
               </button>
             )}
+
+            <button
+              onClick={syncLiveData}
+              disabled={isRefreshing}
+              className="px-3.5 py-2.5 bg-gray-50 hover:bg-orange-50 hover:text-be-orange border border-gray-200 rounded-2xl text-xs font-bold transition-colors flex items-center shadow-xs"
+              title="Sync latest live records from database"
+            >
+              <Sparkles size={14} className={`mr-1.5 text-be-orange ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Syncing...' : 'Sync Database'}
+            </button>
 
             {pendingLeavesForView.length > 0 && (
               <div className="px-3.5 py-2.5 bg-amber-500 text-white rounded-2xl text-xs font-bold shadow-md shadow-amber-500/20 flex items-center animate-pulse">
@@ -517,7 +600,19 @@ export const MyTeam = () => {
       </div>
 
       {/* Breadcrumb Navigation & View Tabs */}
-      {(isExecutiveAdmin || selectedHOD || selectedTL) && (
+      {isUserTL ? (
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-xs sm:text-sm font-bold text-gray-800">
+            <div className="px-3 py-1.5 rounded-xl bg-orange-100 text-orange-900 ring-2 ring-orange-300 font-extrabold flex items-center shadow-xs">
+              <ShieldCheck size={14} className="mr-1.5 text-orange-600" />
+              Team Leader: {resolvedCurrentTL?.name || currentUser.name} ({resolvedCurrentTL?.dept || currentUser.department || 'Operations'})
+            </div>
+          </div>
+          <div className="text-xs font-semibold text-gray-500">
+            Total Team Members: <strong className="text-gray-900">{filteredMembers.length}</strong>
+          </div>
+        </div>
+      ) : (isExecutiveAdmin || selectedHOD || selectedTL) && (
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center justify-between gap-3">
           {/* Active Breadcrumb Trail when drilled into HOD or TL */}
           {(selectedHOD || selectedTL) ? (
@@ -1250,7 +1345,7 @@ export const MyTeam = () => {
       {/* ========================================================================= */}
       {((currentHierarchyLevel === 3) || (currentHierarchyLevel === 1 && viewTab === 'all-members')) && (
         <div className="space-y-6">
-          {selectedTL && (
+          {selectedTL && !isUserTL && (
             <div className="bg-orange-50/70 p-4 rounded-2xl border border-orange-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-xl bg-be-orange text-white flex items-center justify-center font-bold">
@@ -1408,16 +1503,28 @@ export const MyTeam = () => {
                 <Users size={48} className="mx-auto text-gray-300 mb-3" />
                 <h3 className="text-lg font-bold text-gray-800">No Team Members Found</h3>
                 <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
-                  {selectedTL 
+                  {isUserTL
+                    ? `No subordinates are currently assigned under you (${currentUser.name}) in the system directory.`
+                    : selectedTL 
                     ? `No subordinates are currently assigned under Team Leader ${selectedTL.name}.`
                     : `No team members matching the search criteria found.`}
                 </p>
-                {selectedTL && (
+                {selectedTL && !isUserTL && (
                   <button
                     onClick={() => setSelectedTL(null)}
                     className="mt-4 px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold shadow hover:bg-black transition-colors"
                   >
                     {selectedHOD ? `Back to ${selectedHOD.name}'s Department` : 'Back to Team Leaders'}
+                  </button>
+                )}
+                {isUserTL && (
+                  <button
+                    onClick={syncLiveData}
+                    disabled={isRefreshing}
+                    className="mt-4 px-4 py-2.5 bg-be-orange hover:bg-orange-600 text-white rounded-xl text-xs font-bold shadow hover:shadow-md transition-all inline-flex items-center"
+                  >
+                    <Sparkles size={14} className={`mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    {isRefreshing ? 'Syncing Team...' : 'Sync Team from Database'}
                   </button>
                 )}
               </div>

@@ -48,6 +48,7 @@ import {
   type ZohoAttendanceRecord,
   type ZohoAttendancePayload
 } from '../../services/zohoService';
+import { isSubordinateOfTL, isMatchingName } from '../../utils/employeeUtils';
 
 
 // ── Safe localStorage helper ─────────────────────────────────────────────────
@@ -349,13 +350,8 @@ export const Attendance = () => {
     }
     if (isTeamLead) {
       return allEmployees.filter((e: any) => {
-        const isSelf = e.id === currentUser.id || e.empId === currentUser.empId || e.name?.toLowerCase() === currentUser.name?.toLowerCase();
-        const isSubordinate =
-          e.teamLeaderId === currentUser.id ||
-          e.teamLeaderId === currentUser.empId ||
-          (e.teamLeaderName && currentUser.name && e.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase())) ||
-          (e.formData?.teamLeaderId && (e.formData.teamLeaderId === currentUser.id || e.formData.teamLeaderId === currentUser.empId)) ||
-          (e.formData?.teamLeaderName && currentUser.name && e.formData.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase()));
+        const isSelf = e.id === currentUser.id || e.empId === currentUser.empId || isMatchingName(e.name, currentUser.name);
+        const isSubordinate = isSubordinateOfTL(e, currentUser);
         return isSelf || isSubordinate;
       });
     }

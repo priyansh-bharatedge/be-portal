@@ -11,6 +11,7 @@ import { ROLE_DEFINITIONS } from '../../types/roles';
 import type { SystemRole } from '../../types/roles';
 import { getDocument } from '../../lib/db';
 import { saveOrUpdateZohoEmployee } from '../../services/zohoService';
+import { isSubordinateOfTL, isMatchingName } from '../../utils/employeeUtils';
 
 export const EmployeeDetails = () => {
   const { id } = useParams();
@@ -56,13 +57,7 @@ export const EmployeeDetails = () => {
     employee.name?.toLowerCase() === currentUser.name?.toLowerCase()
   );
 
-  const isTeamLeaderOfEmployee = isTL && employee && (
-    employee.teamLeaderId === currentUser.id ||
-    employee.teamLeaderId === currentUser.empId ||
-    (employee.teamLeaderName && currentUser.name && employee.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase())) ||
-    (employee.formData?.teamLeaderId && (employee.formData.teamLeaderId === currentUser.id || employee.formData.teamLeaderId === currentUser.empId)) ||
-    (employee.formData?.teamLeaderName && currentUser.name && employee.formData.teamLeaderName.toLowerCase().includes(currentUser.name.toLowerCase()))
-  );
+  const isTeamLeaderOfEmployee = (isTL || currentUser.role === 'TL') && employee && isSubordinateOfTL(employee, currentUser);
 
   if (isEmployeeSelfOnly && !isSelf && !isTeamLeaderOfEmployee) {
     return (
