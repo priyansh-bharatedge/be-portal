@@ -643,8 +643,7 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
           <div class="party-title">From:</div>
           <div class="party-name">bharatedge services</div>
           <div class="party-address">102, SKYLAR BUILDING, Prahlad Nagar,<br>Ahmedabad, Gujarat 380015</div>
-          <div class="party-contact"><strong>Phone:</strong> 6357994583</div>
-          <div class="party-contact"><strong>Email:</strong> support@bharat-edge.com</div>
+          <div class="party-contact"><strong>Email:</strong> sales@bharat-edge.com</div>
         </div>
 
         <div class="party-block to-block">

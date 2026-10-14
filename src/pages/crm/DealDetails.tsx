@@ -296,6 +296,11 @@ export const DealDetails = () => {
   const [verifyingDetailsMilestone, setVerifyingDetailsMilestone] = useState<number | null>(null);
   const [verifyingDetailsLegal, setVerifyingDetailsLegal] = useState<number | null>(null);
 
+  // Accounts Department Specific Fields: Bank Details & Account Remarks
+  const [bankDetails, setBankDetails] = useState<string>('');
+  const [accountsRemark, setAccountsRemark] = useState<string>('');
+  const [isSavingAccountsDetails, setIsSavingAccountsDetails] = useState<boolean>(false);
+
   // Payment Screenshots (Deal_payment_screenshot) State
   const [dealPaymentScreenshots, setDealPaymentScreenshots] = useState<{
     id: string;
@@ -498,6 +503,12 @@ export const DealDetails = () => {
         reminder4Date: normalizeDateForInput(deal.reminder4Date || deal.Reminder_4_date || raw.Reminder_4_date || raw.Reminder_4 || fd.reminder4Date || ''),
         reminder5Date: normalizeDateForInput(deal.reminder5Date || deal.Reminder_5_date || raw.Reminder_5_date || raw.Reminder_5 || fd.reminder5Date || ''),
       });
+
+      // Synchronize Accounts Details (Bank Details & Account Remarks)
+      const rawBank = deal.Bank_details ?? deal.bankDetails ?? raw.Bank_details ?? fd.Bank_details ?? fd.bankDetails ?? '';
+      setBankDetails(formatZohoValue(rawBank));
+      const rawRemark = deal.Accounts_remark ?? deal.accountsRemark ?? raw.Accounts_remark ?? fd.Accounts_remark ?? fd.accountsRemark ?? '';
+      setAccountsRemark(formatZohoValue(rawRemark));
 
       // Synchronize Legal Subform Items
       const rawLegal = Array.isArray(raw.Legal) && raw.Legal.length > 0 ? raw.Legal : null;
@@ -752,23 +763,30 @@ export const DealDetails = () => {
     }
   };
 
-  const handleVerifyPayment = async () => {
+  const handleSaveAccountsDetails = async () => {
     if (!deal) return;
-    setIsActionInProgress(true);
+    setIsSavingAccountsDetails(true);
     try {
+      const finalBank = bankDetails || deal.Bank_details || deal.bankDetails || 'BSPL';
+      const finalRemark = accountsRemark !== undefined ? accountsRemark : (deal.Accounts_remark || '');
+
       const updatedDeal = {
         ...deal,
-        Payment_verifications: true,
-        paymentVerified: true,
-        stage: 'Legal',
-        Stage: 'Legal',
-        status: 'Legal',
+        Bank_details: finalBank,
+        bankDetails: finalBank,
+        Accounts_remark: finalRemark,
+        accountsRemark: finalRemark,
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
-          Payment_verifications: true,
-          Stage: 'Legal',
-          stage: 'Legal',
-          status: 'Legal'
+          Bank_details: finalBank,
+          Accounts_remark: finalRemark,
+        },
+        formData: {
+          ...(deal.formData || {}),
+          Bank_details: finalBank,
+          bankDetails: finalBank,
+          Accounts_remark: finalRemark,
+          accountsRemark: finalRemark,
         }
       };
       setDeal(updatedDeal);
@@ -782,14 +800,90 @@ export const DealDetails = () => {
         }
       } catch (e) {}
 
-      // 1. Sync updated payment verification & stage to Zoho CRM
+      try {
+        window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
+      } catch (e) {}
+
+      const targetZohoId = deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : '');
+      const zohoRes = await saveOrUpdateZohoDeal({
+        ...updatedDeal,
+        id: targetZohoId || updatedDeal.id,
+        zohoId: targetZohoId,
+        Bank_details: finalBank,
+        Accounts_remark: finalRemark,
+        isPartial: true,
+      });
+
+      if (zohoRes.success) {
+        setWorkflowToast({ type: 'success', message: 'Bank Details and Account Remarks updated in Zoho CRM deal record successfully.' });
+      } else {
+        setWorkflowToast({ type: 'success', message: 'Account details saved locally. (Zoho sync: ' + (zohoRes.message || 'pending') + ')' });
+      }
+    } catch (e: any) {
+      setWorkflowToast({ type: 'error', message: e?.message || 'Failed to update account details in Zoho CRM' });
+    } finally {
+      setIsSavingAccountsDetails(false);
+    }
+  };
+
+  const handleVerifyPayment = async () => {
+    if (!deal) return;
+    setIsActionInProgress(true);
+    try {
+      const finalBank = bankDetails || deal.Bank_details || deal.bankDetails || 'BSPL';
+      const finalRemark = accountsRemark !== undefined ? accountsRemark : (deal.Accounts_remark || '');
+
+      const updatedDeal = {
+        ...deal,
+        Payment_verifications: true,
+        paymentVerified: true,
+        stage: 'Legal',
+        Stage: 'Legal',
+        status: 'Legal',
+        Bank_details: finalBank,
+        bankDetails: finalBank,
+        Accounts_remark: finalRemark,
+        accountsRemark: finalRemark,
+        rawZohoDeal: {
+          ...(deal.rawZohoDeal || {}),
+          Payment_verifications: true,
+          Stage: 'Legal',
+          stage: 'Legal',
+          status: 'Legal',
+          Bank_details: finalBank,
+          Accounts_remark: finalRemark,
+        },
+        formData: {
+          ...(deal.formData || {}),
+          Bank_details: finalBank,
+          bankDetails: finalBank,
+          Accounts_remark: finalRemark,
+          accountsRemark: finalRemark,
+        }
+      };
+      setDeal(updatedDeal);
+
+      try {
+        const saved = localStorage.getItem('be_deals');
+        if (saved) {
+          const allDeals = JSON.parse(saved);
+          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
+          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
+        }
+      } catch (e) {}
+
+      try {
+        window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
+      } catch (e) {}
+
+      // 1. Sync updated payment verification, bank details & accounts remark to Zoho CRM
       const zohoRes = await saveOrUpdateZohoDeal(updatedDeal);
 
       // 2. Automatically execute Zoho CRM Blueprint Transition: Account to Legal ("1078476000000492001")
       const blueprintRes = await moveDealToLegal(deal.zohoId || deal.id || id || '');
 
       if (zohoRes.success || blueprintRes.success) {
-        setWorkflowToast({ type: 'success', message: 'Payment successfully verified and deal automatically moved to Legal Department.' });
+        setWorkflowToast({ type: 'success', message: 'Payment successfully verified, account details saved, and deal automatically moved to Legal Department.' });
       } else {
         setWorkflowToast({ type: 'success', message: 'Payment verified and deal moved to Legal stage locally.' });
       }
@@ -804,14 +898,30 @@ export const DealDetails = () => {
     if (!deal) return;
     setIsActionInProgress(true);
     try {
+      const finalBank = bankDetails || deal.Bank_details || deal.bankDetails || 'BSPL';
+      const finalRemark = accountsRemark !== undefined ? accountsRemark : (deal.Accounts_remark || '');
+
       const updatedDeal = {
         ...deal,
         stage: 'Legal',
         Stage: 'Legal',
         status: 'Legal',
+        Bank_details: finalBank,
+        bankDetails: finalBank,
+        Accounts_remark: finalRemark,
+        accountsRemark: finalRemark,
         rawZohoDeal: {
           ...(deal.rawZohoDeal || {}),
-          Stage: 'Legal'
+          Stage: 'Legal',
+          Bank_details: finalBank,
+          Accounts_remark: finalRemark,
+        },
+        formData: {
+          ...(deal.formData || {}),
+          Bank_details: finalBank,
+          bankDetails: finalBank,
+          Accounts_remark: finalRemark,
+          accountsRemark: finalRemark,
         }
       };
       setDeal(updatedDeal);
@@ -825,7 +935,14 @@ export const DealDetails = () => {
         }
       } catch (e) {}
 
-      // Execute Zoho CRM Blueprint Transition: Account to Legal ("1078476000000492001")
+      try {
+        window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
+      } catch (e) {}
+
+      // 1. Sync updated bank details & account remarks to Zoho CRM Deal record
+      await saveOrUpdateZohoDeal(updatedDeal);
+
+      // 2. Execute Zoho CRM Blueprint Transition: Account to Legal ("1078476000000492001")
       const zohoRes = await moveDealToLegal(deal.zohoId || deal.id || id || '');
       if (zohoRes.success) {
         setWorkflowToast({ type: 'success', message: 'Deal stage successfully transitioned to Legal department via Zoho Blueprint.' });
@@ -4024,6 +4141,81 @@ export const DealDetails = () => {
                 </div>
               )}
             </div>
+
+            {/* Accounts Department Specific Card: Bank Details & Account Remarks (Strictly Accounts Department & Super Admin Only) */}
+            {(isAccounts || isSuperAdmin) && (
+              <div className="p-3.5 bg-gradient-to-br from-amber-50/60 via-white to-orange-50/40 rounded-xl border border-amber-200/90 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between border-b border-amber-100 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-md bg-amber-100 text-amber-800 flex items-center justify-center">
+                      <Building2 size={12} />
+                    </div>
+                    <span className="text-xs font-bold text-gray-900">Accounts Details</span>
+                  </div>
+                  <span className="text-[9px] font-mono font-medium text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded border border-amber-200">
+                    Accounts Only
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 text-xs">
+                  {/* Field 1: Bank Details (Zoho CRM Deal Field: Bank_details) */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] font-semibold text-gray-700">
+                        Bank Details <span className="text-red-500">*</span>
+                      </label>
+                      <span className="text-[9px] font-mono text-gray-400">Bank_details</span>
+                    </div>
+                    <select
+                      value={bankDetails}
+                      onChange={(e) => setBankDetails(e.target.value)}
+                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-800 font-medium focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange transition-colors"
+                    >
+                      <option value="">Select Bank Details</option>
+                      <option value="BSPL">BSPL</option>
+                      <option value="BSAPL">BSAPL</option>
+                    </select>
+                  </div>
+
+                  {/* Field 2: Account Remarks (Zoho CRM Deal Field: Accounts_remark) */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] font-semibold text-gray-700">
+                        Account Remarks
+                      </label>
+                      <span className="text-[9px] font-mono text-gray-400">Accounts_remark</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={accountsRemark}
+                      onChange={(e) => setAccountsRemark(e.target.value)}
+                      placeholder="Enter account remarks..."
+                      className="w-full text-xs px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange transition-colors"
+                    />
+                  </div>
+
+                  {/* Save Button */}
+                  <button
+                    type="button"
+                    onClick={handleSaveAccountsDetails}
+                    disabled={isSavingAccountsDetails}
+                    className="w-full mt-1 flex items-center justify-center px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs disabled:opacity-50 gap-1.5 cursor-pointer"
+                  >
+                    {isSavingAccountsDetails ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>Updating Zoho CRM...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save size={13} />
+                        <span>Update Account Details</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* 50/50 Split Breakdown Card if Partner BDM is active */}
             {hasPartnerBdm && (

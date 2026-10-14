@@ -110,11 +110,8 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
               102, SKYLAR BUILDING, Prahlad Nagar,<br />
               Ahmedabad, Gujarat 380015
             </div>
-            <div className="text-xs sm:text-sm text-gray-800 pt-1">
-              <span className="font-semibold text-gray-900">Phone:</span> 6357994583
-            </div>
             <div className="text-xs sm:text-sm text-gray-800">
-              <span className="font-semibold text-gray-900">Email:</span> support@bharat-edge.com
+              <span className="font-semibold text-gray-900">Email:</span> sales@bharat-edge.com
             </div>
           </div>
 
