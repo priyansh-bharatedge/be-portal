@@ -602,3 +602,79 @@ export const getDealVerifiedLegalMilestonesCount = (d: any): number => {
   const milestones = getDealMilestones(d);
   return milestones.filter(m => m.hasPayment && m.isLegalVerified).length;
 };
+
+/**
+ * Checks whether a deal's Internal Legal Status is marked as "RECEIVED"
+ * (in the Legal Details subform or at the deal level).
+ */
+export const isDealLegalReceived = (d: any): boolean => {
+  if (!d) return false;
+
+  const isStatusReceived = (val: any): boolean => {
+    if (!val) return false;
+    if (typeof val === 'string') {
+      const s = val.trim().toUpperCase();
+      return s === 'RECEIVED' || s.startsWith('RECEIVED') || s.includes('RECEIVED');
+    }
+    if (typeof val === 'object') {
+      const name = val.name || val.value || '';
+      if (typeof name === 'string') {
+        const s = name.trim().toUpperCase();
+        return s === 'RECEIVED' || s.startsWith('RECEIVED') || s.includes('RECEIVED');
+      }
+    }
+    return false;
+  };
+
+  // 1. Check legalData array
+  if (Array.isArray(d.legalData) && d.legalData.length > 0) {
+    if (d.legalData.some((row: any) => 
+      isStatusReceived(row?.legalStatus) || 
+      isStatusReceived(row?.Internal_legal_status) || 
+      isStatusReceived(row?.internalLegalStatus)
+    )) {
+      return true;
+    }
+  }
+
+  // 2. Check Legal array (on deal, rawZohoDeal, or formData)
+  const rawLegal = d.Legal || d.rawZohoDeal?.Legal || d.formData?.Legal;
+  if (Array.isArray(rawLegal) && rawLegal.length > 0) {
+    if (rawLegal.some((row: any) => 
+      isStatusReceived(row?.Internal_legal_status) || 
+      isStatusReceived(row?.legalStatus) || 
+      isStatusReceived(row?.internalLegalStatus)
+    )) {
+      return true;
+    }
+  }
+
+  // 3. Check formData?.legalData array
+  if (Array.isArray(d.formData?.legalData) && d.formData.legalData.length > 0) {
+    if (d.formData.legalData.some((row: any) => 
+      isStatusReceived(row?.legalStatus) || 
+      isStatusReceived(row?.Internal_legal_status) || 
+      isStatusReceived(row?.internalLegalStatus)
+    )) {
+      return true;
+    }
+  }
+
+  // 4. Check direct / top-level fields
+  if (
+    isStatusReceived(d.Internal_legal_status) ||
+    isStatusReceived(d.internalLegalStatus) ||
+    isStatusReceived(d.legalStatus) ||
+    isStatusReceived(d.rawZohoDeal?.Internal_legal_status) ||
+    isStatusReceived(d.rawZohoDeal?.internalLegalStatus) ||
+    isStatusReceived(d.rawZohoDeal?.legalStatus) ||
+    isStatusReceived(d.formData?.Internal_legal_status) ||
+    isStatusReceived(d.formData?.internalLegalStatus) ||
+    isStatusReceived(d.formData?.legalStatus)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+

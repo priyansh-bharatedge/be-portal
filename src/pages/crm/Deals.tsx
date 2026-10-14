@@ -45,6 +45,7 @@ import {
   getDealUnverifiedMilestonesCount,
   getDealUnverifiedLegalMilestonesCount,
   getDealVerifiedLegalMilestonesCount,
+  isDealLegalReceived,
   isUserPartnerBdm,
   isUserPrimaryBdm,
   type DealMilestoneItem
@@ -142,9 +143,9 @@ export const Deals = () => {
     const tabParam = searchParams.get('tab') || location.state?.tab;
     if ((tabParam === 'Account Queue' || tabParam === 'Account Verified') && !isAccounts && !isSuperAdmin) return 'All Deals';
     if (tabParam === 'Remaining Payments' && !isAccounts && !isLegal && !isSuperAdmin) return 'All Deals';
-    if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) return 'All Deals';
+    if ((tabParam === 'Legal Queue' || tabParam === 'Received') && !isLegal && !isSuperAdmin) return 'All Deals';
     if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals') && (isAccounts || isLegal) && !isSuperAdmin) return 'All Deals';
-    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments' || tabParam === 'Legal Queue') return tabParam;
+    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments' || tabParam === 'Legal Queue' || tabParam === 'Received') return tabParam;
     if (isLegal && !isSuperAdmin) return 'Legal Queue';
     if (isAccounts && !isSuperAdmin) return 'Account Queue';
     return 'All Deals';
@@ -176,7 +177,7 @@ export const Deals = () => {
         setActiveTab('All Deals');
       } else if (tabParam === 'Remaining Payments' && !isAccounts && !isLegal && !isSuperAdmin) {
         setActiveTab('All Deals');
-      } else if (tabParam === 'Legal Queue' && !isLegal && !isSuperAdmin) {
+      } else if ((tabParam === 'Legal Queue' || tabParam === 'Received') && !isLegal && !isSuperAdmin) {
         setActiveTab('All Deals');
       } else if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals') && (isAccounts || isLegal) && !isSuperAdmin) {
         setActiveTab('All Deals');
@@ -2972,8 +2973,12 @@ export const Deals = () => {
   const legalQueueCount = useMemo(() => {
     return rbacDeals.filter((d: any) => {
       const st = String(d.stage || d.rawZohoDeal?.Stage || '').toLowerCase();
-      return st.includes('legal');
+      return st.includes('legal') && !isDealLegalReceived(d);
     }).length;
+  }, [rbacDeals]);
+
+  const legalReceivedCount = useMemo(() => {
+    return rbacDeals.filter((d: any) => isDealLegalReceived(d)).length;
   }, [rbacDeals]);
 
   const remainingDealsCount = useMemo(() => {
@@ -3024,6 +3029,7 @@ export const Deals = () => {
       const isVerified = isDealPaymentVerified(deal);
       const isAccStage = String(deal.stage || deal.rawZohoDeal?.Stage || '').toLowerCase().includes('account');
       const isLegalStage = String(deal.stage || deal.rawZohoDeal?.Stage || '').toLowerCase().includes('legal');
+      const isLegalReceived = isDealLegalReceived(deal);
 
       if (activeTab === 'Manual Deals' && isFromQt) return false;
       if (activeTab === 'From Quotations' && !isFromQt) return false;
@@ -3031,7 +3037,8 @@ export const Deals = () => {
       if (activeTab === 'Account Queue' && (!isAccStage || isVerified)) return false;
       if (activeTab === 'Account Verified' && !isVerified) return false;
       if (activeTab === 'Remaining Payments' && !hasDealRemainingPayments(deal)) return false;
-      if (activeTab === 'Legal Queue' && !isLegalStage) return false;
+      if (activeTab === 'Legal Queue' && (!isLegalStage || isLegalReceived)) return false;
+      if (activeTab === 'Received' && !isLegalReceived) return false;
 
       if (quickFilter === 'today' && !isDealToday(deal)) return false;
       if (quickFilter === 'this_month' && !isDealThisMonth(deal)) return false;
@@ -3158,6 +3165,14 @@ export const Deals = () => {
               isRemaining: true 
             },
           ] : []),
+          ...((isLegal || isSuperAdmin) ? [
+            {
+              id: 'Received',
+              label: 'Received',
+              count: legalReceivedCount,
+              isReceived: true,
+            }
+          ] : []),
           ...(((!isAccounts && !isLegal) || isSuperAdmin) ? [
             { id: 'Manual Deals', label: 'Manual Deals', count: null },
             { id: 'From Quotations', label: 'From Quotations', count: null },
@@ -3179,6 +3194,7 @@ export const Deals = () => {
                 tabItem.isTeam ? 'bg-blue-100 text-blue-800 border border-blue-200' :
                 tabItem.isQueue && tabItem.count > 0 ? 'bg-amber-100 text-amber-800' :
                 tabItem.isRemaining && tabItem.count > 0 ? 'bg-purple-100 text-purple-800 border border-purple-200' :
+                tabItem.isReceived && tabItem.count > 0 ? 'bg-teal-100 text-teal-800 border border-teal-200' :
                 tabItem.isVerified ? 'bg-emerald-100 text-emerald-800' :
                 tabItem.isLegal ? 'bg-indigo-100 text-indigo-800' :
                 'bg-gray-100 text-gray-600'
@@ -3700,9 +3716,16 @@ export const Deals = () => {
                         </td>
                         <td className="px-6 py-5 font-bold text-orange-600 border-t border-b border-gray-100 group-hover:border-orange-100">{displayPending}</td>
                       <td className="px-6 py-5 border-t border-b border-gray-100 group-hover:border-orange-100">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(deal.status)}`}>
-                          {deal.status}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(deal.status)}`}>
+                            {deal.status}
+                          </span>
+                          {isDealLegalReceived(deal) && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200 shadow-xs" title="Internal Legal Status: Received">
+                              <CheckCircle2 size={10} className="mr-1 text-teal-600 shrink-0" /> Received
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-5 font-medium border-t border-b border-gray-100 group-hover:border-orange-100">
                         {(() => {
@@ -3897,6 +3920,14 @@ export const Deals = () => {
                                   <Users className="w-4 h-4 mr-2" />
                                   View My Team Deals ({myTeamDealsCount})
                                 </button>
+                              </div>
+                            ) : activeTab === 'Received' ? (
+                              <div className="flex flex-col items-center justify-center py-6 space-y-2">
+                                <CheckCircle2 className="w-8 h-8 text-teal-500 mb-1" />
+                                <p className="text-base font-semibold text-gray-900">No Received Deals Yet</p>
+                                <p className="text-sm text-gray-500 max-w-md text-center">
+                                  Deals whose internal legal status is marked as <span className="font-bold text-teal-700">"RECEIVED"</span> in the Legal Details subform will automatically appear here.
+                                </p>
                               </div>
                             ) : (
                               <>
