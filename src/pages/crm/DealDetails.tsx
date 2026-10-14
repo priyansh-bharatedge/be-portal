@@ -4143,7 +4143,7 @@ export const DealDetails = () => {
             </div>
 
             {/* Accounts Department Specific Card: Bank Details & Account Remarks (Strictly Accounts Department & Super Admin Only) */}
-            {(isAccounts || isSuperAdmin) && (
+            {(isAccounts || isSuperAdmin || (currentUser?.email || '').toLowerCase().includes('vrunda') || (currentUser?.department || '').toLowerCase().includes('account') || (deal.stage || raw.Stage || deal.status || '').toLowerCase().includes('account')) && (
               <div className="p-3.5 bg-gradient-to-br from-amber-50/60 via-white to-orange-50/40 rounded-xl border border-amber-200/90 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between border-b border-amber-100 pb-2">
                   <div className="flex items-center gap-1.5">

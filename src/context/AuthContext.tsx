@@ -188,8 +188,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             workEmail: e.formData?.workEmail || e.email || '',
             mobile: e.mobile || e.formData?.mobile || '',
             role: sRole,
-            department: e.dept || e.formData?.dept || 'General',
-            designation: e.role || e.formData?.role || 'Employee',
+            department: e.dept || e.formData?.dept || e.Department || e.department || 'General',
+            designation: e.role || e.formData?.role || e.Designation_Job_Title || e.designation || 'Employee',
             empId: e.id,
             zohoId: e.zohoId || '',
             password: e.password || e.formData?.password,
@@ -882,8 +882,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               workEmail: matched.formData?.workEmail || matched.email,
               mobile: matched.mobile || '',
               role: sRole,
-              department: matched.dept || matched.formData?.dept || 'General',
-              designation: matched.role || matched.formData?.role || 'Employee',
+              department: matched.dept || matched.formData?.dept || matched.Department || matched.department || 'General',
+              designation: matched.role || matched.formData?.role || matched.Designation_Job_Title || matched.designation || 'Employee',
               empId: matched.id,
               zohoId: matched.zohoId || '',
               password: matched.password || matched.formData?.password,
@@ -946,7 +946,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isTM = !isSuperAdmin && !isHR && !isHOD && !isTL;
   const deptLower = (currentUser.department || '').toLowerCase();
   const desigLower = (currentUser.designation || currentUser.role || '').toLowerCase();
-  const isAccounts = deptLower.includes('account') || deptLower.includes('finance') || desigLower.includes('account') || desigLower.includes('finance');
+  const isAccounts = deptLower.includes('account') || deptLower.includes('finance') || desigLower.includes('account') || desigLower.includes('finance') || (currentUser.email || '').toLowerCase().includes('vrunda');
   const isLegal = deptLower.includes('legal') || desigLower.includes('legal');
   const isSales = deptLower.includes('sale') || deptLower.includes('bdm') || (!isAccounts && !isLegal && !isSuperAdmin && !isHR && !deptLower.includes('allocat') && !deptLower.includes('execut') && !deptLower.includes('operat'));
 
