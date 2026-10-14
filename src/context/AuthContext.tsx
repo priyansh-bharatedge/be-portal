@@ -945,8 +945,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isTL = !isSuperAdmin && !isHR && !isHOD && (currentUser.role === 'TL');
   const isTM = !isSuperAdmin && !isHR && !isHOD && !isTL;
   const deptLower = (currentUser.department || '').toLowerCase();
-  const isAccounts = deptLower.includes('account') || deptLower.includes('finance');
-  const isLegal = deptLower.includes('legal');
+  const desigLower = (currentUser.designation || currentUser.role || '').toLowerCase();
+  const isAccounts = deptLower.includes('account') || deptLower.includes('finance') || desigLower.includes('account') || desigLower.includes('finance');
+  const isLegal = deptLower.includes('legal') || desigLower.includes('legal');
   const isSales = deptLower.includes('sale') || deptLower.includes('bdm') || (!isAccounts && !isLegal && !isSuperAdmin && !isHR && !deptLower.includes('allocat') && !deptLower.includes('execut') && !deptLower.includes('operat'));
 
   const activeRole: SystemRole = isSuperAdmin ? 'Super Admin' : isHR ? 'HR' : isHOD ? 'HOD' : isTL ? 'TL' : 'TM';

@@ -127,6 +127,10 @@ export const Deals = () => {
     (currentUser as any)?.systemRole === 'TL'
   );
 
+  const isSalesScoped = !isSuperAdmin && !isHOD && !isHR && !isAccounts && !isLegal && Boolean(
+    isUserTL || currentUser?.role === 'TL' || currentUser?.role === 'TM' || (currentUser as any)?.systemRole === 'TL' || (currentUser as any)?.systemRole === 'TM' || isSales
+  );
+
   const allEmployees = useMemo(() => {
     return getAllEmployeesList(availableUsers);
   }, [availableUsers]);
@@ -145,9 +149,7 @@ export const Deals = () => {
     if (tabParam === 'Remaining Payments' && !isAccounts && !isLegal && !isSuperAdmin) return 'All Deals';
     if ((tabParam === 'Legal Queue' || tabParam === 'Received') && !isLegal && !isSuperAdmin) return 'All Deals';
     if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals') && (isAccounts || isLegal) && !isSuperAdmin) return 'All Deals';
-    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments' || tabParam === 'Legal Queue' || tabParam === 'Received') return tabParam;
-    if (isLegal && !isSuperAdmin) return 'Legal Queue';
-    if (isAccounts && !isSuperAdmin) return 'Account Queue';
+    if (tabParam === 'From Quotations' || tabParam === 'Manual Deals' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals' || tabParam === 'Account Queue' || tabParam === 'Account Verified' || tabParam === 'Remaining Payments' || tabParam === 'Legal Queue' || tabParam === 'Received' || tabParam === 'All Deals') return tabParam;
     return 'All Deals';
   });
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || location.state?.search || '');
@@ -1680,8 +1682,8 @@ export const Deals = () => {
           }
         }
 
-        // Apply RBAC criteria for role-scoped visibility
-        if (currentUser && currentUser.role !== 'Super Admin' && currentUser.role !== 'HOD' && currentUser.role !== 'HR' && currentUser.email !== 'superadmin@be.com' && currentUser.email !== 'md@bharat-edge.com') {
+        // Apply RBAC criteria for role-scoped visibility (never apply to Accounts, Legal, Super Admin, or HOD)
+        if (currentUser && currentUser.role !== 'Super Admin' && currentUser.role !== 'HOD' && currentUser.role !== 'HR' && !isAccounts && !isLegal && currentUser.email !== 'superadmin@be.com' && currentUser.email !== 'md@bharat-edge.com') {
           const { criteria, isUnfiltered } = buildZohoRbacCriteria('Deals', currentUser, currentEmployeesList);
           if (!isUnfiltered && criteria) {
             queryParams.set('criteria', criteria);
@@ -3108,7 +3110,7 @@ export const Deals = () => {
           <div className="flex items-center space-x-3">
             <h1 className="text-2xl font-bold text-gray-900">Deals</h1>
             <span className="px-2.5 py-0.5 bg-orange-50 text-be-orange font-bold text-xs rounded-full border border-orange-200">
-              {((isFiltered || isUserTL || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records ?? rbacDeals.length))).toLocaleString()} Deals
+              {((isFiltered || isSalesScoped) ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records ?? rbacDeals.length))).toLocaleString()} Deals
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">Manage all active deals with live synchronization and pagination.</p>
@@ -3258,8 +3260,8 @@ export const Deals = () => {
 
       {/* Deals Table & Accounts Remaining Payments View */}
       {(() => {
-        const totalDealsCount = (isFiltered || isUserTL || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
-        const paginatedDeals = (isFiltered || isUserTL || currentUser?.role === 'TL' || currentUser?.role === 'TM') ? filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : filteredDeals;
+        const totalDealsCount = (isFiltered || isSalesScoped) ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
+        const paginatedDeals = (isFiltered || isSalesScoped) ? filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : filteredDeals;
 
         if (activeTab === 'Remaining Payments') {
           return (
