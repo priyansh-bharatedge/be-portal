@@ -97,7 +97,7 @@ export const Quotations = () => {
     'Shram Suvidha Registration', 'START-UP India Certificate', 'GeM Registration',
     'Tax Exemption Certificate', 'ZED Certificate', 'ISO Certificate',
     'GST Registration & Certificate', 'FSSAI Certificate', 'IEC Certificate',
-    'Udhyam Registration', 'Psara Certificate',
+    'Udhyam Registration', 'Psara Certificate', 'MSME Certificate',
     'Surge Growth Fund', 'Global Innovation Fund', 'Seed Support Scheme',
     'Agri Preneurs', 'MSME Design', 'Gujarat Innovators', 'iStart Rajasthan',
     'Animal Husbandry (AHIDF)', 'Credit Guarantee (CGSS)', 'Gujarat Samriddhi Yojana',

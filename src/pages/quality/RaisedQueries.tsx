@@ -129,6 +129,7 @@ export const RaisedQueries = () => {
     "IEC Certificate",
     "Udhyam Registration",
     "Psara Certificate",
+    "MSME Certificate",
     "Surge Growth Fund",
     "Global Innovation Fund",
     "Seed Support Scheme",
