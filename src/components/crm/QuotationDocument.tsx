@@ -93,7 +93,7 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
             />
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-wide uppercase text-orange-600 mb-1">
-            SALES QUOTATION
+            SERVICE QUOTATION
           </h1>
           <div className="text-xs sm:text-sm text-gray-700 font-medium space-y-0.5">
             <div><span className="font-bold text-gray-900">Quotation Number:</span> {quotationNumber}</div>

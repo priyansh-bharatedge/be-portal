@@ -1736,20 +1736,33 @@ export const Quotations = () => {
                                           initial={{ opacity: 0, y: -5 }}
                                           animate={{ opacity: 1, y: 0 }}
                                           exit={{ opacity: 0, y: -5 }}
-                                          className="absolute top-full left-0 w-[300px] mt-1 bg-white border border-gray-100 rounded-lg shadow-2xl z-[100] flex flex-col"
+                                          className="absolute top-full left-0 w-[320px] mt-1 bg-white border border-gray-100 rounded-lg shadow-2xl z-[100] flex flex-col overflow-hidden"
                                         >
-                                          <div className="p-2 border-b border-gray-100 relative">
-                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                            <input
-                                              type="text"
-                                              placeholder="Search services..."
-                                              value={serviceSearchQuery}
-                                              onChange={(e) => setServiceSearchQuery(e.target.value)}
-                                              className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border-none rounded text-sm focus:ring-1 focus:ring-be-orange outline-none"
-                                              autoFocus
-                                            />
+                                          <div className="p-2 border-b border-gray-100 flex items-center justify-between gap-2 bg-gray-50/50">
+                                            <div className="relative flex-1">
+                                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                              <input
+                                                type="text"
+                                                placeholder={`Search ${allServices.length} services...`}
+                                                value={serviceSearchQuery}
+                                                onChange={(e) => setServiceSearchQuery(e.target.value)}
+                                                className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded text-sm focus:ring-1 focus:ring-be-orange focus:border-be-orange outline-none"
+                                                autoFocus
+                                              />
+                                            </div>
+                                            <span className="text-[10px] text-gray-400 font-bold shrink-0 px-1.5 py-0.5 bg-gray-100 rounded" title="Total Available Services">
+                                              {allServices.filter(srv => srv.toLowerCase().includes(serviceSearchQuery.toLowerCase())).length}
+                                            </span>
                                           </div>
-                                          <div className="p-1 max-h-60 overflow-y-auto">
+                                          <div
+                                            ref={(el) => {
+                                              if (el && !serviceSearchQuery && (!service.name || !el.dataset.scrolled)) {
+                                                el.scrollTop = 0;
+                                                el.dataset.scrolled = 'true';
+                                              }
+                                            }}
+                                            className="p-1 max-h-60 overflow-y-auto"
+                                          >
                                             {allServices.filter(srv => srv.toLowerCase().includes(serviceSearchQuery.toLowerCase())).map(srv => (
                                               <div
                                                 key={srv}

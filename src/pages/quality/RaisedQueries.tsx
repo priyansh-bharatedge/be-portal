@@ -732,22 +732,22 @@ export const RaisedQueries = () => {
                         disabled={!formData.client}
                       >
                         <option value="">Select Service...</option>
-                        {deals
-                          .find(
+                        {(() => {
+                          const clientDeal = deals.find(
                             (d) =>
                               d.owner === formData.salesEmployee &&
                               d.client === formData.client,
-                          )
-                          ?.servicesData?.map((s: any) => (
-                            <option key={s.name} value={s.name}>
-                              {s.name}
-                            </option>
-                          )) ||
-                          allServices.map((s) => (
+                          );
+                          const dealServices = (clientDeal?.servicesData || [])
+                            .map((s: any) => s.name)
+                            .filter(Boolean);
+                          const serviceOptions = Array.from(new Set([...dealServices, ...allServices]));
+                          return serviceOptions.map((s) => (
                             <option key={s} value={s}>
                               {s}
                             </option>
-                          ))}
+                          ));
+                        })()}
                       </select>
                     </div>
                     <div className="col-span-2">
