@@ -7,6 +7,7 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { fetchZohoEmployees, fetchZohoAttendance, fetchZohoLeaves } from '../../services/zohoService';
+import { mapZohoRecordToEmployee } from '../../utils/employeeUtils';
 
 export const HrmsDashboard = () => {
   const navigate = useNavigate();
@@ -47,9 +48,11 @@ export const HrmsDashboard = () => {
           fetchZohoAttendance(),
           fetchZohoLeaves(),
         ]);
-        if (empsRes.status === 'fulfilled' && empsRes.value.success && empsRes.value.data.length > 0) {
-          setEmployees(empsRes.value.data);
-          localStorage.setItem('be_employees', JSON.stringify(empsRes.value.data));
+        if (empsRes.status === 'fulfilled' && empsRes.value.success && Array.isArray(empsRes.value.data) && empsRes.value.data.length > 0) {
+          const mapped = empsRes.value.data.map(mapZohoRecordToEmployee);
+          setEmployees(mapped);
+          localStorage.setItem('be_employees', JSON.stringify(mapped));
+          window.dispatchEvent(new Event('be_employees_updated'));
         }
         if (attRes.status === 'fulfilled' && attRes.value.success && attRes.value.data.length > 0) {
           setAttendance(attRes.value.data);

@@ -21,6 +21,7 @@ import {
   fetchZohoQuotations,
   fetchZohoEmployees
 } from '../../services/zohoService';
+import { mapZohoRecordToEmployee } from '../../utils/employeeUtils';
 import {
   getDealSplitBreakdown,
   isDealPartnerBdm,
@@ -433,8 +434,12 @@ export const CrmDashboard = () => {
       }
 
       if (empsRes.status === 'fulfilled' && empsRes.value.success && Array.isArray(empsRes.value.data)) {
-        setEmployees(empsRes.value.data);
-        try { localStorage.setItem('be_employees', JSON.stringify(empsRes.value.data)); } catch (e) { }
+        const mapped = empsRes.value.data.map(mapZohoRecordToEmployee);
+        setEmployees(mapped);
+        try { 
+          localStorage.setItem('be_employees', JSON.stringify(mapped));
+          window.dispatchEvent(new Event('be_employees_updated'));
+        } catch (e) { }
       }
     } catch (e) {
       console.error('Dashboard Zoho fetch error:', e);

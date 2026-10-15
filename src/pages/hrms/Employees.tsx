@@ -127,7 +127,19 @@ export const Employees = () => {
     const lastName = z.Last_Name || '';
     const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ') || z.Name || 'Employee';
     const empId = z.Employment_ID || (z.id ? `EMP-${String(z.id).slice(-4)}` : `EMP-${Math.floor(1000 + Math.random() * 9000)}`);
-    const systemRole: SystemRole = (z.System_Role as SystemRole) || 'TM';
+    let systemRole: SystemRole = 'TM';
+    const rawRole = String(z.System_Role || '').toLowerCase().trim();
+    if (rawRole.includes('super') || rawRole.includes('director') || (rawRole.includes('admin') && !rawRole.includes('hod'))) {
+      systemRole = 'Super Admin';
+    } else if (rawRole.includes('hod') || rawRole.includes('head')) {
+      systemRole = 'HOD';
+    } else if (rawRole.includes('hr')) {
+      systemRole = 'HR';
+    } else if (rawRole.includes('leader') || rawRole === 'tl') {
+      systemRole = 'TL';
+    } else if (rawRole === 'tm' || rawRole.includes('member')) {
+      systemRole = 'TM';
+    }
 
     const fd = {
       empId,
@@ -209,32 +221,60 @@ export const Employees = () => {
     try {
       const res = await fetchZohoEmployees();
       if (res.success && Array.isArray(res.data)) {
-        const zohoEmployees = res.data.map(mapZohoRecordToEmployee);
-        
+        // Filter out blank / phantom ghost records from Zoho CRM (where name is missing or numeric ID only, and no email)
+        const validRecords = res.data.filter((z: any) => {
+          const rawName = (z.Name || '').trim();
+          const isNumericName = /^\d{15,}$/.test(rawName);
+          const hasRealName = Boolean(rawName && !isNumericName && rawName !== 'Employee');
+          const hasEmail = Boolean(z.Email || z.Personal_Email_Address);
+          const hasEmpId = Boolean(z.Employment_ID && !/^\d{15,}$/.test(String(z.Employment_ID).trim()));
+          return hasRealName || hasEmail || hasEmpId;
+        });
+        const zohoEmployees = validRecords.map(mapZohoRecordToEmployee);
+
         // Merge with existing local employees to keep any local documents / un-synced items
         const saved = localStorage.getItem('be_employees');
-        const localList: EmployeeData[] = saved ? JSON.parse(saved) : [];
+        let localList: any[] = [];
+        try {
+          localList = saved ? JSON.parse(saved) : [];
+        } catch (_) { }
 
         const seenZohoIds = new Set<string>();
         const seenIds = new Set<string>();
         const mergedList: EmployeeData[] = [];
 
-        // Add Zoho employees
+        // Add Zoho employees first
         for (const zEmp of zohoEmployees) {
-          if (zEmp.zohoId) seenZohoIds.add(zEmp.zohoId);
-          if (zEmp.id) seenIds.add(zEmp.id.toLowerCase());
+          if (zEmp.zohoId) seenZohoIds.add(String(zEmp.zohoId).trim());
+          if (zEmp.id) seenIds.add(String(zEmp.id).trim().toLowerCase());
           mergedList.push(zEmp);
         }
 
-        // Preserve only local draft employees (items created locally without a Zoho record)
-        for (const lEmp of localList) {
-          if (!lEmp.zohoId) {
-            const lId = lEmp.id ? (lEmp.id ?? '').toLowerCase() : '';
-            if (lId && !seenIds.has(lId)) {
-              seenIds.add(lId);
-              mergedList.push(lEmp);
-            }
+        // Preserve only actual local draft employees (items created locally without a Zoho record)
+        for (const rawItem of localList) {
+          const lEmp = (rawItem.Name && !rawItem.name) ? mapZohoRecordToEmployee(rawItem) : rawItem;
+          const rawZohoId = lEmp.zohoId || (/^\d{15,}$/.test(String(lEmp.id || '')) ? String(lEmp.id) : null);
+
+          // If this record corresponds to an existing Zoho record, skip it to avoid duplicate
+          if (rawZohoId && seenZohoIds.has(String(rawZohoId).trim())) {
+            continue;
           }
+
+          const lId = lEmp.id ? String(lEmp.id).trim().toLowerCase() : '';
+          if (lId && seenIds.has(lId)) {
+            continue;
+          }
+
+          // Skip phantoms (records with numeric name or missing name and no email)
+          const rawName = (lEmp.name || '').trim();
+          const isNumericName = /^\d{15,}$/.test(rawName);
+          if ((!rawName || isNumericName || rawName === 'Employee') && !lEmp.email && !lEmp.formData?.email && !lEmp.formData?.workEmail) {
+            continue;
+          }
+
+          if (lId) seenIds.add(lId);
+          if (rawZohoId) seenZohoIds.add(String(rawZohoId).trim());
+          mergedList.push(lEmp);
         }
 
         setEmployees(mergedList);
@@ -275,7 +315,19 @@ export const Employees = () => {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          setEmployees(parsed);
+          const clean = parsed.map(e => {
+            if (e.Name && !e.name) return mapZohoRecordToEmployee(e);
+            return e;
+          }).filter(e => {
+            const rawName = (e.name || '').trim();
+            const isNumericName = /^\d{15,}$/.test(rawName);
+            const hasRealName = Boolean(rawName && !isNumericName && rawName !== 'Employee');
+            const hasEmail = Boolean(e.email || e.formData?.email || e.formData?.workEmail);
+            const hasEmpId = Boolean(e.id && !/^\d{15,}$/.test(String(e.id).trim()));
+            return hasRealName || hasEmail || hasEmpId;
+          });
+          setEmployees(clean);
+          localStorage.setItem('be_employees', JSON.stringify(clean));
         } else {
           setEmployees([]);
         }
@@ -306,19 +358,22 @@ export const Employees = () => {
     const uniqueEmployees: EmployeeData[] = [];
 
     for (const emp of newEmployees) {
-      const idKey = emp.id ? String(emp.id).trim().toLowerCase() : '';
-      const zohoKey = emp.zohoId ? String(emp.zohoId).trim() : '';
+      const normalized = ((emp as any).Name && !emp.name) ? mapZohoRecordToEmployee(emp) : emp;
+      const rawName = (normalized.name || '').trim();
+      const isNumericName = /^\d{15,}$/.test(rawName);
+      const isPhantom = (!rawName || isNumericName || rawName === 'Employee') &&
+        !normalized.email && !normalized.formData?.email && !normalized.formData?.workEmail;
+      if (isPhantom) continue;
 
-      if (idKey && seenIds.has(idKey)) {
-        continue;
-      }
-      if (zohoKey && seenZohoIds.has(zohoKey)) {
-        continue;
-      }
+      const idKey = normalized.id ? String(normalized.id).trim().toLowerCase() : '';
+      const zohoKey = normalized.zohoId ? String(normalized.zohoId).trim() : (/^\d{15,}$/.test(String(normalized.id || '')) ? String(normalized.id) : '');
+
+      if (idKey && seenIds.has(idKey)) continue;
+      if (zohoKey && seenZohoIds.has(zohoKey)) continue;
 
       if (idKey) seenIds.add(idKey);
       if (zohoKey) seenZohoIds.add(zohoKey);
-      uniqueEmployees.push(emp);
+      uniqueEmployees.push(normalized);
     }
 
     setEmployees(uniqueEmployees);
@@ -457,6 +512,9 @@ export const Employees = () => {
   };
 
   const handleSaveEmployee = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
     const targetOriginalId = editingEmployee ? editingEmployee.id : null;
     const targetOriginalZohoId = editingEmployee?.zohoId || null;
     const finalEmpId = formData.empId || targetOriginalId || `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -587,7 +645,6 @@ export const Employees = () => {
       zohoStatus: editingEmployee?.zohoStatus || 'pending',
     };
 
-    setIsSubmitting(true);
     // Sync with Zoho CRM Employee Module
     try {
       const zohoRes = await saveOrUpdateZohoEmployee(newEmp);
@@ -647,46 +704,48 @@ export const Employees = () => {
         message: `Employee Saved Locally (Sync Error)`,
         submessage: zErr?.message || 'Failed to communicate with server'
       });
+    }
+
+    try {
+      let updatedEmployees: EmployeeData[];
+      if (editingEmployee) {
+        // Find the existing employee by matching original ID, original Zoho ID, or target finalEmpId
+        const matchIndex = employees.findIndex(emp =>
+          (targetOriginalId && emp.id === targetOriginalId) ||
+          (targetOriginalZohoId && emp.zohoId && emp.zohoId === targetOriginalZohoId) ||
+          (emp.id === finalEmpId)
+        );
+
+        if (matchIndex !== -1) {
+          // Update the employee in-place
+          const listCopy = [...employees];
+          listCopy[matchIndex] = {
+            ...newEmp,
+            id: finalEmpId,
+            status: editingEmployee.status || listCopy[matchIndex].status || 'Active'
+          };
+          // Filter out any other accidental duplicate occurrences of the same employee
+          updatedEmployees = listCopy.filter((emp, idx) => {
+            if (idx === matchIndex) return true;
+            if (finalEmpId && emp.id === finalEmpId) return false;
+            if (targetOriginalId && emp.id === targetOriginalId) return false;
+            if (targetOriginalZohoId && emp.zohoId && emp.zohoId === targetOriginalZohoId) return false;
+            return true;
+          });
+        } else {
+          // If not found by index, prepend cleanly and deduplicate
+          updatedEmployees = [newEmp, ...employees.filter(e => e.id !== finalEmpId && (!targetOriginalId || e.id !== targetOriginalId))];
+        }
+      } else {
+        // Adding new employee (prevent duplicate ID)
+        updatedEmployees = [newEmp, ...employees.filter(e => e.id !== finalEmpId)];
+      }
+
+      saveToStorage(updatedEmployees);
+      closeModal();
     } finally {
       setIsSubmitting(false);
     }
-
-    let updatedEmployees: EmployeeData[];
-    if (editingEmployee) {
-      // Find the existing employee by matching original ID, original Zoho ID, or target finalEmpId
-      const matchIndex = employees.findIndex(emp =>
-        (targetOriginalId && emp.id === targetOriginalId) ||
-        (targetOriginalZohoId && emp.zohoId && emp.zohoId === targetOriginalZohoId) ||
-        (emp.id === finalEmpId)
-      );
-
-      if (matchIndex !== -1) {
-        // Update the employee in-place
-        const listCopy = [...employees];
-        listCopy[matchIndex] = {
-          ...newEmp,
-          id: finalEmpId,
-          status: editingEmployee.status || listCopy[matchIndex].status || 'Active'
-        };
-        // Filter out any other accidental duplicate occurrences of the same employee
-        updatedEmployees = listCopy.filter((emp, idx) => {
-          if (idx === matchIndex) return true;
-          if (finalEmpId && emp.id === finalEmpId) return false;
-          if (targetOriginalId && emp.id === targetOriginalId) return false;
-          if (targetOriginalZohoId && emp.zohoId && emp.zohoId === targetOriginalZohoId) return false;
-          return true;
-        });
-      } else {
-        // If not found by index, prepend cleanly and deduplicate
-        updatedEmployees = [newEmp, ...employees.filter(e => e.id !== finalEmpId && (!targetOriginalId || e.id !== targetOriginalId))];
-      }
-    } else {
-      // Adding new employee (prevent duplicate ID)
-      updatedEmployees = [newEmp, ...employees.filter(e => e.id !== finalEmpId)];
-    }
-
-    saveToStorage(updatedEmployees);
-    closeModal();
   };
 
   const openEditModal = (employee: EmployeeData) => {
@@ -874,24 +933,24 @@ export const Employees = () => {
   const matchedEmployees = (isFullAdmin || isHodUser)
     ? employees
     : isTeamLead
-    ? employees.filter(e =>
-      e.id === currentUser.id ||
-      e.id === currentUser.empId ||
-      (currentUser.id && e.id && String(e.id).trim().toLowerCase() === String(currentUser.id).trim().toLowerCase()) ||
-      (currentUser.empId && e.id && String(e.id).trim().toLowerCase() === String(currentUser.empId).trim().toLowerCase()) ||
-      (e.name && currentUser.name && isMatchingName(e.name, currentUser.name)) ||
-      isSubordinateOfTL(e, currentUser)
-    )
-    : employees.filter(e =>
-      e.id === currentUser.id ||
-      e.id === currentUser.empId ||
-      (currentUser.id && e.id && String(e.id).trim().toLowerCase() === String(currentUser.id).trim().toLowerCase()) ||
-      (currentUser.empId && e.id && String(e.id).trim().toLowerCase() === String(currentUser.empId).trim().toLowerCase()) ||
-      (e.email && currentUser.email && (e.email ?? '').trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
-      (e.formData?.email && currentUser.email && e.formData.email.trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
-      (e.formData?.workEmail && currentUser.email && e.formData.workEmail.trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
-      (e.name && currentUser.name && (e.name ?? '').trim().toLowerCase() === (currentUser.name ?? '').trim().toLowerCase())
-    );
+      ? employees.filter(e =>
+        e.id === currentUser.id ||
+        e.id === currentUser.empId ||
+        (currentUser.id && e.id && String(e.id).trim().toLowerCase() === String(currentUser.id).trim().toLowerCase()) ||
+        (currentUser.empId && e.id && String(e.id).trim().toLowerCase() === String(currentUser.empId).trim().toLowerCase()) ||
+        (e.name && currentUser.name && isMatchingName(e.name, currentUser.name)) ||
+        isSubordinateOfTL(e, currentUser)
+      )
+      : employees.filter(e =>
+        e.id === currentUser.id ||
+        e.id === currentUser.empId ||
+        (currentUser.id && e.id && String(e.id).trim().toLowerCase() === String(currentUser.id).trim().toLowerCase()) ||
+        (currentUser.empId && e.id && String(e.id).trim().toLowerCase() === String(currentUser.empId).trim().toLowerCase()) ||
+        (e.email && currentUser.email && (e.email ?? '').trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
+        (e.formData?.email && currentUser.email && e.formData.email.trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
+        (e.formData?.workEmail && currentUser.email && e.formData.workEmail.trim().toLowerCase() === (currentUser.email ?? '').trim().toLowerCase()) ||
+        (e.name && currentUser.name && (e.name ?? '').trim().toLowerCase() === (currentUser.name ?? '').trim().toLowerCase())
+      );
 
   const visibleEmployees: EmployeeData[] = (!isFullAdmin && !isHodUser && matchedEmployees.length === 0)
     ? [{
@@ -913,8 +972,8 @@ export const Employees = () => {
     : matchedEmployees;
 
   const filteredEmployees = visibleEmployees.filter(e => {
-    const isDeptMatch = selectedDeptFilter === 'All' || 
-      e.dept === selectedDeptFilter || 
+    const isDeptMatch = selectedDeptFilter === 'All' ||
+      e.dept === selectedDeptFilter ||
       ((selectedDeptFilter === 'Accounts' || selectedDeptFilter === 'Accountant') && (e.dept === 'Finance' || e.dept === 'Accounts' || e.dept === 'Account' || e.dept === 'Accountant')) ||
       (selectedDeptFilter === 'Operation' && (e.dept === 'Operations' || e.dept === 'Operation')) ||
       (selectedDeptFilter === 'IT' && (e.dept === 'IT' || e.dept === 'It')) ||
@@ -2038,11 +2097,10 @@ export const Employees = () => {
                               key={preset.val}
                               type="button"
                               onClick={() => setFormData({ ...formData, monthlyTarget: preset.val, target: preset.val })}
-                              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${
-                                formData.monthlyTarget === preset.val
+                              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all ${formData.monthlyTarget === preset.val
                                   ? 'bg-be-orange text-white border-be-orange shadow-sm scale-105'
                                   : 'bg-white text-gray-700 border-gray-200 hover:border-amber-400 hover:bg-amber-50'
-                              }`}
+                                }`}
                             >
                               {preset.label}
                             </button>
@@ -2431,11 +2489,10 @@ export const Employees = () => {
                         key={preset.val}
                         type="button"
                         onClick={() => setTargetInputVal(preset.val)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all ${
-                          targetInputVal === preset.val
+                        className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all ${targetInputVal === preset.val
                             ? 'bg-be-orange text-white border-be-orange shadow-sm'
                             : 'bg-white text-gray-700 border-gray-200 hover:border-amber-400 hover:bg-amber-50'
-                        }`}
+                          }`}
                       >
                         {preset.label}
                       </button>

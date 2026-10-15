@@ -248,7 +248,19 @@ export function mapZohoRecordToEmployee(z: any): EmployeeData {
   const lastName = z.Last_Name || '';
   const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ') || z.Name || 'Employee';
   const empId = z.Employment_ID || (z.id ? `EMP-${String(z.id).slice(-4)}` : `EMP-${Math.floor(1000 + Math.random() * 9000)}`);
-  const systemRole: SystemRole = (z.System_Role as SystemRole) || 'TM';
+  let systemRole: SystemRole = 'TM';
+  const rawRole = String(z.System_Role || '').toLowerCase().trim();
+  if (rawRole.includes('super') || rawRole.includes('director') || (rawRole.includes('admin') && !rawRole.includes('hod'))) {
+    systemRole = 'Super Admin';
+  } else if (rawRole.includes('hod') || rawRole.includes('head')) {
+    systemRole = 'HOD';
+  } else if (rawRole.includes('hr')) {
+    systemRole = 'HR';
+  } else if (rawRole.includes('leader') || rawRole === 'tl') {
+    systemRole = 'TL';
+  } else if (rawRole === 'tm' || rawRole.includes('member')) {
+    systemRole = 'TM';
+  }
 
   // Handle lookup objects vs strings
   const tlName = typeof z.Who_is_the_Team_Leader_TL === 'object' 
