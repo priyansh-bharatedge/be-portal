@@ -80,7 +80,8 @@ export const ModuleSelection = () => {
                        currentRole === 'HR' || 
                        (currentUser.role as string) === 'HR' || 
                        currentUser.email?.toLowerCase().includes('hr@') ||
-                       currentUser.name?.toLowerCase().includes('hr');
+                       currentUser.name?.toLowerCase() === 'hr admin' ||
+                       currentUser.name?.toLowerCase() === 'hr';
 
   const isHODEmployee = !isHREmployee && (
     isHOD || 
