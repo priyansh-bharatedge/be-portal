@@ -44,6 +44,9 @@ interface AuthContextType {
   isAccounts: boolean;
   isLegal: boolean;
   isSales: boolean;
+  isOperations: boolean;
+  isOperationsHOD: boolean;
+  isLegalHOD: boolean;
   can: (permission: string) => boolean;
   searchEmployeeInZoho: (email: string) => Promise<{ success: boolean; exists: boolean; hasPassword?: boolean; employee?: any; error?: string }>;
   login: (email: string, password?: string, role?: SystemRole) => { success: boolean; error?: string; isFirstLogin?: boolean; user?: AuthUser; token?: string };
@@ -948,7 +951,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const desigLower = (currentUser.designation || currentUser.role || '').toLowerCase();
   const isAccounts = deptLower.includes('account') || deptLower.includes('finance') || desigLower.includes('account') || desigLower.includes('finance') || (currentUser.email || '').toLowerCase().includes('vrunda');
   const isLegal = deptLower.includes('legal') || desigLower.includes('legal');
-  const isSales = deptLower.includes('sale') || deptLower.includes('bdm') || (!isAccounts && !isLegal && !isSuperAdmin && !isHR && !deptLower.includes('allocat') && !deptLower.includes('execut') && !deptLower.includes('operat'));
+  const isOperations = deptLower.includes('operat') || desigLower.includes('operat') || deptLower.includes('allocat') || deptLower.includes('execut');
+  const isSales = deptLower.includes('sale') || deptLower.includes('bdm') || (!isAccounts && !isLegal && !isSuperAdmin && !isHR && !isOperations);
+  const isOperationsHOD = isSuperAdmin || (isHOD && (isOperations || (!isLegal && !isAccounts && !isSales)));
+  const isLegalHOD = isSuperAdmin || (isLegal && (isHOD || desigLower.includes('hod') || desigLower.includes('head') || currentUser.role === 'HOD'));
 
   const activeRole: SystemRole = isSuperAdmin ? 'Super Admin' : isHR ? 'HR' : isHOD ? 'HOD' : isTL ? 'TL' : 'TM';
   const roleInfo = ROLE_DEFINITIONS[activeRole] || ROLE_DEFINITIONS['TM'];
@@ -1064,6 +1070,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAccounts,
         isLegal,
         isSales,
+        isOperations,
+        isOperationsHOD,
+        isLegalHOD,
         can,
         searchEmployeeInZoho,
         login,

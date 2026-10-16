@@ -117,6 +117,7 @@ export const ZOHO_MODULE_LOOKUP_MAP: Record<string, ZohoModuleConfig> = {
   Deals: { section: 'CRM', moduleName: 'Deals', lookupField: 'Employee', secondaryLookupFields: ['Owner', 'Partner_BDM', 'Partner_BDM_ID'] },
   Clients: { section: 'CRM', moduleName: 'Clients', lookupField: 'Employee', secondaryLookupFields: ['Owner', 'Created_By'] },
   Companies: { section: 'CRM', moduleName: 'Companies', lookupField: 'Employee', secondaryLookupFields: ['Owner', 'Created_By'] },
+  Internal_Operations: { section: 'CRM', moduleName: 'Internal_Operations', lookupField: 'Team_Member', secondaryLookupFields: ['Team_Leader', 'Employee', 'Deal_ID'] },
 
   // 2. HRMS Section
   Employee: { section: 'HRMS', moduleName: 'Employee', lookupField: 'id', isLookupExempt: true },

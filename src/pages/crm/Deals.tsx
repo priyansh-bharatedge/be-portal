@@ -32,8 +32,8 @@ import { buildZohoRbacCriteria, getAllEmployeesList, filterRecordsByRbac } from 
 import { isSubordinateOfTL, isMatchingName, mapZohoRecordToEmployee } from '../../utils/employeeUtils';
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
-import { Layers, DownloadCloud } from 'lucide-react';
 import { ALL_SERVICES } from '../../utils/servicesList';
+import { generateServiceAllocationsForDeal } from '../../services/internalOperationsService';
 import {
   getDealSplitBreakdown,
   isDealPartnerBdm,
@@ -121,7 +121,7 @@ export const Deals = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, isSuperAdmin, isHR, isHOD, isTL, isAccounts, isLegal, isSales, availableUsers, filterRecords } = useAuth();
+  const { currentUser, isSuperAdmin, isHR, isHOD, isTL, isAccounts, isLegal, isSales, isOperationsHOD, isLegalHOD, availableUsers, filterRecords } = useAuth();
   const isUserTL = !isSuperAdmin && !isHR && !isHOD && !isAccounts && !isLegal && Boolean(
     isTL ||
     currentUser?.role === 'TL' ||
@@ -182,6 +182,9 @@ export const Deals = () => {
         setActiveTab('All Deals');
       } else if ((tabParam === 'Legal Queue' || tabParam === 'Received') && !isLegal && !isSuperAdmin) {
         setActiveTab('All Deals');
+      } else if (tabParam === 'Internal Operations') {
+        navigate('/crm/internal-operations', { replace: true });
+        return;
       } else if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals') && (isAccounts || isLegal) && !isSuperAdmin) {
         setActiveTab('All Deals');
       } else {
@@ -2641,6 +2644,13 @@ export const Deals = () => {
       setDeals(updatedList);
       safeSaveDealsToStorage(updatedList);
 
+      // Automatically generate sub-child service allocation records in Internal Operations module
+      try {
+        generateServiceAllocationsForDeal(updatedDeal);
+      } catch (genErr) {
+        console.warn('[Deals] Service allocation creation warning:', genErr);
+      }
+
       // Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
       const zohoRes = await moveDealToOperationsAllocator(deal.zohoId || deal.id);
       if (zohoRes.success) {
@@ -2780,7 +2790,7 @@ export const Deals = () => {
     }
 
     const key = `${deal.id}_${slotIndex}`;
-    const selectedBank = forcedBankType || milestoneBankSelections[key] || deal[`R${slotIndex}_Bank_type`] || deal.rawZohoDeal?.[`R${slotIndex}_Bank_type`] || 'BSPL';
+    const selectedBank = forcedBankType || milestoneBankSelections[key] || deal[`R${slotIndex}_Bank_type`] || deal.rawZohoDeal?.[`R${slotIndex}_Bank_type`] || '';
 
     setVerifyingMilestoneKey(key);
     try {
@@ -2979,6 +2989,8 @@ export const Deals = () => {
     return rbacDeals.filter((d: any) => isDealOwnedByTL(d, currentUser)).length;
   }, [rbacDeals, isUserTL, currentUser]);
 
+
+
   const myTeamDealsCount = useMemo(() => {
     if (!isUserTL) return 0;
     return rbacDeals.filter((d: any) => isDealOwnedBySubordinate(d, currentUser, effectiveEmployees)).length;
@@ -3154,6 +3166,7 @@ export const Deals = () => {
               isReceived: true,
             }
           ] : []),
+
           ...(((!isAccounts && !isLegal) || isSuperAdmin) ? [
             { id: 'Manual Deals', label: 'Manual Deals', count: null },
             { id: 'From Quotations', label: 'From Quotations', count: null },
@@ -3241,6 +3254,8 @@ export const Deals = () => {
       {(() => {
         const totalDealsCount = (isFiltered || isSalesScoped) ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
         const paginatedDeals = (isFiltered || isSalesScoped) ? filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : filteredDeals;
+
+
 
         if (activeTab === 'Remaining Payments') {
           return (
@@ -3370,7 +3385,7 @@ export const Deals = () => {
                           ) : (
                             recordedMilestones.map((milestone: DealMilestoneItem) => {
                               const itemKey = `${deal.id}_${milestone.index}`;
-                              const selectedBank = milestoneBankSelections[itemKey] || milestone.bankType || 'BSPL';
+                              const selectedBank = milestoneBankSelections[itemKey] || milestone.bankType || '';
                               const isVerifying = verifyingMilestoneKey === itemKey;
                               const isVerifyingLegal = verifyingMilestoneLegalKey === itemKey;
 
@@ -3451,7 +3466,7 @@ export const Deals = () => {
                                               value={selectedBank}
                                               disabled={isVerifying}
                                               onChange={(e) => {
-                                                const val = e.target.value as 'BSPL' | 'BSAPL';
+                                                const val = e.target.value as 'BSPL' | 'BSAPL' | '';
                                                 setMilestoneBankSelections(prev => ({
                                                   ...prev,
                                                   [itemKey]: val
@@ -3460,16 +3475,17 @@ export const Deals = () => {
                                               className="px-2 py-0.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all shadow-xs"
                                               title={`Zoho CRM Pick List field: R${milestone.index}_Bank_type`}
                                             >
+                                              <option value="">None</option>
                                               <option value="BSPL">BSPL</option>
                                               <option value="BSAPL">BSAPL</option>
                                             </select>
-                                            {selectedBank !== (milestone.bankType || 'BSPL') && (
+                                            {selectedBank !== (milestone.bankType || '') && (
                                               <button
                                                 type="button"
                                                 onClick={() => handleSaveMilestoneBank(deal, milestone.index, selectedBank)}
                                                 disabled={isVerifying}
                                                 className="px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[10px] font-bold transition-colors cursor-pointer"
-                                                title={`Save R${milestone.index}_Bank_type as ${selectedBank} in Zoho CRM`}
+                                                title={`Save R${milestone.index}_Bank_type as ${selectedBank || 'None'} in Zoho CRM`}
                                               >
                                                 Save
                                               </button>
@@ -3477,7 +3493,7 @@ export const Deals = () => {
                                           </>
                                         ) : (
                                           <span className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-gray-700">
-                                            {milestone.bankType || 'BSPL'}
+                                            {milestone.bankType || 'None'}
                                           </span>
                                         )}
                                       </div>

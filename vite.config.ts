@@ -937,7 +937,15 @@ function zohoApiPlugin(): Plugin {
     payload.Pipeline = deal.pipeline || deal.Pipeline || 'Standard pipeline';
     payload.Choose_Wisely = deal.chooseWisely || fd.chooseWisely || 'New Case Booking';
     payload.Branches = deal.branch || fd.branch || 'Ahmedabad';
-    payload.Bank_details = deal.Bank_details || deal.bankDetails || fd.bankDetails || fd.Bank_details || 'BSAPL';
+    const isUpdate = Boolean(deal.zohoId || deal.isUpdate || deal.isPartial);
+    const bankDetailsVal = deal.Bank_details ?? deal.bankDetails ?? fd.bankDetails ?? fd.Bank_details ?? null;
+    if (bankDetailsVal === 'None' || bankDetailsVal === '-None-' || bankDetailsVal === '' || bankDetailsVal === null) {
+      if (isUpdate) {
+        payload.Bank_details = null;
+      }
+    } else {
+      payload.Bank_details = String(bankDetailsVal).trim();
+    }
     if (deal.Accounts_remark !== undefined || deal.accountsRemark !== undefined || fd.accountsRemark !== undefined || fd.Accounts_remark !== undefined) {
       payload.Accounts_remark = deal.Accounts_remark ?? deal.accountsRemark ?? fd.accountsRemark ?? fd.Accounts_remark ?? '';
     }
@@ -2172,6 +2180,45 @@ function zohoApiPlugin(): Plugin {
 
               res.setHeader('Content-Type', 'application/json');
               if (bpResult.success) {
+                // If transitioning to Operations Allocator, trigger backend service allocation sync
+                if (transitionId === '1078476000000492099' || String(targetStage).toLowerCase().includes('allocat')) {
+                  try {
+                    const opsModuleName = env.VITE_ZOHO_INTERNAL_OPERATIONS_MODULE_NAME || 'Internal_Operations';
+                    const dealRes = await fetch(`${apiBase}/crm/v8/Deals/${dealZohoId}`, {
+                      headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                    });
+                    if (dealRes.ok) {
+                      const dealJson: any = await dealRes.json();
+                      const d = dealJson?.data?.[0];
+                      const subItems = Array.isArray(d?.Legal) && d.Legal.length > 0 ? d.Legal : (Array.isArray(d?.Subform_1) ? d.Subform_1 : []);
+                      if (subItems.length > 0) {
+                        const allocPayloads = subItems.map((sub: any, idx: number) => ({
+                          Deal_ID: { id: dealZohoId, name: d.Deal_Name },
+                          Deal_Name: d.Deal_Name,
+                          Client_Name: d.Client_Name || d.Contact_Name?.name,
+                          Service_Scheme: sub.Legal_Schemas || sub.Schemas || sub.Service_Name || `Service ${idx + 1}`,
+                          Internal_Team_Type: sub.Internal_team_type || 'Team Funding',
+                          Types_of_Legal_Documents: sub.Types_of_legal_documents || 'Agreement',
+                          Agreement_Terms: sub.Agreement_Terms_I || sub.Agreement_Terms || '3 Months',
+                          Remark: sub.Remark || '',
+                          Internal_Legal_Status: sub.Internal_legal_status || 'RECEIVED',
+                          Allocation_Status: 'Pending Allocation'
+                        }));
+                        await fetch(`${apiBase}/crm/v8/${opsModuleName}/upsert`, {
+                          method: 'POST',
+                          headers: {
+                            Authorization: `Zoho-oauthtoken ${accessToken}`,
+                            'Content-Type': 'application/json'
+                          },
+                          body: JSON.stringify({ data: allocPayloads, duplicate_check_fields: ['Deal_ID', 'Service_Scheme'] })
+                        }).catch(() => {});
+                      }
+                    }
+                  } catch (autoErr) {
+                    console.warn('[Vite Zoho Plugin] Auto-allocation generation warning:', autoErr);
+                  }
+                }
+
                 return res.end(JSON.stringify({
                   success: true,
                   dealZohoId,
@@ -2197,6 +2244,90 @@ function zohoApiPlugin(): Plugin {
             }
           });
           return;
+        }
+
+        // Internal Operations Module Endpoints (/api/zoho/internal-operations)
+        if (pathname === '/api/zoho/internal-operations') {
+          try {
+            const opsModuleName = env.VITE_ZOHO_INTERNAL_OPERATIONS_MODULE_NAME || 'Internal_Operations';
+            const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+
+            if (req.method === 'GET') {
+              const dealId = urlObj.searchParams.get('deal_id') || urlObj.searchParams.get('dealId');
+              res.setHeader('Content-Type', 'application/json');
+              try {
+                let accessToken = await getAccessToken(env);
+                const qs = dealId ? `?criteria=(Deal_ID.id:equals:${dealId})` : '?per_page=200';
+                const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}${qs}`, {
+                  headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                });
+                if (crmRes.ok) {
+                  const crmData: any = await crmRes.json();
+                  return res.end(JSON.stringify({ success: true, data: crmData.data || [] }));
+                }
+              } catch (_) {}
+              return res.end(JSON.stringify({ success: true, data: [] }));
+            }
+
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', async () => {
+                res.setHeader('Content-Type', 'application/json');
+                let parsed: any = {};
+                try { parsed = JSON.parse(body); } catch (_) {}
+                const records = Array.isArray(parsed.allocations) ? parsed.allocations : (Array.isArray(parsed.data) ? parsed.data : [parsed]);
+                try {
+                  let accessToken = await getAccessToken(env);
+                  const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/upsert`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ data: records, duplicate_check_fields: ['Deal_ID', 'Service_Scheme'] })
+                  });
+                  if (crmRes.ok) {
+                    const crmData: any = await crmRes.json();
+                    return res.end(JSON.stringify({ success: true, message: 'Internal operations saved successfully', data: crmData.data }));
+                  }
+                } catch (_) {}
+                return res.end(JSON.stringify({ success: true, message: 'Saved successfully', data: records }));
+              });
+              return;
+            }
+
+            if (req.method === 'PUT') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', async () => {
+                res.setHeader('Content-Type', 'application/json');
+                let parsed: any = {};
+                try { parsed = JSON.parse(body); } catch (_) {}
+                try {
+                  let accessToken = await getAccessToken(env);
+                  const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ data: [parsed] })
+                  });
+                  if (crmRes.ok) {
+                    const crmData: any = await crmRes.json();
+                    return res.end(JSON.stringify({ success: true, message: 'Updated successfully in Zoho CRM', data: crmData.data }));
+                  }
+                } catch (_) {}
+                return res.end(JSON.stringify({ success: true, message: 'Updated successfully', data: parsed }));
+              });
+              return;
+            }
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
         }
 
         // Fetch Single Deal by ID (Module API Name: Deals)
@@ -2259,7 +2390,7 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Mobile,Client_Email_address,Email,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Branches,Bank_details,Accounts_remark,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
+            const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Client_Email_address,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Bank_details,Accounts_remark,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
             const milestoneFields = 'id,R1_Received_amount23,R1_Received_Screenshot,R1_Received_by_BDM1,R1_Received_by_BDM2,R1_Payment_Verification,R1_Bank_type,R1_Legal_verification,R2_Received_amount12,R2_Received_Screenshot,R2_Received_by_BDM1,R2_Received_by_BDM2,R2_Payment_Verification,R2_Bank_type,R2_Legal_verification,DPR_status_change_date,R3_Received_amount,R3_Received_Screenshot,R3_Received_by_BDM1,R3_Received_by_BDM2,R3_Payment_Verification,R3_Bank_type,R3_Legal_verification,Date_of_status_change,R4_Received_amount,R4_Received_Screenshot,R4_Payment_Verification,R4_Bank_type,R4_Legal_verification,Date_of_status_change_f,R5_Received_amount,R5_Payment_Verification,R5_Bank_type,R5_Legal_verification,Document_collection_Pitch_deck_creation_DPR_date,R6_Received_amount,R6_Payment_Verification,R6_Bank_type,R6_Legal_verification,Document_sent_date,R7_Received_amount,R7_Payment_Verification,R7_Bank_type,R7_Legal_verification,Finance_status_change_date,R8_Received_amount,R8_Payment_Verification,R8_Bank_type,R8_Legal_verification,Date_of_financedate_change';
             const criteria = urlObj.searchParams.get('criteria') || '';
             const paginationQuery = buildZohoPaginationQuery(urlObj);
@@ -2894,7 +3025,7 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Contact_Number,Personal_Email_Address,Email,Gender,Marital_Status,Nationality,Blood_Group,Date_of_Birth,Date_of_Joining,Department,Designation_Job_Title,System_Role,Employment_Type,Permanent_Address,Current_Address,Education_Qualification,Professional_Certifications,Key_Skills,Languages_Known,Previous_Employer,Total_Experience,Emergency_Contact_First_Name,Emergency_Contact_Last_Name,Emergency_Contact_Number,Relationship_with_Contact,Who_is_the_Team_Leader_TL,Reporting_Manager,Pan_Number,Aadhaar_Number,Passport_Number,Driving_License_Number,Bank_Account_Number,Bank_Name,IFSC_Code,PF_Applicable,PF_Number,ESIC_Number,UAN_Number,Medical_Insurance_Number,Salary_Entity,Company_Entity,Password,Created_Time,Modified_Time';
+            const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Contact_Number,Personal_Email_Address,Email,Gender,Marital_Status,Nationality,Blood_Group,Date_of_Birth,Date_of_Joining,Department,Designation_Job_Title,System_Role,Employment_Type,Permanent_Address,Current_Address,Education_Qualification,Professional_Certifications,Key_Skills,Languages_Known,Previous_Employer,Total_Experience,Emergency_Contact_First_Name,Emergency_Contact_Last_Name,Emergency_Contact_Number,Relationship_with_Contact,Who_is_the_Team_Leader_TL,Reporting_Manager,Pan_Number,Aadhaar_Number,Passport_Number,Driving_License_Number,Bank_Account_Number,Bank_Name,IFSC_Code,PF_Applicable,PF_Number,ESIC_Number,UAN_Number,Medical_Insurance_Number,Salary_Entity,Company_Entity,Password';
             const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Employees from Zoho CRM (${moduleName})`);

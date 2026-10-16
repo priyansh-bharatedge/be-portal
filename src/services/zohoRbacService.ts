@@ -654,6 +654,32 @@ export function filterRecordsByRbac<T = any>(
       }
     }
 
+    // 11. Internal Operations module scoping:
+    // Super Admin & Operations HOD have full management & assignment access.
+    // Legal HOD has supervisory oversight and visibility over legal sub-child details.
+    // Operations TL / TM have visibility over their specifically assigned service records.
+    // Unauthorized personnel (sales, accounts, unassigned staff) are blocked.
+    if (moduleName === 'Internal_Operations' || moduleName === 'internal_operations') {
+      const isSuperAdmin = user.role === 'Super Admin' || user.email === 'superadmin@be.com' || user.email === 'md@bharat-edge.com';
+      const isOpsHOD = user.role === 'HOD' && (userDept.includes('operat') || !userDept.includes('legal'));
+      const isLegalHOD = user.role === 'HOD' && userDept.includes('legal');
+      if (isSuperAdmin || isOpsHOD || isLegalHOD) return true;
+
+      // TL check: Assigned as TL
+      const tlId = String(rec.Team_Leader?.id || rec.Team_Leader_ID || '').toLowerCase();
+      const tlName = String(rec.Team_Leader?.name || rec.Team_Leader_Name || '').toLowerCase();
+      if (tlId && idSet.has(tlId)) return true;
+      if (tlName && isAccessiblePerson(tlName)) return true;
+
+      // TM check: Assigned as TM
+      const tmId = String(rec.Team_Member?.id || rec.Team_Member_ID || '').toLowerCase();
+      const tmName = String(rec.Team_Member?.name || rec.Team_Member_Name || '').toLowerCase();
+      if (tmId && idSet.has(tmId)) return true;
+      if (tmName && isAccessiblePerson(tmName)) return true;
+
+      return false;
+    }
+
     return false;
   });
 }
@@ -674,6 +700,7 @@ export function getEndpointForModule(moduleName: string): string {
   if (norm === 'client' || norm === 'clients') return '/api/zoho/get-clients';
   if (norm === 'company' || norm === 'companies') return '/api/zoho/get-companies';
   if (norm === 'dsr') return '/api/zoho/get-dsr';
+  if (norm === 'internal-operations' || norm === 'internal-operation') return '/api/zoho/internal-operations';
   return `/api/zoho/get-${norm}`;
 }
 
@@ -708,6 +735,7 @@ export async function mutateZohoWithRbac<T = any>(
       Cases: { insert: '/api/zoho/insert-query', update: '/api/zoho/update-query' },
       Company_Policies: { insert: '/api/zoho/insert-policy', update: '/api/zoho/update-policy' },
       Company_Calendar: { insert: '/api/zoho/insert-calendar', update: '/api/zoho/update-calendar' },
+      Internal_Operations: { insert: '/api/zoho/internal-operations', update: '/api/zoho/internal-operations' },
     };
 
     const target = endpointMap[moduleName] || {

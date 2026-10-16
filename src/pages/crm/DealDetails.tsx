@@ -34,6 +34,8 @@ import {
   fetchZohoEmployees
 } from '../../services/zohoService';
 import { useAuth } from '../../context/AuthContext';
+import { InternalOperationsAllocationTable } from '../../components/crm/InternalOperationsAllocationTable';
+import { generateServiceAllocationsForDeal } from '../../services/internalOperationsService';
 import { getDealSplitBreakdown, isDealPartnerBdm, isDealPaymentVerified, isUserPrimaryBdm, getDealMilestones, type DealMilestoneItem } from '../../utils/dealSplitUtils';
 
 // Helper to scan IndexedDB for all documents matching this deal
@@ -506,7 +508,8 @@ export const DealDetails = () => {
 
       // Synchronize Accounts Details (Bank Details & Account Remarks)
       const rawBank = deal.Bank_details ?? deal.bankDetails ?? raw.Bank_details ?? fd.Bank_details ?? fd.bankDetails ?? '';
-      setBankDetails(formatZohoValue(rawBank));
+      const formattedBank = formatZohoValue(rawBank);
+      setBankDetails(formattedBank === 'None' || formattedBank === '-None-' ? '' : formattedBank);
       const rawRemark = deal.Accounts_remark ?? deal.accountsRemark ?? raw.Accounts_remark ?? fd.Accounts_remark ?? fd.accountsRemark ?? '';
       setAccountsRemark(formatZohoValue(rawRemark));
 
@@ -768,7 +771,7 @@ export const DealDetails = () => {
     setIsSavingAccountsDetails(true);
     try {
       const targetZohoId = String(deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : '') || deal.id || '').trim();
-      const finalBank = bankVal || 'BSPL';
+      const finalBank = (bankVal && bankVal !== 'None' && bankVal !== '-None-') ? bankVal : '';
       const finalRemark = remarkVal ?? '';
 
       const updatedDeal = {
@@ -819,7 +822,7 @@ export const DealDetails = () => {
       const cleanPayload = {
         id: targetZohoId,
         zohoId: targetZohoId,
-        Bank_details: finalBank,
+        Bank_details: finalBank ? finalBank : null,
         Accounts_remark: finalRemark,
         isPartial: true,
       };
@@ -835,7 +838,7 @@ export const DealDetails = () => {
       const zohoRes = await response.json().catch(() => ({ success: response.ok }));
 
       if (response.ok && zohoRes.success) {
-        setWorkflowToast({ type: 'success', message: `Bank Details (${finalBank}) & Remarks updated in Zoho CRM deal record successfully!` });
+        setWorkflowToast({ type: 'success', message: finalBank ? `Bank Details (${finalBank}) & Remarks updated in Zoho CRM deal record successfully!` : 'Account Details updated in Zoho CRM deal record successfully!' });
       } else {
         setWorkflowToast({ type: 'error', message: zohoRes.message || 'Updated locally, but failed to update Zoho CRM' });
       }
@@ -854,7 +857,7 @@ export const DealDetails = () => {
     if (!deal) return;
     setIsActionInProgress(true);
     try {
-      const finalBank = bankDetails || deal.Bank_details || deal.bankDetails || 'BSPL';
+      const finalBank = (bankDetails && bankDetails !== 'None' && bankDetails !== '-None-') ? bankDetails : ((deal.Bank_details && deal.Bank_details !== 'None') ? deal.Bank_details : (deal.bankDetails && deal.bankDetails !== 'None' ? deal.bankDetails : ''));
       const finalRemark = accountsRemark !== undefined ? accountsRemark : (deal.Accounts_remark || '');
 
       const updatedDeal = {
@@ -934,7 +937,7 @@ export const DealDetails = () => {
     if (!deal) return;
     setIsActionInProgress(true);
     try {
-      const finalBank = bankDetails || deal.Bank_details || deal.bankDetails || 'BSPL';
+      const finalBank = (bankDetails && bankDetails !== 'None' && bankDetails !== '-None-') ? bankDetails : ((deal.Bank_details && deal.Bank_details !== 'None') ? deal.Bank_details : (deal.bankDetails && deal.bankDetails !== 'None' ? deal.bankDetails : ''));
       const finalRemark = accountsRemark !== undefined ? accountsRemark : (deal.Accounts_remark || '');
 
       const updatedDeal = {
@@ -1323,6 +1326,13 @@ export const DealDetails = () => {
       try {
         window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
       } catch (e) {}
+
+      // Automatically generate sub-child service allocation records in Internal Operations module
+      try {
+        generateServiceAllocationsForDeal(updatedDeal);
+      } catch (genErr) {
+        console.warn('[DealDetails] Service allocation creation warning:', genErr);
+      }
 
       // 1. Sync updated deal data & legal fields to Zoho CRM
       await saveOrUpdateZohoDeal(updatedDeal);
@@ -2030,8 +2040,8 @@ export const DealDetails = () => {
       // Bank type from R{i}_Bank_type
       const rawBank = deal[`R${slot.index}_Bank_type`] ?? raw[`R${slot.index}_Bank_type`] ?? deal.formData?.[`R${slot.index}_Bank_type`] ?? 
         (slot.index <= 2 ? (deal[`R${slot.index}_Bank_details`] ?? raw[`R${slot.index}_Bank_details`]) : '') ?? 
-        deal.Bank_details ?? raw.Bank_details ?? 'BSPL';
-      const slotBankType = String(rawBank || 'BSPL').trim();
+        deal.Bank_details ?? raw.Bank_details ?? '';
+      const slotBankType = (rawBank === 'None' || rawBank === '-None-') ? '' : String(rawBank || '').trim();
 
       const slotIsVerif = Boolean(
         deal[`R${slot.index}_Payment_Verification`] ?? raw[`R${slot.index}_Payment_Verification`] ??
@@ -2341,7 +2351,7 @@ export const DealDetails = () => {
       return;
     }
 
-    const currentBank = forcedBankType || detailsBankSelections[slotIndex] || deal[`R${slotIndex}_Bank_type`] || deal.rawZohoDeal?.[`R${slotIndex}_Bank_type`] || 'BSPL';
+    const currentBank = forcedBankType || detailsBankSelections[slotIndex] || deal[`R${slotIndex}_Bank_type`] || deal.rawZohoDeal?.[`R${slotIndex}_Bank_type`] || '';
 
     setVerifyingDetailsMilestone(slotIndex);
     try {
@@ -3067,6 +3077,16 @@ export const DealDetails = () => {
             </div>
           )}
 
+          {/* Internal Operations Sub-Child Module Section */}
+          <div className="mt-6">
+            <InternalOperationsAllocationTable
+              deal={deal}
+              mode="deal"
+              onProceedToExecutors={handleSendToOperationsExecutors}
+              canProceedToExecutors={String(deal?.stage || deal?.Stage || '').toLowerCase().includes('allocat')}
+            />
+          </div>
+
           {/* Operations & Team Allocation Card */}
           {(raw.Operation_stages || raw.Operation_team_leader || raw.Operation_team_member || raw.Quality_team_leader || raw.Quality_team_member || raw.Data_check_employee || raw.DPR_creator || raw.Finance_creator) && (
             <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
@@ -3232,7 +3252,7 @@ export const DealDetails = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
                   {recordedMilestones.map((m: DealMilestoneItem) => {
-                    const currentBank = detailsBankSelections[m.index] || m.bankType || 'BSPL';
+                    const currentBank = detailsBankSelections[m.index] || m.bankType || '';
                     const isVerifying = verifyingDetailsMilestone === m.index;
 
                     return (
@@ -3316,22 +3336,23 @@ export const DealDetails = () => {
                                   value={currentBank}
                                   disabled={isVerifying}
                                   onChange={(e) => {
-                                    const val = e.target.value as 'BSPL' | 'BSAPL';
+                                    const val = e.target.value as 'BSPL' | 'BSAPL' | '';
                                     setDetailsBankSelections(prev => ({ ...prev, [m.index]: val }));
                                   }}
                                   className="px-2 py-1 bg-white border border-gray-300 rounded-md text-xs font-bold text-gray-800 outline-none focus:border-be-orange focus:ring-1 focus:ring-be-orange transition-all shadow-xs"
                                   title={`Zoho CRM Pick List field: R${m.index}_Bank_type`}
                                 >
+                                  <option value="">None</option>
                                   <option value="BSPL">BSPL</option>
                                   <option value="BSAPL">BSAPL</option>
                                 </select>
-                                {currentBank !== (m.bankType || 'BSPL') && (
+                                {currentBank !== (m.bankType || '') && (
                                   <button
                                     type="button"
                                     onClick={() => handleSaveDetailsMilestoneBank(m.index, currentBank)}
                                     disabled={isVerifying}
                                     className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[10px] font-bold transition-colors cursor-pointer"
-                                    title={`Save R${m.index}_Bank_type as ${currentBank} in Zoho CRM`}
+                                    title={`Save R${m.index}_Bank_type as ${currentBank || 'None'} in Zoho CRM`}
                                   >
                                     Save Bank
                                   </button>
@@ -3339,7 +3360,7 @@ export const DealDetails = () => {
                               </div>
                             ) : (
                               <span className="px-2 py-0.5 bg-white border border-gray-200 rounded text-[11px] font-bold text-gray-700">
-                                {m.bankType || 'BSPL'}
+                                {m.bankType || 'None'}
                               </span>
                             )}
                           </div>
@@ -4221,13 +4242,11 @@ export const DealDetails = () => {
                       onChange={(e) => {
                         const newVal = e.target.value;
                         setBankDetails(newVal);
-                        if (newVal) {
-                          saveAccountsDetailsToZoho(newVal, accountsRemark);
-                        }
+                        saveAccountsDetailsToZoho(newVal, accountsRemark);
                       }}
                       className="w-full text-xs px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-800 font-medium focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange transition-colors"
                     >
-                      <option value="">Select Bank Details</option>
+                      <option value="">None</option>
                       <option value="BSPL">BSPL</option>
                       <option value="BSAPL">BSAPL</option>
                     </select>

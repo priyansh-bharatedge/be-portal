@@ -6,7 +6,8 @@ import {
   Settings, LogOut, LayoutDashboard, Briefcase, Users, 
   Building2, FileText, BarChart3, Calendar, ShieldAlert,
   HelpCircle, UserCircle, SwitchCamera, ClipboardList,
-  Crown, Shield, User, RefreshCw, UserCheck, ArrowLeft
+  Crown, Shield, User, RefreshCw, UserCheck, ArrowLeft,
+  Layers
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -105,6 +106,7 @@ export const AppLayout = () => {
         { name: 'Dashboard', path: '/crm/dashboard', icon: <LayoutDashboard size={20} /> },
         { name: 'Quotations', path: '/crm/quotations', icon: <ClipboardList size={20} /> },
         { name: 'Deals', path: '/crm/deals', icon: <Briefcase size={20} /> },
+        { name: 'Internal Operations', path: '/crm/internal-operations', icon: <Layers size={20} /> },
         { name: 'Clients', path: '/crm/clients', icon: <Users size={20} /> },
         { name: 'Companies', path: '/crm/companies', icon: <Building2 size={20} /> },
         { name: 'Documents', path: '/crm/documents', icon: <FileText size={20} /> },

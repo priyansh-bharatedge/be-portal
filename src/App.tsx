@@ -10,14 +10,15 @@ import { ModuleSelection } from './pages/ModuleSelection';
 import { AppLayout } from './layouts/AppLayout';
 
 // ── CRM Pages (lazy) ──────────────────────────────────────────────────────────
-const CrmDashboard     = lazy(() => import('./pages/crm/Dashboard').then(m => ({ default: m.CrmDashboard })));
-const Deals            = lazy(() => import('./pages/crm/Deals').then(m => ({ default: m.Deals })));
-const DealDetails      = lazy(() => import('./pages/crm/DealDetails').then(m => ({ default: m.DealDetails })));
-const Clients          = lazy(() => import('./pages/crm/Clients').then(m => ({ default: m.Clients })));
-const Companies        = lazy(() => import('./pages/crm/Companies').then(m => ({ default: m.Companies })));
-const CrmDocuments     = lazy(() => import('./pages/crm/Documents').then(m => ({ default: m.Documents })));
-const Quotations       = lazy(() => import('./pages/crm/Quotations').then(m => ({ default: m.Quotations })));
-const QuotationDetails = lazy(() => import('./pages/crm/QuotationDetails').then(m => ({ default: m.QuotationDetails })));
+const CrmDashboard        = lazy(() => import('./pages/crm/Dashboard').then(m => ({ default: m.CrmDashboard })));
+const Deals               = lazy(() => import('./pages/crm/Deals').then(m => ({ default: m.Deals })));
+const DealDetails         = lazy(() => import('./pages/crm/DealDetails').then(m => ({ default: m.DealDetails })));
+const InternalOperations  = lazy(() => import('./pages/crm/InternalOperations').then(m => ({ default: m.InternalOperations })));
+const Clients             = lazy(() => import('./pages/crm/Clients').then(m => ({ default: m.Clients })));
+const Companies           = lazy(() => import('./pages/crm/Companies').then(m => ({ default: m.Companies })));
+const CrmDocuments        = lazy(() => import('./pages/crm/Documents').then(m => ({ default: m.Documents })));
+const Quotations          = lazy(() => import('./pages/crm/Quotations').then(m => ({ default: m.Quotations })));
+const QuotationDetails    = lazy(() => import('./pages/crm/QuotationDetails').then(m => ({ default: m.QuotationDetails })));
 
 // ── HRMS Pages (lazy) ─────────────────────────────────────────────────────────
 const HrmsDashboard    = lazy(() => import('./pages/hrms/Dashboard').then(m => ({ default: m.HrmsDashboard })));
@@ -74,9 +75,10 @@ function App() {
             <Route path="/crm/dashboard"      element={<Lazy><CrmDashboard /></Lazy>} />
             <Route path="/crm/quotations"     element={<Lazy><Quotations /></Lazy>} />
             <Route path="/crm/quotations/:id" element={<Lazy><QuotationDetails /></Lazy>} />
-            <Route path="/crm/deals"          element={<Lazy><Deals /></Lazy>} />
-            <Route path="/crm/deals/:id"      element={<Lazy><DealDetails /></Lazy>} />
-            <Route path="/crm/clients"        element={<Lazy><Clients /></Lazy>} />
+            <Route path="/crm/deals"                element={<Lazy><Deals /></Lazy>} />
+            <Route path="/crm/deals/:id"            element={<Lazy><DealDetails /></Lazy>} />
+            <Route path="/crm/internal-operations"  element={<Lazy><InternalOperations /></Lazy>} />
+            <Route path="/crm/clients"              element={<Lazy><Clients /></Lazy>} />
             <Route path="/crm/companies"      element={<Lazy><Companies /></Lazy>} />
             <Route path="/crm/documents"      element={<Lazy><CrmDocuments /></Lazy>} />
 
