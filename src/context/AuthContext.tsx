@@ -440,11 +440,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 1. Query live Zoho CRM "Employee" module & Zoho Users
       const zohoRes = await searchZohoEmployeeByEmail(cleanEmail);
       if (zohoRes.success && zohoRes.exists && zohoRes.employee) {
+        let hasPassword = Boolean(zohoRes.hasPassword);
+        let empPassword = zohoRes.employee.password;
+
+        // If Zoho returned empty password, check if employee already set password previously
+        if (!hasPassword) {
+          const savedEmps = localStorage.getItem('be_employees');
+          if (savedEmps) {
+            try {
+              const empsList = JSON.parse(savedEmps);
+              const localEmp = empsList.find((e: any) => 
+                (e.email && e.email.toLowerCase() === cleanEmail) ||
+                (e.formData?.email && e.formData.email.toLowerCase() === cleanEmail) ||
+                (e.formData?.workEmail && e.formData.workEmail.toLowerCase() === cleanEmail) ||
+                (e.id && String(e.id).toLowerCase() === cleanEmail)
+              );
+              if (localEmp && (localEmp.password || localEmp.formData?.password)) {
+                hasPassword = true;
+                empPassword = localEmp.password || localEmp.formData?.password;
+              }
+            } catch (_) {}
+          }
+        }
+
         return {
           success: true,
           exists: true,
-          hasPassword: zohoRes.hasPassword,
-          employee: zohoRes.employee
+          hasPassword,
+          employee: {
+            ...zohoRes.employee,
+            password: empPassword || zohoRes.employee.password,
+            hasPassword
+          }
         };
       }
 

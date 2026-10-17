@@ -2674,6 +2674,31 @@ function zohoApiPlugin(): Plugin {
                       }
                     }
                   }
+
+                  // Fallback: list scan on Employee custom module
+                  if (!isCustomEmployeeRecord) {
+                    try {
+                      const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=id,Email,Personal_Email_Address,Employment_ID,Name&per_page=200`;
+                      let listRes = await fetch(listUrl, {
+                        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                      });
+                      if (listRes.status === 200) {
+                        const listData: any = await listRes.json();
+                        const matched = listData?.data?.find((x: any) =>
+                          (x.Personal_Email_Address && x.Personal_Email_Address.toLowerCase() === email.toLowerCase()) ||
+                          (x.Email && x.Email.toLowerCase() === email.toLowerCase()) ||
+                          (x.Employment_ID && String(x.Employment_ID).toLowerCase() === email.toLowerCase()) ||
+                          (x.Name && x.Name.toLowerCase() === email.toLowerCase())
+                        );
+                        if (matched?.id) {
+                          zohoId = String(matched.id);
+                          isCustomEmployeeRecord = true;
+                        }
+                      }
+                    } catch (listErr) {
+                      console.warn('[Vite Zoho Plugin] Employee list scan fallback failed:', listErr);
+                    }
+                  }
                 } catch (searchErr) {
                   console.warn('[Vite Zoho Plugin] Error searching employee by email:', searchErr);
                 }
@@ -2834,11 +2859,12 @@ function zohoApiPlugin(): Plugin {
               const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
 
               let matchedRecord: any = null;
+              const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Personal_Email_Address,Email,Password,System_Role,Department,Designation_Job_Title,Who_is_the_Team_Leader_TL,Reporting_Manager,Contact_Number';
 
               // Step 1: Search Employee custom module by criteria
               try {
                 const criteria = `(((Personal_Email_Address:equals:${cleanEmail})or(Email:equals:${cleanEmail}))or(Employment_ID:equals:${cleanEmail}))`;
-                const searchUrl = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteria)}`;
+                const searchUrl = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteria)}&fields=${employeeFields}`;
 
                 let searchRes = await fetch(searchUrl, {
                   headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
@@ -2865,7 +2891,7 @@ function zohoApiPlugin(): Plugin {
               // Step 2: Fallback search?email=...
               if (!matchedRecord && cleanEmail.includes('@')) {
                 try {
-                  const emailSearchUrl = `${apiBase}/crm/v8/${moduleName}/search?email=${encodeURIComponent(cleanEmail)}`;
+                  const emailSearchUrl = `${apiBase}/crm/v8/${moduleName}/search?email=${encodeURIComponent(cleanEmail)}&fields=${employeeFields}`;
                   let emailRes = await fetch(emailSearchUrl, {
                     headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
                   });
@@ -2883,7 +2909,6 @@ function zohoApiPlugin(): Plugin {
               // Step 3: Fallback list scan on Employee custom module
               if (!matchedRecord) {
                 try {
-                  const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Personal_Email_Address,Email,Password,System_Role,Department,Designation_Job_Title,Who_is_the_Team_Leader_TL,Reporting_Manager,Contact_Number';
                   const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&per_page=200`;
                   let listRes = await fetch(listUrl, {
                     headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
@@ -2901,6 +2926,24 @@ function zohoApiPlugin(): Plugin {
                   }
                 } catch (listErr) {
                   console.warn('[Vite Zoho Plugin] Employee list scan failed:', listErr);
+                }
+              }
+
+              // If matched from Employee module, fetch single record to guarantee Password field is fully retrieved
+              if (matchedRecord && matchedRecord.id) {
+                try {
+                  const singleUrl = `${apiBase}/crm/v8/${moduleName}/${matchedRecord.id}`;
+                  let singleRes = await fetch(singleUrl, {
+                    headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                  });
+                  if (singleRes.status === 200) {
+                    const singleData: any = await singleRes.json();
+                    if (singleData?.data?.[0]) {
+                      matchedRecord = { ...matchedRecord, ...singleData.data[0] };
+                    }
+                  }
+                } catch (singleErr) {
+                  console.warn('[Vite Zoho Plugin] Single employee record fetch failed:', singleErr);
                 }
               }
 
