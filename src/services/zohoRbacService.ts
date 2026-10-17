@@ -644,6 +644,33 @@ export function filterRecordsByRbac<T = any>(
       }
     }
 
+    // 9b. Operations Department access: If user is assigned as TL or TM to any child Internal Operations record for this Deal
+    if (moduleName === 'Deals' || moduleName === 'Deal' || moduleName === 'CRM') {
+      try {
+        const rawIO = localStorage.getItem('be_internal_operations');
+        if (rawIO) {
+          const ioList = JSON.parse(rawIO);
+          const dId = String(rec.id || rec.zohoId || '').trim().toLowerCase();
+          if (dId && Array.isArray(ioList)) {
+            const hasAssignedChild = ioList.some((io: any) => {
+              if (String(io.Deal_ID || '').trim().toLowerCase() !== dId) return false;
+              const tlId = String(io.Team_Leader?.id || io.Team_Leader_ID || '').toLowerCase();
+              const tlName = String(io.Team_Leader?.name || io.Team_Leader_Name || '').toLowerCase();
+              const tmId = String(io.Team_Member?.id || io.Team_Member_ID || '').toLowerCase();
+              const tmName = String(io.Team_Member?.name || io.Team_Member_Name || '').toLowerCase();
+              return (
+                (tlId && idSet.has(tlId)) ||
+                (tlName && isAccessiblePerson(tlName)) ||
+                (tmId && idSet.has(tmId)) ||
+                (tmName && isAccessiblePerson(tmName))
+              );
+            });
+            if (hasAssignedChild) return true;
+          }
+        }
+      } catch (_) {}
+    }
+
     // 10. Special fallback for Quotations: if created locally or before employee metadata was linked
     if (moduleName === 'Quotations' || moduleName === 'quotation' || moduleName === 'CRM') {
       const isUnassigned = (!rec.Employee || (typeof rec.Employee === 'object' && !rec.Employee.id && !rec.Employee.name)) &&

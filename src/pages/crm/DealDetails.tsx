@@ -269,6 +269,14 @@ export const DealDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser, isSuperAdmin, isHOD, isAccounts, isLegal, isSales, availableUsers } = useAuth();
+  const isSalesDeptUser = !isSuperAdmin && Boolean(
+    isSales || 
+    (currentUser?.department && (
+      currentUser.department.toLowerCase().includes('sale') || 
+      currentUser.department.toLowerCase().includes('bdm') || 
+      currentUser.department.toLowerCase().includes('business dev')
+    ))
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deal, setDeal] = useState<any>(null);
@@ -528,16 +536,8 @@ export const DealDetails = () => {
         return true;
       });
 
-      if (dealLegal) {
-        const seenLegal = new Set<string>();
-        const uniqueDealLegal = dealLegal.filter((lg: any, idx: number) => {
-          const rawKey = formatZohoValue(lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[idx]?.Schemas || servicesList[idx]?.name || 'Service');
-          const key = rawKey.trim().toLowerCase();
-          if (seenLegal.has(key)) return false;
-          seenLegal.add(key);
-          return true;
-        });
-        setLegalSubformItems(uniqueDealLegal.map((lg: any, i: number) => {
+      if (dealLegal && dealLegal.length > 0) {
+        setLegalSubformItems(dealLegal.map((lg: any, i: number) => {
           const schemaName = formatZohoValue(lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service');
           let realId = (lg.id && /^\d{15,}$/.test(String(lg.id))) ? String(lg.id) : '';
           if (!realId && rawLegal) {
@@ -560,16 +560,8 @@ export const DealDetails = () => {
             tenure: formatZohoValue(lg.tenure || lg.Tenure_of_Service || ''),
           };
         }));
-      } else if (rawLegal) {
-        const seenLegal = new Set<string>();
-        const uniqueRawLegal = rawLegal.filter((lg: any, idx: number) => {
-          const rawKey = formatZohoValue(lg.Legal_Schemas || lg.Schemas || lg.schema || servicesList[idx]?.Schemas || servicesList[idx]?.name || 'Service');
-          const key = rawKey.trim().toLowerCase();
-          if (seenLegal.has(key)) return false;
-          seenLegal.add(key);
-          return true;
-        });
-        setLegalSubformItems(uniqueRawLegal.map((lg: any, i: number) => ({
+      } else if (rawLegal && rawLegal.length > 0) {
+        setLegalSubformItems(rawLegal.map((lg: any, i: number) => ({
           id: String(lg.id || `temp_${i + 1}`),
           schema: formatZohoValue(lg.Legal_Schemas || lg.Schemas || lg.schema || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service'),
           internalTeamType: formatZohoValue(lg.Internal_team_type || lg.internalTeamType || ''),
@@ -1011,15 +1003,7 @@ export const DealDetails = () => {
     setIsSavingLegalSubform(true);
     try {
       const existingRawLegal = deal.rawZohoDeal?.Legal || (deal as any).Legal || [];
-      const seenLg = new Set<string>();
-      const dedupedItems = legalSubformItems.filter((lg: any, idx: number) => {
-        const key = (lg.schema || lg.Legal_Schemas || lg.Schemas || `service_${idx}`).trim().toLowerCase();
-        if (seenLg.has(key)) return false;
-        seenLg.add(key);
-        return true;
-      });
-
-      const formattedLegal = dedupedItems.map((lg: any, idx: number) => {
+      const formattedLegal = legalSubformItems.map((lg: any, idx: number) => {
         let validId = lg.id && /^\d{15,}$/.test(String(lg.id)) ? String(lg.id) : '';
         if (!validId && Array.isArray(existingRawLegal) && existingRawLegal.length > 0) {
           const matched = existingRawLegal.find((rl: any) => 
@@ -3078,14 +3062,16 @@ export const DealDetails = () => {
           )}
 
           {/* Internal Operations Sub-Child Module Section */}
-          <div className="mt-6">
-            <InternalOperationsAllocationTable
-              deal={deal}
-              mode="deal"
-              onProceedToExecutors={handleSendToOperationsExecutors}
-              canProceedToExecutors={String(deal?.stage || deal?.Stage || '').toLowerCase().includes('allocat')}
-            />
-          </div>
+          {!isSalesDeptUser && (
+            <div className="mt-6">
+              <InternalOperationsAllocationTable
+                deal={deal}
+                mode="deal"
+                onProceedToExecutors={handleSendToOperationsExecutors}
+                canProceedToExecutors={String(deal?.stage || deal?.Stage || '').toLowerCase().includes('allocat')}
+              />
+            </div>
+          )}
 
           {/* Operations & Team Allocation Card */}
           {(raw.Operation_stages || raw.Operation_team_leader || raw.Operation_team_member || raw.Quality_team_leader || raw.Quality_team_member || raw.Data_check_employee || raw.DPR_creator || raw.Finance_creator) && (

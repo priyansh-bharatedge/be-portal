@@ -952,7 +952,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAccounts = deptLower.includes('account') || deptLower.includes('finance') || desigLower.includes('account') || desigLower.includes('finance') || (currentUser.email || '').toLowerCase().includes('vrunda');
   const isLegal = deptLower.includes('legal') || desigLower.includes('legal');
   const isOperations = deptLower.includes('operat') || desigLower.includes('operat') || deptLower.includes('allocat') || deptLower.includes('execut');
-  const isSales = deptLower.includes('sale') || deptLower.includes('bdm') || (!isAccounts && !isLegal && !isSuperAdmin && !isHR && !isOperations);
+  const isSales = !isSuperAdmin && (
+    deptLower.includes('sale') || 
+    deptLower.includes('bdm') || 
+    deptLower.includes('business dev') || 
+    (!isAccounts && !isLegal && !isHR && !isOperations)
+  );
   const isOperationsHOD = isSuperAdmin || (isHOD && (isOperations || (!isLegal && !isAccounts && !isSales)));
   const isLegalHOD = isSuperAdmin || (isLegal && (isHOD || desigLower.includes('hod') || desigLower.includes('head') || currentUser.role === 'HOD'));
 

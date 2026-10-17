@@ -48,14 +48,28 @@ export function setStoredInternalOperations(records: InternalOperationRecord[]):
 }
 
 /**
- * Idempotently generates/updates Internal Operations sub-child records for a Deal
+ * Normalizes Team Type string (handles both "Team Incorporation" and "Incorporation")
+ */
+export function normalizeTeamType(val: any): string {
+  const str = formatValue(val).trim();
+  const lower = str.toLowerCase();
+  if (lower.includes('incorporation')) return 'Incorporation';
+  if (lower.includes('compliance')) return 'Compliance';
+  if (lower.includes('funding')) return 'Funding';
+  if (lower.includes('certification')) return 'Certification';
+  if (lower.includes('digital') || lower.includes('marketing')) return 'Digital Marketing';
+  return str.replace(/^Team\s+/i, '') || 'Funding';
+}
+
+/**
+ * Idempotently generates/updates Internal Operations child records for a Deal
  * based on its Legal Details Subform entries.
  *
  * Rules:
- * 1. Checks Deal_ID + Service_Scheme for duplicate prevention.
- * 2. If record already exists: Preserves existing TL/TM assignments and updates subform fields.
- * 3. If record does not exist: Instantiates a new sub-child record linked to Deal_ID.
- * 4. Preserves all parent Deal data and subforms without data clearing.
+ * 1. The number of child records matches exactly the number of services listed in the Legal subform (4 services = 4 child records).
+ * 2. If record already exists: Preserves existing TL/TM assignments, CA/CS1, CA/CS2, Stage, and dynamic sections data.
+ * 3. If record does not exist: Instantiates a new child record linked to Deal_ID with default Stage 'Doc collection'.
+ * 4. Preserves all parent Deal data and subforms without data loss.
  */
 export function generateServiceAllocationsForDeal(
   deal: any,
@@ -102,28 +116,23 @@ export function generateServiceAllocationsForDeal(
     }];
   }
 
-  // Deduplicate subform entries by scheme name
-  const seenSchemes = new Set<string>();
-  const uniqueSubformRows = subformRows.filter((row: any) => {
-    const sName = formatValue(
-      row.schema || row.Legal_Schemas || row.Schemas || row.Service_Name || row.name || deal.service || 'Service'
-    ).trim().toLowerCase();
-    if (!sName || seenSchemes.has(sName)) return false;
-    seenSchemes.add(sName);
-    return true;
-  });
-
+  // All service rows from Legal subform - exact 1-to-1 matching (no deduplication dropping services)
   const currentRecords = [...existingList];
+  const dealRecords = currentRecords.filter(r => String(r.Deal_ID || '').trim().toLowerCase() === dealId.toLowerCase());
+  const otherRecords = currentRecords.filter(r => String(r.Deal_ID || '').trim().toLowerCase() !== dealId.toLowerCase());
+
   const created: InternalOperationRecord[] = [];
   const updated: InternalOperationRecord[] = [];
+  const matchedExistingIds = new Set<string>();
+  const resultingDealRecords: InternalOperationRecord[] = [];
 
   const nowIso = new Date().toISOString();
 
-  uniqueSubformRows.forEach((row: any, idx: number) => {
+  subformRows.forEach((row: any, idx: number) => {
     const serviceScheme = formatValue(
       row.schema || row.Legal_Schemas || row.Schemas || row.Service_Name || row.name || `Service ${idx + 1}`
     );
-    const internalTeamType = formatValue(
+    const rawTeamType = formatValue(
       row.internalTeamType || row.Internal_team_type || 'Team Funding'
     );
     const typesOfLegalDocs = formatValue(
@@ -139,44 +148,47 @@ export function generateServiceAllocationsForDeal(
     const tenure = formatValue(row.tenure || row.Tenure_of_Service || '');
     const subformRowId = String(row.id || `row_${idx + 1}`);
 
-    // Idempotency lookup: Match Deal_ID + Service_Scheme
-    const matchKey = `${dealId.toLowerCase()}::${serviceScheme.toLowerCase()}`;
-    const existingIndex = currentRecords.findIndex(r => {
-      const rDealId = String(r.Deal_ID || '').trim().toLowerCase();
-      const rScheme = String(r.Service_Scheme || '').trim().toLowerCase();
-      return `${rDealId}::${rScheme}` === matchKey;
-    });
+    // Try finding existing record for this deal:
+    // 1. By Subform_Row_ID
+    let existingIndex = dealRecords.findIndex(r => !matchedExistingIds.has(r.id) && r.Subform_Row_ID === subformRowId);
+
+    // 2. Fallback: By Service_Scheme
+    if (existingIndex < 0) {
+      existingIndex = dealRecords.findIndex(
+        r => !matchedExistingIds.has(r.id) && String(r.Service_Scheme || '').trim().toLowerCase() === serviceScheme.toLowerCase()
+      );
+    }
+
+    // 3. Fallback: By sequential index position
+    if (existingIndex < 0 && idx < dealRecords.length && !matchedExistingIds.has(dealRecords[idx].id)) {
+      existingIndex = idx;
+    }
 
     if (existingIndex >= 0) {
-      // Existing record found: Preserves TL/TM while updating modified legal details
-      const existingRecord = currentRecords[existingIndex];
-      const hasChanges =
-        existingRecord.Internal_Team_Type !== internalTeamType ||
-        existingRecord.Internal_Legal_Status !== internalLegalStatus ||
-        existingRecord.Types_of_Legal_Documents !== typesOfLegalDocs ||
-        existingRecord.Agreement_Terms !== agreementTerms ||
-        existingRecord.Remark !== remark;
+      const existingRecord = dealRecords[existingIndex];
+      matchedExistingIds.add(existingRecord.id);
 
-      if (hasChanges) {
-        const updatedRecord: InternalOperationRecord = {
-          ...existingRecord,
-          Deal_Name: dealName || existingRecord.Deal_Name,
-          Client_Name: clientName || existingRecord.Client_Name,
-          Company_Name: companyName || existingRecord.Company_Name,
-          Internal_Team_Type: internalTeamType,
-          Internal_Legal_Status: internalLegalStatus,
-          Types_of_Legal_Documents: typesOfLegalDocs,
-          Agreement_Terms: agreementTerms,
-          Remark: remark,
-          Tenure_of_Service: tenure || existingRecord.Tenure_of_Service,
-          Subform_Row_ID: subformRowId || existingRecord.Subform_Row_ID,
-          Modified_Time: nowIso
-        };
-        currentRecords[existingIndex] = updatedRecord;
-        updated.push(updatedRecord);
-      }
+      const updatedRecord: InternalOperationRecord = {
+        ...existingRecord,
+        Deal_Name: dealName || existingRecord.Deal_Name,
+        Client_Name: clientName || existingRecord.Client_Name,
+        Company_Name: companyName || existingRecord.Company_Name,
+        Service_Scheme: serviceScheme,
+        Internal_Team_Type: rawTeamType,
+        Internal_Legal_Status: internalLegalStatus,
+        Types_of_Legal_Documents: typesOfLegalDocs,
+        Agreement_Terms: agreementTerms,
+        Remark: remark,
+        Tenure_of_Service: tenure || existingRecord.Tenure_of_Service,
+        Subform_Row_ID: subformRowId,
+        Stage: existingRecord.Stage || 'Doc collection',
+        Modified_Time: nowIso
+      };
+
+      resultingDealRecords.push(updatedRecord);
+      updated.push(updatedRecord);
     } else {
-      // Create new sub-child record
+      // Create new child record with default stage and common fields
       const newRecord: InternalOperationRecord = {
         id: `IO-${Date.now()}-${idx + 1}-${Math.random().toString(36).substring(2, 6)}`,
         Deal_ID: dealId,
@@ -184,13 +196,18 @@ export function generateServiceAllocationsForDeal(
         Client_Name: clientName,
         Company_Name: companyName,
         Service_Scheme: serviceScheme,
-        Internal_Team_Type: internalTeamType,
+        Internal_Team_Type: rawTeamType,
         Types_of_Legal_Documents: typesOfLegalDocs,
         Agreement_Terms: agreementTerms,
         Remark: remark,
         Internal_Legal_Status: internalLegalStatus,
         Tenure_of_Service: tenure,
         Subform_Row_ID: subformRowId,
+        Stage: 'Doc collection',
+        CA_CS1: '',
+        CA_CS2: '',
+        After_Allocation: 'No',
+        Company_Type: 'PVT LTD',
         Team_Leader: null,
         Team_Leader_ID: '',
         Team_Leader_Name: '',
@@ -198,16 +215,27 @@ export function generateServiceAllocationsForDeal(
         Team_Member_ID: '',
         Team_Member_Name: '',
         Allocation_Status: 'Pending Allocation',
+        sectionsData: {},
         Created_Time: nowIso,
         Modified_Time: nowIso
       };
-      currentRecords.push(newRecord);
+
+      resultingDealRecords.push(newRecord);
       created.push(newRecord);
     }
   });
 
+  // Preserve any assigned records that weren't matched if they have assignments
+  dealRecords.forEach(r => {
+    if (!matchedExistingIds.has(r.id) && (r.Team_Leader?.id || r.Team_Member?.id)) {
+      resultingDealRecords.push(r);
+    }
+  });
+
+  const finalRecords = [...otherRecords, ...resultingDealRecords];
+
   if (created.length > 0 || updated.length > 0) {
-    setStoredInternalOperations(currentRecords);
+    setStoredInternalOperations(finalRecords);
 
     // Sync in background with backend endpoint if available
     syncAllocationsToBackend(created.length > 0 ? created : updated).catch(e => {
@@ -215,7 +243,7 @@ export function generateServiceAllocationsForDeal(
     });
   }
 
-  return { created, updated, all: currentRecords };
+  return { created, updated, all: finalRecords };
 }
 
 /**

@@ -183,7 +183,11 @@ export const Deals = () => {
       } else if ((tabParam === 'Legal Queue' || tabParam === 'Received') && !isLegal && !isSuperAdmin) {
         setActiveTab('All Deals');
       } else if (tabParam === 'Internal Operations') {
-        navigate('/crm/internal-operations', { replace: true });
+        if (!isSales) {
+          navigate('/crm/internal-operations', { replace: true });
+        } else {
+          setActiveTab('All Deals');
+        }
         return;
       } else if ((tabParam === 'Manual Deals' || tabParam === 'From Quotations' || tabParam === 'Partner BDM Deals' || tabParam === 'My Team Deals') && (isAccounts || isLegal) && !isSuperAdmin) {
         setActiveTab('All Deals');

@@ -16,6 +16,13 @@ export interface InternalOperationRecord {
   Tenure_of_Service?: string;
   Subform_Row_ID?: string;
 
+  // Common Fields & Role Assignment (Phase 2)
+  Stage?: OperationStage;
+  CA_CS1?: string;
+  CA_CS2?: string;
+  After_Allocation?: 'Yes' | 'No';
+  Company_Type?: CompanyType;
+
   // Assignment controls managed by Operations HOD
   Team_Leader?: {
     id: string;
@@ -42,8 +49,86 @@ export interface InternalOperationRecord {
   Allocated_By_Name?: string;
   Execution_Notes?: string;
 
+  // Dynamic UI Sections Data Store (Phase 3 & 4)
+  sectionsData?: Record<string, any>;
+
   Created_Time: string;
   Modified_Time?: string;
+}
+
+export type OperationStage =
+  | 'Doc collection'
+  | 'Name Application'
+  | 'DSC Creation'
+  | 'Final Filing'
+  | 'Board Resolution'
+  | 'Hold'
+  | 'Refund'
+  | 'Ineligible'
+  | 'Incorporation pending'
+  | 'Transfer';
+
+export const OPERATION_STAGES: OperationStage[] = [
+  'Doc collection',
+  'Name Application',
+  'DSC Creation',
+  'Final Filing',
+  'Board Resolution',
+  'Hold',
+  'Refund',
+  'Ineligible',
+  'Incorporation pending',
+  'Transfer'
+];
+
+export type StandardExecutionStatus =
+  | 'In-process'
+  | 'In-review'
+  | 'Pending'
+  | 'Filled'
+  | 'Approved'
+  | 'Hold'
+  | 'Refund'
+  | 'Ineligible'
+  | 'Transfer'
+  | 'Rejected';
+
+export const STANDARD_EXECUTION_STATUSES: StandardExecutionStatus[] = [
+  'In-process',
+  'In-review',
+  'Pending',
+  'Filled',
+  'Approved',
+  'Hold',
+  'Refund',
+  'Ineligible',
+  'Transfer'
+];
+
+export const STATUSES_WITH_REJECTED: StandardExecutionStatus[] = [
+  'In-process',
+  'In-review',
+  'Pending',
+  'Filled',
+  'Approved',
+  'Hold',
+  'Refund',
+  'Ineligible',
+  'Transfer',
+  'Rejected'
+];
+
+export type CompanyType = 'LLP' | 'PVT LTD' | 'Section 8';
+
+export const COMPANY_TYPES: CompanyType[] = ['LLP', 'PVT LTD', 'Section 8'];
+
+export interface UploadedFileMeta {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  uploadedAt: string;
+  dataUrl?: string;
 }
 
 export interface ServiceAllocationPayload {

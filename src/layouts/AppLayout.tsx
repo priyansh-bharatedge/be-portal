@@ -22,7 +22,7 @@ export const AppLayout = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
 
-  const { currentUser, currentRole, roleInfo, isHR, isHOD, isSuperAdmin, switchRole, logout } = useAuth();
+  const { currentUser, currentRole, roleInfo, isHR, isHOD, isSuperAdmin, isSales, switchRole, logout } = useAuth();
 
   // Determine current module based on URL path
   const currentModule = location.pathname.split('/')[1] as 'crm' | 'hrms' | 'quality';
@@ -99,18 +99,39 @@ export const AppLayout = () => {
     ];
   };
 
+  const isSalesDeptUser = !isSuperAdmin && Boolean(
+    isSales || 
+    (currentUser?.department && (
+      currentUser.department.toLowerCase().includes('sale') || 
+      currentUser.department.toLowerCase().includes('bdm') || 
+      currentUser.department.toLowerCase().includes('business dev')
+    ))
+  );
+
+  const getCrmMenuItems = () => {
+    const items = [
+      { name: 'Dashboard', path: '/crm/dashboard', icon: <LayoutDashboard size={20} /> },
+      { name: 'Quotations', path: '/crm/quotations', icon: <ClipboardList size={20} /> },
+      { name: 'Deals', path: '/crm/deals', icon: <Briefcase size={20} /> },
+    ];
+
+    if (!isSalesDeptUser) {
+      items.push({ name: 'Internal Operations', path: '/crm/internal-operations', icon: <Layers size={20} /> });
+    }
+
+    items.push(
+      { name: 'Clients', path: '/crm/clients', icon: <Users size={20} /> },
+      { name: 'Companies', path: '/crm/companies', icon: <Building2 size={20} /> },
+      { name: 'Documents', path: '/crm/documents', icon: <FileText size={20} /> },
+    );
+
+    return items;
+  };
+
   const menuConfig = {
     crm: {
       title: 'CRM',
-      items: [
-        { name: 'Dashboard', path: '/crm/dashboard', icon: <LayoutDashboard size={20} /> },
-        { name: 'Quotations', path: '/crm/quotations', icon: <ClipboardList size={20} /> },
-        { name: 'Deals', path: '/crm/deals', icon: <Briefcase size={20} /> },
-        { name: 'Internal Operations', path: '/crm/internal-operations', icon: <Layers size={20} /> },
-        { name: 'Clients', path: '/crm/clients', icon: <Users size={20} /> },
-        { name: 'Companies', path: '/crm/companies', icon: <Building2 size={20} /> },
-        { name: 'Documents', path: '/crm/documents', icon: <FileText size={20} /> },
-      ]
+      items: getCrmMenuItems()
     },
     hrms: {
       title: 'HRMS',
