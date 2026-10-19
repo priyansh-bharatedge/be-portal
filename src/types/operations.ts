@@ -220,6 +220,12 @@ export const STATUSES_WITH_REJECTED: StandardExecutionStatus[] = [
   'Rejected'
 ];
 
+export const DSC_CREATION_STATUSES = [
+  'In process',
+  'Pending',
+  'Completed'
+];
+
 export type CompanyType = 'LLP' | 'PVT LTD' | 'Section 8';
 
 export const COMPANY_TYPES: CompanyType[] = ['LLP', 'PVT LTD', 'Section 8'];

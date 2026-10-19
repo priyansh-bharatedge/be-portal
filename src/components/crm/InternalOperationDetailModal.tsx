@@ -12,6 +12,7 @@ import {
   OPERATION_STAGES,
   STANDARD_EXECUTION_STATUSES,
   STATUSES_WITH_REJECTED,
+  DSC_CREATION_STATUSES,
   COMPANY_TYPES,
   getOperationStagesForTeamType
 } from '../../types/operations';
@@ -664,8 +665,12 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     />
                     <SelectInput
                       label="Status"
-                      value={sections.dscCreation?.status || 'In-process'}
-                      options={STANDARD_EXECUTION_STATUSES}
+                      value={
+                        sections.dscCreation?.status === 'In-process'
+                          ? 'In process'
+                          : sections.dscCreation?.status || 'In process'
+                      }
+                      options={DSC_CREATION_STATUSES}
                       onChange={(val) => updateSection('dscCreation', 'status', val)}
                     />
                   </div>
