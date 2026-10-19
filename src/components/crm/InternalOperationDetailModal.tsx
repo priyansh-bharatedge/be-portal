@@ -19,6 +19,7 @@ import {
   POST_INCORPORATION_STATUSES,
   CERT_DOC_COLLECTION_STATUSES,
   CERT_FINAL_APP_STATUSES,
+  DIRECTOR_ITR_STATUSES,
   COMPANY_TYPES,
   getOperationStagesForTeamType
 } from '../../types/operations';
@@ -972,7 +973,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       </div>
                     </SectionContainer>
 
-                    {/* 2. Director ITR: [Name, Date, Status, File Upload, File required (Yes/No), Doc collection (Yes/No)] */}
+                    {/* 2. Director ITR: [Name, Date, Status, File Upload, File required (Yes/No), Doc collection (Pending/Completed)] */}
                     <SectionContainer title="Director ITR" badge="Personal Filings">
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         <TextInput
@@ -987,8 +988,13 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                         />
                         <SelectInput
                           label="Status"
-                          value={sections.directorItr?.status || 'In-process'}
-                          options={STANDARD_EXECUTION_STATUSES}
+                          value={(() => {
+                            const s = sections.directorItr?.status;
+                            if (!s || s === 'In-process' || s === 'In process') return 'In Process';
+                            const match = DIRECTOR_ITR_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                            return match || s;
+                          })()}
+                          options={DIRECTOR_ITR_STATUSES}
                           onChange={(val) => updateSection('directorItr', 'status', val)}
                         />
                         <SelectInput
@@ -997,21 +1003,30 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                           options={['Yes', 'No']}
                           onChange={(val) => updateSection('directorItr', 'fileRequired', val)}
                         />
-                        <SelectInput
-                          label="Doc collection"
-                          value={sections.directorItr?.docCollection || 'Yes'}
-                          options={['Yes', 'No']}
-                          onChange={(val) => updateSection('directorItr', 'docCollection', val)}
-                        />
+                        {(sections.directorItr?.fileRequired || 'Yes') === 'Yes' && (
+                          <SelectInput
+                            label="Doc collection"
+                            value={(() => {
+                              const dc = sections.directorItr?.docCollection;
+                              if (!dc || dc === 'No') return 'Pending';
+                              if (dc === 'Yes') return 'Completed';
+                              return dc;
+                            })()}
+                            options={['Pending', 'Completed']}
+                            onChange={(val) => updateSection('directorItr', 'docCollection', val)}
+                          />
+                        )}
                       </div>
-                      <div className="mt-3">
-                        <FileUploadWidget
-                          label="File Upload"
-                          files={sections.directorItr?.files || []}
-                          onChange={(files) => updateSection('directorItr', 'files', files)}
-                          multiple={true}
-                        />
-                      </div>
+                      {(sections.directorItr?.fileRequired || 'Yes') === 'Yes' && (
+                        <div className="mt-3">
+                          <FileUploadWidget
+                            label="File Upload"
+                            files={sections.directorItr?.files || []}
+                            onChange={(files) => updateSection('directorItr', 'files', files)}
+                            multiple={true}
+                          />
+                        </div>
+                      )}
                     </SectionContainer>
 
                     {/* 3. Accounting: [Name, Date, Status, File Upload, Doc collection (Pending/Completed)] */}

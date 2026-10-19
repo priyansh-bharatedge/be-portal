@@ -263,6 +263,12 @@ export const CERT_FINAL_APP_STATUSES = [
   'Approved'
 ];
 
+export const DIRECTOR_ITR_STATUSES = [
+  'In Process',
+  'Pending',
+  'Completed'
+];
+
 export type CompanyType = 'LLP' | 'PVT LTD' | 'Section 8';
 
 export const COMPANY_TYPES: CompanyType[] = ['LLP', 'PVT LTD', 'Section 8'];
