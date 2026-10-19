@@ -1134,47 +1134,6 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       </div>
                     </SectionContainer>
 
-                    {/* 6. AOC-4: [Name, Date, Status, File Upload, Director & Audit report (Prepared/Not Prepared)] */}
-                    <SectionContainer title="AOC-4" badge="Financial Statements">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                        <TextInput
-                          label="Name"
-                          value={sections.aoc4?.name || ''}
-                          onChange={(val) => updateSection('aoc4', 'name', val)}
-                        />
-                        <DateInput
-                          label="Date"
-                          value={sections.aoc4?.date || ''}
-                          onChange={(val) => updateSection('aoc4', 'date', val)}
-                        />
-                        <SelectInput
-                          label="Status"
-                          value={(() => {
-                            const s = sections.aoc4?.status;
-                            if (!s || s === 'In-process' || s === 'In process') return 'In process';
-                            const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
-                            return match || s;
-                          })()}
-                          options={POST_INCORPORATION_STATUSES}
-                          onChange={(val) => updateSection('aoc4', 'status', val)}
-                        />
-                        <SelectInput
-                          label="Director & Audit report"
-                          value={sections.aoc4?.directorAuditReport || 'Prepared'}
-                          options={['Prepared', 'Not Prepared']}
-                          onChange={(val) => updateSection('aoc4', 'directorAuditReport', val)}
-                        />
-                      </div>
-                      <div className="mt-3">
-                        <FileUploadWidget
-                          label="File Upload"
-                          files={sections.aoc4?.files || []}
-                          onChange={(files) => updateSection('aoc4', 'files', files)}
-                          multiple={true}
-                        />
-                      </div>
-                    </SectionContainer>
-
                     {/* Conditional based on Company Type for Compliance */}
                     {(companyType === 'PVT LTD' || companyType === 'Section 8') && (
                       <div className="space-y-4 pt-2 border-t border-gray-200">
@@ -1188,6 +1147,47 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                           data={sections.dpt3 || {}}
                           onChange={(k, v) => updateSection('dpt3', k, v)}
                         />
+
+                        {/* AOC-4: [Name, Date, Status, File Upload, Director & Audit report (Prepared/Not Prepared)] */}
+                        <SectionContainer title="AOC-4" badge="Financial Statements">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                            <TextInput
+                              label="Name"
+                              value={sections.aoc4?.name || ''}
+                              onChange={(val) => updateSection('aoc4', 'name', val)}
+                            />
+                            <DateInput
+                              label="Date"
+                              value={sections.aoc4?.date || ''}
+                              onChange={(val) => updateSection('aoc4', 'date', val)}
+                            />
+                            <SelectInput
+                              label="Status"
+                              value={(() => {
+                                const s = sections.aoc4?.status;
+                                if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                                const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                                return match || s;
+                              })()}
+                              options={POST_INCORPORATION_STATUSES}
+                              onChange={(val) => updateSection('aoc4', 'status', val)}
+                            />
+                            <SelectInput
+                              label="Director & Audit report"
+                              value={sections.aoc4?.directorAuditReport || 'Prepared'}
+                              options={['Prepared', 'Not Prepared']}
+                              onChange={(val) => updateSection('aoc4', 'directorAuditReport', val)}
+                            />
+                          </div>
+                          <div className="mt-3">
+                            <FileUploadWidget
+                              label="File Upload"
+                              files={sections.aoc4?.files || []}
+                              onChange={(files) => updateSection('aoc4', 'files', files)}
+                              multiple={true}
+                            />
+                          </div>
+                        </SectionContainer>
 
                         {/* MGT-7/7A */}
                         <StandardSection
