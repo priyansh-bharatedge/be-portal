@@ -13,6 +13,7 @@ import {
   STANDARD_EXECUTION_STATUSES,
   STATUSES_WITH_REJECTED,
   DSC_CREATION_STATUSES,
+  FINAL_FILING_STATUSES,
   COMPANY_TYPES,
   getOperationStagesForTeamType
 } from '../../types/operations';
@@ -145,11 +146,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
     const currentData = sections[baseSectionKey] || {};
     const currentHistory = Array.isArray(sections[historyKey]) ? sections[historyKey] : [];
 
-    if (newStatus === 'Rejected') {
+    if (newStatus === 'Rejected' || newStatus.toLowerCase().includes('reject')) {
       // Archive current rejected attempt into history if not already archived
       const archivedAttempt = {
         ...currentData,
-        status: 'Rejected',
+        status: newStatus,
         rejectedAt: new Date().toISOString(),
         attemptNumber: currentHistory.length + 1
       };
@@ -161,7 +162,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
           name: `${currentData.name || ''} (Resubmission Round ${currentHistory.length + 2})`,
           approvedName: '',
           date: new Date().toISOString().split('T')[0],
-          status: 'In-process',
+          status: 'In process',
           files: []
         }
       }));
@@ -717,8 +718,29 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     />
                     <SelectInput
                       label="Status"
-                      value={sections.finalFiling?.status || 'In-process'}
-                      options={STATUSES_WITH_REJECTED}
+                      value={(() => {
+                        const s = sections.finalFiling?.status;
+                        if (!s) return 'In process';
+                        if (s === 'In-process') return 'In process';
+                        const match = FINAL_FILING_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                        if (match) return match;
+                        if (s.toLowerCase().includes('reject')) return 'Rejected (resubmission)';
+                        return s;
+                      })()}
+                      options={(() => {
+                        const currentVal = (() => {
+                          const s = sections.finalFiling?.status;
+                          if (!s) return 'In process';
+                          if (s === 'In-process') return 'In process';
+                          const match = FINAL_FILING_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                          if (match) return match;
+                          if (s.toLowerCase().includes('reject')) return 'Rejected (resubmission)';
+                          return s;
+                        })();
+                        return FINAL_FILING_STATUSES.includes(currentVal)
+                          ? FINAL_FILING_STATUSES
+                          : [currentVal, ...FINAL_FILING_STATUSES];
+                      })()}
                       onChange={(val) => handleRepeatableSectionStatusChange('finalFiling', 'finalFilingHistory', val)}
                     />
                   </div>

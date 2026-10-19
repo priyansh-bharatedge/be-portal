@@ -226,6 +226,13 @@ export const DSC_CREATION_STATUSES = [
   'Completed'
 ];
 
+export const FINAL_FILING_STATUSES = [
+  'In process',
+  'Pending',
+  'Approved',
+  'Rejected (resubmission)'
+];
+
 export type CompanyType = 'LLP' | 'PVT LTD' | 'Section 8';
 
 export const COMPANY_TYPES: CompanyType[] = ['LLP', 'PVT LTD', 'Section 8'];
