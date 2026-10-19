@@ -14,6 +14,9 @@ import {
   STATUSES_WITH_REJECTED,
   DSC_CREATION_STATUSES,
   FINAL_FILING_STATUSES,
+  BOARD_RESOLUTION_STATUSES,
+  SHARE_CERTIFICATE_STATUSES,
+  POST_INCORPORATION_STATUSES,
   COMPANY_TYPES,
   getOperationStagesForTeamType
 } from '../../types/operations';
@@ -802,6 +805,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       <StandardSection
                         title="Board Resolution"
                         data={sections.boardResolution || {}}
+                        statusOptions={BOARD_RESOLUTION_STATUSES}
                         onChange={(k, v) => updateSection('boardResolution', k, v)}
                       />
 
@@ -809,6 +813,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       <StandardSection
                         title="2-Share Certificate"
                         data={sections.shareCertificate || {}}
+                        statusOptions={SHARE_CERTIFICATE_STATUSES}
                         onChange={(k, v) => updateSection('shareCertificate', k, v)}
                       />
 
@@ -816,6 +821,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       <StandardSection
                         title="MSME Certificate"
                         data={sections.msmeCertificate || {}}
+                        statusOptions={POST_INCORPORATION_STATUSES}
                         onChange={(k, v) => updateSection('msmeCertificate', k, v)}
                       />
 
@@ -840,8 +846,12 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                           />
                           <SelectInput
                             label="Status"
-                            value={sections.adt1?.status || 'In-process'}
-                            options={STANDARD_EXECUTION_STATUSES}
+                            value={
+                              sections.adt1?.status === 'In-process'
+                                ? 'In process'
+                                : (sections.adt1?.status || 'In process')
+                            }
+                            options={POST_INCORPORATION_STATUSES}
                             onChange={(val) => updateSection('adt1', 'status', val)}
                           />
                         </div>
@@ -859,6 +869,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       <StandardSection
                         title="INC 20-A"
                         data={sections.inc20A || {}}
+                        statusOptions={POST_INCORPORATION_STATUSES}
                         onChange={(k, v) => updateSection('inc20A', k, v)}
                       />
                     </div>
@@ -882,6 +893,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       <StandardSection
                         title="MSME Certificate"
                         data={sections.msmeCertificateLlp || {}}
+                        statusOptions={POST_INCORPORATION_STATUSES}
                         onChange={(k, v) => updateSection('msmeCertificateLlp', k, v)}
                       />
 
@@ -1399,37 +1411,44 @@ const StandardSection: React.FC<StandardSectionProps> = ({
   data,
   onChange,
   statusOptions = STANDARD_EXECUTION_STATUSES
-}) => (
-  <SectionContainer title={title}>
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <TextInput
-        label="Name"
-        value={data.name || ''}
-        onChange={(val) => onChange('name', val)}
-        placeholder="Responsible name"
-      />
-      <DateInput
-        label="Date"
-        value={data.date || ''}
-        onChange={(val) => onChange('date', val)}
-      />
-      <SelectInput
-        label="Status"
-        value={data.status || 'In-process'}
-        options={statusOptions}
-        onChange={(val) => onChange('status', val)}
-      />
-    </div>
-    <div className="mt-3">
-      <FileUploadWidget
-        label="File Upload"
-        files={data.files || []}
-        onChange={(files) => onChange('files', files)}
-        multiple={true}
-      />
-    </div>
-  </SectionContainer>
-);
+}) => {
+  const currentStatus = data.status === 'In-process' ? 'In process' : (data.status || statusOptions[0] || 'In process');
+  const safeOptions = statusOptions.includes(currentStatus)
+    ? statusOptions
+    : [currentStatus, ...statusOptions];
+
+  return (
+    <SectionContainer title={title}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <TextInput
+          label="Name"
+          value={data.name || ''}
+          onChange={(val) => onChange('name', val)}
+          placeholder="Responsible name"
+        />
+        <DateInput
+          label="Date"
+          value={data.date || ''}
+          onChange={(val) => onChange('date', val)}
+        />
+        <SelectInput
+          label="Status"
+          value={currentStatus}
+          options={safeOptions}
+          onChange={(val) => onChange('status', val)}
+        />
+      </div>
+      <div className="mt-3">
+        <FileUploadWidget
+          label="File Upload"
+          files={data.files || []}
+          onChange={(files) => onChange('files', files)}
+          multiple={true}
+        />
+      </div>
+    </SectionContainer>
+  );
+};
 
 interface TextInputProps {
   label: string;

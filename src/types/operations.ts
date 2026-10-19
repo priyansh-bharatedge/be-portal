@@ -233,6 +233,24 @@ export const FINAL_FILING_STATUSES = [
   'Rejected (resubmission)'
 ];
 
+export const BOARD_RESOLUTION_STATUSES = [
+  'In process',
+  'Completed',
+  'Pending'
+];
+
+export const SHARE_CERTIFICATE_STATUSES = [
+  'In process',
+  'Completed',
+  'Pending'
+];
+
+export const POST_INCORPORATION_STATUSES = [
+  'In process',
+  'Pending',
+  'Completed'
+];
+
 export type CompanyType = 'LLP' | 'PVT LTD' | 'Section 8';
 
 export const COMPANY_TYPES: CompanyType[] = ['LLP', 'PVT LTD', 'Section 8'];
