@@ -588,9 +588,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
 
       // 4. Stage filter
       if (selectedStage !== 'all') {
-        const defaultStage = ['Certification', 'Funding'].includes(normalizeTeamType(r.Internal_Team_Type))
-          ? 'Document pending from client'
-          : 'Doc collection';
+        const defaultStage = getOperationStagesForTeamType(r.Internal_Team_Type)[0] || 'Document pending from client';
         const recStage = (r.Stage || defaultStage).toLowerCase();
         const normRec = recStage.replace(/inelligible/g, 'ineligible');
         const normFilter = selectedStage.toLowerCase().replace(/inelligible/g, 'ineligible');
@@ -625,11 +623,17 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     const myTotal = myAssignedRecords.length;
     const myDocCollection = myAssignedRecords.filter(r => !r.Stage || r.Stage === 'Doc collection' || r.Stage === 'Document pending from client').length;
     const myInProgress = myAssignedRecords.filter(r => 
-      r.Stage === 'Name Application' || r.Stage === 'DSC Creation' || r.Stage === 'Incorporation pending' ||
-      r.Stage === 'Incorporation pending from client' || r.Stage === 'DSC work in progress' || r.Stage === 'Draft work in progress' || r.Stage === 'Draft in review to client' || r.Stage === 'Draft approved from client' || r.Stage === 'Payment pending from client'
+      r.Stage === 'Name Application' || r.Stage === 'Name application filing' ||
+      r.Stage === 'DSC Creation' || r.Stage === 'DSC creation' ||
+      r.Stage === 'Incorporation pending' || r.Stage === 'Incorporation pending from client' ||
+      r.Stage === 'DSC work in progress' || r.Stage === 'Draft work in progress' ||
+      r.Stage === 'Draft in review to client' || r.Stage === 'Draft approved from client' ||
+      r.Stage === 'Payment pending from client'
     ).length;
     const myFinalFiling = myAssignedRecords.filter(r => 
-      r.Stage === 'Final Filing' || r.Stage === 'Board Resolution' ||
+      r.Stage === 'Final Filing' || r.Stage === 'Board Resolution' || r.Stage === 'Board resolution preparation' ||
+      r.Stage === 'Z-share certificate' || r.Stage === 'MSME' || r.Stage === 'ADT-1 Filing' ||
+      r.Stage === 'INC 20-A filing' || r.Stage === 'Process Completed' ||
       r.Stage === 'Application submitted' || r.Stage === 'Application resubmitted' || r.Stage === 'Selected'
     ).length;
 

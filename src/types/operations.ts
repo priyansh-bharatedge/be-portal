@@ -80,20 +80,37 @@ export type OperationStage =
   | 'Application resubmitted'
   | 'Selected'
   | 'Cancel'
+  // Incorporation specific operation stages
+  | 'Name application filing'
+  | 'DSC creation'
+  | 'Board resolution preparation'
+  | 'Z-share certificate'
+  | 'MSME'
+  | 'ADT-1 Filing'
+  | 'INC 20-A filing'
+  | 'Process Completed'
   | string;
 
-export const DEFAULT_OPERATION_STAGES: OperationStage[] = [
-  'Doc collection',
-  'Name Application',
-  'DSC Creation',
+export const INCORPORATION_OPERATION_STAGES: OperationStage[] = [
+  'Document pending from client',
+  'Incorporation pending from client',
+  'Name application filing',
+  'DSC creation',
   'Final Filing',
-  'Board Resolution',
+  'Board resolution preparation',
+  'Z-share certificate',
+  'MSME',
+  'ADT-1 Filing',
+  'INC 20-A filing',
+  'Process Completed',
+  'Inelligible',
   'Hold',
+  'Transfer',
   'Refund',
-  'Ineligible',
-  'Incorporation pending',
-  'Transfer'
+  'Cancel'
 ];
+
+export const DEFAULT_OPERATION_STAGES: OperationStage[] = INCORPORATION_OPERATION_STAGES;
 
 export const CERTIFICATION_OPERATION_STAGES: OperationStage[] = [
   'Document pending from client',
@@ -130,28 +147,40 @@ export const FUNDING_OPERATION_STAGES: OperationStage[] = [
   'Cancel'
 ];
 
-export const OPERATION_STAGES: OperationStage[] = DEFAULT_OPERATION_STAGES;
+export const OPERATION_STAGES: OperationStage[] = INCORPORATION_OPERATION_STAGES;
 
 export const ALL_OPERATION_STAGES: OperationStage[] = Array.from(
-  new Set([...DEFAULT_OPERATION_STAGES, ...CERTIFICATION_OPERATION_STAGES, ...FUNDING_OPERATION_STAGES])
+  new Set([
+    ...INCORPORATION_OPERATION_STAGES,
+    ...CERTIFICATION_OPERATION_STAGES,
+    ...FUNDING_OPERATION_STAGES,
+    'Doc collection',
+    'Name Application',
+    'DSC Creation',
+    'Board Resolution'
+  ])
 );
 
 /**
  * Returns the relevant Operation Stages based on the record's Team Type.
+ * - Incorporation: 16 stages
  * - Certification: 15 stages (includes Selected)
  * - Funding: 14 stages (without Selected)
- * - Default: standard 10 stages
+ * - Default: Incorporation stages
  */
 export function getOperationStagesForTeamType(teamType?: string): OperationStage[] {
-  if (!teamType) return DEFAULT_OPERATION_STAGES;
+  if (!teamType) return INCORPORATION_OPERATION_STAGES;
   const lower = String(teamType).toLowerCase().trim();
+  if (lower.includes('incorporation')) {
+    return INCORPORATION_OPERATION_STAGES;
+  }
   if (lower.includes('certification')) {
     return CERTIFICATION_OPERATION_STAGES;
   }
   if (lower.includes('funding')) {
     return FUNDING_OPERATION_STAGES;
   }
-  return DEFAULT_OPERATION_STAGES;
+  return INCORPORATION_OPERATION_STAGES;
 }
 
 export type StandardExecutionStatus =

@@ -1,4 +1,5 @@
 import type { InternalOperationRecord } from '../types/operations';
+import { getOperationStagesForTeamType } from '../types/operations';
 import type { ZohoApiResponse } from './zohoService';
 import { isValidServiceName } from '../utils/dealSplitUtils';
 
@@ -182,7 +183,7 @@ export function generateServiceAllocationsForDeal(
         Remark: remark,
         Tenure_of_Service: tenure || existingRecord.Tenure_of_Service,
         Subform_Row_ID: subformRowId,
-        Stage: existingRecord.Stage || (['Certification', 'Funding'].includes(normalizeTeamType(rawTeamType)) ? 'Document pending from client' : 'Doc collection'),
+        Stage: existingRecord.Stage || getOperationStagesForTeamType(rawTeamType)[0] || 'Document pending from client',
         Modified_Time: nowIso
       };
 
@@ -204,7 +205,7 @@ export function generateServiceAllocationsForDeal(
         Internal_Legal_Status: internalLegalStatus,
         Tenure_of_Service: tenure,
         Subform_Row_ID: subformRowId,
-        Stage: ['Certification', 'Funding'].includes(normalizeTeamType(rawTeamType)) ? 'Document pending from client' : 'Doc collection',
+        Stage: getOperationStagesForTeamType(rawTeamType)[0] || 'Document pending from client',
         CA_CS1: '',
         CA_CS2: '',
         After_Allocation: 'No',
