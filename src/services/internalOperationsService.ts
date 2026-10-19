@@ -1,5 +1,6 @@
 import type { InternalOperationRecord } from '../types/operations';
 import type { ZohoApiResponse } from './zohoService';
+import { isValidServiceName } from '../utils/dealSplitUtils';
 
 const STORAGE_KEY = 'be_internal_operations';
 
@@ -105,7 +106,7 @@ export function generateServiceAllocationsForDeal(
     subformRows = raw.Subform_1;
   } else if (Array.isArray(deal.servicesData) && deal.servicesData.length > 0) {
     subformRows = deal.servicesData;
-  } else if (deal.service || deal.Service_Name) {
+  } else if ((deal.service || deal.Service_Name) && isValidServiceName(deal.service || deal.Service_Name, clientName, companyName, dealId)) {
     subformRows = [{
       schema: deal.service || deal.Service_Name,
       internalTeamType: 'Team Funding',

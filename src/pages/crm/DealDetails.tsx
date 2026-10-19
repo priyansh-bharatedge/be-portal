@@ -36,7 +36,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { InternalOperationsAllocationTable } from '../../components/crm/InternalOperationsAllocationTable';
 import { generateServiceAllocationsForDeal } from '../../services/internalOperationsService';
-import { getDealSplitBreakdown, isDealPartnerBdm, isDealPaymentVerified, isUserPrimaryBdm, getDealMilestones, type DealMilestoneItem } from '../../utils/dealSplitUtils';
+import { getDealSplitBreakdown, isDealPartnerBdm, isDealPaymentVerified, isUserPrimaryBdm, getDealMilestones, isValidServiceName, type DealMilestoneItem } from '../../utils/dealSplitUtils';
 
 // Helper to scan IndexedDB for all documents matching this deal
 const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promise<any[]> => {
@@ -1638,11 +1638,12 @@ export const DealDetails = () => {
         successFees: sf.Success_fees || '',
       };
     });
-  } else if (rawServices.length > 0) {
+  } else if (rawServices.length > 0 && rawServices.some((s: any) => isValidServiceName(s.name || s.Schemas || s.Service_Name, clientName, companyName, deal.id))) {
     const seenSvc = new Set<string>();
     const uniqueServices = rawServices.filter((s: any) => {
-      const nameKey = (s.name || s.Schemas || s.Service_Name || '').trim().toLowerCase();
-      if (!nameKey) return true;
+      const sName = s.name || s.Schemas || s.Service_Name || '';
+      if (!isValidServiceName(sName, clientName, companyName, deal.id)) return false;
+      const nameKey = sName.trim().toLowerCase();
       if (seenSvc.has(nameKey)) return false;
       seenSvc.add(nameKey);
       return true;
@@ -1760,9 +1761,23 @@ export const DealDetails = () => {
     Number((totalAmountNum - totalOverallReceived).toFixed(2))
   );
 
-  // If services array was still empty, create default single row with the resolved totals
-  if (services.length === 0 || (services.length === 1 && services[0].name === 'General Services' && totalAmountNum > 0)) {
-    const serviceTitle = formatZohoValue(raw.Choose_Wisely || raw.Service_Name || raw.Business_plan_selected || (raw.Deal_Name && raw.Deal_Name.includes(' - ') ? raw.Deal_Name.split(' - ').slice(1).join(' - ').trim() : '') || deal.service || 'General Services');
+  // If services array was still empty or contains invalid name, resolve serviceTitle with validation
+  if (services.length === 0 || (services.length === 1 && !isValidServiceName(services[0].name, clientName, companyName, deal.id) && totalAmountNum > 0)) {
+    let serviceTitle = '';
+    if (isValidServiceName(deal.service, clientName, companyName, deal.id)) {
+      serviceTitle = formatZohoValue(deal.service);
+    } else if (isValidServiceName(raw.Service_Name, clientName, companyName, deal.id)) {
+      serviceTitle = formatZohoValue(raw.Service_Name);
+    } else if (isValidServiceName(raw.Choose_Wisely, clientName, companyName, deal.id) && raw.Choose_Wisely !== 'New Case Booking') {
+      serviceTitle = formatZohoValue(raw.Choose_Wisely);
+    } else if (isValidServiceName(raw.Business_plan_selected, clientName, companyName, deal.id)) {
+      serviceTitle = formatZohoValue(raw.Business_plan_selected);
+    } else if (isValidServiceName(raw.Item_Name, clientName, companyName, deal.id)) {
+      serviceTitle = formatZohoValue(raw.Item_Name);
+    } else {
+      serviceTitle = 'General Services';
+    }
+
     services = [{
       id: '1',
       name: serviceTitle,

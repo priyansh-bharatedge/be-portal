@@ -49,6 +49,7 @@ import {
   isDealLegalReceived,
   isUserPartnerBdm,
   isUserPrimaryBdm,
+  isValidServiceName,
   type DealMilestoneItem
 } from '../../utils/dealSplitUtils';
 
@@ -277,7 +278,27 @@ export const Deals = () => {
       const saved = localStorage.getItem('be_deals');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((d: any) => {
+            if (!isValidServiceName(d.service, d.client, d.company, d.id)) {
+              let validSvc = '';
+              if (Array.isArray(d.servicesData)) {
+                const validItem = d.servicesData.find((s: any) => isValidServiceName(s.name, d.client, d.company, d.id));
+                if (validItem) validSvc = validItem.name;
+              }
+              if (!validSvc && Array.isArray(d.legalData)) {
+                const validLegal = d.legalData.find((lg: any) => isValidServiceName(lg.schema || lg.Legal_Schemas || lg.Schemas, d.client, d.company, d.id));
+                if (validLegal) validSvc = validLegal.schema || validLegal.Legal_Schemas || validLegal.Schemas;
+              }
+              return {
+                ...d,
+                service: validSvc || 'Services',
+                servicesData: Array.isArray(d.servicesData) ? d.servicesData.filter((s: any) => isValidServiceName(s.name, d.client, d.company, d.id)) : []
+              };
+            }
+            return d;
+          });
+        }
       }
     } catch (e) { }
     return [];
@@ -1346,60 +1367,9 @@ export const Deals = () => {
       const billAddress = zDeal.Billing_address || zDeal.Company_address || '';
       const stateName = zDeal.State || (billAddress ? billAddress.split(',').pop()?.trim() : '') || '';
 
-      // 4. Subform_1 (Choose Services)
-      let servicesFromSubform: any[] = [];
-      if (uniqueSubform1.length > 0) {
-        servicesFromSubform = uniqueSubform1.map((sf: any, i: number) => {
-          const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || 0);
-          const withoutGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
-          const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
-          return {
-            id: String(sf.id || i + 1),
-            name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service',
-            totalAmount: String(totalAmt || ''),
-            baseAmount: String(withoutGst || 0),
-            receivedAmount: sf.Received_amount || sf.Received || '',
-            pendingAmount: sf.Pending_amount || sf.Pending || '',
-            paymentStages: sf.Payment_stages || '',
-            paymentType: sf.Payment_type || '',
-            paymentDate: sf.Payment_received_date || '',
-            qualityProvided: sf.Quality_provided || '',
-            successFees: sf.Success_fees || '',
-          };
-        });
-      } else {
-        let inferredServiceName = '';
-        if (zDeal.Service_Name) {
-          inferredServiceName = zDeal.Service_Name;
-        } else if (zDeal.Choose_Wisely && zDeal.Choose_Wisely !== 'New Case Booking') {
-          inferredServiceName = zDeal.Choose_Wisely;
-        } else if (zDeal.Deal_Name && zDeal.Deal_Name.includes(' - ')) {
-          const afterHyphen = zDeal.Deal_Name.split(' - ').slice(1).join(' - ').trim();
-          if (afterHyphen && !/^\(\d+\)$/.test(afterHyphen)) {
-            inferredServiceName = afterHyphen;
-          }
-        }
-        if (!inferredServiceName) {
-          inferredServiceName = zDeal.Choose_Wisely || (existingIdx >= 0 ? updatedDeals[existingIdx]?.service : 'Services') || 'Services';
-        }
+      const existingDeal = existingIdx >= 0 ? updatedDeals[existingIdx] : null;
 
-        servicesFromSubform = [{
-          id: '1',
-          name: inferredServiceName || 'Services',
-          totalAmount: String(totalAmountNum || ''),
-          baseAmount: String(withoutGstNum || ''),
-          receivedAmount: String(receivedAmountNum || ''),
-          pendingAmount: String(pendingAmountNum || ''),
-        }];
-      }
-
-      const serviceTitle = servicesFromSubform.length === 1 
-        ? servicesFromSubform[0].name 
-        : servicesFromSubform.length > 1 
-          ? `${servicesFromSubform.length} Services` 
-          : 'Services';
-
-      // 5. Legal Subform
+      // 4. Legal Subform (Parsed first to allow fallback service schema detection)
       const seenLegalRows = new Set<string>();
       const dedupedRawLegal = Array.isArray(zDeal.Legal)
         ? zDeal.Legal.filter((lg: any, i: number) => {
@@ -1435,6 +1405,104 @@ export const Deals = () => {
             remark: lg.Remark || ''
           }))
         : [];
+
+      // 5. Subform_1 (Choose Services)
+      let servicesFromSubform: any[] = [];
+      if (uniqueSubform1.length > 0) {
+        servicesFromSubform = uniqueSubform1.map((sf: any, i: number) => {
+          const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || 0);
+          const withoutGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
+          const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
+          return {
+            id: String(sf.id || i + 1),
+            name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || 'Service',
+            totalAmount: String(totalAmt || ''),
+            baseAmount: String(withoutGst || 0),
+            receivedAmount: sf.Received_amount || sf.Received || '',
+            pendingAmount: sf.Pending_amount || sf.Pending || '',
+            paymentStages: sf.Payment_stages || '',
+            paymentType: sf.Payment_type || '',
+            paymentDate: sf.Payment_received_date || '',
+            qualityProvided: sf.Quality_provided || '',
+            successFees: sf.Success_fees || '',
+          };
+        });
+      } else if (
+        existingDeal &&
+        Array.isArray(existingDeal.servicesData) &&
+        existingDeal.servicesData.length > 0 &&
+        existingDeal.servicesData.some((s: any) => isValidServiceName(s.name, resolvedClientName, resolvedCompanyName, existingDeal.id))
+      ) {
+        servicesFromSubform = existingDeal.servicesData.filter((s: any) =>
+          isValidServiceName(s.name, resolvedClientName, resolvedCompanyName, existingDeal.id)
+        );
+      } else if (
+        existingDeal &&
+        isValidServiceName(existingDeal.service, resolvedClientName, resolvedCompanyName, existingDeal.id)
+      ) {
+        servicesFromSubform = [{
+          id: '1',
+          name: existingDeal.service,
+          totalAmount: String(totalAmountNum || ''),
+          baseAmount: String(withoutGstNum || ''),
+          receivedAmount: String(receivedAmountNum || ''),
+          pendingAmount: String(pendingAmountNum || ''),
+        }];
+      } else if (
+        dedupedRawLegal.length > 0 &&
+        dedupedRawLegal.some((lg: any) => isValidServiceName(lg.Legal_Schemas || lg.Schemas, resolvedClientName, resolvedCompanyName, zDeal.id))
+      ) {
+        const validLegal = dedupedRawLegal.filter((lg: any) =>
+          isValidServiceName(lg.Legal_Schemas || lg.Schemas, resolvedClientName, resolvedCompanyName, zDeal.id)
+        );
+        servicesFromSubform = validLegal.map((lg: any, i: number) => ({
+          id: String(lg.id || i + 1),
+          name: lg.Legal_Schemas || lg.Schemas,
+          totalAmount: String(totalAmountNum || ''),
+          baseAmount: String(withoutGstNum || ''),
+          receivedAmount: String(receivedAmountNum || ''),
+          pendingAmount: String(pendingAmountNum || ''),
+        }));
+      } else {
+        let inferredServiceName = '';
+        if (isValidServiceName(zDeal.Service_Name, resolvedClientName, resolvedCompanyName, zDeal.id)) {
+          inferredServiceName = zDeal.Service_Name.trim();
+        } else if (
+          zDeal.Choose_Wisely &&
+          zDeal.Choose_Wisely !== 'New Case Booking' &&
+          isValidServiceName(zDeal.Choose_Wisely, resolvedClientName, resolvedCompanyName, zDeal.id)
+        ) {
+          inferredServiceName = zDeal.Choose_Wisely.trim();
+        } else if (isValidServiceName(zDeal.Business_plan_selected, resolvedClientName, resolvedCompanyName, zDeal.id)) {
+          inferredServiceName = zDeal.Business_plan_selected.trim();
+        } else if (isValidServiceName(zDeal.Item_Name, resolvedClientName, resolvedCompanyName, zDeal.id)) {
+          inferredServiceName = zDeal.Item_Name.trim();
+        }
+
+        if (inferredServiceName) {
+          servicesFromSubform = [{
+            id: '1',
+            name: inferredServiceName,
+            totalAmount: String(totalAmountNum || ''),
+            baseAmount: String(withoutGstNum || ''),
+            receivedAmount: String(receivedAmountNum || ''),
+            pendingAmount: String(pendingAmountNum || ''),
+          }];
+        } else {
+          servicesFromSubform = [];
+        }
+      }
+
+      let serviceTitle = '';
+      if (servicesFromSubform.length === 1 && isValidServiceName(servicesFromSubform[0].name, resolvedClientName, resolvedCompanyName, zDeal.id)) {
+        serviceTitle = servicesFromSubform[0].name;
+      } else if (servicesFromSubform.length > 1) {
+        serviceTitle = `${servicesFromSubform.length} Services`;
+      } else if (existingDeal && isValidServiceName(existingDeal.service, resolvedClientName, resolvedCompanyName, existingDeal.id)) {
+        serviceTitle = existingDeal.service;
+      } else {
+        serviceTitle = 'Services';
+      }
 
       const stageName = zDeal.Stage || 'Sales';
       let statusName = 'New';
@@ -1877,11 +1945,18 @@ export const Deals = () => {
     });
 
     const pageSlice = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    const dealsToEnrich = pageSlice.filter(
-      (d: any) => (getDealAmount(d) === 0 || !d.servicesData || d.servicesData.length === 0) &&
-                  (d.zohoId || (d.id && String(d.id).length > 8)) &&
-                  !enrichingDealsRef.current.has(String(d.zohoId || d.id))
-    );
+    const dealsToEnrich = pageSlice.filter((d: any) => {
+      const hasValidService = isValidServiceName(d.service, d.client, d.company, d.id) &&
+        d.service !== 'Services' && d.service !== 'Custom Services' && d.service !== 'General Services';
+      const hasValidServicesData = Array.isArray(d.servicesData) && d.servicesData.length > 0 &&
+        d.servicesData.some((s: any) => isValidServiceName(s.name, d.client, d.company, d.id));
+      const needsServiceEnrichment = !hasValidService || !hasValidServicesData;
+      const needsAmountEnrichment = getDealAmount(d) === 0;
+
+      return (needsServiceEnrichment || needsAmountEnrichment) &&
+        (d.zohoId || (d.id && String(d.id).length > 8)) &&
+        !enrichingDealsRef.current.has(String(d.zohoId || d.id));
+    });
 
     if (dealsToEnrich.length === 0) return;
 
@@ -1901,6 +1976,7 @@ export const Deals = () => {
               if (idx >= 0) {
                 const copy = [...prevDeals];
                 copy[idx] = { ...copy[idx], ...enriched };
+                safeSaveDealsToStorage(copy);
                 return copy;
               }
               return prevDeals;

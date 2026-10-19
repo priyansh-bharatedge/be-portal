@@ -10,6 +10,7 @@
 
 
 import { fetchZohoWithRbac, injectEmployeeLookup } from './zohoRbacService';
+import { isValidServiceName } from '../utils/dealSplitUtils';
 export * from './zohoRbacService';
 
 export interface ZohoFetchOptions {
@@ -1757,7 +1758,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   if (Array.isArray(rawZoho.Subform_1) && rawZoho.Subform_1.length > 0) {
     const seenSubforms = new Set<string>();
     const uniqueRawSubform = rawZoho.Subform_1.filter((sf: any) => {
-      const sRaw = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'website development');
+      const sRaw = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || 'website development');
       const sName = sRaw.trim().toLowerCase();
       if (seenSubforms.has(sName)) return false;
       seenSubforms.add(sName);
@@ -1776,7 +1777,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       subformReceived += recAmt;
       subformPending += pendAmt;
 
-      const svcName = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service');
+      const svcName = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || 'Service');
 
       return {
         id: String(sf.id || i + 1),
@@ -1792,11 +1793,15 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
         successFees: sf.Success_fees || '',
       };
     });
-  } else if (Array.isArray(existingDeal?.servicesData) && existingDeal.servicesData.length > 0) {
+  } else if (
+    Array.isArray(existingDeal?.servicesData) &&
+    existingDeal.servicesData.length > 0 &&
+    existingDeal.servicesData.some((s: any) => isValidServiceName(s.name, resolvedClient, resolvedCompany, existingDeal?.id))
+  ) {
     const seenSvc = new Set<string>();
     servicesSubform = existingDeal.servicesData.filter((s: any) => {
       const sName = (s.name || s.Schemas || s.Service_Name || '').trim().toLowerCase();
-      if (!sName) return true;
+      if (!sName || !isValidServiceName(s.name, resolvedClient, resolvedCompany, existingDeal?.id)) return false;
       if (seenSvc.has(sName)) return false;
       seenSvc.add(sName);
       return true;
@@ -1811,6 +1816,23 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       subformReceived += r;
       subformPending += p;
     });
+  } else if (Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0 && rawZoho.Legal.some((lg: any) => isValidServiceName(lg.Legal_Schemas || lg.Schemas, resolvedClient, resolvedCompany, existingDeal?.id))) {
+    const seenSvc = new Set<string>();
+    const validLegal = rawZoho.Legal.filter((lg: any) => {
+      const sName = (lg.Legal_Schemas || lg.Schemas || '').trim().toLowerCase();
+      if (!sName || !isValidServiceName(sName, resolvedClient, resolvedCompany, existingDeal?.id)) return false;
+      if (seenSvc.has(sName)) return false;
+      seenSvc.add(sName);
+      return true;
+    });
+    servicesSubform = validLegal.map((lg: any, i: number) => ({
+      id: String(lg.id || i + 1),
+      name: lg.Legal_Schemas || lg.Schemas,
+      totalAmount: '',
+      baseAmount: '',
+      receivedAmount: '',
+      pendingAmount: '',
+    }));
   }
 
   // 3. Financial Calculation
@@ -1944,9 +1966,22 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     status = stage;
   }
 
-  const serviceTitle = servicesSubform.length > 0
-    ? (servicesSubform.length === 1 ? servicesSubform[0].name : `${servicesSubform.length} Services`)
-    : extractZohoName(rawZoho.Choose_Wisely || rawZoho.Service_Name || (rawZoho.Deal_Name && rawZoho.Deal_Name.includes(' - ') ? rawZoho.Deal_Name.split(' - ').slice(1).join(' - ').trim() : (existingDeal?.service || 'Services')));
+  let serviceTitle = '';
+  if (servicesSubform.length > 0 && isValidServiceName(servicesSubform[0].name, resolvedClient, resolvedCompany, existingDeal?.id)) {
+    serviceTitle = servicesSubform.length === 1 ? servicesSubform[0].name : `${servicesSubform.length} Services`;
+  } else if (isValidServiceName(existingDeal?.service, resolvedClient, resolvedCompany, existingDeal?.id)) {
+    serviceTitle = existingDeal.service;
+  } else if (isValidServiceName(rawZoho.Service_Name, resolvedClient, resolvedCompany, existingDeal?.id)) {
+    serviceTitle = extractZohoName(rawZoho.Service_Name);
+  } else if (isValidServiceName(rawZoho.Choose_Wisely, resolvedClient, resolvedCompany, existingDeal?.id) && rawZoho.Choose_Wisely !== 'New Case Booking') {
+    serviceTitle = extractZohoName(rawZoho.Choose_Wisely);
+  } else if (isValidServiceName(rawZoho.Business_plan_selected, resolvedClient, resolvedCompany, existingDeal?.id)) {
+    serviceTitle = extractZohoName(rawZoho.Business_plan_selected);
+  } else if (isValidServiceName(rawZoho.Item_Name, resolvedClient, resolvedCompany, existingDeal?.id)) {
+    serviceTitle = extractZohoName(rawZoho.Item_Name);
+  } else {
+    serviceTitle = 'Services';
+  }
 
   const employeeName =
     (rawZoho.Employee && typeof rawZoho.Employee === 'object' ? rawZoho.Employee.name : (typeof rawZoho.Employee === 'string' && !/^\d+$/.test(rawZoho.Employee) ? rawZoho.Employee : '')) ||

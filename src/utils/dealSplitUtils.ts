@@ -678,3 +678,50 @@ export const isDealLegalReceived = (d: any): boolean => {
   return false;
 };
 
+/**
+ * Validates that a string represents a real service name rather than a fallback client/company name or Deal ID.
+ */
+export function isValidServiceName(
+  name: any,
+  clientName?: string,
+  companyName?: string,
+  dealId?: string
+): boolean {
+  if (!name || typeof name !== 'string') return false;
+  const trimmed = name.trim();
+  const lower = trimmed.toLowerCase();
+  const invalidGenerics = [
+    'services', 'service', 'custom services', 'general services',
+    'new case booking', 'individual', 'client', 'company', 'n/a', 'na', 'none', 'null', 'undefined'
+  ];
+  if (!trimmed || invalidGenerics.includes(lower)) {
+    return false;
+  }
+  // Check if it contains DL ID format like DL-7532 or (DL-7532)
+  if (/\bDL-\d+\b/i.test(trimmed)) return false;
+  // Check if it's just numbers, symbols or brackets
+  if (/^[\d\s().-]+$/.test(trimmed)) return false;
+  // Check if it matches or contains clientName
+  if (clientName && clientName.trim().length > 1) {
+    const cClean = clientName.trim().toLowerCase();
+    const tClean = trimmed.toLowerCase();
+    if (tClean === cClean || tClean.startsWith(cClean) || tClean.includes(` ${cClean}`) || cClean.includes(tClean)) {
+      return false;
+    }
+  }
+  // Check if it matches or contains companyName
+  if (companyName && companyName.trim().length > 1) {
+    const compClean = companyName.trim().toLowerCase();
+    const tClean = trimmed.toLowerCase();
+    if (tClean === compClean || tClean.startsWith(compClean) || compClean.includes(tClean)) {
+      return false;
+    }
+  }
+  // Check if it matches dealId
+  if (dealId && dealId.trim().length > 0 && trimmed.toLowerCase().includes(dealId.trim().toLowerCase())) {
+    return false;
+  }
+  return true;
+}
+
+

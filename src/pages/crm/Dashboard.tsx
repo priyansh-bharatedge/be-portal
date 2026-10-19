@@ -27,7 +27,8 @@ import {
   isDealPartnerBdm,
   getDealTotalAmount,
   getDealReceivedAmount,
-  getDealPendingAmount
+  getDealPendingAmount,
+  isValidServiceName
 } from '../../utils/dealSplitUtils';
 
 export const CrmDashboard = () => {
@@ -157,17 +158,20 @@ export const CrmDashboard = () => {
       }
 
       let serviceName = '';
-      if (zDeal.Service_Name) {
-        serviceName = zDeal.Service_Name;
-      } else if (zDeal.Choose_Wisely && zDeal.Choose_Wisely !== 'New Case Booking') {
-        serviceName = zDeal.Choose_Wisely;
-      } else if (zDeal.Deal_Name && zDeal.Deal_Name.includes(' - ')) {
-        const afterHyphen = zDeal.Deal_Name.split(' - ').slice(1).join(' - ').trim();
-        if (afterHyphen && !/^\(\d+\)$/.test(afterHyphen)) {
-          serviceName = afterHyphen;
-        }
+      if (isValidServiceName(zDeal.Service_Name, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
+        serviceName = zDeal.Service_Name.trim();
+      } else if (
+        zDeal.Choose_Wisely &&
+        zDeal.Choose_Wisely !== 'New Case Booking' &&
+        isValidServiceName(zDeal.Choose_Wisely, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)
+      ) {
+        serviceName = zDeal.Choose_Wisely.trim();
+      } else if (isValidServiceName(zDeal.Business_plan_selected, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
+        serviceName = zDeal.Business_plan_selected.trim();
+      } else if (isValidServiceName(zDeal.Item_Name, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
+        serviceName = zDeal.Item_Name.trim();
       }
-      if (!serviceName) serviceName = zDeal.Choose_Wisely || 'General Services';
+      if (!serviceName) serviceName = 'General Services';
 
       const formatRupee = (val: number): string => {
         if (!val || isNaN(val) || val <= 0) return '₹0';
@@ -496,10 +500,17 @@ export const CrmDashboard = () => {
 
   // Auto-enrich deals on the Dashboard that have ₹0 amounts
   useEffect(() => {
-    const dealsToEnrich = deals.slice(0, 20).filter(
-      (d: any) => (getDealAmount(d) === 0 || !d.servicesData || d.servicesData.length === 0) &&
-        (d.zohoId || (d.id && String(d.id).length > 8))
-    );
+    const dealsToEnrich = deals.slice(0, 20).filter((d: any) => {
+      const hasValidService = isValidServiceName(d.service, d.client, d.company, d.id) &&
+        d.service !== 'Services' && d.service !== 'Custom Services' && d.service !== 'General Services';
+      const hasValidServicesData = Array.isArray(d.servicesData) && d.servicesData.length > 0 &&
+        d.servicesData.some((s: any) => isValidServiceName(s.name, d.client, d.company, d.id));
+      const needsServiceEnrichment = !hasValidService || !hasValidServicesData;
+      const needsAmountEnrichment = getDealAmount(d) === 0;
+
+      return (needsServiceEnrichment || needsAmountEnrichment) &&
+        (d.zohoId || (d.id && String(d.id).length > 8));
+    });
 
     if (dealsToEnrich.length === 0) return;
 
