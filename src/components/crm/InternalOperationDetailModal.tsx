@@ -12,7 +12,8 @@ import {
   OPERATION_STAGES,
   STANDARD_EXECUTION_STATUSES,
   STATUSES_WITH_REJECTED,
-  COMPANY_TYPES
+  COMPANY_TYPES,
+  getOperationStagesForTeamType
 } from '../../types/operations';
 import {
   normalizeTeamType,
@@ -70,8 +71,20 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Normalized Team Type (Incorporation, Compliance, Funding, Certification, Digital Marketing)
+  const [teamType, setTeamType] = useState<string>(() => normalizeTeamType(record.Internal_Team_Type));
+
+  // Dynamic available stages based on the current Team Type
+  const availableStages = useMemo(() => {
+    return getOperationStagesForTeamType(teamType);
+  }, [teamType]);
+
   // Common Fields State (Phase 2)
-  const [stage, setStage] = useState<OperationStage>(record.Stage || 'Doc collection');
+  const [stage, setStage] = useState<OperationStage>(() => {
+    if (record.Stage) return record.Stage;
+    const initialStages = getOperationStagesForTeamType(record.Internal_Team_Type);
+    return initialStages[0] || 'Doc collection';
+  });
   const [caCs1, setCaCs1] = useState<string>(record.CA_CS1 || '');
   const [caCs2, setCaCs2] = useState<string>(record.CA_CS2 || '');
   const [selectedTlId, setSelectedTlId] = useState<string>(
@@ -85,9 +98,6 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   const [sections, setSections] = useState<Record<string, any>>(() => {
     return record.sectionsData || {};
   });
-
-  // Normalized Team Type (Incorporation, Compliance, Funding, Certification, Digital Marketing)
-  const [teamType, setTeamType] = useState<string>(() => normalizeTeamType(record.Internal_Team_Type));
 
   // Company Type & After Allocation
   const [afterAllocation, setAfterAllocation] = useState<'Yes' | 'No'>(() => {
@@ -363,7 +373,14 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   {canManage ? (
                     <select
                       value={teamType}
-                      onChange={(e) => setTeamType(e.target.value)}
+                      onChange={(e) => {
+                        const newTeam = e.target.value;
+                        setTeamType(newTeam);
+                        const newStages = getOperationStagesForTeamType(newTeam);
+                        if (!newStages.includes(stage)) {
+                          setStage(newStages[0]);
+                        }
+                      }}
                       className="w-full px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 focus:border-orange-500 rounded-lg text-xs font-bold text-gray-900 outline-none transition-all cursor-pointer shadow-2xs"
                     >
                       <option value="Incorporation">Incorporation</option>
@@ -393,7 +410,12 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     onChange={(e) => setStage(e.target.value as OperationStage)}
                     className="w-full px-3 py-2 bg-white border border-blue-200 hover:border-blue-300 focus:border-blue-500 rounded-xl text-xs font-bold text-blue-900 outline-none transition-all cursor-pointer shadow-2xs"
                   >
-                    {OPERATION_STAGES.map((stg) => (
+                    {!availableStages.includes(stage) && (
+                      <option value={stage}>
+                        {stage}
+                      </option>
+                    )}
+                    {availableStages.map((stg) => (
                       <option key={stg} value={stg}>
                         {stg}
                       </option>

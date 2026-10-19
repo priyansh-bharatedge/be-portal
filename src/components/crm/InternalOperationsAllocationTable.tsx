@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import type { InternalOperationRecord, OperationStage } from '../../types/operations';
-import { OPERATION_STAGES } from '../../types/operations';
+import { OPERATION_STAGES, ALL_OPERATION_STAGES, getOperationStagesForTeamType } from '../../types/operations';
 import {
   getStoredInternalOperations,
   fetchInternalOperations,
@@ -588,8 +588,13 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
 
       // 4. Stage filter
       if (selectedStage !== 'all') {
-        const recStage = (r.Stage || 'Doc collection').toLowerCase();
-        if (recStage !== selectedStage.toLowerCase()) {
+        const defaultStage = normalizeTeamType(r.Internal_Team_Type) === 'Certification'
+          ? 'Document pending from client'
+          : 'Doc collection';
+        const recStage = (r.Stage || defaultStage).toLowerCase();
+        const normRec = recStage.replace(/inelligible/g, 'ineligible');
+        const normFilter = selectedStage.toLowerCase().replace(/inelligible/g, 'ineligible');
+        if (normRec !== normFilter) {
           return false;
         }
       }
@@ -618,9 +623,15 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
       checkUserMatchesStaff(currentUser, r.Team_Member, r.Team_Member_ID, r.Team_Member_Name)
     );
     const myTotal = myAssignedRecords.length;
-    const myDocCollection = myAssignedRecords.filter(r => !r.Stage || r.Stage === 'Doc collection').length;
-    const myInProgress = myAssignedRecords.filter(r => r.Stage === 'Name Application' || r.Stage === 'DSC Creation' || r.Stage === 'Incorporation pending').length;
-    const myFinalFiling = myAssignedRecords.filter(r => r.Stage === 'Final Filing' || r.Stage === 'Board Resolution').length;
+    const myDocCollection = myAssignedRecords.filter(r => !r.Stage || r.Stage === 'Doc collection' || r.Stage === 'Document pending from client').length;
+    const myInProgress = myAssignedRecords.filter(r => 
+      r.Stage === 'Name Application' || r.Stage === 'DSC Creation' || r.Stage === 'Incorporation pending' ||
+      r.Stage === 'Incorporation pending from client' || r.Stage === 'DSC work in progress' || r.Stage === 'Draft work in progress' || r.Stage === 'Draft in review to client' || r.Stage === 'Draft approved from client' || r.Stage === 'Payment pending from client'
+    ).length;
+    const myFinalFiling = myAssignedRecords.filter(r => 
+      r.Stage === 'Final Filing' || r.Stage === 'Board Resolution' ||
+      r.Stage === 'Application submitted' || r.Stage === 'Application resubmitted' || r.Stage === 'Selected'
+    ).length;
 
     return { total, allocated, pending, uniqueDeals, myTotal, myDocCollection, myInProgress, myFinalFiling };
   }, [records, currentUser]);
@@ -807,7 +818,16 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
               </div>
               <select
                 value={selectedTeamType}
-                onChange={(e) => setSelectedTeamType(e.target.value)}
+                onChange={(e) => {
+                  const newTeam = e.target.value;
+                  setSelectedTeamType(newTeam);
+                  if (selectedStage !== 'all') {
+                    const validStages = newTeam !== 'all' ? getOperationStagesForTeamType(newTeam) : ALL_OPERATION_STAGES;
+                    if (!validStages.includes(selectedStage as any)) {
+                      setSelectedStage('all');
+                    }
+                  }
+                }}
                 className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl text-xs font-semibold text-gray-700 outline-none cursor-pointer"
               >
                 <option value="all">All Teams</option>
@@ -822,7 +842,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                 className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl text-xs font-semibold text-gray-700 outline-none cursor-pointer"
               >
                 <option value="all">All Stages</option>
-                {OPERATION_STAGES.map(s => (
+                {(selectedTeamType !== 'all' ? getOperationStagesForTeamType(selectedTeamType) : ALL_OPERATION_STAGES).map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
@@ -957,18 +977,27 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
 
                       {/* 3. Stage Dropdown */}
                       <td className="px-4 py-3.5 align-middle">
-                        <select
-                          value={item.Stage || 'Doc collection'}
-                          onChange={(e) => handleInlineStageChange(item, e.target.value as OperationStage)}
-                          disabled={isSyncing}
-                          className="px-2.5 py-1.5 bg-blue-50/60 hover:bg-white focus:bg-white border border-blue-200 hover:border-blue-300 focus:border-blue-500 rounded-lg text-xs font-bold text-blue-900 outline-none transition-all cursor-pointer shadow-2xs w-full max-w-[170px]"
-                        >
-                          {OPERATION_STAGES.map((stg) => (
-                            <option key={stg} value={stg}>
-                              {stg}
-                            </option>
-                          ))}
-                        </select>
+                        {(() => {
+                          const rowStages = getOperationStagesForTeamType(item.Internal_Team_Type);
+                          const currentStage = item.Stage || rowStages[0] || 'Doc collection';
+                          const options = rowStages.includes(currentStage as any)
+                            ? rowStages
+                            : [currentStage, ...rowStages];
+                          return (
+                            <select
+                              value={currentStage}
+                              onChange={(e) => handleInlineStageChange(item, e.target.value as OperationStage)}
+                              disabled={isSyncing}
+                              className="px-2.5 py-1.5 bg-blue-50/60 hover:bg-white focus:bg-white border border-blue-200 hover:border-blue-300 focus:border-blue-500 rounded-lg text-xs font-bold text-blue-900 outline-none transition-all cursor-pointer shadow-2xs w-full min-w-[160px] max-w-[220px]"
+                            >
+                              {options.map((stg) => (
+                                <option key={stg} value={stg}>
+                                  {stg}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })()}
                       </td>
 
                       {/* 4. Assigned TL (Team Leader) */}

@@ -65,10 +65,24 @@ export type OperationStage =
   | 'Hold'
   | 'Refund'
   | 'Ineligible'
+  | 'Inelligible'
   | 'Incorporation pending'
-  | 'Transfer';
+  | 'Transfer'
+  // Certification specific operation stages
+  | 'Document pending from client'
+  | 'Incorporation pending from client'
+  | 'DSC work in progress'
+  | 'Draft work in progress'
+  | 'Draft in review to client'
+  | 'Draft approved from client'
+  | 'Payment pending from client'
+  | 'Application submitted'
+  | 'Application resubmitted'
+  | 'Selected'
+  | 'Cancel'
+  | string;
 
-export const OPERATION_STAGES: OperationStage[] = [
+export const DEFAULT_OPERATION_STAGES: OperationStage[] = [
   'Doc collection',
   'Name Application',
   'DSC Creation',
@@ -80,6 +94,43 @@ export const OPERATION_STAGES: OperationStage[] = [
   'Incorporation pending',
   'Transfer'
 ];
+
+export const CERTIFICATION_OPERATION_STAGES: OperationStage[] = [
+  'Document pending from client',
+  'Incorporation pending from client',
+  'DSC work in progress',
+  'Draft work in progress',
+  'Draft in review to client',
+  'Draft approved from client',
+  'Payment pending from client',
+  'Application submitted',
+  'Application resubmitted',
+  'Selected',
+  'Inelligible',
+  'Hold',
+  'Transfer',
+  'Refund',
+  'Cancel'
+];
+
+export const OPERATION_STAGES: OperationStage[] = DEFAULT_OPERATION_STAGES;
+
+export const ALL_OPERATION_STAGES: OperationStage[] = Array.from(
+  new Set([...DEFAULT_OPERATION_STAGES, ...CERTIFICATION_OPERATION_STAGES])
+);
+
+/**
+ * Returns the relevant Operation Stages based on the record's Team Type.
+ * If Team Type is Certification, returns the 15 Certification-specific stages.
+ */
+export function getOperationStagesForTeamType(teamType?: string): OperationStage[] {
+  if (!teamType) return DEFAULT_OPERATION_STAGES;
+  const lower = String(teamType).toLowerCase().trim();
+  if (lower.includes('certification')) {
+    return CERTIFICATION_OPERATION_STAGES;
+  }
+  return DEFAULT_OPERATION_STAGES;
+}
 
 export type StandardExecutionStatus =
   | 'In-process'
