@@ -1029,9 +1029,9 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       )}
                     </SectionContainer>
 
-                    {/* 3. Accounting: [Name, Date, Status, File Upload, Doc collection (Pending/Completed)] */}
+                    {/* 3. Accounting: [Name, Date, Status, File Upload] */}
                     <SectionContainer title="Accounting" badge="Books of Account">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         <TextInput
                           label="Name"
                           value={sections.accounting?.name || ''}
@@ -1044,15 +1044,14 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                         />
                         <SelectInput
                           label="Status"
-                          value={sections.accounting?.status || 'In-process'}
-                          options={STANDARD_EXECUTION_STATUSES}
+                          value={(() => {
+                            const s = sections.accounting?.status;
+                            if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                            const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                            return match || s;
+                          })()}
+                          options={POST_INCORPORATION_STATUSES}
                           onChange={(val) => updateSection('accounting', 'status', val)}
-                        />
-                        <SelectInput
-                          label="Doc collection"
-                          value={sections.accounting?.docCollection || 'Pending'}
-                          options={['Pending', 'Completed']}
-                          onChange={(val) => updateSection('accounting', 'docCollection', val)}
                         />
                       </div>
                       <div className="mt-3">
