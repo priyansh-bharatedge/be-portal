@@ -251,6 +251,18 @@ export const POST_INCORPORATION_STATUSES = [
   'Completed'
 ];
 
+export const CERT_DOC_COLLECTION_STATUSES = [
+  'In process',
+  'In Review',
+  'Pending',
+  'Approved'
+];
+
+export const CERT_FINAL_APP_STATUSES = [
+  'Pending',
+  'Approved'
+];
+
 export type CompanyType = 'LLP' | 'PVT LTD' | 'Section 8';
 
 export const COMPANY_TYPES: CompanyType[] = ['LLP', 'PVT LTD', 'Section 8'];

@@ -17,6 +17,8 @@ import {
   BOARD_RESOLUTION_STATUSES,
   SHARE_CERTIFICATE_STATUSES,
   POST_INCORPORATION_STATUSES,
+  CERT_DOC_COLLECTION_STATUSES,
+  CERT_FINAL_APP_STATUSES,
   COMPANY_TYPES,
   getOperationStagesForTeamType
 } from '../../types/operations';
@@ -1309,6 +1311,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                 <StandardSection
                   title="Doc collection / DSC"
                   data={sections.certDocCollection || {}}
+                  statusOptions={CERT_DOC_COLLECTION_STATUSES}
                   onChange={(k, v) => updateSection('certDocCollection', k, v)}
                 />
 
@@ -1316,6 +1319,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                 <StandardSection
                   title="Final Application"
                   data={sections.certFinalApp || {}}
+                  statusOptions={CERT_FINAL_APP_STATUSES}
                   onChange={(k, v) => updateSection('certFinalApp', k, v)}
                 />
               </div>
@@ -1412,7 +1416,18 @@ const StandardSection: React.FC<StandardSectionProps> = ({
   onChange,
   statusOptions = STANDARD_EXECUTION_STATUSES
 }) => {
-  const currentStatus = data.status === 'In-process' ? 'In process' : (data.status || statusOptions[0] || 'In process');
+  const currentStatus = (() => {
+    if (!data.status || data.status === 'In-process' || data.status === 'In process') {
+      if (statusOptions.includes('In process')) return 'In process';
+      if (statusOptions.includes('In-process')) return 'In-process';
+      return statusOptions[0] || 'Pending';
+    }
+    if (data.status === 'In-review' && statusOptions.includes('In Review')) return 'In Review';
+    const match = statusOptions.find(opt => opt.toLowerCase() === data.status.toLowerCase());
+    if (match) return match;
+    return data.status;
+  })();
+
   const safeOptions = statusOptions.includes(currentStatus)
     ? statusOptions
     : [currentStatus, ...statusOptions];
