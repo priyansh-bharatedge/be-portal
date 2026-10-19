@@ -161,7 +161,9 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         [baseSectionKey]: {
           name: `${currentData.name || ''} (Resubmission Round ${currentHistory.length + 2})`,
           approvedName: '',
+          finalApprovalName: '',
           date: new Date().toISOString().split('T')[0],
+          doiDate: '',
           status: 'In process',
           files: []
         }
@@ -694,7 +696,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                         <div key={hIdx} className="p-2 bg-white rounded-lg border border-rose-100 text-xs flex justify-between items-center">
                           <div>
                             <span className="font-bold text-gray-900 block">Attempt #{hist.attemptNumber || hIdx + 1}: {hist.name || 'Filing'}</span>
-                            <span className="text-[10px] text-gray-500">Date: {hist.date || 'N/A'}</span>
+                            <span className="text-[10px] text-gray-500">
+                              {hist.finalApprovalName ? `Final Approval: ${hist.finalApprovalName} • ` : ''}
+                              Date: {hist.date || 'N/A'}
+                              {hist.doiDate ? ` • DOI: ${hist.doiDate}` : ''}
+                            </span>
                           </div>
                           <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-black rounded-md">
                             REJECTED
@@ -704,17 +710,28 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                     <TextInput
                       label="Name"
                       value={sections.finalFiling?.name || ''}
                       onChange={(val) => updateSection('finalFiling', 'name', val)}
                       placeholder="Filing applicant name"
                     />
+                    <TextInput
+                      label="Final Approval Name"
+                      value={sections.finalFiling?.finalApprovalName || ''}
+                      onChange={(val) => updateSection('finalFiling', 'finalApprovalName', val)}
+                      placeholder="e.g. Acme Tech Pvt Ltd"
+                    />
                     <DateInput
                       label="Date"
                       value={sections.finalFiling?.date || ''}
                       onChange={(val) => updateSection('finalFiling', 'date', val)}
+                    />
+                    <DateInput
+                      label="DOI Date"
+                      value={sections.finalFiling?.doiDate || ''}
+                      onChange={(val) => updateSection('finalFiling', 'doiDate', val)}
                     />
                     <SelectInput
                       label="Status"
