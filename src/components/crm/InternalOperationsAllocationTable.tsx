@@ -588,7 +588,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
 
       // 4. Stage filter
       if (selectedStage !== 'all') {
-        const defaultStage = normalizeTeamType(r.Internal_Team_Type) === 'Certification'
+        const defaultStage = ['Certification', 'Funding'].includes(normalizeTeamType(r.Internal_Team_Type))
           ? 'Document pending from client'
           : 'Doc collection';
         const recStage = (r.Stage || defaultStage).toLowerCase();

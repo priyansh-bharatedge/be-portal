@@ -113,21 +113,43 @@ export const CERTIFICATION_OPERATION_STAGES: OperationStage[] = [
   'Cancel'
 ];
 
+export const FUNDING_OPERATION_STAGES: OperationStage[] = [
+  'Document pending from client',
+  'Incorporation pending from client',
+  'DSC work in progress',
+  'Draft work in progress',
+  'Draft in review to client',
+  'Draft approved from client',
+  'Payment pending from client',
+  'Application submitted',
+  'Application resubmitted',
+  'Inelligible',
+  'Hold',
+  'Transfer',
+  'Refund',
+  'Cancel'
+];
+
 export const OPERATION_STAGES: OperationStage[] = DEFAULT_OPERATION_STAGES;
 
 export const ALL_OPERATION_STAGES: OperationStage[] = Array.from(
-  new Set([...DEFAULT_OPERATION_STAGES, ...CERTIFICATION_OPERATION_STAGES])
+  new Set([...DEFAULT_OPERATION_STAGES, ...CERTIFICATION_OPERATION_STAGES, ...FUNDING_OPERATION_STAGES])
 );
 
 /**
  * Returns the relevant Operation Stages based on the record's Team Type.
- * If Team Type is Certification, returns the 15 Certification-specific stages.
+ * - Certification: 15 stages (includes Selected)
+ * - Funding: 14 stages (without Selected)
+ * - Default: standard 10 stages
  */
 export function getOperationStagesForTeamType(teamType?: string): OperationStage[] {
   if (!teamType) return DEFAULT_OPERATION_STAGES;
   const lower = String(teamType).toLowerCase().trim();
   if (lower.includes('certification')) {
     return CERTIFICATION_OPERATION_STAGES;
+  }
+  if (lower.includes('funding')) {
+    return FUNDING_OPERATION_STAGES;
   }
   return DEFAULT_OPERATION_STAGES;
 }
