@@ -1064,9 +1064,9 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       </div>
                     </SectionContainer>
 
-                    {/* 4. Audit: [Name, Date, Status, File Upload, Doc collection (Done/Completed)] */}
+                    {/* 4. Audit: [Name, Date, Status, File Upload] */}
                     <SectionContainer title="Audit" badge="Statutory Audit">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         <TextInput
                           label="Name"
                           value={sections.audit?.name || ''}
@@ -1079,15 +1079,14 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                         />
                         <SelectInput
                           label="Status"
-                          value={sections.audit?.status || 'In-process'}
-                          options={STANDARD_EXECUTION_STATUSES}
+                          value={(() => {
+                            const s = sections.audit?.status;
+                            if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                            const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                            return match || s;
+                          })()}
+                          options={POST_INCORPORATION_STATUSES}
                           onChange={(val) => updateSection('audit', 'status', val)}
-                        />
-                        <SelectInput
-                          label="Doc collection"
-                          value={sections.audit?.docCollection || 'Done'}
-                          options={['Done', 'Completed']}
-                          onChange={(val) => updateSection('audit', 'docCollection', val)}
                         />
                       </div>
                       <div className="mt-3">
@@ -1100,9 +1099,9 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       </div>
                     </SectionContainer>
 
-                    {/* 5. Company ITR: [Name, Date, Status, File Upload, Document (Yes/No)] */}
+                    {/* 5. Company ITR: [Name, Date, Status, File Upload] */}
                     <SectionContainer title="Company ITR" badge="Corporate Tax">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         <TextInput
                           label="Name"
                           value={sections.companyItr?.name || ''}
@@ -1115,15 +1114,14 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                         />
                         <SelectInput
                           label="Status"
-                          value={sections.companyItr?.status || 'In-process'}
-                          options={STANDARD_EXECUTION_STATUSES}
+                          value={(() => {
+                            const s = sections.companyItr?.status;
+                            if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                            const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                            return match || s;
+                          })()}
+                          options={POST_INCORPORATION_STATUSES}
                           onChange={(val) => updateSection('companyItr', 'status', val)}
-                        />
-                        <SelectInput
-                          label="Document"
-                          value={sections.companyItr?.document || 'Yes'}
-                          options={['Yes', 'No']}
-                          onChange={(val) => updateSection('companyItr', 'document', val)}
                         />
                       </div>
                       <div className="mt-3">
@@ -1151,8 +1149,13 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                         />
                         <SelectInput
                           label="Status"
-                          value={sections.aoc4?.status || 'In-process'}
-                          options={STANDARD_EXECUTION_STATUSES}
+                          value={(() => {
+                            const s = sections.aoc4?.status;
+                            if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                            const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                            return match || s;
+                          })()}
+                          options={POST_INCORPORATION_STATUSES}
                           onChange={(val) => updateSection('aoc4', 'status', val)}
                         />
                         <SelectInput
