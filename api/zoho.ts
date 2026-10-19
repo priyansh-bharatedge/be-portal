@@ -915,6 +915,13 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
   if (deal.Accounts_remark !== undefined || deal.accountsRemark !== undefined || fd.accountsRemark !== undefined || fd.Accounts_remark !== undefined) {
     payload.Accounts_remark = deal.Accounts_remark ?? deal.accountsRemark ?? fd.accountsRemark ?? fd.Accounts_remark ?? '';
   }
+  const dealRemark = deal.remark || deal.Remark || deal.remarks || deal.Remarks || fd.remark || fd.Remark || fd.remarks || fd.Remarks || '';
+  if (dealRemark) {
+    payload.Remark = dealRemark;
+    payload.Remarks = dealRemark;
+    payload.Description = dealRemark;
+    payload.remark = dealRemark;
+  }
   payload.Date = bookingDate;
   payload.Date_checked_date = bookingDate;
 
@@ -2501,7 +2508,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     if ((action === 'get-deals' || action === 'deals') && method === 'GET') {
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
-      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Client_Email_address,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Bank_details,Accounts_remark,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
+      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Client_Email_address,Gst_number,Pan_number,Aadhaar_Card,Billing_address,City,State,Bank_details,Accounts_remark,Remark,Remarks,Description,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
       return executeZohoGet(apiBase, moduleName, dealFields, req, res, urlObj, 'deals');
     }
 

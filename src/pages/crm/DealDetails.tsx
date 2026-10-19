@@ -3545,7 +3545,7 @@ export const DealDetails = () => {
           )}
 
           {/* Remarks & Notes Card */}
-          {(raw.Accounts_remark || raw.Customer_update || raw.Google_remark || raw.Google_review || raw.Google_reviews || raw.Description || raw.Remark) && (
+          {(raw.Accounts_remark || raw.Customer_update || raw.Google_remark || raw.Google_review || raw.Google_reviews || raw.Description || raw.Remark || raw.remark || deal?.remark || deal?.Remark || fd.remark || fd.Remark) && (
             <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-3">
               <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center">
                 <FileText size={18} className="mr-2 text-be-orange" />
@@ -3570,10 +3570,10 @@ export const DealDetails = () => {
                     <p className="text-gray-700 leading-relaxed">{formatZohoValue(raw.Google_review || raw.Google_reviews || raw.Google_remark)}</p>
                   </div>
                 )}
-                {raw.Remark && (
+                {(raw.Remark || raw.remark || deal?.remark || deal?.Remark || fd.remark || fd.Remark) && (
                   <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-gray-800">
-                    <span className="font-bold block mb-1 text-gray-900">General Remark:</span>
-                    <p className="text-gray-600 leading-relaxed">{formatZohoValue(raw.Remark)}</p>
+                    <span className="font-bold block mb-1 text-gray-900">Remark:</span>
+                    <p className="text-gray-600 leading-relaxed">{formatZohoValue(raw.Remark || raw.remark || deal?.remark || deal?.Remark || fd.remark || fd.Remark)}</p>
                   </div>
                 )}
                 {raw.Description && (

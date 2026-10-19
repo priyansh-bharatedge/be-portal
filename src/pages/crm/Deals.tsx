@@ -450,6 +450,7 @@ export const Deals = () => {
   const [hasPartnerBdm, setHasPartnerBdm] = useState<boolean>(false);
   const [partnerBdmId, setPartnerBdmId] = useState<string>('');
   const [partnerBdmName, setPartnerBdmName] = useState<string>('');
+  const [remark, setRemark] = useState<string>('');
 
   const loadSalesEmployees = useCallback(async () => {
     setIsLoadingSalesEmployees(true);
@@ -901,6 +902,9 @@ export const Deals = () => {
       const pName = deal.partnerBdmName || deal.partner_bdm_name || fd.partnerBdmName || fd.partner_bdm_name || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.name : '') || (typeof rawZ.Partner_BDM === 'object' ? rawZ.Partner_BDM?.name : '') || '';
       setPartnerBdmId(pId);
       setPartnerBdmName(pName);
+
+      const rem = deal.remark || deal.Remark || deal.remarks || deal.Description || fd.remark || fd.Remark || fd.remarks || rawZ.Remark || rawZ.Description || '';
+      setRemark(rem);
     } else {
       setEditingDealId(null);
       setFormData({
@@ -917,6 +921,7 @@ export const Deals = () => {
       setHasPartnerBdm(false);
       setPartnerBdmId('');
       setPartnerBdmName('');
+      setRemark('');
     }
   };
 
@@ -939,6 +944,7 @@ export const Deals = () => {
       setHasPartnerBdm(false);
       setPartnerBdmId('');
       setPartnerBdmName('');
+      setRemark('');
     }, 300);
   };
 
@@ -2120,9 +2126,17 @@ export const Deals = () => {
         partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
         partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
         bookingAmount: Number(amountReceived) || 0,
+        remark: remark.trim(),
+        Remark: remark.trim(),
+        remarks: remark.trim(),
+        Description: remark.trim(),
         // Full details
         formData: {
           ...formData,
+          remark: remark.trim(),
+          Remark: remark.trim(),
+          remarks: remark.trim(),
+          Description: remark.trim(),
           Payment_Date: existingDeal?.Payment_Date || new Date().toISOString().split('T')[0],
           paymentDate: existingDeal?.Payment_Date || new Date().toISOString().split('T')[0],
           Closing_Date: isEditing ? (existingDeal?.Closing_Date || undefined) : undefined,
@@ -4351,6 +4365,20 @@ export const Deals = () => {
                       <div className="flex justify-between text-orange-600 font-semibold items-center">
                         <span>Pending Amount</span>
                         <span className="text-base">₹{pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                      </div>
+
+                      {/* Remark Field */}
+                      <div className="pt-3 border-t border-gray-200 space-y-1.5">
+                        <label className="block font-medium text-gray-700">
+                          Remark
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={remark}
+                          onChange={(e) => setRemark(e.target.value)}
+                          placeholder="Enter remark..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange transition-colors resize-none"
+                        />
                       </div>
 
                       {/* Partner BDM Split Checkbox & Conditional Fields */}
