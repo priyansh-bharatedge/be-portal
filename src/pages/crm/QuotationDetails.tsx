@@ -137,6 +137,17 @@ export const QuotationDetails = () => {
               </table>
             </div>
           </div>
+
+          {Boolean((quotation.Q_Notes || quotation.q_notes || fd.Q_Notes || fd.q_notes || quotation.notes || fd.notes || quotation.remark || fd.remark || quotation.Remark || fd.Remark || quotation.Description || '').trim()) && (
+            <div className="card p-6 bg-white border border-gray-100">
+              <h2 className="text-base font-bold text-gray-900 mb-3 border-b border-gray-100 pb-3 flex items-center">
+                <FileText size={18} className="mr-2 text-be-orange" /> Notes & Special Instructions
+              </h2>
+              <div className="p-4 bg-orange-50/60 rounded-xl border border-orange-100 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                {(quotation.Q_Notes || quotation.q_notes || fd.Q_Notes || fd.q_notes || quotation.notes || fd.notes || quotation.remark || fd.remark || quotation.Remark || fd.Remark || quotation.Description || '').trim()}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">

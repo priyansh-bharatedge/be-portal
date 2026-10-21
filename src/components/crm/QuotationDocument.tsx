@@ -23,6 +23,7 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
 
   const quotationNumber = quotation.id || 'QT-0001';
   const quotationDate = formatDisplayDate(quotation.date);
+  const notesText = (quotation.Q_Notes || quotation.q_notes || fd.Q_Notes || fd.q_notes || quotation.notes || fd.notes || quotation.remark || fd.remark || quotation.Remark || fd.Remark || quotation.Description || '').trim();
 
   // Items
   let items = quotation.servicesData || [];
@@ -205,6 +206,18 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
             </table>
           </div>
         </div>
+
+        {/* Notes & Special Instructions */}
+        {Boolean(notesText) && (
+          <div className="my-5 p-4 rounded-xl bg-orange-50/70 border-l-4 border-l-orange-500 border border-orange-200">
+            <div className="text-xs font-extrabold uppercase text-orange-900 tracking-wider mb-1">
+              NOTES & SPECIAL INSTRUCTIONS:
+            </div>
+            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words">
+              {notesText}
+            </p>
+          </div>
+        )}
 
         {/* Terms and Conditions */}
         <div className="my-6">

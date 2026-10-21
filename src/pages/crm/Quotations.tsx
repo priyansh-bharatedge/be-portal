@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, Download, Send, Cloud, CloudOff, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Loader2, Printer, Users } from 'lucide-react';
+import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, ChevronDown, Eye, Edit, Download, Send, Cloud, CloudOff, RefreshCw, CheckCircle2, AlertCircle, ExternalLink, Loader2, Printer, Users, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { saveDocument } from '../../lib/db';
@@ -73,7 +73,8 @@ export const Quotations = () => {
     clientName: '', mobile: '', email: '', gender: 'Male',
     panCard: '', aadhaarCard: '', city: '', state: '',
     companyName: '', businessType: '', doi: '', gstNumber: '',
-    companyPan: '', sector: 'IT', industry: 'Software'
+    companyPan: '', sector: 'IT', industry: 'Software',
+    notes: ''
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -102,10 +103,15 @@ export const Quotations = () => {
 
     if (deal && deal.id && deal.id.startsWith('QT-')) {
       setEditingQuotationId(deal.id);
-      setFormData(deal.formData || {
+      setFormData(deal.formData ? {
+        ...deal.formData,
+        notes: deal.formData.Q_Notes || deal.Q_Notes || deal.formData.q_notes || deal.q_notes || deal.formData.notes || deal.notes || deal.formData.remark || deal.remark || deal.formData.Remark || deal.Remark || deal.Description || ''
+      } : {
         clientName: deal.client || '', mobile: '', email: '', gender: 'Male',
         panCard: '', aadhaarCard: '', city: '', state: '',
-        companyName: deal.company || '', businessType: '', doi: '', gstNumber: ''
+        companyName: deal.company || '', businessType: '', doi: '', gstNumber: '',
+        companyPan: '', sector: 'IT', industry: 'Software',
+        notes: deal.Q_Notes || deal.q_notes || deal.notes || deal.remark || deal.Remark || deal.Description || ''
       });
       setQuotationServices((deal.servicesData || []).map((s: any) => {
         const t = s.totalAmount !== undefined 
@@ -130,7 +136,8 @@ export const Quotations = () => {
         clientName: '', mobile: '', email: '', gender: 'Male',
         panCard: '', aadhaarCard: '', city: '', state: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
-        companyPan: '', sector: 'IT', industry: 'Software'
+        companyPan: '', sector: 'IT', industry: 'Software',
+        notes: ''
       });
       setQuotationServices([]);
       setAmountReceived('');
@@ -149,7 +156,8 @@ export const Quotations = () => {
         clientName: '', mobile: '', email: '', gender: 'Male',
         panCard: '', aadhaarCard: '', city: '', state: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
-        companyPan: '', sector: 'IT', industry: 'Software'
+        companyPan: '', sector: 'IT', industry: 'Software',
+        notes: ''
       });
       setFormErrors({});
       setQuotationServices([]);
@@ -546,6 +554,11 @@ export const Quotations = () => {
           date: z.Created_Time ? new Date(z.Created_Time).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
           zohoId: String(z.id),
           zohoStatus: 'synced',
+          notes: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
+          Q_Notes: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
+          remark: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
+          Remark: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
+          Description: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
           owner: z.Owner?.name || z.Created_By?.name || (typeof z.Employee === 'object' ? z.Employee?.name : null) || z.Sales_Representative || currentUser?.name || 'Admin',
           Employee: z.Employee,
           employeeId: typeof z.Employee === 'object' ? z.Employee?.id : (z.Employee || z.Employee_ID || ''),
@@ -570,6 +583,10 @@ export const Quotations = () => {
             companyPan: z.Company_PAN_Number || '',
             sector: z.Sector || '',
             industry: z.Industry || '',
+            notes: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
+            Q_Notes: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
+            remark: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
+            Remark: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
             employeeName: typeof z.Employee === 'object' ? z.Employee?.name : (z.Employee_Name || ''),
             employeeZohoId: typeof z.Employee === 'object' ? z.Employee?.id : (z.Employee || ''),
           },
@@ -793,6 +810,14 @@ export const Quotations = () => {
         status: existingQuotation?.status || 'Draft',
         owner: existingQuotation?.owner || currentUser?.name || 'Admin',
         date: existingQuotation?.date || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        notes: (formData.notes || '').trim(),
+        Notes: (formData.notes || '').trim(),
+        Q_Notes: (formData.notes || '').trim(),
+        q_notes: (formData.notes || '').trim(),
+        remark: (formData.notes || '').trim(),
+        Remark: (formData.notes || '').trim(),
+        remarks: (formData.notes || '').trim(),
+        Description: (formData.notes || '').trim(),
         // RBAC & Ownership
         employeeName: existingQuotation?.employeeName || currentUser?.name || '',
         empName: existingQuotation?.empName || currentUser?.name || '',
@@ -809,6 +834,14 @@ export const Quotations = () => {
         // Full details
         formData: {
           ...formData,
+          notes: (formData.notes || '').trim(),
+          Notes: (formData.notes || '').trim(),
+          Q_Notes: (formData.notes || '').trim(),
+          q_notes: (formData.notes || '').trim(),
+          remark: (formData.notes || '').trim(),
+          Remark: (formData.notes || '').trim(),
+          remarks: (formData.notes || '').trim(),
+          Description: (formData.notes || '').trim(),
           employeeName: existingQuotation?.formData?.employeeName || currentUser?.name,
           employeeEmail: existingQuotation?.formData?.employeeEmail || currentUser?.email,
           empId: existingQuotation?.formData?.empId || currentUser?.empId || currentUser?.id,
@@ -1153,6 +1186,8 @@ export const Quotations = () => {
 
       const existingDeal = deals.find((d: any) => d.id === dealId || d.quotationId === qToConvert.id);
 
+      const quotationNote = (qToConvert.Q_Notes || qToConvert.q_notes || qToConvert.notes || qToConvert.Notes || qToConvert.formData?.Q_Notes || qToConvert.formData?.q_notes || qToConvert.formData?.notes || qToConvert.formData?.Notes || qToConvert.remark || qToConvert.formData?.remark || qToConvert.Remark || qToConvert.formData?.Remark || qToConvert.remarks || qToConvert.Description || '').trim();
+
       const dealData: any = {
         ...(existingDeal || qToConvert),
         id: existingDeal?.id || dealId,
@@ -1170,6 +1205,14 @@ export const Quotations = () => {
         stage: existingDeal?.stage || 'Sales',
         source: 'Quotation',
         quotationId: qToConvert.id,
+        Q_Notes: quotationNote || existingDeal?.Q_Notes || existingDeal?.q_notes || '',
+        q_notes: quotationNote || existingDeal?.q_notes || existingDeal?.Q_Notes || '',
+        notes: quotationNote || existingDeal?.notes || existingDeal?.Notes || '',
+        Notes: quotationNote || existingDeal?.Notes || existingDeal?.notes || '',
+        remark: quotationNote || existingDeal?.remark || existingDeal?.Remark || '',
+        Remark: quotationNote || existingDeal?.Remark || existingDeal?.remark || '',
+        remarks: quotationNote || existingDeal?.remarks || existingDeal?.remark || '',
+        Description: quotationNote || existingDeal?.Description || existingDeal?.Remark || '',
         formData: {
           ...(qToConvert.formData || {}),
           companyZohoId,
@@ -1180,6 +1223,14 @@ export const Quotations = () => {
           employeeEmail: qToConvert.employeeEmail || existingDeal?.employeeEmail || currentUser?.email,
           empId: qToConvert.empId || existingDeal?.empId || currentUser?.empId || currentUser?.id,
           salesEmployee: qToConvert.salesEmployee || qToConvert.employeeName || existingDeal?.salesEmployee || currentUser?.name,
+          Q_Notes: quotationNote || existingDeal?.formData?.Q_Notes || existingDeal?.formData?.q_notes || '',
+          q_notes: quotationNote || existingDeal?.formData?.q_notes || existingDeal?.formData?.Q_Notes || '',
+          notes: quotationNote || existingDeal?.formData?.notes || existingDeal?.formData?.Notes || '',
+          Notes: quotationNote || existingDeal?.formData?.Notes || existingDeal?.formData?.notes || '',
+          remark: quotationNote || existingDeal?.formData?.remark || existingDeal?.formData?.Remark || '',
+          Remark: quotationNote || existingDeal?.formData?.Remark || existingDeal?.formData?.remark || '',
+          remarks: quotationNote || existingDeal?.formData?.remarks || existingDeal?.formData?.remark || '',
+          Description: quotationNote || existingDeal?.formData?.Description || existingDeal?.formData?.Remark || '',
         },
         servicesData: qToConvert.servicesData || [],
         totals: qToConvert.totals || {},
@@ -1824,6 +1875,24 @@ export const Quotations = () => {
                       <div className="flex justify-between text-lg font-bold text-gray-900 pt-3 border-t border-gray-200">
                         <span>Grand Total</span><span>₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
                       </div>
+                    </div>
+
+                    {/* Notes / Special Instructions */}
+                    <div className="space-y-1.5 pt-1">
+                      <label className="block text-xs font-semibold text-gray-700 flex items-center justify-between">
+                        <span className="flex items-center">
+                          <FileText size={14} className="mr-1.5 text-orange-500" />
+                          Notes / Remarks (Will appear in Quotation PDF & Deal)
+                        </span>
+                        <span className="text-[11px] text-gray-400 font-normal">Optional</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={formData.notes || ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        placeholder="Add special instructions, payment terms, or custom notes for this quotation..."
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all resize-y"
+                      />
                     </div>
                   </motion.div>
                 )}

@@ -950,7 +950,7 @@ export const Deals = () => {
       setPartnerBdmId(pId);
       setPartnerBdmName(pName);
 
-      const rem = deal.remark || deal.Remark || deal.remarks || deal.Description || fd.remark || fd.Remark || fd.remarks || rawZ.Remark || rawZ.Description || '';
+      const rem = deal.Q_Notes || deal.q_notes || deal.notes || deal.Notes || deal.remark || deal.Remark || deal.remarks || deal.Description || fd.Q_Notes || fd.q_notes || fd.notes || fd.Notes || fd.remark || fd.Remark || fd.remarks || rawZ.Q_Notes || rawZ.q_notes || rawZ.Notes || rawZ.Remark || rawZ.Description || '';
       setRemark(rem);
     } else {
       setEditingDealId(null);

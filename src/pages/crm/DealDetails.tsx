@@ -3684,13 +3684,22 @@ export const DealDetails = () => {
           )}
 
           {/* Remarks & Notes Card */}
-          {(raw.Accounts_remark || raw.Customer_update || raw.Google_remark || raw.Google_review || raw.Google_reviews || raw.Description || raw.Remark || raw.remark || deal?.remark || deal?.Remark || fd.remark || fd.Remark) && (
+          {(raw.Accounts_remark || raw.Customer_update || raw.Google_remark || raw.Google_review || raw.Google_reviews || raw.Description || raw.Remark || raw.remark || raw.Q_Notes || raw.q_notes || raw.Notes || raw.notes || deal?.Q_Notes || deal?.q_notes || deal?.notes || deal?.Notes || deal?.remark || deal?.Remark || fd.Q_Notes || fd.q_notes || fd.notes || fd.Notes || fd.remark || fd.Remark) && (
             <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-3">
               <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center">
                 <FileText size={18} className="mr-2 text-be-orange" />
                 Remarks & Activity Updates
               </h2>
               <div className="space-y-3 text-xs">
+                {Boolean(raw.Q_Notes || raw.q_notes || raw.Notes || raw.notes || deal?.Q_Notes || deal?.q_notes || deal?.notes || deal?.Notes || fd.Q_Notes || fd.q_notes || fd.notes || fd.Notes) && (
+                  <div className="p-3 bg-orange-50/70 rounded-xl border border-orange-200 text-orange-950">
+                    <span className="font-bold block mb-1 text-orange-900 flex items-center">
+                      <FileText size={13} className="mr-1.5 text-orange-600" />
+                      Notes / Quotation Instructions:
+                    </span>
+                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{formatZohoValue(raw.Q_Notes || raw.q_notes || raw.Notes || raw.notes || deal?.Q_Notes || deal?.q_notes || deal?.notes || deal?.Notes || fd.Q_Notes || fd.q_notes || fd.notes || fd.Notes)}</p>
+                  </div>
+                )}
                 {raw.Accounts_remark && (
                   <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100 text-amber-900">
                     <span className="font-bold block mb-1">Accounts Remark:</span>
@@ -3709,18 +3718,32 @@ export const DealDetails = () => {
                     <p className="text-gray-700 leading-relaxed">{formatZohoValue(raw.Google_review || raw.Google_reviews || raw.Google_remark)}</p>
                   </div>
                 )}
-                {(raw.Remark || raw.remark || deal?.remark || deal?.Remark || fd.remark || fd.Remark) && (
-                  <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-gray-800">
-                    <span className="font-bold block mb-1 text-gray-900">Remark:</span>
-                    <p className="text-gray-600 leading-relaxed">{formatZohoValue(raw.Remark || raw.remark || deal?.remark || deal?.Remark || fd.remark || fd.Remark)}</p>
-                  </div>
-                )}
-                {raw.Description && (
-                  <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-gray-800">
-                    <span className="font-bold block mb-1 text-gray-900">Description:</span>
-                    <p className="text-gray-600 leading-relaxed">{formatZohoValue(raw.Description)}</p>
-                  </div>
-                )}
+                {(() => {
+                  const remVal = raw.Remark || raw.remark || deal?.remark || deal?.Remark || fd.remark || fd.Remark;
+                  const noteVal = raw.Q_Notes || raw.q_notes || raw.Notes || raw.notes || deal?.Q_Notes || deal?.q_notes || deal?.notes || deal?.Notes || fd.Q_Notes || fd.q_notes || fd.notes || fd.Notes;
+                  if (!remVal) return null;
+                  if (noteVal && String(remVal).trim() === String(noteVal).trim()) return null;
+                  return (
+                    <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-gray-800">
+                      <span className="font-bold block mb-1 text-gray-900">Remark:</span>
+                      <p className="text-gray-600 leading-relaxed">{formatZohoValue(remVal)}</p>
+                    </div>
+                  );
+                })()}
+                {(() => {
+                  const descVal = raw.Description;
+                  const noteVal = raw.Q_Notes || raw.q_notes || raw.Notes || raw.notes || deal?.Q_Notes || deal?.q_notes || deal?.notes || deal?.Notes || fd.Q_Notes || fd.q_notes || fd.notes || fd.Notes;
+                  const remVal = raw.Remark || raw.remark || deal?.remark || deal?.Remark || fd.remark || fd.Remark;
+                  if (!descVal) return null;
+                  if (noteVal && String(descVal).trim() === String(noteVal).trim()) return null;
+                  if (remVal && String(descVal).trim() === String(remVal).trim()) return null;
+                  return (
+                    <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 text-gray-800">
+                      <span className="font-bold block mb-1 text-gray-900">Description:</span>
+                      <p className="text-gray-600 leading-relaxed">{formatZohoValue(descVal)}</p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

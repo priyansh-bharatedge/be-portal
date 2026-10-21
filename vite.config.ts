@@ -484,6 +484,15 @@ function zohoApiPlugin(): Plugin {
       });
     }
 
+    const quotationNotes = quotation.Q_Notes || quotation.q_notes || fd.Q_Notes || fd.q_notes || quotation.notes || quotation.Notes || fd.notes || fd.Notes || quotation.remark || fd.remark || quotation.Remark || fd.Remark || quotation.Description || '';
+    if (quotationNotes) {
+      payload.Q_Notes = quotationNotes;
+      payload.Notes = quotationNotes;
+      payload.Remark = quotationNotes;
+      payload.Remarks = quotationNotes;
+      payload.Description = quotationNotes;
+    }
+
     // Associate Employee Lookup field with the logged-in employee record
     const empLookupId = quotation.employeeZohoId || fd.employeeZohoId || quotation.empZohoId || fd.empZohoId || (typeof quotation.Employee === 'object' ? quotation.Employee?.id : (typeof quotation.Employee === 'string' && /^\d+$/.test(quotation.Employee) ? quotation.Employee : null));
     if (empLookupId && String(empLookupId).trim() !== '') {
@@ -949,12 +958,14 @@ function zohoApiPlugin(): Plugin {
     if (deal.Accounts_remark !== undefined || deal.accountsRemark !== undefined || fd.accountsRemark !== undefined || fd.Accounts_remark !== undefined) {
       payload.Accounts_remark = deal.Accounts_remark ?? deal.accountsRemark ?? fd.accountsRemark ?? fd.Accounts_remark ?? '';
     }
-    const dealRemark = deal.remark || deal.Remark || deal.remarks || deal.Remarks || fd.remark || fd.Remark || fd.remarks || fd.Remarks || '';
+    const dealRemark = deal.Q_Notes || deal.q_notes || fd.Q_Notes || fd.q_notes || deal.notes || deal.Notes || deal.remark || deal.Remark || deal.remarks || deal.Remarks || fd.notes || fd.Notes || fd.remark || fd.Remark || fd.remarks || fd.Remarks || '';
     if (dealRemark) {
+      payload.Q_Notes = dealRemark;
       payload.Remark = dealRemark;
       payload.Remarks = dealRemark;
       payload.Description = dealRemark;
       payload.remark = dealRemark;
+      payload.Notes = dealRemark;
     }
     payload.Date = bookingDate;
     payload.Date_checked_date = bookingDate;

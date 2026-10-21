@@ -14,6 +14,12 @@ export interface QuotationPrintData {
   received?: string;
   pending?: string;
   owner?: string;
+  Q_Notes?: string;
+  q_notes?: string;
+  notes?: string;
+  remark?: string;
+  Remark?: string;
+  Description?: string;
   formData?: {
     clientName?: string;
     mobile?: string;
@@ -30,6 +36,12 @@ export interface QuotationPrintData {
     companyPan?: string;
     sector?: string;
     industry?: string;
+    Q_Notes?: string;
+    q_notes?: string;
+    notes?: string;
+    remark?: string;
+    Remark?: string;
+    Description?: string;
   };
   servicesData?: Array<{
     id?: string;
@@ -101,6 +113,7 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
   const quotationNumber = q.id || 'QT-0001';
   const quotationDate = formatDisplayDate(q.date);
   const validUntil = q.validUntil ? formatDisplayDate(q.validUntil) : getValidUntilDate(q.date);
+  const notesText = (q.Q_Notes || q.q_notes || fd.Q_Notes || fd.q_notes || q.notes || fd.notes || q.remark || fd.remark || q.Remark || fd.Remark || q.Description || '').trim();
 
   // Compute item breakdown
   let items = q.servicesData || [];
@@ -515,6 +528,35 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
       color: #111827;
     }
 
+    /* Notes & Special Instructions */
+    .notes-section {
+      margin-top: 18px;
+      margin-bottom: 22px;
+      padding: 12px 16px;
+      background-color: #fffaf5;
+      border-left: 4px solid #ea580c;
+      border-radius: 6px;
+      border: 1px solid #fed7aa;
+      border-left-width: 4px;
+    }
+
+    .notes-heading {
+      font-weight: 700;
+      color: #9a3412;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+    }
+
+    .notes-body {
+      color: #374151;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     /* Terms and Conditions */
     .terms-section {
       margin-bottom: 35px;
@@ -696,6 +738,14 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
           </tr>
         </tbody>
       </table>
+
+      ${notesText ? `
+      <!-- Notes & Special Instructions -->
+      <div class="notes-section">
+        <div class="notes-heading">NOTES & SPECIAL INSTRUCTIONS:</div>
+        <div class="notes-body">${notesText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+      </div>
+      ` : ''}
 
       <!-- Terms and Conditions -->
       <div class="terms-section">
