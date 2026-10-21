@@ -1,3 +1,5 @@
+import { ALL_SERVICES } from './servicesList';
+
 /**
  * Utility functions for Partner BDM (50/50 Pre-GST Split) calculations,
  * identification, and user-scoped metric resolution.
@@ -488,6 +490,7 @@ export interface DealMilestoneItem {
   bdm1: string;
   bdm2: string;
   screenshot: string;
+  screenshotUrl?: string;
   isVerified: boolean;
   bankType: 'BSPL' | 'BSAPL' | string;
   hasPayment: boolean;
@@ -507,6 +510,8 @@ export const MILESTONE_CONFIG = [
 export const getDealMilestones = (d: any): DealMilestoneItem[] => {
   if (!d) return [];
   const raw = d.rawZohoDeal || {};
+  const targetZohoId = String(d.zohoId || (d.id && /^\d+$/.test(d.id) ? d.id : '') || raw.id || '');
+
   return MILESTONE_CONFIG.map(s => {
     const rawAmt = d[s.amtField] ?? raw[s.amtField] ?? d.formData?.[s.amtField] ??
       d[`R${s.index}_Received_amount`] ?? raw[`R${s.index}_Received_amount`] ??
@@ -522,9 +527,68 @@ export const getDealMilestones = (d: any): DealMilestoneItem[] => {
       (s.index === 2 ? (d.DPR_status_change_date ?? raw.DPR_status_change_date ?? d.R2_Payment_Date ?? raw.R2_Payment_Date) : undefined) ?? '';
 
     const ss = d[s.ssField] ?? raw[s.ssField] ?? d.formData?.[s.ssField];
-    const ssName = Array.isArray(ss) && ss.length > 0 
-      ? (ss[0]?.File_Name__s || ss[0]?.name || '') 
-      : (typeof ss === 'string' ? ss : '');
+    let ssName = '';
+    let ssAttId = '';
+    let ssFileId = '';
+    let ssDirectUrl = '';
+
+    if (Array.isArray(ss) && ss.length > 0) {
+      const item = ss[0];
+      if (typeof item === 'object' && item !== null) {
+        ssName = item.File_Name__s || item.name || item.file_name || '';
+        ssAttId = item.id || item.fields_attachment_id || '';
+        ssFileId = item.File_Id__s || item.file_id || '';
+      } else if (typeof item === 'string') {
+        ssName = item;
+      }
+    } else if (ss && typeof ss === 'object') {
+      ssName = ss.File_Name__s || ss.name || ss.file_name || '';
+      ssAttId = ss.id || ss.fields_attachment_id || '';
+      ssFileId = ss.File_Id__s || ss.file_id || '';
+    } else if (typeof ss === 'string' && ss.trim()) {
+      ssName = ss.trim();
+      if (ssName.startsWith('http') || ssName.startsWith('blob:') || ssName.startsWith('data:') || ssName.startsWith('/api/')) {
+        ssDirectUrl = ssName;
+      }
+    }
+
+    // For R1 (1st payment), fallback to Deal_payment_screenshot, paymentScreenshots, or paymentScreenshotName
+    if (s.index === 1) {
+      const pss = d.Deal_payment_screenshot ?? raw.Deal_payment_screenshot ?? d.paymentScreenshots ?? raw.paymentScreenshots;
+      let pssItem: any = null;
+      if (Array.isArray(pss) && pss.length > 0) {
+        pssItem = pss[0];
+      } else if (pss && typeof pss === 'object') {
+        pssItem = pss;
+      }
+
+      if (pssItem && typeof pssItem === 'object') {
+        if (!ssName) ssName = pssItem.File_Name__s || pssItem.name || pssItem.file_name || 'payment_screenshot.png';
+        if (!ssAttId) ssAttId = pssItem.id || pssItem.fields_attachment_id || '';
+        if (!ssFileId) ssFileId = pssItem.File_Id__s || pssItem.file_id || '';
+      } else if (typeof pss === 'string' && pss.trim() && !ssName) {
+        ssName = pss.trim();
+      }
+
+      if (!ssName) {
+        ssName = d.paymentScreenshotName || raw.Payment_Screenshot_Name || d.Payment_Screenshot_Name || '';
+      }
+      if (!ssDirectUrl && (d.paymentScreenshotUrl || raw.Payment_Screenshot_URL)) {
+        ssDirectUrl = d.paymentScreenshotUrl || raw.Payment_Screenshot_URL;
+      }
+    }
+
+    // Resolve authenticated Zoho stream/preview URL if attachment/file IDs exist
+    let resolvedUrl = ssDirectUrl;
+    if (!resolvedUrl && (ssFileId || (targetZohoId && ssAttId))) {
+      const params = new URLSearchParams();
+      params.set('module', 'Deals');
+      if (targetZohoId) params.set('recordId', targetZohoId);
+      if (ssAttId) params.set('attachmentId', ssAttId);
+      if (ssFileId) params.set('fileId', ssFileId);
+      params.set('preview', 'true');
+      resolvedUrl = `/api/zoho/download-field-attachment?${params.toString()}`;
+    }
 
     const bdm1Val = d[s.bdm1Field] ?? raw[s.bdm1Field] ?? d.formData?.[s.bdm1Field];
     const bdm1 = typeof bdm1Val === 'object' ? (bdm1Val?.name || '') : String(bdm1Val || '');
@@ -565,6 +629,7 @@ export const getDealMilestones = (d: any): DealMilestoneItem[] => {
       bdm1,
       bdm2,
       screenshot: ssName,
+      screenshotUrl: resolvedUrl || undefined,
       isVerified: isVerif,
       isLegalVerified: isLegalVerif,
       bankType,
@@ -687,9 +752,21 @@ export function isValidServiceName(
   companyName?: string,
   dealId?: string
 ): boolean {
-  if (!name || typeof name !== 'string') return false;
-  const trimmed = name.trim();
+  if (!name) return false;
+  let rawStr = '';
+  if (typeof name === 'object' && name !== null) {
+    rawStr = String(name.name || name.display_value || name.value || name.Service_Name || '');
+  } else {
+    rawStr = String(name || '');
+  }
+  const trimmed = rawStr.trim();
   const lower = trimmed.toLowerCase();
+
+  // 1. If it matches any official company service in ALL_SERVICES, it is definitively valid!
+  if (ALL_SERVICES.some(s => s.toLowerCase() === lower || lower.startsWith(s.toLowerCase()))) {
+    return true;
+  }
+
   const invalidGenerics = [
     'services', 'service', 'custom services', 'general services',
     'new case booking', 'individual', 'client', 'company', 'n/a', 'na', 'none', 'null', 'undefined'
@@ -697,28 +774,27 @@ export function isValidServiceName(
   if (!trimmed || invalidGenerics.includes(lower)) {
     return false;
   }
-  // Check if it contains DL ID format like DL-7532 or (DL-7532)
-  if (/\bDL-\d+\b/i.test(trimmed)) return false;
+  // Check if string is just a DL ID like DL-7532 or (DL-7532)
+  if (/^(\(?DL-\d+\)?)$/i.test(trimmed)) return false;
   // Check if it's just numbers, symbols or brackets
   if (/^[\d\s().-]+$/.test(trimmed)) return false;
-  // Check if it matches or contains clientName
-  if (clientName && clientName.trim().length > 1) {
+
+  // Check if it's just the clientName
+  if (clientName && clientName.trim().length > 2) {
     const cClean = clientName.trim().toLowerCase();
-    const tClean = trimmed.toLowerCase();
-    if (tClean === cClean || tClean.startsWith(cClean) || tClean.includes(` ${cClean}`) || cClean.includes(tClean)) {
+    if (lower === cClean || (cClean.length > 4 && lower.startsWith(cClean))) {
       return false;
     }
   }
-  // Check if it matches or contains companyName
-  if (companyName && companyName.trim().length > 1) {
+  // Check if it's just the companyName
+  if (companyName && companyName.trim().length > 2) {
     const compClean = companyName.trim().toLowerCase();
-    const tClean = trimmed.toLowerCase();
-    if (tClean === compClean || tClean.startsWith(compClean) || compClean.includes(tClean)) {
+    if (lower === compClean || (compClean.length > 4 && lower.startsWith(compClean))) {
       return false;
     }
   }
-  // Check if it matches dealId
-  if (dealId && dealId.trim().length > 0 && trimmed.toLowerCase().includes(dealId.trim().toLowerCase())) {
+  // Check if it exactly matches dealId
+  if (dealId && dealId.trim().length > 0 && lower === dealId.trim().toLowerCase()) {
     return false;
   }
   return true;

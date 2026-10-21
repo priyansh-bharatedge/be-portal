@@ -11,6 +11,7 @@
 
 import { fetchZohoWithRbac, injectEmployeeLookup } from './zohoRbacService';
 import { isValidServiceName } from '../utils/dealSplitUtils';
+import { ALL_SERVICES } from '../utils/servicesList';
 export * from './zohoRbacService';
 
 export interface ZohoFetchOptions {
@@ -1758,8 +1759,9 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   if (Array.isArray(rawZoho.Subform_1) && rawZoho.Subform_1.length > 0) {
     const seenSubforms = new Set<string>();
     const uniqueRawSubform = rawZoho.Subform_1.filter((sf: any) => {
-      const sRaw = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || 'website development');
+      const sRaw = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || sf.Product_Name || sf.Service_Scheme || sf.Service_scheme || sf.Services || sf.Name || sf.name || sf.Legal_Schemas || 'Service');
       const sName = sRaw.trim().toLowerCase();
+      if (!sName || sName === 'service') return true;
       if (seenSubforms.has(sName)) return false;
       seenSubforms.add(sName);
       return true;
@@ -1777,7 +1779,7 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       subformReceived += recAmt;
       subformPending += pendAmt;
 
-      const svcName = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || 'Service');
+      const svcName = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || sf.Product_Name || sf.Service_Scheme || sf.Service_scheme || sf.Services || sf.Name || sf.name || sf.Legal_Schemas || 'Service');
 
       return {
         id: String(sf.id || i + 1),
@@ -1966,21 +1968,56 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     status = stage;
   }
 
+  const findMatchingService = (text: any): string | null => {
+    if (!text || typeof text !== 'string') return null;
+    const clean = text.toLowerCase();
+    for (const s of ALL_SERVICES) {
+      if (s && s.length > 2 && clean.includes(s.toLowerCase())) {
+        return s;
+      }
+    }
+    return null;
+  };
+
+  const serviceCandidates = [
+    // Subform items
+    ...(servicesSubform.map((s: any) => s.name)),
+    // Existing deal service
+    existingDeal?.service,
+    // Zoho deal fields
+    rawZoho.Service_Name,
+    rawZoho.Services,
+    rawZoho.Service,
+    rawZoho.Service_scheme,
+    rawZoho.Service_Scheme,
+    rawZoho.Legal_Schemas,
+    rawZoho.Schemas,
+    rawZoho.Product_Name,
+    rawZoho.Choose_Wisely !== 'New Case Booking' ? rawZoho.Choose_Wisely : null,
+    rawZoho.Business_plan_selected,
+    rawZoho.Item_Name,
+  ].map((val: any) => extractZohoName(val).trim()).filter(Boolean);
+
   let serviceTitle = '';
-  if (servicesSubform.length > 0 && isValidServiceName(servicesSubform[0].name, resolvedClient, resolvedCompany, existingDeal?.id)) {
-    serviceTitle = servicesSubform.length === 1 ? servicesSubform[0].name : `${servicesSubform.length} Services`;
-  } else if (isValidServiceName(existingDeal?.service, resolvedClient, resolvedCompany, existingDeal?.id)) {
-    serviceTitle = existingDeal.service;
-  } else if (isValidServiceName(rawZoho.Service_Name, resolvedClient, resolvedCompany, existingDeal?.id)) {
-    serviceTitle = extractZohoName(rawZoho.Service_Name);
-  } else if (isValidServiceName(rawZoho.Choose_Wisely, resolvedClient, resolvedCompany, existingDeal?.id) && rawZoho.Choose_Wisely !== 'New Case Booking') {
-    serviceTitle = extractZohoName(rawZoho.Choose_Wisely);
-  } else if (isValidServiceName(rawZoho.Business_plan_selected, resolvedClient, resolvedCompany, existingDeal?.id)) {
-    serviceTitle = extractZohoName(rawZoho.Business_plan_selected);
-  } else if (isValidServiceName(rawZoho.Item_Name, resolvedClient, resolvedCompany, existingDeal?.id)) {
-    serviceTitle = extractZohoName(rawZoho.Item_Name);
+  if (servicesSubform.length > 1) {
+    const validCount = servicesSubform.filter((s: any) => isValidServiceName(s.name, resolvedClient, resolvedCompany, existingDeal?.id)).length;
+    serviceTitle = `${validCount > 1 ? validCount : servicesSubform.length} Services`;
   } else {
-    serviceTitle = 'Services';
+    for (const cand of serviceCandidates) {
+      if (cand && cand.toLowerCase() !== 'service' && cand.toLowerCase() !== 'services' && isValidServiceName(cand, resolvedClient, resolvedCompany, existingDeal?.id)) {
+        serviceTitle = cand;
+        break;
+      }
+    }
+    if (!serviceTitle && rawZoho.Deal_Name) {
+      const match = findMatchingService(rawZoho.Deal_Name);
+      if (match && isValidServiceName(match, resolvedClient, resolvedCompany, existingDeal?.id)) {
+        serviceTitle = match;
+      }
+    }
+    if (!serviceTitle) {
+      serviceTitle = existingDeal?.service || 'Services';
+    }
   }
 
   const employeeName =
@@ -2021,6 +2058,11 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   }
 
   const resolvedId = existingDeal?.id || embeddedDlId || (rawZoho.id ? String(rawZoho.id) : `DL-${Math.floor(1000 + Math.random() * 9000)}`);
+
+  const rawPaymentScreenshot = rawZoho.Deal_payment_screenshot || existingDeal?.Deal_payment_screenshot || existingDeal?.paymentScreenshots || [];
+  const normalizedPaymentScreenshots = Array.isArray(rawPaymentScreenshot)
+    ? rawPaymentScreenshot
+    : (rawPaymentScreenshot && typeof rawPaymentScreenshot === 'object' ? [rawPaymentScreenshot] : (typeof rawPaymentScreenshot === 'string' && rawPaymentScreenshot ? [rawPaymentScreenshot] : []));
 
   return {
     ...existingDeal,
@@ -2065,8 +2107,32 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     documentsData: existingDeal?.documentsData || [],
     paymentScreenshotName: existingDeal?.paymentScreenshotName || rawZoho.Payment_Screenshot_Name || '',
     paymentScreenshotUrl: existingDeal?.paymentScreenshotUrl || '',
-    Deal_payment_screenshot: rawZoho.Deal_payment_screenshot || existingDeal?.Deal_payment_screenshot || [],
-    paymentScreenshots: rawZoho.Deal_payment_screenshot || existingDeal?.paymentScreenshots || existingDeal?.Deal_payment_screenshot || [],
+    Deal_payment_screenshot: normalizedPaymentScreenshots,
+    paymentScreenshots: normalizedPaymentScreenshots,
+    R1_Received_Screenshot: rawZoho.R1_Received_Screenshot ?? existingDeal?.R1_Received_Screenshot,
+    R2_Received_Screenshot: rawZoho.R2_Received_Screenshot ?? existingDeal?.R2_Received_Screenshot,
+    R3_Received_Screenshot: rawZoho.R3_Received_Screenshot ?? existingDeal?.R3_Received_Screenshot,
+    R4_Received_Screenshot: rawZoho.R4_Received_Screenshot ?? existingDeal?.R4_Received_Screenshot,
+    R5_Received_Screenshot: rawZoho.R5_Received_Screenshot ?? existingDeal?.R5_Received_Screenshot,
+    R6_Received_Screenshot: rawZoho.R6_Received_Screenshot ?? existingDeal?.R6_Received_Screenshot,
+    R7_Received_Screenshot: rawZoho.R7_Received_Screenshot ?? existingDeal?.R7_Received_Screenshot,
+    R8_Received_Screenshot: rawZoho.R8_Received_Screenshot ?? existingDeal?.R8_Received_Screenshot,
+    R1_Received_Amount: rawZoho.R1_Received_Amount ?? existingDeal?.R1_Received_Amount,
+    R2_Received_Amount: rawZoho.R2_Received_Amount ?? existingDeal?.R2_Received_Amount,
+    R3_Received_Amount: rawZoho.R3_Received_Amount ?? existingDeal?.R3_Received_Amount,
+    R4_Received_Amount: rawZoho.R4_Received_Amount ?? existingDeal?.R4_Received_Amount,
+    R5_Received_Amount: rawZoho.R5_Received_Amount ?? existingDeal?.R5_Received_Amount,
+    R6_Received_Amount: rawZoho.R6_Received_Amount ?? existingDeal?.R6_Received_Amount,
+    R7_Received_Amount: rawZoho.R7_Received_Amount ?? existingDeal?.R7_Received_Amount,
+    R8_Received_Amount: rawZoho.R8_Received_Amount ?? existingDeal?.R8_Received_Amount,
+    R1_Bank_type: rawZoho.R1_Bank_type ?? rawZoho.R1_Bank_details ?? existingDeal?.R1_Bank_type,
+    R2_Bank_type: rawZoho.R2_Bank_type ?? rawZoho.R2_Bank_details ?? existingDeal?.R2_Bank_type,
+    R3_Bank_type: rawZoho.R3_Bank_type ?? existingDeal?.R3_Bank_type,
+    R4_Bank_type: rawZoho.R4_Bank_type ?? existingDeal?.R4_Bank_type,
+    R5_Bank_type: rawZoho.R5_Bank_type ?? existingDeal?.R5_Bank_type,
+    R6_Bank_type: rawZoho.R6_Bank_type ?? existingDeal?.R6_Bank_type,
+    R7_Bank_type: rawZoho.R7_Bank_type ?? existingDeal?.R7_Bank_type,
+    R8_Bank_type: rawZoho.R8_Bank_type ?? existingDeal?.R8_Bank_type,
     Bank_details: rawZoho.Bank_details || existingDeal?.Bank_details || existingDeal?.bankDetails || '',
     bankDetails: rawZoho.Bank_details || existingDeal?.Bank_details || existingDeal?.bankDetails || '',
     Accounts_remark: rawZoho.Accounts_remark || existingDeal?.Accounts_remark || existingDeal?.accountsRemark || '',

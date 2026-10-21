@@ -280,20 +280,46 @@ export const Deals = () => {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((d: any) => {
-            if (!isValidServiceName(d.service, d.client, d.company, d.id)) {
+            const raw = d.rawZohoDeal || {};
+            if (!isValidServiceName(d.service, d.client, d.company, d.id) || d.service === 'Services') {
               let validSvc = '';
-              if (Array.isArray(d.servicesData)) {
+              if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
                 const validItem = d.servicesData.find((s: any) => isValidServiceName(s.name, d.client, d.company, d.id));
                 if (validItem) validSvc = validItem.name;
               }
-              if (!validSvc && Array.isArray(d.legalData)) {
+              if (!validSvc && Array.isArray(d.legalData) && d.legalData.length > 0) {
                 const validLegal = d.legalData.find((lg: any) => isValidServiceName(lg.schema || lg.Legal_Schemas || lg.Schemas, d.client, d.company, d.id));
                 if (validLegal) validSvc = validLegal.schema || validLegal.Legal_Schemas || validLegal.Schemas;
               }
+              if (!validSvc && Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0) {
+                const validSf = raw.Subform_1.find((sf: any) => {
+                  const n = sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || sf.Product_Name || sf.Service_Scheme || sf.Services;
+                  const nameStr = typeof n === 'object' ? n?.name : String(n || '');
+                  return isValidServiceName(nameStr, d.client, d.company, d.id);
+                });
+                if (validSf) {
+                  const n = validSf.Schemas || validSf.Schema || validSf.Service_Name || validSf.Service || validSf.Business_plan_selected || validSf.Item_Name || validSf.Product_Name || validSf.Service_Scheme || validSf.Services;
+                  validSvc = typeof n === 'object' ? n?.name : String(n || '');
+                }
+              }
+              if (!validSvc) {
+                const cand = raw.Service_Name || raw.Services || raw.Service || raw.Service_scheme || raw.Service_Scheme || raw.Legal_Schemas || raw.Schemas || raw.Product_Name || (raw.Choose_Wisely !== 'New Case Booking' ? raw.Choose_Wisely : null) || raw.Business_plan_selected || raw.Item_Name;
+                const candStr = typeof cand === 'object' ? cand?.name : String(cand || '');
+                if (isValidServiceName(candStr, d.client, d.company, d.id)) {
+                  validSvc = candStr;
+                }
+              }
+              if (!validSvc && raw.Deal_Name) {
+                const match = ALL_SERVICES.find(s => s && s.length > 2 && String(raw.Deal_Name).toLowerCase().includes(s.toLowerCase()));
+                if (match && isValidServiceName(match, d.client, d.company, d.id)) {
+                  validSvc = match;
+                }
+              }
+
               return {
                 ...d,
-                service: validSvc || 'Services',
-                servicesData: Array.isArray(d.servicesData) ? d.servicesData.filter((s: any) => isValidServiceName(s.name, d.client, d.company, d.id)) : []
+                service: validSvc || (d.service && d.service !== 'Services' ? d.service : 'Services'),
+                servicesData: Array.isArray(d.servicesData) && d.servicesData.length > 0 ? d.servicesData : (validSvc ? [{ id: '1', name: validSvc }] : [])
               };
             }
             return d;
@@ -1413,17 +1439,19 @@ export const Deals = () => {
           const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || 0);
           const withoutGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
           const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
+          const rawSvc = sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || sf.Product_Name || sf.Service_Scheme || sf.Service_scheme || sf.Services || sf.Name || sf.name || sf.Legal_Schemas || 'Service';
+          const svcName = typeof rawSvc === 'object' ? (rawSvc?.name || rawSvc?.display_value || 'Service') : String(rawSvc || 'Service');
           return {
             id: String(sf.id || i + 1),
-            name: sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || 'Service',
+            name: svcName,
             totalAmount: String(totalAmt || ''),
             baseAmount: String(withoutGst || 0),
             receivedAmount: sf.Received_amount || sf.Received || '',
             pendingAmount: sf.Pending_amount || sf.Pending || '',
-            paymentStages: sf.Payment_stages || '',
-            paymentType: sf.Payment_type || '',
-            paymentDate: sf.Payment_received_date || '',
-            qualityProvided: sf.Quality_provided || '',
+            paymentStages: typeof sf.Payment_stages === 'object' ? (sf.Payment_stages?.name || '') : String(sf.Payment_stages || ''),
+            paymentType: typeof sf.Payment_type === 'object' ? (sf.Payment_type?.name || '') : String(sf.Payment_type || ''),
+            paymentDate: typeof sf.Payment_received_date === 'object' ? (sf.Payment_received_date?.name || '') : String(sf.Payment_received_date || ''),
+            qualityProvided: typeof sf.Quality_provided === 'object' ? (sf.Quality_provided?.name || '') : String(sf.Quality_provided || ''),
             successFees: sf.Success_fees || '',
           };
         });
@@ -1457,7 +1485,7 @@ export const Deals = () => {
         );
         servicesFromSubform = validLegal.map((lg: any, i: number) => ({
           id: String(lg.id || i + 1),
-          name: lg.Legal_Schemas || lg.Schemas,
+          name: typeof lg.Legal_Schemas === 'object' ? (lg.Legal_Schemas?.name || '') : String(lg.Legal_Schemas || lg.Schemas || ''),
           totalAmount: String(totalAmountNum || ''),
           baseAmount: String(withoutGstNum || ''),
           receivedAmount: String(receivedAmountNum || ''),
@@ -1465,18 +1493,32 @@ export const Deals = () => {
         }));
       } else {
         let inferredServiceName = '';
-        if (isValidServiceName(zDeal.Service_Name, resolvedClientName, resolvedCompanyName, zDeal.id)) {
-          inferredServiceName = zDeal.Service_Name.trim();
-        } else if (
-          zDeal.Choose_Wisely &&
-          zDeal.Choose_Wisely !== 'New Case Booking' &&
-          isValidServiceName(zDeal.Choose_Wisely, resolvedClientName, resolvedCompanyName, zDeal.id)
-        ) {
-          inferredServiceName = zDeal.Choose_Wisely.trim();
-        } else if (isValidServiceName(zDeal.Business_plan_selected, resolvedClientName, resolvedCompanyName, zDeal.id)) {
-          inferredServiceName = zDeal.Business_plan_selected.trim();
-        } else if (isValidServiceName(zDeal.Item_Name, resolvedClientName, resolvedCompanyName, zDeal.id)) {
-          inferredServiceName = zDeal.Item_Name.trim();
+        const svcCandidates = [
+          zDeal.Service_Name,
+          zDeal.Services,
+          zDeal.Service,
+          zDeal.Service_scheme,
+          zDeal.Service_Scheme,
+          zDeal.Legal_Schemas,
+          zDeal.Schemas,
+          zDeal.Product_Name,
+          zDeal.Choose_Wisely !== 'New Case Booking' ? zDeal.Choose_Wisely : null,
+          zDeal.Business_plan_selected,
+          zDeal.Item_Name,
+        ];
+        for (const cand of svcCandidates) {
+          if (!cand) continue;
+          const candStr = typeof cand === 'object' ? (cand?.name || cand?.display_value || '') : String(cand).trim();
+          if (candStr && isValidServiceName(candStr, resolvedClientName, resolvedCompanyName, zDeal.id)) {
+            inferredServiceName = candStr;
+            break;
+          }
+        }
+        if (!inferredServiceName && zDeal.Deal_Name) {
+          const match = ALL_SERVICES.find(s => s && s.length > 2 && String(zDeal.Deal_Name).toLowerCase().includes(s.toLowerCase()));
+          if (match && isValidServiceName(match, resolvedClientName, resolvedCompanyName, zDeal.id)) {
+            inferredServiceName = match;
+          }
         }
 
         if (inferredServiceName) {
@@ -1500,6 +1542,8 @@ export const Deals = () => {
         serviceTitle = `${servicesFromSubform.length} Services`;
       } else if (existingDeal && isValidServiceName(existingDeal.service, resolvedClientName, resolvedCompanyName, existingDeal.id)) {
         serviceTitle = existingDeal.service;
+      } else if (servicesFromSubform.length > 0 && servicesFromSubform[0].name && servicesFromSubform[0].name !== 'Service') {
+        serviceTitle = servicesFromSubform[0].name;
       } else {
         serviceTitle = 'Services';
       }
@@ -3029,11 +3073,50 @@ export const Deals = () => {
       }
     } catch (_) {}
 
-    if (milestone.screenshot && (milestone.screenshot.startsWith('http') || milestone.screenshot.startsWith('blob:'))) {
+    // 2. Direct or computed authenticated screenshot URL
+    const targetUrl = milestone.screenshotUrl || (milestone.screenshot && (milestone.screenshot.startsWith('http') || milestone.screenshot.startsWith('blob:') || milestone.screenshot.startsWith('/api/')) ? milestone.screenshot : '');
+    if (targetUrl) {
       setPreviewScreenshotModal({
         isOpen: true,
-        url: milestone.screenshot,
-        title: `${deal.id} - ${milestone.label} Screenshot`
+        url: targetUrl,
+        title: `${deal.id} - ${milestone.label} Screenshot (${milestone.screenshot || 'Receipt'})`
+      });
+      return;
+    }
+
+    // 3. Resolve Zoho Field Attachment URL directly from deal/rawZoho
+    const targetZohoId = String(deal.zohoId || (deal.id && /^\d+$/.test(deal.id) ? deal.id : '') || '');
+    const raw = deal.rawZohoDeal || {};
+    const slotField = `R${milestone.index}_Received_Screenshot`;
+    const rawSlot = deal[slotField] ?? raw[slotField];
+
+    let attId = '';
+    let fileId = '';
+    if (rawSlot && typeof rawSlot === 'object') {
+      attId = rawSlot.id || rawSlot.fields_attachment_id || '';
+      fileId = rawSlot.File_Id__s || rawSlot.file_id || '';
+    }
+    if (!attId && !fileId && milestone.index === 1) {
+      const pss = deal.Deal_payment_screenshot ?? raw.Deal_payment_screenshot ?? deal.paymentScreenshots ?? raw.paymentScreenshots;
+      const item = Array.isArray(pss) ? pss[0] : (pss && typeof pss === 'object' ? pss : null);
+      if (item) {
+        attId = item.id || item.fields_attachment_id || '';
+        fileId = item.File_Id__s || item.file_id || '';
+      }
+    }
+
+    if (fileId || (targetZohoId && attId)) {
+      const params = new URLSearchParams();
+      params.set('module', 'Deals');
+      if (targetZohoId) params.set('recordId', targetZohoId);
+      if (attId) params.set('attachmentId', attId);
+      if (fileId) params.set('fileId', fileId);
+      params.set('preview', 'true');
+      const directUrl = `/api/zoho/download-field-attachment?${params.toString()}`;
+      setPreviewScreenshotModal({
+        isOpen: true,
+        url: directUrl,
+        title: `${deal.id} - ${milestone.label} Screenshot (${milestone.screenshot || 'Receipt'})`
       });
       return;
     }

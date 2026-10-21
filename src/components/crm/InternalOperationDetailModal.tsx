@@ -19,6 +19,9 @@ import {
   POST_INCORPORATION_STATUSES,
   CERT_DOC_COLLECTION_STATUSES,
   CERT_FINAL_APP_STATUSES,
+  FUNDING_DPR_STATUSES,
+  FUNDING_FINANCE_STATUSES,
+  FUNDING_APP_SUBMISSION_STATUSES,
   DIRECTOR_ITR_STATUSES,
   COMPANY_TYPES,
   getOperationStagesForTeamType
@@ -1260,6 +1263,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                 <StandardSection
                   title="DPR / Pitch deck creation"
                   data={sections.dprCreation || {}}
+                  statusOptions={FUNDING_DPR_STATUSES}
                   onChange={(k, v) => updateSection('dprCreation', k, v)}
                 />
 
@@ -1267,6 +1271,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                 <StandardSection
                   title="Finance / Projected Financials"
                   data={sections.fundingFinance || {}}
+                  statusOptions={FUNDING_FINANCE_STATUSES}
                   onChange={(k, v) => updateSection('fundingFinance', k, v)}
                 />
 
@@ -1283,12 +1288,30 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       value={sections.appSubmission?.date || ''}
                       onChange={(val) => updateSection('appSubmission', 'date', val)}
                     />
-                    <SelectInput
-                      label="Status"
-                      value={sections.appSubmission?.status || 'In-process'}
-                      options={STANDARD_EXECUTION_STATUSES}
-                      onChange={(val) => updateSection('appSubmission', 'status', val)}
-                    />
+                    {(() => {
+                      const rawStatus = sections.appSubmission?.status;
+                      const currentAppStatus = (() => {
+                        if (!rawStatus || rawStatus === 'In-process' || rawStatus === 'In process') {
+                          return 'Pending';
+                        }
+                        const match = FUNDING_APP_SUBMISSION_STATUSES.find(
+                          (opt) => opt.toLowerCase() === rawStatus.toLowerCase()
+                        );
+                        return match || rawStatus;
+                      })();
+                      const safeAppOptions = FUNDING_APP_SUBMISSION_STATUSES.includes(currentAppStatus)
+                        ? FUNDING_APP_SUBMISSION_STATUSES
+                        : [currentAppStatus, ...FUNDING_APP_SUBMISSION_STATUSES];
+
+                      return (
+                        <SelectInput
+                          label="Status"
+                          value={currentAppStatus}
+                          options={safeAppOptions}
+                          onChange={(val) => updateSection('appSubmission', 'status', val)}
+                        />
+                      );
+                    })()}
                     <TextInput
                       label="Portal User ID"
                       value={sections.appSubmission?.portalId || ''}

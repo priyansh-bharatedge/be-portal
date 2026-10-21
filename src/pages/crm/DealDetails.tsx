@@ -37,6 +37,7 @@ import { useAuth } from '../../context/AuthContext';
 import { InternalOperationsAllocationTable } from '../../components/crm/InternalOperationsAllocationTable';
 import { generateServiceAllocationsForDeal } from '../../services/internalOperationsService';
 import { getDealSplitBreakdown, isDealPartnerBdm, isDealPaymentVerified, isUserPrimaryBdm, getDealMilestones, isValidServiceName, type DealMilestoneItem } from '../../utils/dealSplitUtils';
+import { ALL_SERVICES } from '../../utils/servicesList';
 
 // Helper to scan IndexedDB for all documents matching this deal
 const scanLocalDocuments = async (dealObj: any, currentParamId?: string): Promise<any[]> => {
@@ -311,6 +312,10 @@ export const DealDetails = () => {
   const [accountsRemark, setAccountsRemark] = useState<string>('');
   const [isSavingAccountsDetails, setIsSavingAccountsDetails] = useState<boolean>(false);
 
+  // Zoho Attachments State
+  const [zohoAttachments, setZohoAttachments] = useState<any[]>([]);
+  const [loadingAttachments, setLoadingAttachments] = useState<boolean>(false);
+
   // Payment Screenshots (Deal_payment_screenshot) State
   const [dealPaymentScreenshots, setDealPaymentScreenshots] = useState<{
     id: string;
@@ -327,17 +332,16 @@ export const DealDetails = () => {
         return;
       }
       const raw = deal.rawZohoDeal || {};
-      const zohoFieldScreenshots = Array.isArray(raw.Deal_payment_screenshot)
-        ? raw.Deal_payment_screenshot
-        : (Array.isArray(deal.Deal_payment_screenshot)
-          ? deal.Deal_payment_screenshot
-          : (Array.isArray(deal.paymentScreenshots) ? deal.paymentScreenshots : []));
+      const rawFieldScreenshots = raw.Deal_payment_screenshot ?? deal.Deal_payment_screenshot ?? deal.paymentScreenshots ?? raw.paymentScreenshots;
+      const zohoFieldScreenshots = Array.isArray(rawFieldScreenshots)
+        ? rawFieldScreenshots
+        : (rawFieldScreenshots && typeof rawFieldScreenshots === 'object' ? [rawFieldScreenshots] : []);
 
       const list: { id: string; name: string; url: string; size?: string }[] = [];
       const seenNames = new Set<string>();
+      const targetZohoId = String(deal.zohoId || (id && /^\d+$/.test(id) ? id : '') || '');
 
       // 1. From Zoho CRM Deal_payment_screenshot
-      const targetZohoId = String(deal.zohoId || (id && /^\d+$/.test(id) ? id : '') || '');
       for (const item of zohoFieldScreenshots) {
         if (!item) continue;
         const attId = item.id || item.fields_attachment_id || '';
@@ -356,7 +360,67 @@ export const DealDetails = () => {
         seenNames.add(fileName.toLowerCase());
       }
 
-      // 2. Scan IndexedDB for locally saved payment screenshots for this deal
+      // 2. Scan milestone screenshots (R1 to R8)
+      for (const slot of PAYMENT_SLOTS) {
+        const rawSs = deal[slot.screenshotField] ?? raw[slot.screenshotField];
+        if (!rawSs) continue;
+        let ssItem: any = null;
+        if (Array.isArray(rawSs) && rawSs.length > 0) {
+          ssItem = rawSs[0];
+        } else if (typeof rawSs === 'object') {
+          ssItem = rawSs;
+        }
+
+        let attId = '';
+        let fileId = '';
+        let fileName = '';
+        if (ssItem && typeof ssItem === 'object') {
+          attId = ssItem.id || ssItem.fields_attachment_id || '';
+          fileId = ssItem.File_Id__s || ssItem.file_id || '';
+          fileName = ssItem.File_Name__s || ssItem.name || ssItem.file_name || `${slot.label}_screenshot.png`;
+        } else if (typeof rawSs === 'string' && rawSs.trim()) {
+          fileName = rawSs.trim();
+        }
+
+        if (fileName && !seenNames.has(fileName.toLowerCase())) {
+          let url = '';
+          if (fileName.startsWith('http') || fileName.startsWith('blob:') || fileName.startsWith('/api/')) {
+            url = fileName;
+          } else if (fileId || (targetZohoId && attId)) {
+            url = getZohoFieldAttachmentUrl(targetZohoId, attId, fileId, 'Deals');
+          }
+          if (url) {
+            list.push({
+              id: String(attId || fileId || `slot_${slot.index}`),
+              name: fileName,
+              url,
+              size: `${slot.tabName} Payment`,
+            });
+            seenNames.add(fileName.toLowerCase());
+          }
+        }
+      }
+
+      // 3. Scan attachments from Zoho CRM (zohoAttachments) for image receipts
+      if (Array.isArray(zohoAttachments) && zohoAttachments.length > 0) {
+        for (const att of zohoAttachments) {
+          const fn = att.File_Name || att.name || att.file_name || '';
+          const isImg = att.isImage || /\.(png|jpe?g|webp|gif)$/i.test(fn);
+          if (isImg && fn && !seenNames.has(fn.toLowerCase())) {
+            const attId = att.id || att.attachmentId || '';
+            const url = att.downloadUrl || getZohoAttachmentDownloadUrl('Deals', targetZohoId, attId, true);
+            list.push({
+              id: String(attId || Math.random()),
+              name: fn,
+              url,
+              size: att.sizeText || '',
+            });
+            seenNames.add(fn.toLowerCase());
+          }
+        }
+      }
+
+      // 4. Scan IndexedDB for locally saved payment screenshots for this deal
       try {
         const allDbDocs = await getAllDocuments();
         const dealDlId = (deal?.id?.startsWith('DL-') ? deal.id : '') ||
@@ -391,7 +455,7 @@ export const DealDetails = () => {
         console.warn('Error reading local payment screenshots:', e);
       }
 
-      // 3. Fallback: single payment screenshot from deal if not already captured
+      // 5. Fallback: single payment screenshot from deal if not already captured
       if (list.length === 0 && deal.paymentScreenshotUrl) {
         list.push({
           id: 'deal_screenshot_url',
@@ -407,7 +471,7 @@ export const DealDetails = () => {
 
     extractScreenshots();
     return () => { isMounted = false; };
-  }, [deal, id]);
+  }, [deal, id, zohoAttachments]);
 
   // Load Sales Employees Directory for BDM 1 & BDM 2 Selectors
   useEffect(() => {
@@ -601,8 +665,6 @@ export const DealDetails = () => {
   }, [deal]);
 
   // Zoho & Local Attachments State
-  const [zohoAttachments, setZohoAttachments] = useState<any[]>([]);
-  const [loadingAttachments, setLoadingAttachments] = useState<boolean>(false);
   const [previewDoc, setPreviewDoc] = useState<{
     url: string;
     name: string;
@@ -1604,7 +1666,7 @@ export const DealDetails = () => {
   if (Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0) {
     const seenSubforms = new Set<string>();
     const uniqueSubforms = raw.Subform_1.filter((sf: any) => {
-      const rawKey = formatZohoValue(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '');
+      const rawKey = formatZohoValue(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || sf.Product_Name || sf.Service_Scheme || sf.Service_scheme || sf.Services || sf.Name || sf.name || sf.Legal_Schemas || '');
       const nameKey = rawKey.trim().toLowerCase();
       if (!nameKey) return true;
       if (seenSubforms.has(nameKey)) return false;
@@ -1626,7 +1688,7 @@ export const DealDetails = () => {
 
       return {
         id: String(sf.id || i + 1),
-        name: formatZohoValue(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'Service'),
+        name: formatZohoValue(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || sf.Product_Name || sf.Service_Scheme || sf.Service_scheme || sf.Services || sf.Name || sf.name || sf.Legal_Schemas || 'Service'),
         totalAmount: String(totalAmt || ''),
         baseAmount: String(withoutGst || 0),
         receivedAmount: sf.Received_amount || sf.Received || (recAmt > 0 ? String(recAmt) : ''),
@@ -1764,18 +1826,39 @@ export const DealDetails = () => {
   // If services array was still empty or contains invalid name, resolve serviceTitle with validation
   if (services.length === 0 || (services.length === 1 && !isValidServiceName(services[0].name, clientName, companyName, deal.id) && totalAmountNum > 0)) {
     let serviceTitle = '';
-    if (isValidServiceName(deal.service, clientName, companyName, deal.id)) {
-      serviceTitle = formatZohoValue(deal.service);
-    } else if (isValidServiceName(raw.Service_Name, clientName, companyName, deal.id)) {
-      serviceTitle = formatZohoValue(raw.Service_Name);
-    } else if (isValidServiceName(raw.Choose_Wisely, clientName, companyName, deal.id) && raw.Choose_Wisely !== 'New Case Booking') {
-      serviceTitle = formatZohoValue(raw.Choose_Wisely);
-    } else if (isValidServiceName(raw.Business_plan_selected, clientName, companyName, deal.id)) {
-      serviceTitle = formatZohoValue(raw.Business_plan_selected);
-    } else if (isValidServiceName(raw.Item_Name, clientName, companyName, deal.id)) {
-      serviceTitle = formatZohoValue(raw.Item_Name);
-    } else {
-      serviceTitle = 'General Services';
+    const candList = [
+      deal.service,
+      raw.Service_Name,
+      raw.Services,
+      raw.Service,
+      raw.Service_scheme,
+      raw.Service_Scheme,
+      raw.Legal_Schemas,
+      raw.Schemas,
+      raw.Product_Name,
+      raw.Choose_Wisely !== 'New Case Booking' ? raw.Choose_Wisely : null,
+      raw.Business_plan_selected,
+      raw.Item_Name,
+    ];
+    for (const cand of candList) {
+      if (!cand) continue;
+      const formatted = formatZohoValue(cand).trim();
+      if (formatted && formatted.toLowerCase() !== 'service' && formatted.toLowerCase() !== 'services' && isValidServiceName(formatted, clientName, companyName, deal.id)) {
+        serviceTitle = formatted;
+        break;
+      }
+    }
+    if (!serviceTitle) {
+      const dealNameStr = String(deal.Deal_Name || raw.Deal_Name || '');
+      if (dealNameStr) {
+        const match = ALL_SERVICES.find(s => s && s.length > 2 && dealNameStr.toLowerCase().includes(s.toLowerCase()));
+        if (match && isValidServiceName(match, clientName, companyName, deal.id)) {
+          serviceTitle = match;
+        }
+      }
+    }
+    if (!serviceTitle) {
+      serviceTitle = (deal.service && deal.service !== 'General Services') ? deal.service : 'General Services';
     }
 
     services = [{
@@ -2032,9 +2115,50 @@ export const DealDetails = () => {
       const matchedBdm2 = salesEmployees.find(e => e.name.toLowerCase() === bdm2Name.toLowerCase());
       const bdm2Id = matchedBdm2?.id || matchedBdm2?.zohoId || '';
 
-      // Screenshot name strictly for this milestone
+      // Screenshot strictly for this milestone
       const rawScreenshot = deal[slot.screenshotField] ?? raw[slot.screenshotField];
-      const existingName = typeof rawScreenshot === 'string' ? rawScreenshot : '';
+      let existingName = '';
+      let ssAttId = '';
+      let ssFileId = '';
+      let existingUrl = '';
+
+      if (rawScreenshot && typeof rawScreenshot === 'object') {
+        const item = Array.isArray(rawScreenshot) ? rawScreenshot[0] : rawScreenshot;
+        if (item && typeof item === 'object') {
+          existingName = item.File_Name__s || item.name || item.file_name || '';
+          ssAttId = item.id || item.fields_attachment_id || '';
+          ssFileId = item.File_Id__s || item.file_id || '';
+        }
+      } else if (typeof rawScreenshot === 'string' && rawScreenshot.trim()) {
+        existingName = rawScreenshot.trim();
+        if (existingName.startsWith('http') || existingName.startsWith('blob:') || existingName.startsWith('/api/')) {
+          existingUrl = existingName;
+        }
+      }
+
+      // Slot 1 fallback to Deal_payment_screenshot
+      if (slot.index === 1) {
+        const pss = deal.Deal_payment_screenshot ?? raw.Deal_payment_screenshot ?? deal.paymentScreenshots ?? raw.paymentScreenshots;
+        const pssItem = Array.isArray(pss) ? pss[0] : (pss && typeof pss === 'object' ? pss : null);
+        if (pssItem && typeof pssItem === 'object') {
+          if (!existingName) existingName = pssItem.File_Name__s || pssItem.name || pssItem.file_name || 'payment_screenshot.png';
+          if (!ssAttId) ssAttId = pssItem.id || pssItem.fields_attachment_id || '';
+          if (!ssFileId) ssFileId = pssItem.File_Id__s || pssItem.file_id || '';
+        } else if (typeof pss === 'string' && pss.trim() && !existingName) {
+          existingName = pss.trim();
+        }
+        if (!existingName) {
+          existingName = deal.paymentScreenshotName || raw.Payment_Screenshot_Name || '';
+        }
+        if (!existingUrl && (deal.paymentScreenshotUrl || raw.Payment_Screenshot_URL)) {
+          existingUrl = deal.paymentScreenshotUrl || raw.Payment_Screenshot_URL;
+        }
+      }
+
+      const targetZohoId = String(deal.zohoId || (id && /^\d+$/.test(id) ? id : '') || '');
+      if (!existingUrl && (ssFileId || (targetZohoId && ssAttId))) {
+        existingUrl = getZohoFieldAttachmentUrl(targetZohoId, ssAttId, ssFileId, 'Deals');
+      }
 
       // Bank type from R{i}_Bank_type
       const rawBank = deal[`R${slot.index}_Bank_type`] ?? raw[`R${slot.index}_Bank_type`] ?? deal.formData?.[`R${slot.index}_Bank_type`] ?? 
@@ -2056,7 +2180,7 @@ export const DealDetails = () => {
         bdm2Id,
         bdm2Name,
         screenshotFile: null,
-        screenshotPreview: null,
+        screenshotPreview: existingUrl || null,
         existingScreenshotName: existingName,
         bankType: slotBankType,
         isVerified: slotIsVerif,

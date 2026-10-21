@@ -628,13 +628,17 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
       r.Stage === 'Incorporation pending' || r.Stage === 'Incorporation pending from client' ||
       r.Stage === 'DSC work in progress' || r.Stage === 'Draft work in progress' ||
       r.Stage === 'Draft in review to client' || r.Stage === 'Draft approved from client' ||
-      r.Stage === 'Payment pending from client'
+      r.Stage === 'Payment pending from client' ||
+      r.Stage === 'Document work in progress' || r.Stage === 'Document in review to client' ||
+      r.Stage === 'Document approved from client' || r.Stage === 'Payment pending from client end' ||
+      r.Stage === 'Mapping issue'
     ).length;
     const myFinalFiling = myAssignedRecords.filter(r => 
       r.Stage === 'Final Filing' || r.Stage === 'Board Resolution' || r.Stage === 'Board resolution preparation' ||
       r.Stage === 'Z-share certificate' || r.Stage === 'MSME' || r.Stage === 'ADT-1 Filing' ||
       r.Stage === 'INC 20-A filing' || r.Stage === 'Process Completed' ||
-      r.Stage === 'Application submitted' || r.Stage === 'Application resubmitted' || r.Stage === 'Selected'
+      r.Stage === 'Application submitted' || r.Stage === 'Application resubmitted' ||
+      r.Stage === 'Application Resubmission' || r.Stage === 'Selected' || r.Stage === 'Application Selected'
     ).length;
 
     return { total, allocated, pending, uniqueDeals, myTotal, myDocCollection, myInProgress, myFinalFiling };

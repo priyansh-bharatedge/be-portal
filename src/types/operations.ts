@@ -89,6 +89,16 @@ export type OperationStage =
   | 'ADT-1 Filing'
   | 'INC 20-A filing'
   | 'Process Completed'
+  // Compliance specific operation stages
+  | 'Document work in progress'
+  | 'Document in review to client'
+  | 'Document approved from client'
+  | 'Payment pending from client end'
+  | 'Application Resubmission'
+  | 'Application Selected'
+  | 'Mapping issue'
+  | 'Hold - Annual Compliance'
+  | 'Hold - Audit not filled'
   | string;
 
 export const INCORPORATION_OPERATION_STAGES: OperationStage[] = [
@@ -111,6 +121,25 @@ export const INCORPORATION_OPERATION_STAGES: OperationStage[] = [
 ];
 
 export const DEFAULT_OPERATION_STAGES: OperationStage[] = INCORPORATION_OPERATION_STAGES;
+
+export const COMPLIANCE_OPERATION_STAGES: OperationStage[] = [
+  'Document pending from client',
+  'Incorporation pending from client',
+  'Document work in progress',
+  'Document in review to client',
+  'Document approved from client',
+  'Payment pending from client end',
+  'Application submitted',
+  'Application Resubmission',
+  'Application Selected',
+  'Mapping issue',
+  'Inelligible',
+  'Hold',
+  'Hold - Annual Compliance',
+  'Hold - Audit not filled',
+  'Transfer',
+  'Refund'
+];
 
 export const CERTIFICATION_OPERATION_STAGES: OperationStage[] = [
   'Document pending from client',
@@ -152,6 +181,7 @@ export const OPERATION_STAGES: OperationStage[] = INCORPORATION_OPERATION_STAGES
 export const ALL_OPERATION_STAGES: OperationStage[] = Array.from(
   new Set([
     ...INCORPORATION_OPERATION_STAGES,
+    ...COMPLIANCE_OPERATION_STAGES,
     ...CERTIFICATION_OPERATION_STAGES,
     ...FUNDING_OPERATION_STAGES,
     'Doc collection',
@@ -164,6 +194,7 @@ export const ALL_OPERATION_STAGES: OperationStage[] = Array.from(
 /**
  * Returns the relevant Operation Stages based on the record's Team Type.
  * - Incorporation: 16 stages
+ * - Compliance: 16 stages
  * - Certification: 15 stages (includes Selected)
  * - Funding: 14 stages (without Selected)
  * - Default: Incorporation stages
@@ -173,6 +204,9 @@ export function getOperationStagesForTeamType(teamType?: string): OperationStage
   const lower = String(teamType).toLowerCase().trim();
   if (lower.includes('incorporation')) {
     return INCORPORATION_OPERATION_STAGES;
+  }
+  if (lower.includes('compliance')) {
+    return COMPLIANCE_OPERATION_STAGES;
   }
   if (lower.includes('certification')) {
     return CERTIFICATION_OPERATION_STAGES;
@@ -261,6 +295,25 @@ export const CERT_DOC_COLLECTION_STATUSES = [
 export const CERT_FINAL_APP_STATUSES = [
   'Pending',
   'Approved'
+];
+
+export const FUNDING_DPR_STATUSES = [
+  'In process',
+  'In Review',
+  'Pending',
+  'Approved'
+];
+
+export const FUNDING_FINANCE_STATUSES = [
+  'In process',
+  'In Review',
+  'Pending',
+  'Approved'
+];
+
+export const FUNDING_APP_SUBMISSION_STATUSES = [
+  'Pending',
+  'Submitted'
 ];
 
 export const DIRECTOR_ITR_STATUSES = [
