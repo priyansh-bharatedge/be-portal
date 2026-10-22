@@ -49,6 +49,9 @@ export interface QuotationPrintData {
     totalAmount?: string | number;
     baseAmount?: string | number;
     quantity?: number;
+    notes?: string;
+    remarks?: string;
+    remark?: string;
   }>;
   totals?: {
     subtotal?: number;
@@ -138,9 +141,17 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
     const totalPrice = unitPrice * qty;
     calculatedSubtotal += totalPrice;
 
+    const noteContent = (item.notes || item.remarks || item.remark || '').trim();
+    const notesHtml = noteContent
+      ? `<div style="font-size: 11px; color: #6b7280; font-weight: normal; margin-top: 3px; font-style: italic;">${noteContent}</div>`
+      : '';
+
     return `
       <tr>
-        <td class="col-desc">${item.name || 'Professional Service'}</td>
+        <td class="col-desc">
+          <div style="font-weight: 600; color: #111827;">${item.name || 'Professional Service'}</div>
+          ${notesHtml}
+        </td>
         <td class="col-qty">${qty}</td>
         <td class="col-price">₹${formatINR(unitPrice)}</td>
         <td class="col-total">₹${formatINR(totalPrice)}</td>

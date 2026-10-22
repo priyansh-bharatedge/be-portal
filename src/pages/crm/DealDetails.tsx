@@ -2986,6 +2986,11 @@ export const DealDetails = () => {
                         <tr key={idx} className="hover:bg-orange-50/30 transition-colors">
                           <td className="px-4 py-3.5">
                             <div className="font-bold text-gray-900">{formatZohoValue(s.name || 'Website Development')}</div>
+                            {Boolean((s.notes || s.remarks || s.remark || '').trim()) && (
+                              <div className="text-xs text-gray-500 font-normal mt-0.5 italic">
+                                {(s.notes || s.remarks || s.remark).trim()}
+                              </div>
+                            )}
                             {s.paymentStages && (
                               <div className="text-[11px] text-gray-400 mt-0.5">Stage: {formatZohoValue(s.paymentStages)} {s.paymentType ? `• ${formatZohoValue(s.paymentType)}` : ''}</div>
                             )}

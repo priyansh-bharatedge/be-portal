@@ -17,6 +17,8 @@ interface DealService {
   name: string;
   totalAmount?: string;
   baseAmount?: string;
+  notes?: string;
+  remarks?: string;
 }
 
 export const Quotations = () => {
@@ -120,11 +122,14 @@ export const Quotations = () => {
         const b = s.baseAmount !== undefined 
           ? String(s.baseAmount) 
           : (t ? String(Number((Number(t) / 1.18).toFixed(2))) : '');
+        const noteVal = s.notes || s.remarks || s.remark || s.Description || '';
         return {
           id: s.id || Math.random().toString(),
           name: s.name || '',
           totalAmount: t,
           baseAmount: b,
+          notes: noteVal,
+          remarks: noteVal,
         };
       }));
       setAmountReceived(deal.totals?.amountReceived || (deal.received ? deal.received.replace(/[^0-9]/g, '') : ''));
@@ -224,7 +229,7 @@ export const Quotations = () => {
     } else {
       setQuotationServices([
         ...quotationServices,
-        { id: Math.random().toString(), name: serviceName, totalAmount: '', baseAmount: '' }
+        { id: Math.random().toString(), name: serviceName, totalAmount: '', baseAmount: '', notes: '', remarks: '' }
       ]);
     }
   };
@@ -250,6 +255,11 @@ export const Quotations = () => {
     setQuotationServices(quotationServices.map(s => {
       if (s.id === id) {
         const updated = { ...s, [field]: value };
+        if (field === 'notes') {
+          updated.remarks = value;
+        } else if (field === 'remarks') {
+          updated.notes = value;
+        }
         if (field === 'totalAmount') {
           const tNum = Number(value) || 0;
           const baseVal = tNum > 0 ? Number((tNum / 1.18).toFixed(2)) : 0;
@@ -268,7 +278,7 @@ export const Quotations = () => {
   const addBlankService = () => {
     setQuotationServices([
       ...quotationServices,
-      { id: Math.random().toString(), name: '', totalAmount: '', baseAmount: '' }
+      { id: Math.random().toString(), name: '', totalAmount: '', baseAmount: '', notes: '', remarks: '' }
     ]);
   };
 
@@ -590,12 +600,17 @@ export const Quotations = () => {
             employeeName: typeof z.Employee === 'object' ? z.Employee?.name : (z.Employee_Name || ''),
             employeeZohoId: typeof z.Employee === 'object' ? z.Employee?.id : (z.Employee || ''),
           },
-          servicesData: Array.isArray(z.Services_And_Pricing) ? z.Services_And_Pricing.map((s: any, idx: number) => ({
-            id: String(idx + 1),
-            name: s.Service || 'Service',
-            totalAmount: s.Total ? String(s.Total).replace(/[^0-9.]/g, '') : '',
-            baseAmount: s.Base ? String(s.Base).replace(/[^0-9.]/g, '') : '',
-          })) : [],
+          servicesData: Array.isArray(z.Services_And_Pricing) ? z.Services_And_Pricing.map((s: any, idx: number) => {
+            const noteVal = s.Notes || s.notes || s.Remarks || s.remarks || s.Remark || s.remark || s.Description || s.description || '';
+            return {
+              id: String(idx + 1),
+              name: s.Service || 'Service',
+              totalAmount: s.Total ? String(s.Total).replace(/[^0-9.]/g, '') : '',
+              baseAmount: s.Base ? String(s.Base).replace(/[^0-9.]/g, '') : '',
+              notes: noteVal,
+              remarks: noteVal,
+            };
+          }) : [],
           totals: {
             subtotal: z.Subtotal ? Number(String(z.Subtotal).replace(/[^0-9.]/g, '')) : 0,
             totalGst: z.Total_GST ? Number(String(z.Total_GST).replace(/[^0-9.]/g, '')) : 0,
@@ -850,10 +865,15 @@ export const Quotations = () => {
         servicesData: quotationServices.map(s => {
           const t = Number(s.totalAmount) || (Number(s.baseAmount) ? Number((Number(s.baseAmount) * 1.18).toFixed(2)) : 0);
           const b = Number(s.baseAmount) || (t > 0 ? Number((t / 1.18).toFixed(2)) : 0);
+          const noteVal = (s.notes || s.remarks || '').trim();
           return {
             ...s,
             totalAmount: String(t || s.totalAmount || ''),
-            baseAmount: String(b || s.baseAmount || '')
+            baseAmount: String(b || s.baseAmount || ''),
+            notes: noteVal,
+            remarks: noteVal,
+            Remark: noteVal,
+            Description: noteVal,
           };
         }),
         totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount },
@@ -1765,7 +1785,7 @@ export const Quotations = () => {
                             const gst = totalNum > 0 ? Number((totalNum - base).toFixed(2)) : 0;
 
                             return (
-                              <tr key={service.id}>
+                              <tr key={service.id} className="align-top">
                                 <td className="px-4 py-3">
                                   <div className="relative service-dropdown-container">
                                     <button
@@ -1834,9 +1854,20 @@ export const Quotations = () => {
                                       )}
                                     </AnimatePresence>
                                   </div>
+
+                                  {/* Sub field of notes or remarks */}
+                                  <div className="mt-2">
+                                    <input
+                                      type="text"
+                                      placeholder="Add notes / remarks for this service..."
+                                      value={service.notes || service.remarks || ''}
+                                      onChange={(e) => updateService(service.id, 'notes', e.target.value)}
+                                      className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none bg-gray-50/70 hover:bg-white text-gray-800 placeholder-gray-400 transition-colors shadow-2xs"
+                                    />
+                                  </div>
                                 </td>
 
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-3 pt-3.5">
                                   <input
                                     type="number"
                                     min="0"
@@ -1848,9 +1879,9 @@ export const Quotations = () => {
                                   />
                                 </td>
 
-                                <td className="px-4 py-3 text-right text-gray-600">₹{base.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
-                                <td className="px-4 py-3 text-right text-gray-500">₹{gst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
-                                <td className="px-4 py-3 text-center">
+                                <td className="px-4 py-3 pt-4 text-right text-gray-600">₹{base.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                <td className="px-4 py-3 pt-4 text-right text-gray-500">₹{gst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                <td className="px-4 py-3 pt-3.5 text-center">
                                   <button
                                     onClick={() => removeService(service.id)}
                                     className="text-gray-400 hover:text-red-500 transition-colors p-1"

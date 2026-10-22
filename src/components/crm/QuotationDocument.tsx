@@ -169,7 +169,14 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
                   const itemTotal = unitPrice * qty;
                   return (
                     <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-orange-50/30'}>
-                      <td className="py-2.5 px-4 font-medium text-gray-900">{item.name || 'Professional Service'}</td>
+                      <td className="py-2.5 px-4 font-medium text-gray-900">
+                        <div>{item.name || 'Professional Service'}</div>
+                        {Boolean((item.notes || item.remarks || item.remark || '').trim()) && (
+                          <div className="text-[11px] text-gray-500 font-normal mt-0.5 whitespace-pre-line italic">
+                            {(item.notes || item.remarks || item.remark).trim()}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-2.5 px-4 text-center text-gray-700">{qty}</td>
                       <td className="py-2.5 px-4 text-right text-gray-800">₹{formatINR(unitPrice)}</td>
                       <td className="py-2.5 px-4 text-right font-semibold text-gray-900">₹{formatINR(itemTotal)}</td>

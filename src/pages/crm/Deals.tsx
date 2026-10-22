@@ -58,6 +58,8 @@ interface DealService {
   name: string;
   totalAmount?: string;
   baseAmount?: string;
+  notes?: string;
+  remarks?: string;
 }
 
 interface DealSubordinateInfo {
@@ -1062,7 +1064,7 @@ export const Deals = () => {
     } else {
       setDealServices([
         ...dealServices,
-        { id: Math.random().toString(), name: serviceName, totalAmount: '', baseAmount: '' }
+        { id: Math.random().toString(), name: serviceName, totalAmount: '', baseAmount: '', notes: '', remarks: '' }
       ]);
     }
   };
@@ -1088,6 +1090,11 @@ export const Deals = () => {
     setDealServices(dealServices.map(s => {
       if (s.id === id) {
         const updated = { ...s, [field]: value };
+        if (field === 'notes') {
+          updated.remarks = value;
+        } else if (field === 'remarks') {
+          updated.notes = value;
+        }
         if (field === 'totalAmount') {
           const tNum = Number(value) || 0;
           const baseVal = tNum > 0 ? Number((tNum / 1.18).toFixed(2)) : 0;
@@ -1106,7 +1113,7 @@ export const Deals = () => {
   const addBlankService = () => {
     setDealServices([
       ...dealServices,
-      { id: Math.random().toString(), name: '', totalAmount: '', baseAmount: '' }
+      { id: Math.random().toString(), name: '', totalAmount: '', baseAmount: '', notes: '', remarks: '' }
     ]);
   };
 
@@ -4331,7 +4338,7 @@ export const Deals = () => {
                             const gst = totalNum > 0 ? Number((totalNum - base).toFixed(2)) : 0;
 
                             return (
-                              <tr key={service.id}>
+                              <tr key={service.id} className="align-top">
                                 <td className="px-4 py-3">
                                   <div className="relative service-dropdown-container">
                                     <button
@@ -4400,9 +4407,20 @@ export const Deals = () => {
                                       )}
                                     </AnimatePresence>
                                   </div>
+
+                                  {/* Sub field of notes or remarks */}
+                                  <div className="mt-2">
+                                    <input
+                                      type="text"
+                                      placeholder="Add notes / remarks for this service..."
+                                      value={service.notes || service.remarks || ''}
+                                      onChange={(e) => updateService(service.id, 'notes', e.target.value)}
+                                      className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none bg-gray-50/70 hover:bg-white text-gray-800 placeholder-gray-400 transition-colors shadow-2xs"
+                                    />
+                                  </div>
                                 </td>
 
-                                <td className="px-4 py-3">
+                                <td className="px-4 py-3 pt-3.5">
                                   <input
                                     type="number"
                                     min="0"
@@ -4414,9 +4432,9 @@ export const Deals = () => {
                                   />
                                 </td>
 
-                                <td className="px-4 py-3 text-right text-gray-600">₹{base.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
-                                <td className="px-4 py-3 text-right text-gray-500">₹{gst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
-                                <td className="px-4 py-3 text-center">
+                                <td className="px-4 py-3 pt-4 text-right text-gray-600">₹{base.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                <td className="px-4 py-3 pt-4 text-right text-gray-500">₹{gst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                <td className="px-4 py-3 pt-3.5 text-center">
                                   <button
                                     onClick={() => removeService(service.id)}
                                     className="text-gray-400 hover:text-red-500 transition-colors p-1"

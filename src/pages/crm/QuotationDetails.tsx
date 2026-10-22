@@ -119,8 +119,16 @@ export const QuotationDetails = () => {
                     const gst = totalNum > 0 ? Number((totalNum - base).toFixed(2)) : Number((base * 0.18).toFixed(2));
                     const finalTotal = totalNum > 0 ? totalNum : Number((base + gst).toFixed(2));
                     return (
-                      <tr key={idx}>
-                        <td className="px-4 py-3 font-medium">{s.name} {qty > 1 ? `x${qty}` : ''}</td>
+                      <tr key={idx} className="align-top">
+                        <td className="px-4 py-3 font-medium">
+                          <div className="text-gray-900 font-semibold">{s.name} {qty > 1 ? `x${qty}` : ''}</div>
+                          {Boolean((s.notes || s.remarks || s.remark || '').trim()) && (
+                            <div className="text-xs text-gray-500 font-normal mt-0.5 whitespace-pre-wrap flex items-start">
+                              <span className="text-be-orange mr-1 font-semibold">Note:</span>
+                              <span>{(s.notes || s.remarks || s.remark).trim()}</span>
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right">₹{base.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
                         <td className="px-4 py-3 text-right">₹{gst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
                         <td className="px-4 py-3 text-right font-semibold">₹{finalTotal.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
