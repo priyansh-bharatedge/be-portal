@@ -168,6 +168,10 @@ export const getDealReceivedAmount = (d: any): number => {
 
 export const getDealPendingAmount = (d: any): number => {
   if (!d) return 0;
+  const amt = getDealTotalAmount(d);
+  const rec = getDealReceivedAmount(d);
+  if (amt > 0 && rec >= amt) return 0;
+  if (amt > 0 && rec > 0) return Math.max(0, Number((amt - rec).toFixed(2)));
   if (d.rawPending && d.rawPending > 0) return d.rawPending;
   if (d.totals?.pendingAmount && Number(d.totals.pendingAmount) > 0) return Number(d.totals.pendingAmount);
   if (d.pending && d.pending !== '₹0') {
@@ -194,8 +198,6 @@ export const getDealPendingAmount = (d: any): number => {
     );
     if (zPend > 0) return zPend;
   }
-  const amt = getDealTotalAmount(d);
-  const rec = getDealReceivedAmount(d);
   if (amt > rec && rec > 0) return Number((amt - rec).toFixed(2));
   return 0;
 };

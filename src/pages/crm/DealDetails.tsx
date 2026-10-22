@@ -1678,8 +1678,10 @@ export const DealDetails = () => {
       const agreementAmount = parseNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount || 0);
       const withoutGst = parseNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
       const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
-      const recAmt = parseNum(sf.Received_amount || sf.Received || 0);
-      const pendAmt = parseNum(sf.Pending_amount || sf.Pending || (totalAmt > recAmt ? totalAmt - recAmt : 0));
+      const stageStr = formatZohoValue(sf.Payment_stages || sf.Payment_type || '').toLowerCase();
+      const isSfFullPaid = stageStr.includes('full amount paid') || stageStr.includes('fully paid');
+      const recAmt = isSfFullPaid && totalAmt > 0 ? totalAmt : parseNum(sf.Received_amount || sf.Received || 0);
+      const pendAmt = isSfFullPaid ? 0 : parseNum(sf.Pending_amount || sf.Pending || (totalAmt > recAmt ? totalAmt - recAmt : 0));
 
       servicesSumTotal += totalAmt;
       servicesSumBase += withoutGst;
@@ -1778,17 +1780,21 @@ export const DealDetails = () => {
     deal.received ? parseNum(deal.received) : 0
   );
 
-  const pendingAmountNum = findFirstPos(
-    raw.Total_Pending_Amount,
-    raw.Deal_Pending_Amount,
-    raw.Pending_amount,
-    raw.Pending_Amount,
-    raw.Pending,
-    servicesSumPending,
-    totalAmountNum > receivedAmountNum ? Number((totalAmountNum - receivedAmountNum).toFixed(2)) : 0,
-    deal.totals?.pendingAmount,
-    deal.pending ? parseNum(deal.pending) : 0
-  );
+  const pendingAmountNum = (totalAmountNum > 0 && receivedAmountNum >= totalAmountNum)
+    ? 0
+    : (totalAmountNum > 0 && receivedAmountNum > 0)
+    ? Math.max(0, Number((totalAmountNum - receivedAmountNum).toFixed(2)))
+    : findFirstPos(
+        raw.Total_Pending_Amount,
+        raw.Deal_Pending_Amount,
+        raw.Pending_amount,
+        raw.Pending_Amount,
+        raw.Pending,
+        servicesSumPending,
+        totalAmountNum > receivedAmountNum ? Number((totalAmountNum - receivedAmountNum).toFixed(2)) : 0,
+        deal.totals?.pendingAmount,
+        deal.pending ? parseNum(deal.pending) : 0
+      );
 
   // Initial booking advance payment received at deal creation (distinct from R1-R8 remaining payments)
   const resolvedBookingAmount = (() => {
@@ -2970,8 +2976,11 @@ export const DealDetails = () => {
                       const totalNum = Number(s.totalAmount || 0);
                       const baseNum = Number(s.baseAmount || (totalNum > 0 ? (totalNum / 1.18).toFixed(2) : 0));
                       const gstNum = totalNum > baseNum ? Number((totalNum - baseNum).toFixed(2)) : Number((baseNum * 0.18).toFixed(2));
-                      const recNum = s.receivedAmount ? Number(s.receivedAmount) : 0;
-                      const pendNum = s.pendingAmount ? Number(s.pendingAmount) : (totalNum > recNum ? totalNum - recNum : 0);
+                      const isDealFullyPaid = totalAmountNum > 0 && receivedAmountNum >= totalAmountNum;
+                      const stageStr = formatZohoValue(s.paymentStages || s.paymentType || '').toLowerCase();
+                      const isServiceFullyPaid = isDealFullyPaid || stageStr.includes('full amount paid') || stageStr.includes('fully paid');
+                      const recNum = isServiceFullyPaid ? totalNum : (s.receivedAmount ? Number(s.receivedAmount) : 0);
+                      const pendNum = isServiceFullyPaid ? 0 : (s.pendingAmount ? Number(s.pendingAmount) : (totalNum > recNum ? totalNum - recNum : 0));
 
                       return (
                         <tr key={idx} className="hover:bg-orange-50/30 transition-colors">
@@ -4283,12 +4292,12 @@ export const DealDetails = () => {
                 </div>
               </div>
 
-              <div className="p-3.5 bg-orange-50/80 rounded-xl border border-orange-100 text-orange-800 space-y-1">
-                <div className="flex items-center text-xs font-semibold text-orange-700">
-                  <Clock size={13} className="mr-1.5" />
+              <div className={`p-3.5 rounded-xl border space-y-1 ${pendingAmountNum === 0 ? 'bg-gray-50/80 border-gray-200 text-gray-700' : 'bg-orange-50/80 border-orange-100 text-orange-800'}`}>
+                <div className={`flex items-center text-xs font-semibold ${pendingAmountNum === 0 ? 'text-emerald-700' : 'text-orange-700'}`}>
+                  {pendingAmountNum === 0 ? <CheckCircle2 size={13} className="mr-1.5 text-emerald-600" /> : <Clock size={13} className="mr-1.5" />}
                   Pending
                 </div>
-                <div className="text-base font-bold">
+                <div className={`text-base font-bold ${pendingAmountNum === 0 ? 'text-emerald-700' : ''}`}>
                   ₹{pendingAmountNum.toLocaleString('en-IN')}
                 </div>
               </div>

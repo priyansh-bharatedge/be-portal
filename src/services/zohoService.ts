@@ -1771,8 +1771,10 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       const agreementAmount = parseZohoNum(sf.Agreement_amount || sf.totalAmount || sf.Total_amount || sf.Total || sf.Amount || 0);
       const wGst = parseZohoNum(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? Number((agreementAmount / 1.18).toFixed(2)) : 0));
       const tAmt = agreementAmount || (wGst > 0 ? Number((wGst * 1.18).toFixed(2)) : 0);
-      const recAmt = parseZohoNum(sf.Received_amount || sf.Received || 0);
-      const pendAmt = parseZohoNum(sf.Pending_amount || sf.Pending || (tAmt > recAmt ? tAmt - recAmt : 0));
+      const stageStr = extractZohoName(sf.Payment_stages || sf.Payment_type || '').toLowerCase();
+      const isSfFullPaid = stageStr.includes('full amount paid') || stageStr.includes('fully paid');
+      const recAmt = isSfFullPaid && tAmt > 0 ? tAmt : parseZohoNum(sf.Received_amount || sf.Received || 0);
+      const pendAmt = isSfFullPaid ? 0 : parseZohoNum(sf.Pending_amount || sf.Pending || (tAmt > recAmt ? tAmt - recAmt : 0));
 
       subformTotal += tAmt;
       subformWithoutGst += wGst;
@@ -1893,18 +1895,22 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     existingDeal?.received ? parseZohoNum(existingDeal.received) : 0
   );
 
-  const pendNum = findFirstPositive(
-    rawZoho.Total_Pending_Amount,
-    rawZoho.Deal_Pending_Amount,
-    rawZoho.Pending_amount,
-    rawZoho.Pending_Amount,
-    rawZoho.Pending,
-    subformPending,
-    totalNum > recNum ? Number((totalNum - recNum).toFixed(2)) : 0,
-    existingDeal?.rawPending,
-    existingDeal?.totals?.pendingAmount,
-    existingDeal?.pending ? parseZohoNum(existingDeal.pending) : 0
-  );
+  const pendNum = (totalNum > 0 && recNum >= totalNum)
+    ? 0
+    : (totalNum > 0 && recNum > 0)
+    ? Math.max(0, Number((totalNum - recNum).toFixed(2)))
+    : findFirstPositive(
+        rawZoho.Total_Pending_Amount,
+        rawZoho.Deal_Pending_Amount,
+        rawZoho.Pending_amount,
+        rawZoho.Pending_Amount,
+        rawZoho.Pending,
+        subformPending,
+        totalNum > recNum ? Number((totalNum - recNum).toFixed(2)) : 0,
+        existingDeal?.rawPending,
+        existingDeal?.totals?.pendingAmount,
+        existingDeal?.pending ? parseZohoNum(existingDeal.pending) : 0
+      );
 
   const phone = rawZoho.Client_contact_detail || rawZoho.Client_contact_detail_cs || rawZoho.Client_contact_detail_bp || rawZoho.Client_contact_detail_fnf || rawZoho.client_contact_detail_st || rawZoho.Client_s_alternate_contact_detail || rawZoho.Client_s_alternate_contact_detail_bp || rawZoho.Mobile || rawZoho.Phone || existingDeal?.formData?.mobile || '';
   const email = rawZoho.Client_Email_address || rawZoho.Client_Email_address_cs || rawZoho.Client_Email_address_fnf || rawZoho.Client_Email_address_bp || rawZoho.client_email_address_st || rawZoho.Email || existingDeal?.formData?.email || '';

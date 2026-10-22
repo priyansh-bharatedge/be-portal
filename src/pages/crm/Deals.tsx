@@ -383,6 +383,10 @@ export const Deals = () => {
 
   const getDealPending = (d: any): number => {
     if (!d) return 0;
+    const amt = getDealAmount(d);
+    const rec = getDealReceived(d);
+    if (amt > 0 && rec >= amt) return 0;
+    if (amt > 0 && rec > 0) return Math.max(0, Number((amt - rec).toFixed(2)));
     if (d.rawPending && d.rawPending > 0) return d.rawPending;
     if (d.totals?.pendingAmount && Number(d.totals.pendingAmount) > 0) return Number(d.totals.pendingAmount);
     if (d.pending && d.pending !== '₹0') {
@@ -1373,16 +1377,20 @@ export const Deals = () => {
         existingIdx >= 0 ? parseZohoNum(updatedDeals[existingIdx]?.rawReceived || updatedDeals[existingIdx]?.received || updatedDeals[existingIdx]?.totals?.receivedAmount) : 0
       );
 
-      const pendingAmountNum = findFirstPositive(
-        zDeal.Total_Pending_Amount,
-        zDeal.Deal_Pending_Amount,
-        zDeal.Pending_amount,
-        zDeal.Pending_Amount,
-        zDeal.Pending,
-        subformPending,
-        totalAmountNum > receivedAmountNum ? Number((totalAmountNum - receivedAmountNum).toFixed(2)) : 0,
-        existingIdx >= 0 ? parseZohoNum(updatedDeals[existingIdx]?.rawPending || updatedDeals[existingIdx]?.pending || updatedDeals[existingIdx]?.totals?.pendingAmount) : 0
-      );
+      const pendingAmountNum = (totalAmountNum > 0 && receivedAmountNum >= totalAmountNum)
+        ? 0
+        : (totalAmountNum > 0 && receivedAmountNum > 0)
+        ? Math.max(0, Number((totalAmountNum - receivedAmountNum).toFixed(2)))
+        : findFirstPositive(
+            zDeal.Total_Pending_Amount,
+            zDeal.Deal_Pending_Amount,
+            zDeal.Pending_amount,
+            zDeal.Pending_Amount,
+            zDeal.Pending,
+            subformPending,
+            totalAmountNum > receivedAmountNum ? Number((totalAmountNum - receivedAmountNum).toFixed(2)) : 0,
+            existingIdx >= 0 ? parseZohoNum(updatedDeals[existingIdx]?.rawPending || updatedDeals[existingIdx]?.pending || updatedDeals[existingIdx]?.totals?.pendingAmount) : 0
+          );
 
       // 3. Contact & Tax info
       const contactPhone = zDeal.Client_contact_detail || zDeal.Client_contact_detail_cs || zDeal.Client_contact_detail_bp || zDeal.Client_contact_detail_fnf || zDeal.client_contact_detail_st || zDeal.Client_s_alternate_contact_detail || zDeal.Client_s_alternate_contact_detail_bp || zDeal.Mobile || zDeal.Phone || '';

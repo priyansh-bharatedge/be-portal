@@ -248,15 +248,19 @@ export const CrmDashboard = () => {
         subformReceived
       );
 
-      const pendAmt = findFirstPositive(
-        zDeal.Total_Pending_Amount,
-        zDeal.Deal_Pending_Amount,
-        zDeal.Pending_amount,
-        zDeal.Pending_Amount,
-        zDeal.Pending,
-        subformPending,
-        totalAmt > recAmt ? Number((totalAmt - recAmt).toFixed(2)) : 0
-      );
+      const pendAmt = (totalAmt > 0 && recAmt >= totalAmt)
+        ? 0
+        : (totalAmt > 0 && recAmt > 0)
+        ? Math.max(0, Number((totalAmt - recAmt).toFixed(2)))
+        : findFirstPositive(
+            zDeal.Total_Pending_Amount,
+            zDeal.Deal_Pending_Amount,
+            zDeal.Pending_amount,
+            zDeal.Pending_Amount,
+            zDeal.Pending,
+            subformPending,
+            totalAmt > recAmt ? Number((totalAmt - recAmt).toFixed(2)) : 0
+          );
 
       const stage = zDeal.Stage || 'Sales';
       let status = 'New';
