@@ -46,14 +46,14 @@ export const QuotationDetails = () => {
           </div>
         </div>
         <div className="flex items-center space-x-3">
-          <button 
+          <button
             onClick={() => setIsPreviewOpen(true)}
             className="px-3.5 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-lg flex items-center space-x-1.5 text-sm font-semibold shadow-sm transition-colors"
             title="Open Full Quotation Preview"
           >
             <Eye size={16} className="text-orange-600" /> <span>View Quotation</span>
           </button>
-          <button 
+          <button
             onClick={() => downloadQuotationPDF(quotation)}
             className="px-4 py-2 bg-be-orange text-white rounded-lg flex items-center space-x-2 text-sm font-semibold shadow-sm hover:bg-be-orangeHover transition-colors"
             title="Download Quotation PDF"
@@ -192,7 +192,7 @@ export const QuotationDetails = () => {
             </h2>
 
             {/* Document preview card */}
-            <div 
+            <div
               onClick={() => setIsPreviewOpen(true)}
               className="p-3.5 bg-gradient-to-br from-orange-50/60 to-white rounded-xl border border-orange-200/80 hover:border-orange-400 transition-all cursor-pointer group mb-4 shadow-sm"
             >
@@ -242,7 +242,7 @@ export const QuotationDetails = () => {
 
       {/* Full Document Preview Modal */}
       {isPreviewOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsPreviewOpen(false);
@@ -257,7 +257,7 @@ export const QuotationDetails = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-gray-900">
-                    Sales Quotation Preview — {quotation.id}
+                    Service Quotation Preview — {quotation.id}
                   </h3>
                   <p className="text-xs text-gray-500">Official BharatEdge Document</p>
                 </div>

@@ -176,7 +176,7 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sales Quotation - ${quotationNumber} - BharatEdge Services</title>
+  <title>Service Quotation - ${quotationNumber} - BharatEdge Services</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
@@ -683,7 +683,7 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
         <div class="logo-container">
           <img src="${BHARATEDGE_LOGO_BASE64}" alt="BharatEdge Services" class="logo-img" />
         </div>
-        <h1 class="doc-main-title">SALES QUOTATION</h1>
+        <h1 class="doc-main-title">SERVICE QUOTATION</h1>
         <div class="meta-details">
           <div><strong>Quotation Number:</strong> ${quotationNumber}</div>
           <div><strong>Date:</strong> ${quotationDate}</div>
