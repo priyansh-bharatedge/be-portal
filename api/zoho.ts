@@ -716,6 +716,9 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
   const bookingDate = formatDateForZoho(deal.date || deal.bookingDate) || todayDate;
   const paymentDate = formatDateForZoho(deal.Payment_Date || deal.paymentDate || deal.payment_date || deal.date || deal.bookingDate) || bookingDate;
 
+  const amountAfterDisb = Number(deal.amount_if_you_have_kindly_put_0 ?? fd.amount_if_you_have_kindly_put_0 ?? deal.amountAfterDisbursement ?? fd.amountAfterDisbursement ?? deal.Amount_After_disbursement ?? 0);
+  const successFeesVal = String(deal.successFees || fd.successFees || deal.Success_fees || fd.Success_fees || deal.Success_fee || fd.Success_fee || '');
+
   const payload: Record<string, any> = {
     Deal_Name: dealName,
     Name1: dealName,
@@ -729,11 +732,12 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
     Deal_Received_Amount: amountReceivedNum,
     Total_Received_Amount: amountReceivedNum,
     Received_amount: amountReceivedNum,
-    Amount_After_disbursement: amountReceivedNum,
+    Amount_After_disbursement: amountAfterDisb,
     Deal_Pending_Amount: pendingAmountNum,
     Total_Pending_Amount: pendingAmountNum,
     Pending_amount: pendingAmountNum,
-    amount_if_you_have_kindly_put_0: 0,
+    amount_if_you_have_kindly_put_0: amountAfterDisb,
+    ...(successFeesVal ? { Success_fees: successFeesVal, Success_fee: successFeesVal } : {}),
     Payment_Date: paymentDate,
     Booking_Date: bookingDate,
     Sales_date: bookingDate,
@@ -858,6 +862,7 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
         Payment_type: amountReceivedNum >= grandTotalNum ? 'Full amount paid' : amountReceivedNum > 0 ? 'Partially paid' : 'Online',
         Payment_received_date: bookingDate,
         LinkingModule2_Serial_Number: String(idx + 1),
+        ...(svc.successFees || successFeesVal ? { Success_fees: svc.successFees || successFeesVal } : {}),
       };
     });
   } else if (deal.service || fd.service) {
@@ -876,6 +881,7 @@ function buildDealZohoPayload(deal: any): Record<string, any> {
         Payment_type: amountReceivedNum >= grandTotalNum ? 'Full amount paid' : amountReceivedNum > 0 ? 'Partially paid' : 'Online',
         Payment_received_date: bookingDate,
         LinkingModule2_Serial_Number: '1',
+        ...(successFeesVal ? { Success_fees: successFeesVal } : {}),
       }
     ];
   }

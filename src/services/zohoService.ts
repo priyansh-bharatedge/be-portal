@@ -1918,6 +1918,25 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   const panVal = rawZoho.Pan_number || rawZoho.PAN_Number || rawZoho.PAN_Card || rawZoho.PAN || existingDeal?.formData?.panCard || '';
   const aadhVal = rawZoho.Aadhaar_Card || rawZoho.Aadhaar_number || rawZoho.Aadhaar_Number || rawZoho.Aadhar_Card || rawZoho.Aadhaar || existingDeal?.formData?.aadhaarCard || '';
 
+  const amountAfterDisbursement = Number(
+    rawZoho.amount_if_you_have_kindly_put_0 ??
+    rawZoho.Amount_After_disbursement ??
+    existingDeal?.amount_if_you_have_kindly_put_0 ??
+    existingDeal?.amountAfterDisbursement ??
+    existingDeal?.formData?.amountAfterDisbursement ??
+    0
+  );
+
+  const successFees = String(
+    rawZoho.Success_fees ??
+    rawZoho.Success_fee ??
+    servicesSubform[0]?.successFees ??
+    existingDeal?.successFees ??
+    existingDeal?.Success_fees ??
+    existingDeal?.formData?.successFees ??
+    ''
+  );
+
   const partnerBdmLookup = typeof rawZoho.Partner_BDM === 'object' && rawZoho.Partner_BDM !== null ? rawZoho.Partner_BDM : null;
 
   const partnerBdmName =
@@ -2099,6 +2118,12 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     Payment_Date: rawZoho.Payment_Date || rawZoho.Payment_received_date || existingDeal?.Payment_Date,
     paymentDate: rawZoho.Payment_Date || rawZoho.Payment_received_date || existingDeal?.paymentDate,
     source: existingDeal?.source || 'System',
+    amountAfterDisbursement,
+    amount_if_you_have_kindly_put_0: amountAfterDisbursement,
+    Amount_After_disbursement: amountAfterDisbursement,
+    successFees,
+    Success_fees: successFees,
+    Success_fee: successFees,
     hasPartnerBdm,
     has_partner_bdm: hasPartnerBdm,
     partnerBdmId,
@@ -2173,6 +2198,12 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       employeeName,
       employeeZohoId,
       salesEmployee: employeeName || existingDeal?.salesEmployee || '',
+      amountAfterDisbursement: String(amountAfterDisbursement),
+      amount_if_you_have_kindly_put_0: String(amountAfterDisbursement),
+      Amount_After_disbursement: String(amountAfterDisbursement),
+      successFees,
+      Success_fees: successFees,
+      Success_fee: successFees,
       billingAddress: rawZoho.Billing_address || existingDeal?.formData?.billingAddress || '',
       Billing_address: rawZoho.Billing_address || existingDeal?.formData?.Billing_address || existingDeal?.formData?.billingAddress || '',
       companyAddress: rawZoho.Company_address || existingDeal?.formData?.companyAddress || '',

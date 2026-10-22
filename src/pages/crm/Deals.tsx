@@ -795,7 +795,9 @@ export const Deals = () => {
     billingAddress: '', Billing_address: '',
     companyName: '', businessType: '', doi: '', gstNumber: '',
     companyPan: '', sector: 'IT', industry: 'Software',
-    companyAddress: '', Company_address: ''
+    companyAddress: '', Company_address: '',
+    amountAfterDisbursement: '0', amount_if_you_have_kindly_put_0: '0',
+    successFees: '', Success_fees: ''
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -884,6 +886,28 @@ export const Deals = () => {
       const industry = fd.industry || deal.industry || localComp?.industry || 'Software';
       const companyAddress = fd.companyAddress || fd.Company_address || deal.companyAddress || deal.Company_address || localComp?.companyAddress || rawZ.Company_address || rawZ.Company_Address || '';
 
+      const amountAfterDisbursement = String(
+        deal.amount_if_you_have_kindly_put_0 ??
+        deal.Amount_After_disbursement ??
+        deal.amountAfterDisbursement ??
+        fd.amount_if_you_have_kindly_put_0 ??
+        fd.amountAfterDisbursement ??
+        rawZ.amount_if_you_have_kindly_put_0 ??
+        rawZ.Amount_After_disbursement ??
+        '0'
+      );
+      const successFees = String(
+        deal.successFees ??
+        deal.Success_fees ??
+        deal.Success_fee ??
+        fd.successFees ??
+        fd.Success_fees ??
+        rawZ.Success_fees ??
+        rawZ.Success_fee ??
+        (rawZ.Subform_1?.[0]?.Success_fees) ??
+        ''
+      );
+
       setFormData({
         clientName,
         mobile,
@@ -903,7 +927,11 @@ export const Deals = () => {
         sector,
         industry,
         companyAddress,
-        Company_address: companyAddress
+        Company_address: companyAddress,
+        amountAfterDisbursement,
+        amount_if_you_have_kindly_put_0: amountAfterDisbursement,
+        successFees,
+        Success_fees: successFees
       });
 
       let services: DealService[] = [];
@@ -974,7 +1002,9 @@ export const Deals = () => {
         billingAddress: '', Billing_address: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
         companyPan: '', sector: 'IT', industry: 'Software',
-        companyAddress: '', Company_address: ''
+        companyAddress: '', Company_address: '',
+        amountAfterDisbursement: '0', amount_if_you_have_kindly_put_0: '0',
+        successFees: '', Success_fees: ''
       });
       setDealServices([]);
       setAmountReceived('');
@@ -999,7 +1029,9 @@ export const Deals = () => {
         billingAddress: '', Billing_address: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
         companyPan: '', sector: 'IT', industry: 'Software',
-        companyAddress: '', Company_address: ''
+        companyAddress: '', Company_address: '',
+        amountAfterDisbursement: '0', amount_if_you_have_kindly_put_0: '0',
+        successFees: '', Success_fees: ''
       });
       setFormErrors({});
       setDealServices([]);
@@ -2284,6 +2316,11 @@ export const Deals = () => {
         partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
         partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
         bookingAmount: Number(amountReceived) || 0,
+        amount_if_you_have_kindly_put_0: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
+        Amount_After_disbursement: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
+        amountAfterDisbursement: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
+        successFees: formData.successFees || formData.Success_fees || '',
+        Success_fees: formData.successFees || formData.Success_fees || '',
         remark: remark.trim(),
         Remark: remark.trim(),
         remarks: remark.trim(),
@@ -2291,6 +2328,11 @@ export const Deals = () => {
         // Full details
         formData: {
           ...formData,
+          amount_if_you_have_kindly_put_0: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
+          Amount_After_disbursement: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
+          amountAfterDisbursement: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
+          successFees: formData.successFees || formData.Success_fees || '',
+          Success_fees: formData.successFees || formData.Success_fees || '',
           remark: remark.trim(),
           Remark: remark.trim(),
           remarks: remark.trim(),
@@ -2324,7 +2366,9 @@ export const Deals = () => {
           return {
             ...s,
             totalAmount: String(t || s.totalAmount || ''),
-            baseAmount: String(b || s.baseAmount || '')
+            baseAmount: String(b || s.baseAmount || ''),
+            successFees: (s as any).successFees || formData.successFees || formData.Success_fees || '',
+            Success_fees: (s as any).successFees || formData.successFees || formData.Success_fees || '',
           };
         }),
         totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount, bookingAmount: Number(amountReceived) || 0 },
@@ -4581,6 +4625,52 @@ export const Deals = () => {
                       <div className="flex justify-between text-orange-600 font-semibold items-center">
                         <span>Pending Amount</span>
                         <span className="text-base">₹{pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                      </div>
+
+                      {/* Amount After Disbursement & Success Fees */}
+                      <div className="pt-3 border-t border-gray-200 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">
+                              Amount after disbursement <span className="text-gray-400 font-normal">(if you've % put 0)</span>
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                placeholder="0"
+                                value={formData.amountAfterDisbursement || ''}
+                                onChange={(e) => setFormData({ ...formData, amountAfterDisbursement: e.target.value, amount_if_you_have_kindly_put_0: e.target.value })}
+                                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange font-medium text-gray-900"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">
+                              Success fees <span className="text-gray-400 font-normal">(dropdown)</span>
+                            </label>
+                            <select
+                              value={formData.successFees || ''}
+                              onChange={(e) => setFormData({ ...formData, successFees: e.target.value, Success_fees: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange font-medium text-gray-900"
+                            >
+                              <option value="">Select %</option>
+                              <option value="0.5">0.5</option>
+                              <option value="1.0">1.0</option>
+                              <option value="1.5">1.5</option>
+                              <option value="2.0">2.0</option>
+                              <option value="2.5">2.5</option>
+                              <option value="3.0">3.0</option>
+                              <option value="3.5">3.5</option>
+                              <option value="4.0">4.0</option>
+                              <option value="4.5">4.5</option>
+                              <option value="5.0">5.0</option>
+                            </select>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Remark Field */}
