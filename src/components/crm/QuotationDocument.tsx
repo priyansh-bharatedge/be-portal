@@ -15,7 +15,9 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
   const companyName = fd.companyName || quotation.company || '';
   const clientCity = fd.city || '';
   const clientState = fd.state || '';
-  const clientAddress = [clientCity, clientState].filter(Boolean).join(', ');
+  const cityState = [clientCity, clientState].filter(Boolean).join(', ');
+  const billingAddr = fd.billingAddress || fd.Billing_address || quotation.billingAddress || quotation.Billing_address || '';
+  const companyAddr = fd.companyAddress || fd.Company_address || quotation.companyAddress || quotation.Company_address || '';
   const clientPhone = fd.mobile || '';
   const clientEmail = fd.email || '';
   const clientGst = fd.gstNumber || '';
@@ -120,7 +122,12 @@ export const QuotationDocument: React.FC<QuotationDocumentProps> = ({ quotation,
             <div className="text-xs font-extrabold uppercase text-gray-900 tracking-wider mb-1">TO:</div>
             <div className="font-bold text-base text-orange-600 capitalize">{clientName}</div>
             {companyName && <div className="text-gray-700 font-semibold text-xs sm:text-sm">{companyName}</div>}
-            {clientAddress && <div className="text-gray-600 text-xs sm:text-sm">{clientAddress}</div>}
+            {companyAddr && <div className="text-gray-600 text-xs sm:text-sm">{companyAddr}</div>}
+            {billingAddr ? (
+              <div className="text-gray-600 text-xs sm:text-sm">{billingAddr}</div>
+            ) : (!companyAddr && cityState ? (
+              <div className="text-gray-600 text-xs sm:text-sm">{cityState}</div>
+            ) : null)}
             {clientPhone && (
               <div className="text-xs sm:text-sm text-gray-800 pt-1">
                 <span className="font-semibold text-gray-900">Phone:</span> {clientPhone}

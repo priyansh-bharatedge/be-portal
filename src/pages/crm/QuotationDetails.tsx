@@ -80,6 +80,9 @@ export const QuotationDetails = () => {
                   <p className="flex items-center"><Phone size={16} className="mr-2 text-gray-400" /> {fd.mobile || 'N/A'}</p>
                   <p className="flex items-center"><Mail size={16} className="mr-2 text-gray-400" /> {fd.email || 'N/A'}</p>
                   <p className="flex items-center"><MapPin size={16} className="mr-2 text-gray-400" /> {fd.city || 'N/A'}, {fd.state || 'N/A'}</p>
+                  {(fd.billingAddress || fd.Billing_address || quotation.billingAddress || quotation.Billing_address) && (
+                    <p className="flex items-start"><span className="w-24 text-gray-500 font-medium">Billing Addr:</span> <span className="flex-1 text-gray-800">{fd.billingAddress || fd.Billing_address || quotation.billingAddress || quotation.Billing_address}</span></p>
+                  )}
                 </div>
               </div>
               <div className="space-y-4">
@@ -92,8 +95,11 @@ export const QuotationDetails = () => {
                 </div>
                 <div className="space-y-2 text-sm text-gray-600">
                   <p className="flex items-center"><span className="w-20 text-gray-500">GSTIN:</span> {fd.gstNumber || 'N/A'}</p>
-                  <p className="flex items-center"><span className="w-20 text-gray-500">PAN:</span> {fd.panCard || 'N/A'}</p>
+                  <p className="flex items-center"><span className="w-20 text-gray-500">PAN:</span> {fd.panCard || fd.companyPan || 'N/A'}</p>
                   <p className="flex items-center"><span className="w-20 text-gray-500">Aadhaar:</span> {fd.aadhaarCard || 'N/A'}</p>
+                  {(fd.companyAddress || fd.Company_address || quotation.companyAddress || quotation.Company_address) && (
+                    <p className="flex items-start"><span className="w-24 text-gray-500 font-medium">Company Addr:</span> <span className="flex-1 text-gray-800">{fd.companyAddress || fd.Company_address || quotation.companyAddress || quotation.Company_address}</span></p>
+                  )}
                 </div>
               </div>
             </div>

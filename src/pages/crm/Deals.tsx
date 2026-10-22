@@ -792,8 +792,10 @@ export const Deals = () => {
   const [formData, setFormData] = useState({
     clientName: '', mobile: '', email: '', gender: 'Male',
     panCard: '', aadhaarCard: '', city: '', state: '',
+    billingAddress: '', Billing_address: '',
     companyName: '', businessType: '', doi: '', gstNumber: '',
-    companyPan: '', sector: 'IT', industry: 'Software'
+    companyPan: '', sector: 'IT', industry: 'Software',
+    companyAddress: '', Company_address: ''
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -871,6 +873,7 @@ export const Deals = () => {
       const aadhaarCard = fd.aadhaarCard || deal.aadhaarCard || localClient?.aadhaarCard || rawZ.Aadhaar_Card || rawZ.Aadhaar_number || rawZ.Aadhaar_Number || '';
       const city = fd.city || deal.city || localClient?.city || localComp?.city || rawZ.City || 'Ahmedabad';
       const state = fd.state || deal.state || localClient?.state || localComp?.state || rawZ.State || 'Gujarat';
+      const billingAddress = fd.billingAddress || fd.Billing_address || deal.billingAddress || deal.Billing_address || localClient?.billingAddress || rawZ.Billing_address || rawZ.Billing_Address || '';
 
       const companyName = fd.companyName || deal.company || localComp?.name || (typeof rawZ.Account_Name === 'object' ? rawZ.Account_Name?.name : rawZ.Account_Name) || rawZ.Company_Name || (typeof rawZ.Company === 'object' ? rawZ.Company?.name : '') || (typeof rawZ.Companies === 'object' ? rawZ.Companies?.name : '') || '';
       const businessType = fd.businessType || deal.businessType || localComp?.type || rawZ.Company_Type || rawZ.Choose_Wisely || 'Private Limited';
@@ -879,6 +882,7 @@ export const Deals = () => {
       const companyPan = fd.companyPan || deal.companyPan || localComp?.companyPan || rawZ.Company_PAN_Number || panCard;
       const sector = fd.sector || deal.sector || localComp?.sector || 'IT';
       const industry = fd.industry || deal.industry || localComp?.industry || 'Software';
+      const companyAddress = fd.companyAddress || fd.Company_address || deal.companyAddress || deal.Company_address || localComp?.companyAddress || rawZ.Company_address || rawZ.Company_Address || '';
 
       setFormData({
         clientName,
@@ -889,13 +893,17 @@ export const Deals = () => {
         aadhaarCard,
         city,
         state,
+        billingAddress,
+        Billing_address: billingAddress,
         companyName,
         businessType,
         doi,
         gstNumber,
         companyPan,
         sector,
-        industry
+        industry,
+        companyAddress,
+        Company_address: companyAddress
       });
 
       let services: DealService[] = [];
@@ -963,8 +971,10 @@ export const Deals = () => {
       setFormData({
         clientName: '', mobile: '', email: '', gender: 'Male',
         panCard: '', aadhaarCard: '', city: '', state: '',
+        billingAddress: '', Billing_address: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
-        companyPan: '', sector: 'IT', industry: 'Software'
+        companyPan: '', sector: 'IT', industry: 'Software',
+        companyAddress: '', Company_address: ''
       });
       setDealServices([]);
       setAmountReceived('');
@@ -986,8 +996,10 @@ export const Deals = () => {
       setFormData({
         clientName: '', mobile: '', email: '', gender: 'Male',
         panCard: '', aadhaarCard: '', city: '', state: '',
+        billingAddress: '', Billing_address: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
-        companyPan: '', sector: 'IT', industry: 'Software'
+        companyPan: '', sector: 'IT', industry: 'Software',
+        companyAddress: '', Company_address: ''
       });
       setFormErrors({});
       setDealServices([]);
@@ -1692,6 +1704,10 @@ export const Deals = () => {
         zohoId: zDeal.id,
         zohoStatus: 'synced',
         zohoSyncedAt: new Date().toISOString(),
+        billingAddress: billAddress,
+        Billing_address: zDeal.Billing_address || billAddress,
+        companyAddress: zDeal.Company_address || '',
+        Company_address: zDeal.Company_address || '',
         Payment_verifications: Boolean(
           zDeal.Payment_verifications === true ||
           zDeal.Payment_verifications === 'true' ||
@@ -1717,6 +1733,9 @@ export const Deals = () => {
           gstNumber: gstNum,
           panCard: panNum,
           billingAddress: billAddress,
+          Billing_address: zDeal.Billing_address || billAddress,
+          companyAddress: zDeal.Company_address || '',
+          Company_address: zDeal.Company_address || '',
           city: zDeal.City || '',
           state: stateName,
           businessType: zDeal.Company_Type || zDeal.Choose_Wisely || 'Private Limited',
@@ -2226,6 +2245,10 @@ export const Deals = () => {
         id: dealId,
         client: formData.clientName,
         company: formData.companyName,
+        billingAddress: formData.billingAddress || (formData as any).Billing_address || '',
+        Billing_address: formData.Billing_address || (formData as any).billingAddress || '',
+        companyAddress: formData.companyAddress || (formData as any).Company_address || '',
+        Company_address: formData.Company_address || (formData as any).companyAddress || '',
         companyZohoId: companyZohoId,
         clientZohoId: clientZohoId,
         service: dealServices.length === 1 ? dealServices[0].name : dealServices.length > 1 ? `${dealServices.length} Services` : 'Custom Services',
@@ -4246,6 +4269,10 @@ export const Deals = () => {
                         <input type="text" value={formData.state} onChange={e => setFormData({ ...formData, state: e.target.value })} className={`w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-be-orange focus:border-be-orange outline-none ${formErrors.state ? 'border-red-500' : 'border-gray-300'}`} placeholder="Gujarat" />
                         {formErrors.state && <p className="text-red-500 text-xs mt-1">{formErrors.state}</p>}
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Billing Address <span className="text-gray-400 font-normal">(Optional)</span></label>
+                        <input type="text" value={formData.billingAddress || (formData as any).Billing_address || ''} onChange={e => setFormData({ ...formData, billingAddress: e.target.value, Billing_address: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-be-orange focus:border-be-orange outline-none" placeholder="Billing Address" />
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -4293,6 +4320,10 @@ export const Deals = () => {
                         <select value={formData.industry} onChange={e => setFormData({ ...formData, industry: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-be-orange outline-none bg-white">
                           <option>Software</option><option>Hardware</option><option>Consulting</option><option>Real Estate</option><option>Automotive</option><option>E-commerce</option><option>Other</option>
                         </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Company Address <span className="text-gray-400 font-normal">(Optional)</span></label>
+                        <input type="text" value={formData.companyAddress || (formData as any).Company_address || ''} onChange={e => setFormData({ ...formData, companyAddress: e.target.value, Company_address: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-be-orange focus:border-be-orange outline-none" placeholder="Company Address" />
                       </div>
                     </div>
                   </motion.div>

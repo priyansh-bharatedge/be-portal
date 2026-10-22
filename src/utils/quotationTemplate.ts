@@ -29,6 +29,8 @@ export interface QuotationPrintData {
     aadhaarCard?: string;
     city?: string;
     state?: string;
+    billingAddress?: string;
+    Billing_address?: string;
     companyName?: string;
     businessType?: string;
     doi?: string;
@@ -36,6 +38,8 @@ export interface QuotationPrintData {
     companyPan?: string;
     sector?: string;
     industry?: string;
+    companyAddress?: string;
+    Company_address?: string;
     Q_Notes?: string;
     q_notes?: string;
     notes?: string;
@@ -43,6 +47,10 @@ export interface QuotationPrintData {
     Remark?: string;
     Description?: string;
   };
+  billingAddress?: string;
+  Billing_address?: string;
+  companyAddress?: string;
+  Company_address?: string;
   servicesData?: Array<{
     id?: string;
     name: string;
@@ -107,7 +115,9 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
   const companyName = fd.companyName || q.company || '';
   const clientCity = fd.city || '';
   const clientState = fd.state || '';
-  const clientAddress = [clientCity, clientState].filter(Boolean).join(', ');
+  const cityState = [clientCity, clientState].filter(Boolean).join(', ');
+  const billingAddr = fd.billingAddress || fd.Billing_address || (q as any).billingAddress || (q as any).Billing_address || '';
+  const companyAddr = fd.companyAddress || fd.Company_address || (q as any).companyAddress || (q as any).Company_address || '';
   const clientPhone = fd.mobile || '';
   const clientEmail = fd.email || '';
   const clientGst = fd.gstNumber || '';
@@ -703,7 +713,8 @@ export const generateQuotationHTML = (q: QuotationPrintData): string => {
           <div class="party-title">To:</div>
           <div class="party-name">${clientName}</div>
           ${companyName ? `<div class="party-company">${companyName}</div>` : ''}
-          ${clientAddress ? `<div class="party-address">${clientAddress}</div>` : ''}
+          ${companyAddr ? `<div class="party-address">${companyAddr}</div>` : ''}
+          ${billingAddr ? `<div class="party-address">${billingAddr}</div>` : (!companyAddr && cityState ? `<div class="party-address">${cityState}</div>` : '')}
           ${clientPhone ? `<div class="party-contact"><strong>Phone:</strong> ${clientPhone}</div>` : ''}
           ${clientEmail ? `<div class="party-contact"><strong>Email:</strong> ${clientEmail}</div>` : ''}
           ${clientGst ? `<div class="party-tax"><strong>GSTIN:</strong> ${clientGst}</div>` : ''}

@@ -74,8 +74,10 @@ export const Quotations = () => {
   const [formData, setFormData] = useState({
     clientName: '', mobile: '', email: '', gender: 'Male',
     panCard: '', aadhaarCard: '', city: '', state: '',
+    billingAddress: '', Billing_address: '',
     companyName: '', businessType: '', doi: '', gstNumber: '',
     companyPan: '', sector: 'IT', industry: 'Software',
+    companyAddress: '', Company_address: '',
     notes: ''
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -107,12 +109,20 @@ export const Quotations = () => {
       setEditingQuotationId(deal.id);
       setFormData(deal.formData ? {
         ...deal.formData,
+        billingAddress: deal.formData.billingAddress || deal.formData.Billing_address || deal.billingAddress || deal.Billing_address || '',
+        Billing_address: deal.formData.Billing_address || deal.formData.billingAddress || deal.Billing_address || deal.billingAddress || '',
+        companyAddress: deal.formData.companyAddress || deal.formData.Company_address || deal.companyAddress || deal.Company_address || '',
+        Company_address: deal.formData.Company_address || deal.formData.companyAddress || deal.Company_address || deal.companyAddress || '',
         notes: deal.formData.Q_Notes || deal.Q_Notes || deal.formData.q_notes || deal.q_notes || deal.formData.notes || deal.notes || deal.formData.remark || deal.remark || deal.formData.Remark || deal.Remark || deal.Description || ''
       } : {
         clientName: deal.client || '', mobile: '', email: '', gender: 'Male',
         panCard: '', aadhaarCard: '', city: '', state: '',
+        billingAddress: deal.billingAddress || deal.Billing_address || '',
+        Billing_address: deal.Billing_address || deal.billingAddress || '',
         companyName: deal.company || '', businessType: '', doi: '', gstNumber: '',
         companyPan: '', sector: 'IT', industry: 'Software',
+        companyAddress: deal.companyAddress || deal.Company_address || '',
+        Company_address: deal.Company_address || deal.companyAddress || '',
         notes: deal.Q_Notes || deal.q_notes || deal.notes || deal.remark || deal.Remark || deal.Description || ''
       });
       setQuotationServices((deal.servicesData || []).map((s: any) => {
@@ -140,8 +150,10 @@ export const Quotations = () => {
       setFormData({
         clientName: '', mobile: '', email: '', gender: 'Male',
         panCard: '', aadhaarCard: '', city: '', state: '',
+        billingAddress: '', Billing_address: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
         companyPan: '', sector: 'IT', industry: 'Software',
+        companyAddress: '', Company_address: '',
         notes: ''
       });
       setQuotationServices([]);
@@ -160,8 +172,10 @@ export const Quotations = () => {
       setFormData({
         clientName: '', mobile: '', email: '', gender: 'Male',
         panCard: '', aadhaarCard: '', city: '', state: '',
+        billingAddress: '', Billing_address: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
         companyPan: '', sector: 'IT', industry: 'Software',
+        companyAddress: '', Company_address: '',
         notes: ''
       });
       setFormErrors({});
@@ -564,6 +578,10 @@ export const Quotations = () => {
           date: z.Created_Time ? new Date(z.Created_Time).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
           zohoId: String(z.id),
           zohoStatus: 'synced',
+          billingAddress: z.Billing_address || z.Billing_Address || '',
+          Billing_address: z.Billing_address || z.Billing_Address || '',
+          companyAddress: z.Company_address || z.Company_Address || '',
+          Company_address: z.Company_address || z.Company_Address || '',
           notes: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
           Q_Notes: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
           remark: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
@@ -585,6 +603,8 @@ export const Quotations = () => {
             gender: z.Gender || 'Male',
             city: z.City || '',
             state: z.State || '',
+            billingAddress: z.Billing_address || z.Billing_Address || '',
+            Billing_address: z.Billing_address || z.Billing_Address || '',
             panCard: z.PAN_Card || '',
             aadhaarCard: z.Aadhaar_Card || '',
             businessType: z.Company_Type || '',
@@ -593,6 +613,8 @@ export const Quotations = () => {
             companyPan: z.Company_PAN_Number || '',
             sector: z.Sector || '',
             industry: z.Industry || '',
+            companyAddress: z.Company_address || z.Company_Address || '',
+            Company_address: z.Company_address || z.Company_Address || '',
             notes: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
             Q_Notes: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
             remark: z.Q_Notes || z.q_notes || z.Notes || z.notes || z.Remark || z.remark || z.Description || '',
@@ -818,6 +840,10 @@ export const Quotations = () => {
         id: quotationId,
         client: formData.clientName,
         company: formData.companyName,
+        billingAddress: formData.billingAddress || (formData as any).Billing_address || '',
+        Billing_address: formData.Billing_address || (formData as any).billingAddress || '',
+        companyAddress: formData.companyAddress || (formData as any).Company_address || '',
+        Company_address: formData.Company_address || (formData as any).companyAddress || '',
         service: quotationServices.length === 1 ? quotationServices[0].name : quotationServices.length > 1 ? `${quotationServices.length} Services` : 'Custom Services',
         amount: `₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
         received: `₹${(Number(amountReceived) || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
@@ -1693,6 +1719,10 @@ export const Quotations = () => {
                         <input type="text" value={formData.state} onChange={e => setFormData({ ...formData, state: e.target.value })} className={`w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-be-orange focus:border-be-orange outline-none ${formErrors.state ? 'border-red-500' : 'border-gray-300'}`} placeholder="Gujarat" />
                         {formErrors.state && <p className="text-red-500 text-xs mt-1">{formErrors.state}</p>}
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Billing Address <span className="text-gray-400 font-normal">(Optional)</span></label>
+                        <input type="text" value={formData.billingAddress || (formData as any).Billing_address || ''} onChange={e => setFormData({ ...formData, billingAddress: e.target.value, Billing_address: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-be-orange focus:border-be-orange outline-none" placeholder="Billing Address" />
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -1740,6 +1770,10 @@ export const Quotations = () => {
                         <select value={formData.industry} onChange={e => setFormData({ ...formData, industry: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-be-orange outline-none bg-white">
                           <option>Software</option><option>Hardware</option><option>Consulting</option><option>Real Estate</option><option>Automotive</option><option>E-commerce</option><option>Other</option>
                         </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Company Address <span className="text-gray-400 font-normal">(Optional)</span></label>
+                        <input type="text" value={formData.companyAddress || (formData as any).Company_address || ''} onChange={e => setFormData({ ...formData, companyAddress: e.target.value, Company_address: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-be-orange focus:border-be-orange outline-none" placeholder="Company Address" />
                       </div>
                     </div>
                   </motion.div>
