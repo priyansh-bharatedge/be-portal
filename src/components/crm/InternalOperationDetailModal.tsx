@@ -118,6 +118,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   const [companyType, setCompanyType] = useState<CompanyType>(() => {
     return (
       record.Company_Type ||
+      (sections.compDocCollection?.companyType as CompanyType) ||
       (sections.docCollection?.companyType as CompanyType) ||
       'PVT LTD'
     );
@@ -130,6 +131,10 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
       ...prev,
       docCollection: {
         ...(prev.docCollection || {}),
+        companyType: newType
+      },
+      compDocCollection: {
+        ...(prev.compDocCollection || {}),
         companyType: newType
       }
     }));
@@ -144,6 +149,22 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         [field]: value
       }
     }));
+  };
+
+  // Helper to update dual-keyed sections for compatibility (e.g. compAdt1 & adt1)
+  const updateCompSection = (primaryKey: string, fallbackKey: string, field: string, value: any) => {
+    setSections(prev => {
+      const mergedCurrent = {
+        ...(prev[fallbackKey] || {}),
+        ...(prev[primaryKey] || {}),
+        [field]: value
+      };
+      return {
+        ...prev,
+        [primaryKey]: mergedCurrent,
+        [fallbackKey]: mergedCurrent
+      };
+    });
   };
 
   // Handle Repeat / Clone for Resubmission when Status = "Rejected"
@@ -212,6 +233,10 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
           afterAllocation,
           docCollection: {
             ...(sections.docCollection || {}),
+            companyType
+          },
+          compDocCollection: {
+            ...(sections.compDocCollection || {}),
             companyType
           }
         },
@@ -918,13 +943,14 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
             {/* 2. TEAM TYPE: COMPLIANCE */}
             {teamType === 'Compliance' && (
               <div className="space-y-4">
-                {/* After allocation Dropdown */}
-                <div className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200">
+                {/* After allocation Dropdown & Post-Allocation Deliverables */}
+                <div className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-200 space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h4 className="text-sm font-bold text-gray-900">Compliance Execution Workflow</h4>
                       <p className="text-xs text-gray-500">
-                        Select &quot;Yes&quot; to display the annual compliance filings and audits.
+                        Select &quot;Yes&quot; to show post-allocation filings (ADT-1 &amp; INC for PVT LTD / Section 8, or Form 3 for LLP) for{' '}
+                        <span className="font-bold text-indigo-700">{companyType}</span>.
                       </p>
                     </div>
                     <div className="w-full sm:w-48">
@@ -936,323 +962,382 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       />
                     </div>
                   </div>
+
+                  {/* If "Yes" AND PVT LTD / Section 8 */}
+                  {afterAllocation === 'Yes' && (companyType === 'PVT LTD' || companyType === 'Section 8') && (
+                    <div className="space-y-4 pt-3 border-t border-indigo-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
+                          <ShieldCheck size={14} className="text-indigo-600" />
+                          <span>Post-Allocation Filings ({companyType})</span>
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                          2 Sections Active
+                        </span>
+                      </div>
+
+                      {/* 1. ADT-1: [Name, Date, Status, File Upload] */}
+                      <StandardSection
+                        title="ADT-1"
+                        badge="Auditor Filing"
+                        badgeColor="bg-indigo-100 text-indigo-800 border-indigo-200"
+                        data={sections.compAdt1 || sections.adt1 || {}}
+                        statusOptions={POST_INCORPORATION_STATUSES}
+                        onChange={(k, v) => updateCompSection('compAdt1', 'adt1', k, v)}
+                      />
+
+                      {/* 2. INC: [Name, Date, Status, File Upload] */}
+                      <StandardSection
+                        title="INC"
+                        badge="Commencement / Filing"
+                        badgeColor="bg-indigo-100 text-indigo-800 border-indigo-200"
+                        data={sections.compInc || sections.inc || sections.inc20A || {}}
+                        statusOptions={POST_INCORPORATION_STATUSES}
+                        onChange={(k, v) => updateCompSection('compInc', 'inc', k, v)}
+                      />
+                    </div>
+                  )}
+
+                  {/* If "Yes" AND LLP */}
+                  {afterAllocation === 'Yes' && companyType === 'LLP' && (
+                    <div className="space-y-4 pt-3 border-t border-indigo-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
+                          <ShieldCheck size={14} className="text-indigo-600" />
+                          <span>Post-Allocation Filings (LLP)</span>
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                          1 Section Active
+                        </span>
+                      </div>
+
+                      {/* Form 3: [Name, Date, Status, File Upload] */}
+                      <StandardSection
+                        title="Form 3"
+                        badge="LLP Agreement Filing"
+                        badgeColor="bg-indigo-100 text-indigo-800 border-indigo-200"
+                        data={sections.compForm3 || sections.form3 || {}}
+                        statusOptions={POST_INCORPORATION_STATUSES}
+                        onChange={(k, v) => updateCompSection('compForm3', 'form3', k, v)}
+                      />
+                    </div>
+                  )}
                 </div>
 
-                {afterAllocation === 'Yes' && (
-                  <div className="space-y-4">
-                    {/* 1. Doc collection: [Name, Date, Status (Pending, Received), File Upload, Company type] */}
-                    <SectionContainer title="Doc collection" badge="Compliance Core">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                        <TextInput
-                          label="Name"
-                          value={sections.compDocCollection?.name || ''}
-                          onChange={(val) => updateSection('compDocCollection', 'name', val)}
-                        />
-                        <DateInput
-                          label="Date"
-                          value={sections.compDocCollection?.date || ''}
-                          onChange={(val) => updateSection('compDocCollection', 'date', val)}
-                        />
+                {/* DEFAULT COMPLIANCE SECTIONS (Shown by default regardless of after allocation selection) */}
+                <div className="space-y-4">
+                  {/* 1. Doc collection: [Name, Date, Status (Pending, Received), File Upload, Company type] */}
+                  <SectionContainer title="Doc collection" badge="Compliance Core">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                      <TextInput
+                        label="Name"
+                        value={sections.compDocCollection?.name || ''}
+                        onChange={(val) => updateSection('compDocCollection', 'name', val)}
+                      />
+                      <DateInput
+                        label="Date"
+                        value={sections.compDocCollection?.date || ''}
+                        onChange={(val) => updateSection('compDocCollection', 'date', val)}
+                      />
+                      <SelectInput
+                        label="Status"
+                        value={sections.compDocCollection?.status || 'Pending'}
+                        options={['Pending', 'Received']}
+                        onChange={(val) => updateSection('compDocCollection', 'status', val)}
+                      />
+                      <SelectInput
+                        label="Company Type"
+                        value={companyType}
+                        options={COMPANY_TYPES}
+                        onChange={(val) => handleCompanyTypeChange(val as CompanyType)}
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <FileUploadWidget
+                        label="File Upload"
+                        files={sections.compDocCollection?.files || []}
+                        onChange={(files) => updateSection('compDocCollection', 'files', files)}
+                        multiple={true}
+                      />
+                    </div>
+                  </SectionContainer>
+
+                  {/* 2. Director ITR: [Name, Date, Status, File Upload, File required (Yes/No), Doc collection (Pending/Completed)] */}
+                  <SectionContainer title="Director ITR" badge="Personal Filings">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      <TextInput
+                        label="Name"
+                        value={sections.directorItr?.name || ''}
+                        onChange={(val) => updateSection('directorItr', 'name', val)}
+                      />
+                      <DateInput
+                        label="Date"
+                        value={sections.directorItr?.date || ''}
+                        onChange={(val) => updateSection('directorItr', 'date', val)}
+                      />
+                      <SelectInput
+                        label="Status"
+                        value={(() => {
+                          const s = sections.directorItr?.status;
+                          if (!s || s === 'In-process' || s === 'In process') return 'In Process';
+                          const match = DIRECTOR_ITR_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                          return match || s;
+                        })()}
+                        options={DIRECTOR_ITR_STATUSES}
+                        onChange={(val) => updateSection('directorItr', 'status', val)}
+                      />
+                      <SelectInput
+                        label="File required"
+                        value={sections.directorItr?.fileRequired || 'Yes'}
+                        options={['Yes', 'No']}
+                        onChange={(val) => updateSection('directorItr', 'fileRequired', val)}
+                      />
+                      {(sections.directorItr?.fileRequired || 'Yes') === 'Yes' && (
                         <SelectInput
-                          label="Status"
-                          value={sections.compDocCollection?.status || 'Pending'}
-                          options={['Pending', 'Received']}
-                          onChange={(val) => updateSection('compDocCollection', 'status', val)}
+                          label="Doc collection"
+                          value={(() => {
+                            const dc = sections.directorItr?.docCollection;
+                            if (!dc || dc === 'No') return 'Pending';
+                            if (dc === 'Yes') return 'Completed';
+                            return dc;
+                          })()}
+                          options={['Pending', 'Completed']}
+                          onChange={(val) => updateSection('directorItr', 'docCollection', val)}
                         />
-                        <SelectInput
-                          label="Company Type"
-                          value={companyType}
-                          options={COMPANY_TYPES}
-                          onChange={(val) => handleCompanyTypeChange(val as CompanyType)}
-                        />
-                      </div>
+                      )}
+                    </div>
+                    {(sections.directorItr?.fileRequired || 'Yes') === 'Yes' && (
                       <div className="mt-3">
                         <FileUploadWidget
                           label="File Upload"
-                          files={sections.compDocCollection?.files || []}
-                          onChange={(files) => updateSection('compDocCollection', 'files', files)}
+                          files={sections.directorItr?.files || []}
+                          onChange={(files) => updateSection('directorItr', 'files', files)}
                           multiple={true}
                         />
                       </div>
-                    </SectionContainer>
+                    )}
+                  </SectionContainer>
 
-                    {/* 2. Director ITR: [Name, Date, Status, File Upload, File required (Yes/No), Doc collection (Pending/Completed)] */}
-                    <SectionContainer title="Director ITR" badge="Personal Filings">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <TextInput
-                          label="Name"
-                          value={sections.directorItr?.name || ''}
-                          onChange={(val) => updateSection('directorItr', 'name', val)}
-                        />
-                        <DateInput
-                          label="Date"
-                          value={sections.directorItr?.date || ''}
-                          onChange={(val) => updateSection('directorItr', 'date', val)}
-                        />
-                        <SelectInput
-                          label="Status"
-                          value={(() => {
-                            const s = sections.directorItr?.status;
-                            if (!s || s === 'In-process' || s === 'In process') return 'In Process';
-                            const match = DIRECTOR_ITR_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
-                            return match || s;
-                          })()}
-                          options={DIRECTOR_ITR_STATUSES}
-                          onChange={(val) => updateSection('directorItr', 'status', val)}
-                        />
-                        <SelectInput
-                          label="File required"
-                          value={sections.directorItr?.fileRequired || 'Yes'}
-                          options={['Yes', 'No']}
-                          onChange={(val) => updateSection('directorItr', 'fileRequired', val)}
-                        />
-                        {(sections.directorItr?.fileRequired || 'Yes') === 'Yes' && (
-                          <SelectInput
-                            label="Doc collection"
-                            value={(() => {
-                              const dc = sections.directorItr?.docCollection;
-                              if (!dc || dc === 'No') return 'Pending';
-                              if (dc === 'Yes') return 'Completed';
-                              return dc;
-                            })()}
-                            options={['Pending', 'Completed']}
-                            onChange={(val) => updateSection('directorItr', 'docCollection', val)}
+                  {/* 3. Accounting: [Name, Date, Status, File Upload] */}
+                  <SectionContainer title="Accounting" badge="Books of Account">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      <TextInput
+                        label="Name"
+                        value={sections.accounting?.name || ''}
+                        onChange={(val) => updateSection('accounting', 'name', val)}
+                      />
+                      <DateInput
+                        label="Date"
+                        value={sections.accounting?.date || ''}
+                        onChange={(val) => updateSection('accounting', 'date', val)}
+                      />
+                      <SelectInput
+                        label="Status"
+                        value={(() => {
+                          const s = sections.accounting?.status;
+                          if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                          const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                          return match || s;
+                        })()}
+                        options={POST_INCORPORATION_STATUSES}
+                        onChange={(val) => updateSection('accounting', 'status', val)}
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <FileUploadWidget
+                        label="File Upload"
+                        files={sections.accounting?.files || []}
+                        onChange={(files) => updateSection('accounting', 'files', files)}
+                        multiple={true}
+                      />
+                    </div>
+                  </SectionContainer>
+
+                  {/* 4. Audit: [Name, Date, Status, File Upload] */}
+                  <SectionContainer title="Audit" badge="Statutory Audit">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      <TextInput
+                        label="Name"
+                        value={sections.audit?.name || ''}
+                        onChange={(val) => updateSection('audit', 'name', val)}
+                      />
+                      <DateInput
+                        label="Date"
+                        value={sections.audit?.date || ''}
+                        onChange={(val) => updateSection('audit', 'date', val)}
+                      />
+                      <SelectInput
+                        label="Status"
+                        value={(() => {
+                          const s = sections.audit?.status;
+                          if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                          const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                          return match || s;
+                        })()}
+                        options={POST_INCORPORATION_STATUSES}
+                        onChange={(val) => updateSection('audit', 'status', val)}
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <FileUploadWidget
+                        label="File Upload"
+                        files={sections.audit?.files || []}
+                        onChange={(files) => updateSection('audit', 'files', files)}
+                        multiple={true}
+                      />
+                    </div>
+                  </SectionContainer>
+
+                  {/* 5. Company ITR: [Name, Date, Status, File Upload] */}
+                  <SectionContainer title="Company ITR" badge="Corporate Tax">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      <TextInput
+                        label="Name"
+                        value={sections.companyItr?.name || ''}
+                        onChange={(val) => updateSection('companyItr', 'name', val)}
+                      />
+                      <DateInput
+                        label="Date"
+                        value={sections.companyItr?.date || ''}
+                        onChange={(val) => updateSection('companyItr', 'date', val)}
+                      />
+                      <SelectInput
+                        label="Status"
+                        value={(() => {
+                          const s = sections.companyItr?.status;
+                          if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                          const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                          return match || s;
+                        })()}
+                        options={POST_INCORPORATION_STATUSES}
+                        onChange={(val) => updateSection('companyItr', 'status', val)}
+                      />
+                    </div>
+                    <div className="mt-3">
+                      <FileUploadWidget
+                        label="File Upload"
+                        files={sections.companyItr?.files || []}
+                        onChange={(files) => updateSection('companyItr', 'files', files)}
+                        multiple={true}
+                      />
+                    </div>
+                  </SectionContainer>
+
+                  {/* Conditional based on Company Type for Compliance */}
+                  {(companyType === 'PVT LTD' || companyType === 'Section 8') && (
+                    <div className="space-y-4 pt-2 border-t border-gray-200">
+                      <span className="text-xs font-black uppercase text-indigo-900 tracking-wider block">
+                        Entity-Specific Filings ({companyType})
+                      </span>
+
+                      {/* DPT 3 Filing */}
+                      <StandardSection
+                        title="DPT 3 Filing"
+                        data={sections.dpt3 || {}}
+                        onChange={(k, v) => updateSection('dpt3', k, v)}
+                      />
+
+                      {/* AOC-4: [Name, Date, Status, File Upload, Director & Audit report (Prepared/Not Prepared)] */}
+                      <SectionContainer title="AOC-4" badge="Financial Statements">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          <TextInput
+                            label="Name"
+                            value={sections.aoc4?.name || ''}
+                            onChange={(val) => updateSection('aoc4', 'name', val)}
                           />
-                        )}
-                      </div>
-                      {(sections.directorItr?.fileRequired || 'Yes') === 'Yes' && (
+                          <DateInput
+                            label="Date"
+                            value={sections.aoc4?.date || ''}
+                            onChange={(val) => updateSection('aoc4', 'date', val)}
+                          />
+                          <SelectInput
+                            label="Status"
+                            value={(() => {
+                              const s = sections.aoc4?.status;
+                              if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                              const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                              return match || s;
+                            })()}
+                            options={POST_INCORPORATION_STATUSES}
+                            onChange={(val) => updateSection('aoc4', 'status', val)}
+                          />
+                          <SelectInput
+                            label="Director & Audit report"
+                            value={sections.aoc4?.directorAuditReport || 'Prepared'}
+                            options={['Prepared', 'Not Prepared']}
+                            onChange={(val) => updateSection('aoc4', 'directorAuditReport', val)}
+                          />
+                        </div>
                         <div className="mt-3">
                           <FileUploadWidget
                             label="File Upload"
-                            files={sections.directorItr?.files || []}
-                            onChange={(files) => updateSection('directorItr', 'files', files)}
+                            files={sections.aoc4?.files || []}
+                            onChange={(files) => updateSection('aoc4', 'files', files)}
                             multiple={true}
                           />
                         </div>
-                      )}
-                    </SectionContainer>
+                      </SectionContainer>
 
-                    {/* 3. Accounting: [Name, Date, Status, File Upload] */}
-                    <SectionContainer title="Accounting" badge="Books of Account">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <TextInput
-                          label="Name"
-                          value={sections.accounting?.name || ''}
-                          onChange={(val) => updateSection('accounting', 'name', val)}
-                        />
-                        <DateInput
-                          label="Date"
-                          value={sections.accounting?.date || ''}
-                          onChange={(val) => updateSection('accounting', 'date', val)}
-                        />
-                        <SelectInput
-                          label="Status"
-                          value={(() => {
-                            const s = sections.accounting?.status;
-                            if (!s || s === 'In-process' || s === 'In process') return 'In process';
-                            const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
-                            return match || s;
-                          })()}
-                          options={POST_INCORPORATION_STATUSES}
-                          onChange={(val) => updateSection('accounting', 'status', val)}
-                        />
-                      </div>
-                      <div className="mt-3">
-                        <FileUploadWidget
-                          label="File Upload"
-                          files={sections.accounting?.files || []}
-                          onChange={(files) => updateSection('accounting', 'files', files)}
-                          multiple={true}
-                        />
-                      </div>
-                    </SectionContainer>
+                      {/* MGT-7/7A */}
+                      <StandardSection
+                        title="MGT-7 / 7A (Annual Return)"
+                        data={sections.mgt7 || {}}
+                        onChange={(k, v) => updateSection('mgt7', k, v)}
+                      />
+                    </div>
+                  )}
 
-                    {/* 4. Audit: [Name, Date, Status, File Upload] */}
-                    <SectionContainer title="Audit" badge="Statutory Audit">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <TextInput
-                          label="Name"
-                          value={sections.audit?.name || ''}
-                          onChange={(val) => updateSection('audit', 'name', val)}
-                        />
-                        <DateInput
-                          label="Date"
-                          value={sections.audit?.date || ''}
-                          onChange={(val) => updateSection('audit', 'date', val)}
-                        />
-                        <SelectInput
-                          label="Status"
-                          value={(() => {
-                            const s = sections.audit?.status;
-                            if (!s || s === 'In-process' || s === 'In process') return 'In process';
-                            const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
-                            return match || s;
-                          })()}
-                          options={POST_INCORPORATION_STATUSES}
-                          onChange={(val) => updateSection('audit', 'status', val)}
-                        />
-                      </div>
-                      <div className="mt-3">
-                        <FileUploadWidget
-                          label="File Upload"
-                          files={sections.audit?.files || []}
-                          onChange={(files) => updateSection('audit', 'files', files)}
-                          multiple={true}
-                        />
-                      </div>
-                    </SectionContainer>
+                  {companyType === 'LLP' && (
+                    <div className="space-y-4 pt-2 border-t border-gray-200">
+                      <span className="text-xs font-black uppercase text-indigo-900 tracking-wider block">
+                        LLP Compliance Filings
+                      </span>
 
-                    {/* 5. Company ITR: [Name, Date, Status, File Upload] */}
-                    <SectionContainer title="Company ITR" badge="Corporate Tax">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <TextInput
-                          label="Name"
-                          value={sections.companyItr?.name || ''}
-                          onChange={(val) => updateSection('companyItr', 'name', val)}
-                        />
-                        <DateInput
-                          label="Date"
-                          value={sections.companyItr?.date || ''}
-                          onChange={(val) => updateSection('companyItr', 'date', val)}
-                        />
-                        <SelectInput
-                          label="Status"
-                          value={(() => {
-                            const s = sections.companyItr?.status;
-                            if (!s || s === 'In-process' || s === 'In process') return 'In process';
-                            const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
-                            return match || s;
-                          })()}
-                          options={POST_INCORPORATION_STATUSES}
-                          onChange={(val) => updateSection('companyItr', 'status', val)}
-                        />
-                      </div>
-                      <div className="mt-3">
-                        <FileUploadWidget
-                          label="File Upload"
-                          files={sections.companyItr?.files || []}
-                          onChange={(files) => updateSection('companyItr', 'files', files)}
-                          multiple={true}
-                        />
-                      </div>
-                    </SectionContainer>
+                      {/* Form 11 */}
+                      <StandardSection
+                        title="Form 11 (Annual Return of LLP)"
+                        data={sections.form11 || {}}
+                        onChange={(k, v) => updateSection('form11', k, v)}
+                      />
 
-                    {/* Conditional based on Company Type for Compliance */}
-                    {(companyType === 'PVT LTD' || companyType === 'Section 8') && (
-                      <div className="space-y-4 pt-2 border-t border-gray-200">
-                        <span className="text-xs font-black uppercase text-indigo-900 tracking-wider block">
-                          Entity-Specific Filings ({companyType})
-                        </span>
-
-                        {/* DPT 3 Filing */}
-                        <StandardSection
-                          title="DPT 3 Filing"
-                          data={sections.dpt3 || {}}
-                          onChange={(k, v) => updateSection('dpt3', k, v)}
-                        />
-
-                        {/* AOC-4: [Name, Date, Status, File Upload, Director & Audit report (Prepared/Not Prepared)] */}
-                        <SectionContainer title="AOC-4" badge="Financial Statements">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                            <TextInput
-                              label="Name"
-                              value={sections.aoc4?.name || ''}
-                              onChange={(val) => updateSection('aoc4', 'name', val)}
-                            />
-                            <DateInput
-                              label="Date"
-                              value={sections.aoc4?.date || ''}
-                              onChange={(val) => updateSection('aoc4', 'date', val)}
-                            />
-                            <SelectInput
-                              label="Status"
-                              value={(() => {
-                                const s = sections.aoc4?.status;
-                                if (!s || s === 'In-process' || s === 'In process') return 'In process';
-                                const match = POST_INCORPORATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
-                                return match || s;
-                              })()}
-                              options={POST_INCORPORATION_STATUSES}
-                              onChange={(val) => updateSection('aoc4', 'status', val)}
-                            />
-                            <SelectInput
-                              label="Director & Audit report"
-                              value={sections.aoc4?.directorAuditReport || 'Prepared'}
-                              options={['Prepared', 'Not Prepared']}
-                              onChange={(val) => updateSection('aoc4', 'directorAuditReport', val)}
-                            />
-                          </div>
-                          <div className="mt-3">
-                            <FileUploadWidget
-                              label="File Upload"
-                              files={sections.aoc4?.files || []}
-                              onChange={(files) => updateSection('aoc4', 'files', files)}
-                              multiple={true}
-                            />
-                          </div>
-                        </SectionContainer>
-
-                        {/* MGT-7/7A */}
-                        <StandardSection
-                          title="MGT-7 / 7A (Annual Return)"
-                          data={sections.mgt7 || {}}
-                          onChange={(k, v) => updateSection('mgt7', k, v)}
-                        />
-                      </div>
-                    )}
-
-                    {companyType === 'LLP' && (
-                      <div className="space-y-4 pt-2 border-t border-gray-200">
-                        <span className="text-xs font-black uppercase text-indigo-900 tracking-wider block">
-                          LLP Compliance Filings
-                        </span>
-
-                        {/* Form 11 */}
-                        <StandardSection
-                          title="Form 11 (Annual Return of LLP)"
-                          data={sections.form11 || {}}
-                          onChange={(k, v) => updateSection('form11', k, v)}
-                        />
-
-                        {/* Form 8 (Statement of Account & Solvency) with Audit report (Yes/No) */}
-                        <SectionContainer title="Form 8 (Statement of Account & Solvency)" badge="LLP Solvency">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                            <TextInput
-                              label="Name"
-                              value={sections.form8?.name || ''}
-                              onChange={(val) => updateSection('form8', 'name', val)}
-                            />
-                            <DateInput
-                              label="Date"
-                              value={sections.form8?.date || ''}
-                              onChange={(val) => updateSection('form8', 'date', val)}
-                            />
-                            <SelectInput
-                              label="Status"
-                              value={sections.form8?.status || 'In-process'}
-                              options={STANDARD_EXECUTION_STATUSES}
-                              onChange={(val) => updateSection('form8', 'status', val)}
-                            />
-                            <SelectInput
-                              label="Audit report"
-                              value={sections.form8?.auditReport || 'Yes'}
-                              options={['Yes', 'No']}
-                              onChange={(val) => updateSection('form8', 'auditReport', val)}
-                            />
-                          </div>
-                          <div className="mt-3">
-                            <FileUploadWidget
-                              label="File Upload"
-                              files={sections.form8?.files || []}
-                              onChange={(files) => updateSection('form8', 'files', files)}
-                              multiple={true}
-                            />
-                          </div>
-                        </SectionContainer>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      {/* Form 8 (Statement of Account & Solvency) with Audit report (Yes/No) */}
+                      <SectionContainer title="Form 8 (Statement of Account & Solvency)" badge="LLP Solvency">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          <TextInput
+                            label="Name"
+                            value={sections.form8?.name || ''}
+                            onChange={(val) => updateSection('form8', 'name', val)}
+                          />
+                          <DateInput
+                            label="Date"
+                            value={sections.form8?.date || ''}
+                            onChange={(val) => updateSection('form8', 'date', val)}
+                          />
+                          <SelectInput
+                            label="Status"
+                            value={sections.form8?.status || 'In-process'}
+                            options={STANDARD_EXECUTION_STATUSES}
+                            onChange={(val) => updateSection('form8', 'status', val)}
+                          />
+                          <SelectInput
+                            label="Audit report"
+                            value={sections.form8?.auditReport || 'Yes'}
+                            options={['Yes', 'No']}
+                            onChange={(val) => updateSection('form8', 'auditReport', val)}
+                          />
+                        </div>
+                        <div className="mt-3">
+                          <FileUploadWidget
+                            label="File Upload"
+                            files={sections.form8?.files || []}
+                            onChange={(files) => updateSection('form8', 'files', files)}
+                            multiple={true}
+                          />
+                        </div>
+                      </SectionContainer>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1445,6 +1530,8 @@ const SectionContainer: React.FC<SectionContainerProps> = ({
 
 interface StandardSectionProps {
   title: string;
+  badge?: string;
+  badgeColor?: string;
   data: any;
   onChange: (field: string, value: any) => void;
   statusOptions?: string[];
@@ -1452,6 +1539,8 @@ interface StandardSectionProps {
 
 const StandardSection: React.FC<StandardSectionProps> = ({
   title,
+  badge,
+  badgeColor,
   data,
   onChange,
   statusOptions = STANDARD_EXECUTION_STATUSES
@@ -1473,7 +1562,7 @@ const StandardSection: React.FC<StandardSectionProps> = ({
     : [currentStatus, ...statusOptions];
 
   return (
-    <SectionContainer title={title}>
+    <SectionContainer title={title} badge={badge} badgeColor={badgeColor}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <TextInput
           label="Name"

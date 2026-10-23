@@ -312,11 +312,6 @@ export const DealDetails = () => {
   const [accountsRemark, setAccountsRemark] = useState<string>('');
   const [isSavingAccountsDetails, setIsSavingAccountsDetails] = useState<boolean>(false);
 
-  // Disbursement & Success Fees State
-  const [amountAfterDisbursement, setAmountAfterDisbursement] = useState<string>('0');
-  const [successFees, setSuccessFees] = useState<string>('');
-  const [isSavingDisbursement, setIsSavingDisbursement] = useState<boolean>(false);
-
   // Zoho Attachments State
   const [zohoAttachments, setZohoAttachments] = useState<any[]>([]);
   const [loadingAttachments, setLoadingAttachments] = useState<boolean>(false);
@@ -589,12 +584,6 @@ export const DealDetails = () => {
       setBankDetails(formattedBank === 'None' || formattedBank === '-None-' ? '' : formattedBank);
       const rawRemark = deal.Accounts_remark ?? deal.accountsRemark ?? raw.Accounts_remark ?? fd.Accounts_remark ?? fd.accountsRemark ?? '';
       setAccountsRemark(formatZohoValue(rawRemark));
-
-      // Synchronize Disbursement & Success Fees
-      const rawDisb = deal.amount_if_you_have_kindly_put_0 ?? deal.Amount_After_disbursement ?? deal.amountAfterDisbursement ?? raw.amount_if_you_have_kindly_put_0 ?? raw.Amount_After_disbursement ?? fd.amount_if_you_have_kindly_put_0 ?? fd.amountAfterDisbursement ?? 0;
-      setAmountAfterDisbursement(String(rawDisb !== undefined && rawDisb !== null ? rawDisb : '0'));
-      const rawFee = deal.successFees ?? deal.Success_fees ?? deal.Success_fee ?? raw.Success_fees ?? raw.Success_fee ?? fd.successFees ?? fd.Success_fees ?? '';
-      setSuccessFees(String(rawFee || ''));
 
       // Synchronize Legal Subform Items
       const rawLegal = Array.isArray(raw.Legal) && raw.Legal.length > 0 ? raw.Legal : null;
@@ -916,82 +905,6 @@ export const DealDetails = () => {
 
   const handleSaveAccountsDetails = async () => {
     await saveAccountsDetailsToZoho(bankDetails, accountsRemark);
-  };
-
-  const handleSaveDisbursementDetails = async () => {
-    if (!deal) return;
-    setIsSavingDisbursement(true);
-    try {
-      const disbNum = Number(amountAfterDisbursement) || 0;
-      const feeVal = successFees.trim();
-
-      const updatedDeal = {
-        ...deal,
-        amount_if_you_have_kindly_put_0: disbNum,
-        Amount_After_disbursement: disbNum,
-        amountAfterDisbursement: disbNum,
-        successFees: feeVal,
-        Success_fees: feeVal,
-        Success_fee: feeVal,
-        rawZohoDeal: {
-          ...(deal.rawZohoDeal || {}),
-          amount_if_you_have_kindly_put_0: disbNum,
-          Amount_After_disbursement: disbNum,
-          Success_fees: feeVal,
-          Success_fee: feeVal,
-        },
-        formData: {
-          ...(deal.formData || {}),
-          amount_if_you_have_kindly_put_0: disbNum,
-          Amount_After_disbursement: disbNum,
-          amountAfterDisbursement: disbNum,
-          successFees: feeVal,
-          Success_fees: feeVal,
-          Success_fee: feeVal,
-        }
-      };
-
-      setDeal(updatedDeal);
-
-      try {
-        const saved = localStorage.getItem('be_deals');
-        if (saved) {
-          const allDeals = JSON.parse(saved);
-          const updatedAll = allDeals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
-          localStorage.setItem('be_deals', JSON.stringify(updatedAll));
-        }
-      } catch (e) {}
-
-      try {
-        window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
-      } catch (e) {}
-
-      const targetZohoId = String(deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : '') || deal.id || '').trim();
-      const response = await fetch('/api/zoho/update-deal', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: targetZohoId,
-          zohoId: targetZohoId,
-          amount_if_you_have_kindly_put_0: disbNum,
-          Amount_After_disbursement: disbNum,
-          Success_fees: feeVal,
-          Success_fee: feeVal,
-          isPartial: true
-        })
-      });
-
-      const zohoRes = await response.json().catch(() => ({ success: response.ok }));
-      if (response.ok && zohoRes.success) {
-        setWorkflowToast({ type: 'success', message: 'Disbursement amount & Success fees updated in Zoho CRM successfully!' });
-      } else {
-        setWorkflowToast({ type: 'success', message: 'Saved locally, syncing with Zoho CRM database.' });
-      }
-    } catch (e: any) {
-      setWorkflowToast({ type: 'error', message: e?.message || 'Failed to update disbursement details' });
-    } finally {
-      setIsSavingDisbursement(false);
-    }
   };
 
   const handleVerifyPayment = async () => {
@@ -1786,7 +1699,12 @@ export const DealDetails = () => {
         paymentType: formatZohoValue(sf.Payment_type || ''),
         paymentDate: formatZohoValue(sf.Payment_received_date || ''),
         qualityProvided: formatZohoValue(sf.Quality_provided || ''),
-        successFees: sf.Success_fees || '',
+        successFees: sf.Success_fees || sf.successFees || '',
+        amountAfterDisbursement: sf.amount_if_you_have_kindly_put_0 !== undefined && sf.amount_if_you_have_kindly_put_0 !== null
+          ? String(sf.amount_if_you_have_kindly_put_0)
+          : (sf.Amount_After_disbursement !== undefined && sf.Amount_After_disbursement !== null
+            ? String(sf.Amount_After_disbursement)
+            : (sf.amountAfterDisbursement || '')),
       };
     });
   } else if (rawServices.length > 0 && rawServices.some((s: any) => isValidServiceName(s.name || s.Schemas || s.Service_Name, clientName, companyName, deal.id))) {
@@ -3078,13 +2996,22 @@ export const DealDetails = () => {
                                 {(s.notes || s.remarks || s.remark).trim()}
                               </div>
                             )}
-                            {Boolean(s.successFees) && (
-                              <div className="text-[11px] text-emerald-600 font-medium mt-0.5">
-                                Success Fee: {s.successFees}%
-                              </div>
-                            )}
                             {s.paymentStages && (
                               <div className="text-[11px] text-gray-400 mt-0.5">Stage: {formatZohoValue(s.paymentStages)} {s.paymentType ? `• ${formatZohoValue(s.paymentType)}` : ''}</div>
+                            )}
+                            {((s.amountAfterDisbursement !== undefined && s.amountAfterDisbursement !== '') || s.successFees) && (
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                {s.amountAfterDisbursement !== undefined && s.amountAfterDisbursement !== '' && (
+                                  <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
+                                    Disbursement: ₹{Number(s.amountAfterDisbursement).toLocaleString('en-IN')}
+                                  </span>
+                                )}
+                                {s.successFees && (
+                                  <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md border border-amber-100">
+                                    Success Fee: {s.successFees}%
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </td>
                           <td className="px-4 py-3.5 text-right font-medium text-gray-700">
@@ -3115,94 +3042,6 @@ export const DealDetails = () => {
                     </tr>
                   </tbody>
                 </table>
-              </div>
-            </div>
-
-            {/* Disbursement & Success Fee Details */}
-            <div className="mt-5 pt-4 border-t border-gray-100 bg-gray-50/70 rounded-xl p-4 border border-gray-100">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-gray-200/60 gap-2">
-                <div className="flex items-center gap-2">
-                  <Percent size={16} className="text-be-orange" />
-                  <span className="text-sm font-bold text-gray-800">Disbursement & Success Fee Details</span>
-                </div>
-                {(successFees || (Number(amountAfterDisbursement) > 0)) && (
-                  <div className="flex items-center gap-2 text-xs">
-                    {successFees && (
-                      <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200 rounded-md">
-                        Success Fee: {successFees}%
-                      </span>
-                    )}
-                    {Number(amountAfterDisbursement) > 0 && (
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-semibold border border-blue-200 rounded-md">
-                        After Disbursement: ₹{Number(amountAfterDisbursement).toLocaleString('en-IN')}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Amount after disbursement <span className="text-gray-500 font-normal">(if you've % put 0)</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">₹</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="0"
-                      value={amountAfterDisbursement}
-                      onChange={(e) => setAmountAfterDisbursement(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange font-medium text-gray-900 transition-colors"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Success fees <span className="text-gray-500 font-normal">(dropdown)</span>
-                  </label>
-                  <select
-                    value={successFees}
-                    onChange={(e) => setSuccessFees(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange font-medium text-gray-900 transition-colors"
-                  >
-                    <option value="">Select %</option>
-                    <option value="0.5">0.5</option>
-                    <option value="1.0">1.0</option>
-                    <option value="1.5">1.5</option>
-                    <option value="2.0">2.0</option>
-                    <option value="2.5">2.5</option>
-                    <option value="3.0">3.0</option>
-                    <option value="3.5">3.5</option>
-                    <option value="4.0">4.0</option>
-                    <option value="4.5">4.5</option>
-                    <option value="5.0">5.0</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSaveDisbursementDetails}
-                  disabled={isSavingDisbursement}
-                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-be-orange to-rose-500 text-white rounded-lg text-xs font-semibold shadow-xs hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSavingDisbursement ? (
-                    <>
-                      <Loader2 size={13} className="mr-1.5 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={13} className="mr-1.5" />
-                      Save Disbursement Details
-                    </>
-                  )}
-                </button>
               </div>
             </div>
           </div>

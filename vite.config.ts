@@ -741,12 +741,20 @@ function zohoApiPlugin(): Plugin {
     const amountReceivedNum = to2Dec(Number(totals.amountReceived) || Number(deal.received ? String(deal.received).replace(/[^0-9.]/g, '') : 0) || 0);
     const pendingAmountNum = to2Dec(Math.max(0, grandTotalNum - amountReceivedNum));
 
+    const servicesDisbursementSum = servicesData.reduce((sum: number, s: any) => {
+      const v = s.amountAfterDisbursement !== undefined && s.amountAfterDisbursement !== ''
+        ? Number(s.amountAfterDisbursement)
+        : (s.amount_if_you_have_kindly_put_0 !== undefined ? Number(s.amount_if_you_have_kindly_put_0) : 0);
+      return sum + (isNaN(v) ? 0 : v);
+    }, 0);
+    const hasExplicitDisbursement = servicesData.some((s: any) => s.amountAfterDisbursement !== undefined && s.amountAfterDisbursement !== '');
+    const disbursementNum = hasExplicitDisbursement
+      ? servicesDisbursementSum
+      : (deal.amount_if_you_have_kindly_put_0 !== undefined ? Number(deal.amount_if_you_have_kindly_put_0) : 0);
+
     const todayDate = new Date().toISOString().split('T')[0];
     const bookingDate = formatDateForZoho(deal.date || deal.bookingDate) || todayDate;
     const paymentDate = formatDateForZoho(deal.Payment_Date || deal.paymentDate || deal.payment_date || deal.date || deal.bookingDate) || bookingDate;
-
-    const amountAfterDisb = Number(deal.amount_if_you_have_kindly_put_0 ?? fd.amount_if_you_have_kindly_put_0 ?? deal.amountAfterDisbursement ?? fd.amountAfterDisbursement ?? deal.Amount_After_disbursement ?? 0);
-    const successFeesVal = String(deal.successFees || fd.successFees || deal.Success_fees || fd.Success_fees || deal.Success_fee || fd.Success_fee || '');
 
     // Build payload matching standard Zoho CRM Deals and custom layout API names
     const payload: Record<string, any> = {
@@ -762,12 +770,11 @@ function zohoApiPlugin(): Plugin {
       Deal_Received_Amount: amountReceivedNum,
       Total_Received_Amount: amountReceivedNum,
       Received_amount: amountReceivedNum,
-      Amount_After_disbursement: amountAfterDisb,
+      Amount_After_disbursement: disbursementNum,
       Deal_Pending_Amount: pendingAmountNum,
       Total_Pending_Amount: pendingAmountNum,
       Pending_amount: pendingAmountNum,
-      amount_if_you_have_kindly_put_0: amountAfterDisb,
-      ...(successFeesVal ? { Success_fees: successFeesVal, Success_fee: successFeesVal } : {}),
+      amount_if_you_have_kindly_put_0: disbursementNum,
       Payment_Date: paymentDate,
       Booking_Date: bookingDate,
       Sales_date: bookingDate,
@@ -883,6 +890,12 @@ function zohoApiPlugin(): Plugin {
         }
         const itemPending = to2Dec(Math.max(0, itemTotal - itemReceived));
 
+        const svcDisbursement = svc.amountAfterDisbursement !== undefined && svc.amountAfterDisbursement !== ''
+          ? Number(svc.amountAfterDisbursement)
+          : (svc.amount_if_you_have_kindly_put_0 !== undefined && svc.amount_if_you_have_kindly_put_0 !== ''
+            ? Number(svc.amount_if_you_have_kindly_put_0)
+            : (svc.Amount_After_disbursement !== undefined && svc.Amount_After_disbursement !== '' ? Number(svc.Amount_After_disbursement) : undefined));
+
         return {
           ...(svc.id && /^\d{15,}$/.test(String(svc.id)) ? { id: String(svc.id) } : {}),
           Schemas: svc.name || svc.Schemas || 'Website Development',
@@ -895,7 +908,11 @@ function zohoApiPlugin(): Plugin {
           Payment_type: amountReceivedNum >= grandTotalNum ? 'Full amount paid' : amountReceivedNum > 0 ? 'Partially paid' : 'Online',
           Payment_received_date: bookingDate,
           LinkingModule2_Serial_Number: String(idx + 1),
-          ...(svc.successFees || successFeesVal ? { Success_fees: svc.successFees || successFeesVal } : {}),
+          Success_fees: svc.successFees || svc.Success_fees || '',
+          ...(svcDisbursement !== undefined ? {
+            amount_if_you_have_kindly_put_0: svcDisbursement,
+            Amount_After_disbursement: svcDisbursement,
+          } : {}),
         };
       });
     } else if (deal.service || fd.service) {
@@ -914,7 +931,6 @@ function zohoApiPlugin(): Plugin {
           Payment_type: amountReceivedNum >= grandTotalNum ? 'Full amount paid' : amountReceivedNum > 0 ? 'Partially paid' : 'Online',
           Payment_received_date: bookingDate,
           LinkingModule2_Serial_Number: '1',
-          ...(successFeesVal ? { Success_fees: successFeesVal } : {}),
         }
       ];
     }

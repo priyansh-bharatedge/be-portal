@@ -19,6 +19,8 @@ interface DealService {
   baseAmount?: string;
   notes?: string;
   remarks?: string;
+  amountAfterDisbursement?: string;
+  successFees?: string;
 }
 
 export const Quotations = () => {

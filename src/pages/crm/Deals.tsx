@@ -60,7 +60,22 @@ interface DealService {
   baseAmount?: string;
   notes?: string;
   remarks?: string;
+  amountAfterDisbursement?: string;
+  successFees?: string;
 }
+
+const SUCCESS_FEES_OPTIONS = [
+  '0.5',
+  '1.0',
+  '1.5',
+  '2.0',
+  '2.5',
+  '3.0',
+  '3.5',
+  '4.0',
+  '4.5',
+  '5.0'
+];
 
 interface DealSubordinateInfo {
   member: any;
@@ -795,9 +810,7 @@ export const Deals = () => {
     billingAddress: '', Billing_address: '',
     companyName: '', businessType: '', doi: '', gstNumber: '',
     companyPan: '', sector: 'IT', industry: 'Software',
-    companyAddress: '', Company_address: '',
-    amountAfterDisbursement: '0', amount_if_you_have_kindly_put_0: '0',
-    successFees: '', Success_fees: ''
+    companyAddress: '', Company_address: ''
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -886,28 +899,6 @@ export const Deals = () => {
       const industry = fd.industry || deal.industry || localComp?.industry || 'Software';
       const companyAddress = fd.companyAddress || fd.Company_address || deal.companyAddress || deal.Company_address || localComp?.companyAddress || rawZ.Company_address || rawZ.Company_Address || '';
 
-      const amountAfterDisbursement = String(
-        deal.amount_if_you_have_kindly_put_0 ??
-        deal.Amount_After_disbursement ??
-        deal.amountAfterDisbursement ??
-        fd.amount_if_you_have_kindly_put_0 ??
-        fd.amountAfterDisbursement ??
-        rawZ.amount_if_you_have_kindly_put_0 ??
-        rawZ.Amount_After_disbursement ??
-        '0'
-      );
-      const successFees = String(
-        deal.successFees ??
-        deal.Success_fees ??
-        deal.Success_fee ??
-        fd.successFees ??
-        fd.Success_fees ??
-        rawZ.Success_fees ??
-        rawZ.Success_fee ??
-        (rawZ.Subform_1?.[0]?.Success_fees) ??
-        ''
-      );
-
       setFormData({
         clientName,
         mobile,
@@ -927,11 +918,7 @@ export const Deals = () => {
         sector,
         industry,
         companyAddress,
-        Company_address: companyAddress,
-        amountAfterDisbursement,
-        amount_if_you_have_kindly_put_0: amountAfterDisbursement,
-        successFees,
-        Success_fees: successFees
+        Company_address: companyAddress
       });
 
       let services: DealService[] = [];
@@ -948,6 +935,14 @@ export const Deals = () => {
             name: s.name || s.Schemas || '',
             totalAmount: t,
             baseAmount: b,
+            notes: s.notes || s.remarks || '',
+            remarks: s.remarks || s.notes || '',
+            amountAfterDisbursement: s.amountAfterDisbursement !== undefined && s.amountAfterDisbursement !== null
+              ? String(s.amountAfterDisbursement)
+              : (s.amount_if_you_have_kindly_put_0 !== undefined && s.amount_if_you_have_kindly_put_0 !== null
+                ? String(s.amount_if_you_have_kindly_put_0)
+                : (s.Amount_After_disbursement !== undefined && s.Amount_After_disbursement !== null ? String(s.Amount_After_disbursement) : '')),
+            successFees: s.successFees || s.Success_fees || '',
           };
         });
       } else if (Array.isArray(rawZ.Subform_1) && rawZ.Subform_1.length > 0) {
@@ -960,6 +955,14 @@ export const Deals = () => {
             name: sf.Schemas || sf.Schema || sf.Service_Name || 'Service',
             totalAmount: String(totalAmt || ''),
             baseAmount: String(withoutGst || ''),
+            notes: sf.notes || sf.remarks || sf.Remark || '',
+            remarks: sf.remarks || sf.notes || sf.Remark || '',
+            amountAfterDisbursement: sf.amount_if_you_have_kindly_put_0 !== undefined && sf.amount_if_you_have_kindly_put_0 !== null
+              ? String(sf.amount_if_you_have_kindly_put_0)
+              : (sf.Amount_After_disbursement !== undefined && sf.Amount_After_disbursement !== null
+                ? String(sf.Amount_After_disbursement)
+                : (sf.amountAfterDisbursement !== undefined && sf.amountAfterDisbursement !== null ? String(sf.amountAfterDisbursement) : '')),
+            successFees: sf.Success_fees ? String(sf.Success_fees) : (sf.successFees ? String(sf.successFees) : ''),
           };
         });
       } else if (deal.service && deal.service !== 'Services') {
@@ -970,6 +973,10 @@ export const Deals = () => {
           name: deal.service,
           totalAmount: rawAmt > 0 ? String(rawAmt) : '',
           baseAmount: baseAmt > 0 ? String(baseAmt) : '',
+          notes: '',
+          remarks: '',
+          amountAfterDisbursement: '',
+          successFees: '',
         }];
       }
       setDealServices(services);
@@ -1002,9 +1009,7 @@ export const Deals = () => {
         billingAddress: '', Billing_address: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
         companyPan: '', sector: 'IT', industry: 'Software',
-        companyAddress: '', Company_address: '',
-        amountAfterDisbursement: '0', amount_if_you_have_kindly_put_0: '0',
-        successFees: '', Success_fees: ''
+        companyAddress: '', Company_address: ''
       });
       setDealServices([]);
       setAmountReceived('');
@@ -1029,9 +1034,7 @@ export const Deals = () => {
         billingAddress: '', Billing_address: '',
         companyName: '', businessType: '', doi: '', gstNumber: '',
         companyPan: '', sector: 'IT', industry: 'Software',
-        companyAddress: '', Company_address: '',
-        amountAfterDisbursement: '0', amount_if_you_have_kindly_put_0: '0',
-        successFees: '', Success_fees: ''
+        companyAddress: '', Company_address: ''
       });
       setFormErrors({});
       setDealServices([]);
@@ -1108,7 +1111,7 @@ export const Deals = () => {
     } else {
       setDealServices([
         ...dealServices,
-        { id: Math.random().toString(), name: serviceName, totalAmount: '', baseAmount: '', notes: '', remarks: '' }
+        { id: Math.random().toString(), name: serviceName, totalAmount: '', baseAmount: '', notes: '', remarks: '', amountAfterDisbursement: '', successFees: '' }
       ]);
     }
   };
@@ -1157,7 +1160,7 @@ export const Deals = () => {
   const addBlankService = () => {
     setDealServices([
       ...dealServices,
-      { id: Math.random().toString(), name: '', totalAmount: '', baseAmount: '', notes: '', remarks: '' }
+      { id: Math.random().toString(), name: '', totalAmount: '', baseAmount: '', notes: '', remarks: '', amountAfterDisbursement: '', successFees: '' }
     ]);
   };
 
@@ -1511,7 +1514,12 @@ export const Deals = () => {
             paymentType: typeof sf.Payment_type === 'object' ? (sf.Payment_type?.name || '') : String(sf.Payment_type || ''),
             paymentDate: typeof sf.Payment_received_date === 'object' ? (sf.Payment_received_date?.name || '') : String(sf.Payment_received_date || ''),
             qualityProvided: typeof sf.Quality_provided === 'object' ? (sf.Quality_provided?.name || '') : String(sf.Quality_provided || ''),
-            successFees: sf.Success_fees || '',
+            successFees: sf.Success_fees || sf.successFees || '',
+            amountAfterDisbursement: sf.amount_if_you_have_kindly_put_0 !== undefined && sf.amount_if_you_have_kindly_put_0 !== null
+              ? String(sf.amount_if_you_have_kindly_put_0)
+              : (sf.Amount_After_disbursement !== undefined && sf.Amount_After_disbursement !== null
+                ? String(sf.Amount_After_disbursement)
+                : (sf.amountAfterDisbursement || '')),
           };
         });
       } else if (
@@ -2316,11 +2324,6 @@ export const Deals = () => {
         partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
         partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
         bookingAmount: Number(amountReceived) || 0,
-        amount_if_you_have_kindly_put_0: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
-        Amount_After_disbursement: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
-        amountAfterDisbursement: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
-        successFees: formData.successFees || formData.Success_fees || '',
-        Success_fees: formData.successFees || formData.Success_fees || '',
         remark: remark.trim(),
         Remark: remark.trim(),
         remarks: remark.trim(),
@@ -2328,11 +2331,6 @@ export const Deals = () => {
         // Full details
         formData: {
           ...formData,
-          amount_if_you_have_kindly_put_0: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
-          Amount_After_disbursement: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
-          amountAfterDisbursement: Number(formData.amount_if_you_have_kindly_put_0 ?? formData.amountAfterDisbursement ?? 0),
-          successFees: formData.successFees || formData.Success_fees || '',
-          Success_fees: formData.successFees || formData.Success_fees || '',
           remark: remark.trim(),
           Remark: remark.trim(),
           remarks: remark.trim(),
@@ -2367,8 +2365,8 @@ export const Deals = () => {
             ...s,
             totalAmount: String(t || s.totalAmount || ''),
             baseAmount: String(b || s.baseAmount || ''),
-            successFees: (s as any).successFees || formData.successFees || formData.Success_fees || '',
-            Success_fees: (s as any).successFees || formData.successFees || formData.Success_fees || '',
+            amountAfterDisbursement: s.amountAfterDisbursement !== undefined ? String(s.amountAfterDisbursement) : '',
+            successFees: s.successFees || '',
           };
         }),
         totals: { subtotal, totalGst, grandTotal, amountReceived, pendingAmount, bookingAmount: Number(amountReceived) || 0 },
@@ -4393,16 +4391,23 @@ export const Deals = () => {
                         <thead className="bg-gray-50 text-gray-600 font-medium">
                           <tr>
                             <th className="px-4 py-3 min-w-[200px]">Service</th>
-                            <th className="px-4 py-3 w-40">Total (₹)</th>
+                            <th className="px-4 py-3 w-36">Total (₹)</th>
                             <th className="px-4 py-3 text-right">Base (₹)</th>
                             <th className="px-4 py-3 text-right">GST (18%) (₹)</th>
+                            <th className="px-4 py-3 min-w-[190px]">
+                              <div className="leading-tight">
+                                <span>Amount after disbursement</span>
+                                <span className="block text-[11px] text-gray-400 font-normal">(if you've % put 0)</span>
+                              </div>
+                            </th>
+                            <th className="px-4 py-3 w-32">Success Fees (%)</th>
                             <th className="px-4 py-3 w-10"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 text-gray-800">
                           {dealServices.length === 0 && (
                             <tr>
-                              <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                              <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                                 No services added. Click "Add Service" to begin.
                               </td>
                             </tr>
@@ -4509,6 +4514,39 @@ export const Deals = () => {
 
                                 <td className="px-4 py-3 pt-4 text-right text-gray-600">₹{base.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
                                 <td className="px-4 py-3 pt-4 text-right text-gray-500">₹{gst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
+                                
+                                <td className="px-4 py-3 pt-3.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="0"
+                                    value={service.amountAfterDisbursement !== undefined ? service.amountAfterDisbursement : ''}
+                                    onChange={(e) => updateService(service.id, 'amountAfterDisbursement', e.target.value)}
+                                    className="w-full px-2 py-1.5 border border-gray-200 rounded focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none font-medium text-gray-900"
+                                  />
+                                </td>
+
+                                <td className="px-4 py-3 pt-3.5">
+                                  <select
+                                    value={service.successFees ? service.successFees.replace('%', '').trim() : ''}
+                                    onChange={(e) => updateService(service.id, 'successFees', e.target.value)}
+                                    className="w-full px-2 py-1.5 border border-gray-200 rounded focus:border-be-orange focus:ring-1 focus:ring-be-orange outline-none font-medium text-gray-900 bg-white"
+                                  >
+                                    <option value="">Select %</option>
+                                    {SUCCESS_FEES_OPTIONS.map((fee) => (
+                                      <option key={fee} value={fee}>
+                                        {fee}%
+                                      </option>
+                                    ))}
+                                    {service.successFees && !SUCCESS_FEES_OPTIONS.includes(service.successFees.replace('%', '').trim()) && (
+                                      <option value={service.successFees.replace('%', '').trim()}>
+                                        {service.successFees.replace('%', '').trim()}%
+                                      </option>
+                                    )}
+                                  </select>
+                                </td>
+
                                 <td className="px-4 py-3 pt-3.5 text-center">
                                   <button
                                     onClick={() => removeService(service.id)}
@@ -4625,52 +4663,6 @@ export const Deals = () => {
                       <div className="flex justify-between text-orange-600 font-semibold items-center">
                         <span>Pending Amount</span>
                         <span className="text-base">₹{pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
-                      </div>
-
-                      {/* Amount After Disbursement & Success Fees */}
-                      <div className="pt-3 border-t border-gray-200 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">
-                              Amount after disbursement <span className="text-gray-400 font-normal">(if you've % put 0)</span>
-                            </label>
-                            <div className="relative">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">₹</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                placeholder="0"
-                                value={formData.amountAfterDisbursement || ''}
-                                onChange={(e) => setFormData({ ...formData, amountAfterDisbursement: e.target.value, amount_if_you_have_kindly_put_0: e.target.value })}
-                                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange font-medium text-gray-900"
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">
-                              Success fees <span className="text-gray-400 font-normal">(dropdown)</span>
-                            </label>
-                            <select
-                              value={formData.successFees || ''}
-                              onChange={(e) => setFormData({ ...formData, successFees: e.target.value, Success_fees: e.target.value })}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-1 focus:ring-be-orange focus:border-be-orange font-medium text-gray-900"
-                            >
-                              <option value="">Select %</option>
-                              <option value="0.5">0.5</option>
-                              <option value="1.0">1.0</option>
-                              <option value="1.5">1.5</option>
-                              <option value="2.0">2.0</option>
-                              <option value="2.5">2.5</option>
-                              <option value="3.0">3.0</option>
-                              <option value="3.5">3.5</option>
-                              <option value="4.0">4.0</option>
-                              <option value="4.5">4.5</option>
-                              <option value="5.0">5.0</option>
-                            </select>
-                          </div>
-                        </div>
                       </div>
 
                       {/* Remark Field */}
