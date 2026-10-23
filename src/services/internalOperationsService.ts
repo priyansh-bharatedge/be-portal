@@ -1040,10 +1040,33 @@ export async function saveInternalOperation(record: InternalOperationRecord): Pr
   const tlId = record.Team_Leader?.id || record.Team_Leader_ID || record.Team_Leader_TL?.id || (typeof record.Team_Leader_TL === 'string' ? record.Team_Leader_TL : '');
   const tmId = record.Team_Member?.id || record.Team_Member_ID || record.Team_Member_TM?.id || (typeof record.Team_Member_TM === 'string' ? record.Team_Member_TM : '');
 
+  let zohoDealId = record.zohoDealId || (/^\d{15,}$/.test(String(dealId)) ? String(dealId) : undefined);
+  if (!zohoDealId) {
+    try {
+      const savedDeals = localStorage.getItem('be_deals');
+      if (savedDeals) {
+        const deals = JSON.parse(savedDeals);
+        const matched = deals.find((d: any) =>
+          String(d.id || '').toLowerCase() === String(dealId).toLowerCase() ||
+          String(d.zohoId || '').toLowerCase() === String(dealId).toLowerCase() ||
+          (d.name && record.Deal_Name && d.name.toLowerCase() === record.Deal_Name.toLowerCase())
+        );
+        if (matched?.zohoId && /^\d{15,}$/.test(String(matched.zohoId))) {
+          zohoDealId = String(matched.zohoId);
+        } else if (matched?.id && /^\d{15,}$/.test(String(matched.id))) {
+          zohoDealId = String(matched.id);
+        }
+      }
+    } catch (_) {}
+  }
+
   const updatedRecord: InternalOperationRecord = {
     ...record,
     Deal_ID: dealId || record.Deal_ID,
-    Parent_Record_Deal: record.Parent_Record_Deal || (dealId ? (/^\d{15,}$/.test(String(dealId)) ? { id: String(dealId) } : dealId) : undefined),
+    zohoDealId: zohoDealId || undefined,
+    Parent_Record_Deal: zohoDealId
+      ? { id: zohoDealId, name: record.Deal_Name }
+      : (record.Parent_Record_Deal || (dealId ? (/^\d{15,}$/.test(String(dealId)) ? { id: String(dealId) } : dealId) : undefined)),
     Name: serviceName,
     Service_Scheme: serviceName,
     Team_Type: teamType,
@@ -1140,9 +1163,15 @@ export async function saveInternalOperation(record: InternalOperationRecord): Pr
       body: JSON.stringify(updatedRecord)
     });
     const data = await response.json();
+    const createdZohoId = data?.data?.[0]?.details?.id || data?.zohoId;
+    if (createdZohoId && /^\d{15,}$/.test(String(createdZohoId))) {
+      updatedRecord.zohoId = String(createdZohoId);
+      const reSaved = getStoredInternalOperations().map(r => r.id === updatedRecord.id ? { ...r, zohoId: String(createdZohoId) } : r);
+      setStoredInternalOperations(reSaved);
+    }
     return {
       success: true,
-      zohoId: data?.zohoId || updatedRecord.zohoId || updatedRecord.id,
+      zohoId: createdZohoId || updatedRecord.zohoId || updatedRecord.id,
       message: 'Internal Operations record updated successfully',
       data: updatedRecord
     };

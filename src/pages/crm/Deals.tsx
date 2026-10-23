@@ -33,7 +33,7 @@ import { isSubordinateOfTL, isMatchingName, mapZohoRecordToEmployee } from '../.
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 import { ALL_SERVICES } from '../../utils/servicesList';
-import { generateServiceAllocationsForDeal } from '../../services/internalOperationsService';
+import { generateServiceAllocationsForDeal, getStoredInternalOperations } from '../../services/internalOperationsService';
 import {
   getDealSplitBreakdown,
   isDealPartnerBdm,
@@ -2925,13 +2925,70 @@ export const Deals = () => {
       setDeals(updatedList);
       safeSaveDealsToStorage(updatedList);
 
-      // Execute Zoho CRM Blueprint Transition: Operations Allocator to Operations Executors ("1078476000001938757")
-      const zohoRes = await moveDealToOperationsExecutors(deal.zohoId || deal.id);
+      // 1. Gather child service allocations for this deal from storage or generate them from Legal details
+      const allOps = getStoredInternalOperations();
+      const targetDealId = String(deal.id || '').toLowerCase();
+      const targetZohoId = String(deal.zohoId || '').toLowerCase();
+      let dealOps = allOps.filter(r => {
+        const dId = String(r.Deal_ID || (r.Parent_Record_Deal?.id || r.Parent_Record_Deal) || '').toLowerCase();
+        const zId = String((r as any).zohoDealId || '').toLowerCase();
+        return (targetDealId && (dId === targetDealId || zId === targetDealId)) ||
+               (targetZohoId && (dId === targetZohoId || zId === targetZohoId));
+      });
+
+      if (dealOps.length === 0) {
+        const genRes = generateServiceAllocationsForDeal(deal);
+        dealOps = genRes.all.filter(r => {
+          const dId = String(r.Deal_ID || (r.Parent_Record_Deal?.id || r.Parent_Record_Deal) || '').toLowerCase();
+          const zId = String((r as any).zohoDealId || '').toLowerCase();
+          return (targetDealId && (dId === targetDealId || zId === targetDealId)) ||
+                 (targetZohoId && (dId === targetZohoId || zId === targetZohoId));
+        });
+      }
+
+      // Ensure each allocation has the deal's zohoId attached
+      if (deal.zohoId && /^\d{15,}$/.test(String(deal.zohoId))) {
+        dealOps = dealOps.map(op => ({
+          ...op,
+          zohoDealId: String(deal.zohoId),
+          Parent_Record_Deal: { id: String(deal.zohoId), name: deal.name || deal.Deal_Name }
+        }));
+      }
+
+      // 2. Execute Zoho CRM Blueprint Transition: Operations Allocator to Operations Executors ("1078476000001938757")
+      const zohoRes = await moveDealToOperationsExecutors(
+        deal.zohoId || deal.id,
+        'Sent to Operations Executors via Portal',
+        {
+          allocations: dealOps,
+          dealName: deal.name || deal.Deal_Name,
+          Deal_Name: deal.name || deal.Deal_Name,
+          dealZohoId: deal.zohoId || deal.id
+        }
+      );
+
+      // 3. Proactively sync the child service records to Zoho CRM Operation_Internal_CRM module
+      if (dealOps.length > 0) {
+        try {
+          await fetch('/api/zoho/internal-operations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              allocations: dealOps,
+              dealZohoId: deal.zohoId || (/^\d{15,}$/.test(String(deal.id)) ? String(deal.id) : undefined),
+              dealName: deal.name || deal.Deal_Name
+            })
+          });
+        } catch (syncErr) {
+          console.warn('[Deals] Internal operations sync warning:', syncErr);
+        }
+      }
+
       if (zohoRes.success) {
         setToast({
           type: 'success',
           message: 'Sent to Operations Executors',
-          submessage: `Deal ${deal.id} stage successfully transitioned to Operations Executors via Zoho Blueprint.`
+          submessage: `Deal ${deal.id} transitioned to Operations Executors and ${dealOps.length} service allocation(s) synchronized to Zoho CRM.`
         });
       } else {
         setToast({

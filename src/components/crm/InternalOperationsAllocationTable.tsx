@@ -418,6 +418,41 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     }
   };
 
+  // Sync all records directly to Zoho CRM module Operation_Internal_CRM
+  const handleSyncAllToZoho = async () => {
+    setSyncingId('sync-all-zoho');
+    try {
+      const list = getStoredInternalOperations();
+      if (list.length === 0) {
+        setToastMessage({ type: 'error', text: 'No service allocation records to sync.' });
+        return;
+      }
+      const res = await fetch('/api/zoho/internal-operations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allocations: list })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setToastMessage({
+          type: 'success',
+          text: `Successfully synchronized ${list.length} record(s) to Zoho CRM Operation Internal module!`
+        });
+        await loadRecords();
+      } else {
+        setToastMessage({
+          type: 'error',
+          text: data?.message || 'Failed to sync with Zoho CRM'
+        });
+      }
+    } catch (err: any) {
+      setToastMessage({ type: 'error', text: err?.message || 'Sync request failed' });
+    } finally {
+      setSyncingId(null);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
+
   // Inline TL Change
   const handleInlineTlChange = async (record: InternalOperationRecord, newTlId: string) => {
     setSyncingId(record.id);
@@ -875,6 +910,19 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                 />
                 <span className="whitespace-nowrap">My Assigned</span>
               </label>
+
+              {canManageAllocations && (
+                <button
+                  type="button"
+                  onClick={handleSyncAllToZoho}
+                  disabled={syncingId === 'sync-all-zoho'}
+                  className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-be-orange border border-orange-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Synchronize all service allocations directly to Zoho CRM Operation Internal module"
+                >
+                  <RefreshCw size={13} className={syncingId === 'sync-all-zoho' ? 'animate-spin' : ''} />
+                  <span>Sync to Zoho</span>
+                </button>
+              )}
             </div>
           </div>
         )}
