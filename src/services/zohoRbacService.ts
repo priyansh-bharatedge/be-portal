@@ -686,7 +686,7 @@ export function filterRecordsByRbac<T = any>(
     // Legal HOD has supervisory oversight and visibility over legal sub-child details.
     // Operations TL / TM have visibility over their specifically assigned service records.
     // Unauthorized personnel (sales, accounts, unassigned staff) are blocked.
-    if (moduleName === 'Internal_Operations' || moduleName === 'internal_operations') {
+    if (moduleName === 'Internal_Operations' || moduleName === 'internal_operations' || moduleName === 'Operation_Internal_CRM' || moduleName === 'operation_internal_crm') {
       const isSuperAdmin = user.role === 'Super Admin' || user.email === 'superadmin@be.com' || user.email === 'md@bharat-edge.com';
       const isOpsHOD = user.role === 'HOD' && (userDept.includes('operat') || !userDept.includes('legal'));
       const isLegalHOD = user.role === 'HOD' && userDept.includes('legal');

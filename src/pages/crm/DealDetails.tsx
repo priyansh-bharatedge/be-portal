@@ -1373,18 +1373,27 @@ export const DealDetails = () => {
         window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
       } catch (e) {}
 
-      // Automatically generate sub-child service allocation records in Internal Operations module
+      // 1. Sync updated deal data & legal fields to Zoho CRM
+      let currentZohoId = deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : '');
+      try {
+        const dealZohoRes = await saveOrUpdateZohoDeal(updatedDeal);
+        if (dealZohoRes?.success && dealZohoRes?.zohoId) {
+          currentZohoId = dealZohoRes.zohoId;
+          updatedDeal.zohoId = currentZohoId;
+        }
+      } catch (saveErr) {
+        console.warn('[DealDetails] saveOrUpdateZohoDeal warning:', saveErr);
+      }
+
+      // 2. Automatically generate sub-child service allocation records in Internal Operations module
       try {
         generateServiceAllocationsForDeal(updatedDeal);
       } catch (genErr) {
         console.warn('[DealDetails] Service allocation creation warning:', genErr);
       }
 
-      // 1. Sync updated deal data & legal fields to Zoho CRM
-      await saveOrUpdateZohoDeal(updatedDeal);
-
-      // 2. Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
-      const zohoRes = await moveDealToOperationsAllocator(deal.zohoId || deal.id || id || '');
+      // 3. Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
+      const zohoRes = await moveDealToOperationsAllocator(currentZohoId || deal.zohoId || deal.id || id || '');
       if (zohoRes.success) {
         setWorkflowToast({ type: 'success', message: 'Legal handover verified and deal successfully forwarded to Operations Allocator Department.' });
       } else {

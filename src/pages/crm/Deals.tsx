@@ -2847,6 +2847,7 @@ export const Deals = () => {
   const handleSendToOperationsAllocator = async (deal: any) => {
     try {
       setSyncingId(deal.id);
+      let currentZohoId = deal.zohoId;
       const updatedDeal = {
         ...deal,
         stage: 'Operations Allocator',
@@ -2858,19 +2859,30 @@ export const Deals = () => {
         }
       };
 
+      // 1. Sync updated deal data to Zoho CRM Deals module first to ensure valid Zoho record ID
+      try {
+        const dealZohoRes = await saveOrUpdateZohoDeal(updatedDeal);
+        if (dealZohoRes?.success && dealZohoRes?.zohoId) {
+          currentZohoId = dealZohoRes.zohoId;
+          updatedDeal.zohoId = currentZohoId;
+        }
+      } catch (saveErr) {
+        console.warn('[Deals] Error saving deal to Zoho CRM before blueprint transition:', saveErr);
+      }
+
       const updatedList = deals.map((d: any) => (d.id === deal.id || (d.zohoId && d.zohoId === deal.zohoId)) ? updatedDeal : d);
       setDeals(updatedList);
       safeSaveDealsToStorage(updatedList);
 
-      // Automatically generate sub-child service allocation records in Internal Operations module
+      // 2. Automatically generate sub-child service allocation records in Internal Operations module
       try {
         generateServiceAllocationsForDeal(updatedDeal);
       } catch (genErr) {
         console.warn('[Deals] Service allocation creation warning:', genErr);
       }
 
-      // Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
-      const zohoRes = await moveDealToOperationsAllocator(deal.zohoId || deal.id);
+      // 3. Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
+      const zohoRes = await moveDealToOperationsAllocator(currentZohoId || deal.zohoId || deal.id);
       if (zohoRes.success) {
         setToast({
           type: 'success',

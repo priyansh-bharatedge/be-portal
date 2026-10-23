@@ -2236,7 +2236,7 @@ function zohoApiPlugin(): Plugin {
                 // If transitioning to Operations Allocator, trigger backend service allocation sync
                 if (transitionId === '1078476000000492099' || String(targetStage).toLowerCase().includes('allocat')) {
                   try {
-                    const opsModuleName = env.VITE_ZOHO_INTERNAL_OPERATIONS_MODULE_NAME || 'Internal_Operations';
+                    const opsModuleName = env.VITE_ZOHO_INTERNAL_OPERATIONS_MODULE_NAME || 'Operation_Internal_CRM';
                     const dealRes = await fetch(`${apiBase}/crm/v8/Deals/${dealZohoId}`, {
                       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                     });
@@ -2245,26 +2245,72 @@ function zohoApiPlugin(): Plugin {
                       const d = dealJson?.data?.[0];
                       const subItems = Array.isArray(d?.Legal) && d.Legal.length > 0 ? d.Legal : (Array.isArray(d?.Subform_1) ? d.Subform_1 : []);
                       if (subItems.length > 0) {
-                        const allocPayloads = subItems.map((sub: any, idx: number) => ({
-                          Deal_ID: { id: dealZohoId, name: d.Deal_Name },
-                          Deal_Name: d.Deal_Name,
-                          Client_Name: d.Client_Name || d.Contact_Name?.name,
-                          Service_Scheme: sub.Legal_Schemas || sub.Schemas || sub.Service_Name || `Service ${idx + 1}`,
-                          Internal_Team_Type: sub.Internal_team_type || 'Team Funding',
-                          Types_of_Legal_Documents: sub.Types_of_legal_documents || 'Agreement',
-                          Agreement_Terms: sub.Agreement_Terms_I || sub.Agreement_Terms || '3 Months',
-                          Remark: sub.Remark || '',
-                          Internal_Legal_Status: sub.Internal_legal_status || 'RECEIVED',
-                          Allocation_Status: 'Pending Allocation'
-                        }));
-                        await fetch(`${apiBase}/crm/v8/${opsModuleName}/upsert`, {
-                          method: 'POST',
-                          headers: {
-                            Authorization: `Zoho-oauthtoken ${accessToken}`,
-                            'Content-Type': 'application/json'
-                          },
-                          body: JSON.stringify({ data: allocPayloads, duplicate_check_fields: ['Deal_ID', 'Service_Scheme'] })
-                        }).catch(() => {});
+                        const allocPayloads = subItems.map((sub: any, idx: number) => {
+                          const serviceName = sub.Legal_Schemas || sub.Schemas || sub.Service_Name || `Service ${idx + 1}`;
+                          const teamType = sub.Internal_team_type || 'Team Funding';
+                          return {
+                            Name: serviceName,
+                            Service_Scheme: serviceName,
+                            Parent_Record_Deal: { id: String(dealZohoId), name: d.Deal_Name },
+                            Deal_ID: { id: String(dealZohoId), name: d.Deal_Name },
+                            Deal_Name: d.Deal_Name,
+                            Client_Name: d.Client_Name || d.Contact_Name?.name || '',
+                            Internal_Team_Type: teamType,
+                            Team_Type: teamType,
+                            Types_of_Legal_Documents: sub.Types_of_legal_documents || 'Agreement',
+                            Agreement_Terms: sub.Agreement_Terms_I || sub.Agreement_Terms || '3 Months',
+                            Remark: sub.Remark || '',
+                            Internal_Legal_Status: sub.Internal_legal_status || 'RECEIVED',
+                            Allocation_Status: 'Pending Allocation',
+                            Stage: 'Document pending from client',
+                            Operation_Stage: 'Document pending from client'
+                          };
+                        });
+
+                        // Check existing records for this deal in Operation_Internal_CRM
+                        let existingList: any[] = [];
+                        try {
+                          const existingRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?criteria=(Parent_Record_Deal.id:equals:${dealZohoId})`, {
+                            headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                          });
+                          if (existingRes.ok) {
+                            const existingData: any = await existingRes.json();
+                            existingList = existingData?.data || [];
+                          }
+                        } catch (_) {}
+
+                        const toInsert: any[] = [];
+                        const toUpdate: any[] = [];
+
+                        allocPayloads.forEach((alloc: any) => {
+                          const matched = existingList.find((ex: any) => (ex.Name || ex.Service_Scheme) === alloc.Name);
+                          if (matched?.id) {
+                            toUpdate.push({ ...alloc, id: matched.id });
+                          } else {
+                            toInsert.push(alloc);
+                          }
+                        });
+
+                        if (toInsert.length > 0) {
+                          await fetch(`${apiBase}/crm/v8/${opsModuleName}`, {
+                            method: 'POST',
+                            headers: {
+                              Authorization: `Zoho-oauthtoken ${accessToken}`,
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ data: toInsert })
+                          });
+                        }
+                        if (toUpdate.length > 0) {
+                          await fetch(`${apiBase}/crm/v8/${opsModuleName}`, {
+                            method: 'PUT',
+                            headers: {
+                              Authorization: `Zoho-oauthtoken ${accessToken}`,
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ data: toUpdate })
+                          });
+                        }
                       }
                     }
                   } catch (autoErr) {
@@ -2524,24 +2570,34 @@ function zohoApiPlugin(): Plugin {
               const tlId = r.Team_Leader?.id || r.Team_Leader_ID || r.Team_Leader_TL?.id || (typeof r.Team_Leader_TL === 'string' ? r.Team_Leader_TL : '');
               const tmId = r.Team_Member?.id || r.Team_Member_ID || r.Team_Member_TM?.id || (typeof r.Team_Member_TM === 'string' ? r.Team_Member_TM : '');
 
+              const isDealNumeric = /^\d{15,}$/.test(String(dealId || '').trim());
+              const isTlNumeric = /^\d{15,}$/.test(String(tlId || '').trim());
+              const isTmNumeric = /^\d{15,}$/.test(String(tmId || '').trim());
+
               const payload: any = {
                 ...(r.zohoId && /^\d{15,}$/.test(String(r.zohoId)) ? { id: String(r.zohoId) } : {}),
                 ...(r.id && /^\d{15,}$/.test(String(r.id)) ? { id: String(r.id) } : {}),
                 // Core Zoho CRM Fields (Module: Operation_Internal_CRM)
-                ...(dealId ? {
-                  Parent_Record_Deal: /^\d{15,}$/.test(String(dealId)) ? { id: String(dealId) } : dealId,
-                  Deal_ID: /^\d{15,}$/.test(String(dealId)) ? { id: String(dealId) } : dealId
+                ...(isDealNumeric ? {
+                  Parent_Record_Deal: { id: String(dealId).trim() },
+                  Deal_ID: { id: String(dealId).trim() }
                 } : {}),
-                ...(serviceName ? { Name: serviceName, Service_Scheme: serviceName } : {}),
-                ...(teamType ? { Team_Type: teamType, Internal_Team_Type: teamType } : {}),
-                ...(opStage ? { Operation_Stage: opStage, Stage: opStage } : {}),
-                ...(tlId ? {
-                  Team_Leader_TL: /^\d{15,}$/.test(String(tlId)) ? { id: String(tlId) } : tlId,
-                  Team_Leader: /^\d{15,}$/.test(String(tlId)) ? { id: String(tlId) } : tlId
+                ...(r.Deal_Name ? { Deal_Name: r.Deal_Name } : {}),
+                ...(r.Client_Name ? { Client_Name: r.Client_Name } : {}),
+                ...(r.Company_Name ? { Company_Name: r.Company_Name } : {}),
+                Name: serviceName || 'Service Allocation',
+                Service_Scheme: serviceName || 'Service Allocation',
+                Team_Type: teamType || 'Team Funding',
+                Internal_Team_Type: teamType || 'Team Funding',
+                Operation_Stage: opStage || 'Document pending from client',
+                Stage: opStage || 'Document pending from client',
+                ...(isTlNumeric ? {
+                  Team_Leader_TL: { id: String(tlId).trim() },
+                  Team_Leader: { id: String(tlId).trim() }
                 } : {}),
-                ...(tmId ? {
-                  Team_Member_TM: /^\d{15,}$/.test(String(tmId)) ? { id: String(tmId) } : tmId,
-                  Team_Member: /^\d{15,}$/.test(String(tmId)) ? { id: String(tmId) } : tmId
+                ...(isTmNumeric ? {
+                  Team_Member_TM: { id: String(tmId).trim() },
+                  Team_Member: { id: String(tmId).trim() }
                 } : {}),
                 ...(r.CA_CS1 ? { CA_CS1: r.CA_CS1 } : {}),
                 ...(r.CA_CS2 ? { CA_CS2: r.CA_CS2 } : {}),
@@ -3095,32 +3151,102 @@ function zohoApiPlugin(): Plugin {
                 let parsed: any = {};
                 try { parsed = JSON.parse(body); } catch (_) {}
                 const rawRecords = Array.isArray(parsed.allocations) ? parsed.allocations : (Array.isArray(parsed.data) ? parsed.data : [parsed]);
+
+                let accessToken = await getAccessToken(env);
+
+                // Helper to resolve deal ID if needed
+                for (const r of rawRecords) {
+                  const directDealId = r.Deal_ID?.id || (typeof r.Deal_ID === 'string' ? r.Deal_ID : '') || (r.Parent_Record_Deal?.id || (typeof r.Parent_Record_Deal === 'string' ? r.Parent_Record_Deal : ''));
+                  if (directDealId && !/^\d{15,}$/.test(String(directDealId).trim())) {
+                    try {
+                      const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
+                      const dlMatch = String(directDealId).match(/\b(DL-\d+)\b/i) || String(r.Deal_Name || '').match(/\b(DL-\d+)\b/i);
+                      const targetDl = dlMatch ? dlMatch[1].toUpperCase() : '';
+                      const dRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200&fields=id,Deal_Name`, {
+                        headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                      });
+                      if (dRes.ok) {
+                        const dData: any = await dRes.json();
+                        const matched = (dData.data || []).find((d: any) => {
+                          const dName = String(d.Deal_Name || '').toUpperCase();
+                          return (targetDl && dName.includes(targetDl)) || (r.Deal_Name && dName.includes(String(r.Deal_Name).toUpperCase()));
+                        });
+                        if (matched?.id) {
+                          r.Parent_Record_Deal = { id: String(matched.id), name: r.Deal_Name };
+                          r.Deal_ID = { id: String(matched.id), name: r.Deal_Name };
+                        }
+                      }
+                    } catch (_) {}
+                  }
+                }
+
                 const zohoRecords = rawRecords.map(formatRecordForZohoOperation);
                 try {
-                  let accessToken = await getAccessToken(env);
-                  let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/upsert`, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Zoho-oauthtoken ${accessToken}`,
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ data: zohoRecords, duplicate_check_fields: ['Parent_Record_Deal', 'Name'] })
-                  });
-                  if (!crmRes.ok) {
-                    crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/upsert`, {
+                  const toInsert: any[] = [];
+                  const toUpdate: any[] = [];
+
+                  for (const zr of zohoRecords) {
+                    const dealIdNum = zr.Parent_Record_Deal?.id || (typeof zr.Parent_Record_Deal === 'string' && /^\d{15,}$/.test(zr.Parent_Record_Deal) ? zr.Parent_Record_Deal : null);
+                    if (zr.id && /^\d{15,}$/.test(String(zr.id))) {
+                      toUpdate.push(zr);
+                    } else if (dealIdNum && zr.Name) {
+                      try {
+                        const searchRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?criteria=(Parent_Record_Deal.id:equals:${dealIdNum})`, {
+                          headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                        });
+                        if (searchRes.ok) {
+                          const sData: any = await searchRes.json();
+                          const found = (sData.data || []).find((rec: any) => (rec.Name || rec.Service_Scheme) === zr.Name);
+                          if (found?.id) {
+                            zr.id = String(found.id);
+                            toUpdate.push(zr);
+                            continue;
+                          }
+                        }
+                      } catch (_) {}
+                      toInsert.push(zr);
+                    } else {
+                      toInsert.push(zr);
+                    }
+                  }
+
+                  let createdData: any[] = [];
+                  let updatedData: any[] = [];
+
+                  if (toInsert.length > 0) {
+                    const insRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}`, {
                       method: 'POST',
                       headers: {
                         'Authorization': `Zoho-oauthtoken ${accessToken}`,
                         'Content-Type': 'application/json'
                       },
-                      body: JSON.stringify({ data: zohoRecords })
+                      body: JSON.stringify({ data: toInsert })
                     });
+                    const insData: any = await insRes.json();
+                    if (insRes.ok) createdData = insData.data || [];
                   }
-                  if (crmRes.ok) {
-                    const crmData: any = await crmRes.json();
-                    return res.end(JSON.stringify({ success: true, message: 'Internal operations saved successfully', data: crmData.data }));
+
+                  if (toUpdate.length > 0) {
+                    const upRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ data: toUpdate })
+                    });
+                    const upData: any = await upRes.json();
+                    if (upRes.ok) updatedData = upData.data || [];
                   }
-                } catch (_) {}
+
+                  return res.end(JSON.stringify({
+                    success: true,
+                    message: 'Internal operations saved successfully in Zoho CRM',
+                    data: [...createdData, ...updatedData]
+                  }));
+                } catch (postErr) {
+                  console.error('[Vite Plugin] Error syncing internal operations:', postErr);
+                }
                 return res.end(JSON.stringify({ success: true, message: 'Saved successfully', data: rawRecords }));
               });
               return;
@@ -3133,22 +3259,85 @@ function zohoApiPlugin(): Plugin {
                 res.setHeader('Content-Type', 'application/json');
                 let parsed: any = {};
                 try { parsed = JSON.parse(body); } catch (_) {}
-                const zohoRecord = formatRecordForZohoOperation(parsed);
+
+                let accessToken = await getAccessToken(env);
+
+                const directDealId = parsed.Deal_ID?.id || (typeof parsed.Deal_ID === 'string' ? parsed.Deal_ID : '') || (parsed.Parent_Record_Deal?.id || (typeof parsed.Parent_Record_Deal === 'string' ? parsed.Parent_Record_Deal : ''));
+                if (directDealId && !/^\d{15,}$/.test(String(directDealId).trim())) {
+                  try {
+                    const moduleName = env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
+                    const dlMatch = String(directDealId).match(/\b(DL-\d+)\b/i) || String(parsed.Deal_Name || '').match(/\b(DL-\d+)\b/i);
+                    const targetDl = dlMatch ? dlMatch[1].toUpperCase() : '';
+                    const dRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200&fields=id,Deal_Name`, {
+                      headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                    });
+                    if (dRes.ok) {
+                      const dData: any = await dRes.json();
+                      const matched = (dData.data || []).find((d: any) => {
+                        const dName = String(d.Deal_Name || '').toUpperCase();
+                        return (targetDl && dName.includes(targetDl)) || (parsed.Deal_Name && dName.includes(String(parsed.Deal_Name).toUpperCase()));
+                      });
+                      if (matched?.id) {
+                        parsed.Parent_Record_Deal = { id: String(matched.id), name: parsed.Deal_Name };
+                        parsed.Deal_ID = { id: String(matched.id), name: parsed.Deal_Name };
+                      }
+                    }
+                  } catch (_) {}
+                }
+
+                let zohoRecord = formatRecordForZohoOperation(parsed);
+                const hasZohoId = Boolean(zohoRecord.id && /^\d{15,}$/.test(String(zohoRecord.id)));
+
                 try {
-                  let accessToken = await getAccessToken(env);
-                  const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}`, {
-                    method: 'PUT',
-                    headers: {
-                      'Authorization': `Zoho-oauthtoken ${accessToken}`,
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ data: [zohoRecord] })
-                  });
-                  if (crmRes.ok) {
-                    const crmData: any = await crmRes.json();
-                    return res.end(JSON.stringify({ success: true, message: 'Updated successfully in Zoho CRM', data: crmData.data }));
+                  if (!hasZohoId) {
+                    const dealIdNum = zohoRecord.Parent_Record_Deal?.id || (typeof zohoRecord.Parent_Record_Deal === 'string' && /^\d{15,}$/.test(zohoRecord.Parent_Record_Deal) ? zohoRecord.Parent_Record_Deal : null);
+                    if (dealIdNum && zohoRecord.Name) {
+                      try {
+                        const searchRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?criteria=(Parent_Record_Deal.id:equals:${dealIdNum})`, {
+                          headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                        });
+                        if (searchRes.ok) {
+                          const sData: any = await searchRes.json();
+                          const found = (sData.data || []).find((rec: any) => (rec.Name || rec.Service_Scheme) === zohoRecord.Name);
+                          if (found?.id) {
+                            zohoRecord.id = String(found.id);
+                          }
+                        }
+                      } catch (_) {}
+                    }
                   }
-                } catch (_) {}
+
+                  if (zohoRecord.id && /^\d{15,}$/.test(String(zohoRecord.id))) {
+                    const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ data: [zohoRecord] })
+                    });
+                    if (crmRes.ok) {
+                      const crmData: any = await crmRes.json();
+                      return res.end(JSON.stringify({ success: true, message: 'Updated successfully in Zoho CRM', data: crmData.data }));
+                    }
+                  } else {
+                    delete zohoRecord.id;
+                    const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ data: [zohoRecord] })
+                    });
+                    if (crmRes.ok) {
+                      const crmData: any = await crmRes.json();
+                      return res.end(JSON.stringify({ success: true, message: 'Created successfully in Zoho CRM', data: crmData.data }));
+                    }
+                  }
+                } catch (putErr) {
+                  console.error('[Vite Plugin] Exception in PUT internal-operations:', putErr);
+                }
                 return res.end(JSON.stringify({ success: true, message: 'Updated successfully', data: parsed }));
               });
               return;

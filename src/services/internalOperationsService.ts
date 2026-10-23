@@ -81,7 +81,14 @@ export function generateServiceAllocationsForDeal(
     return { created: [], updated: [], all: existingList };
   }
 
-  const dealId = String(deal.id || deal.zohoId || '').trim();
+  const dealLocalId = String(deal.id || '').trim();
+  const dealZohoId = String(
+    deal.zohoId ||
+    deal.rawZohoDeal?.id ||
+    (/^\d{15,}$/.test(dealLocalId) ? dealLocalId : '')
+  ).trim();
+  const dealId = dealLocalId || dealZohoId;
+
   if (!dealId) {
     return { created: [], updated: [], all: existingList };
   }
@@ -179,7 +186,10 @@ export function generateServiceAllocationsForDeal(
         Name: serviceScheme,
         Internal_Team_Type: rawTeamType,
         Team_Type: rawTeamType,
-        Parent_Record_Deal: existingRecord.Parent_Record_Deal || { id: dealId, name: dealName },
+        Parent_Record_Deal: dealZohoId
+          ? { id: dealZohoId, name: dealName }
+          : (existingRecord.Parent_Record_Deal || { id: dealId, name: dealName }),
+        zohoDealId: dealZohoId || (existingRecord as any).zohoDealId || undefined,
         Internal_Legal_Status: internalLegalStatus,
         Types_of_Legal_Documents: typesOfLegalDocs,
         Agreement_Terms: agreementTerms,
@@ -262,7 +272,8 @@ export function generateServiceAllocationsForDeal(
         id: `IO-${Date.now()}-${idx + 1}-${Math.random().toString(36).substring(2, 6)}`,
         Deal_ID: dealId,
         Deal_Name: dealName,
-        Parent_Record_Deal: { id: dealId, name: dealName },
+        zohoDealId: dealZohoId || undefined,
+        Parent_Record_Deal: dealZohoId ? { id: dealZohoId, name: dealName } : { id: dealId, name: dealName },
         Client_Name: clientName,
         Company_Name: companyName,
         Service_Scheme: serviceScheme,
@@ -1119,8 +1130,12 @@ export async function saveInternalOperation(record: InternalOperationRecord): Pr
 
   // Background sync to backend API
   try {
+    const hasZohoId = Boolean(
+      (updatedRecord.zohoId && /^\d{15,}$/.test(String(updatedRecord.zohoId))) ||
+      (updatedRecord.id && /^\d{15,}$/.test(String(updatedRecord.id)))
+    );
     const response = await fetch('/api/zoho/internal-operations', {
-      method: index >= 0 ? 'PUT' : 'POST',
+      method: hasZohoId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedRecord)
     });

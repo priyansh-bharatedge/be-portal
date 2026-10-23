@@ -1,6 +1,7 @@
 export interface InternalOperationRecord {
   id: string; // e.g. "IO-1718291000-1" or Zoho CRM record ID
   zohoId?: string;
+  zohoDealId?: string;
   Deal_ID: string; // Parent Deal Record ID (Lookup to Deals)
   Deal_Name?: string;
   Client_Name?: string;
