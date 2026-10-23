@@ -6,6 +6,12 @@ export interface InternalOperationRecord {
   Client_Name?: string;
   Company_Name?: string;
 
+  // Zoho CRM Core Fields (Module: Operation_Internal_CRM)
+  Parent_Record_Deal?: any; // Lookup field to associate all child records with their parent record (Deal)
+  Name?: string; // Service Name field in Zoho CRM (Single Line)
+  Team_Type?: string; // Team Type field in Zoho CRM (Pick List)
+  Operation_Stage?: string; // Operation Stage field in Zoho CRM (Pick List)
+
   // Mapped from Legal Details Subform
   Service_Scheme: string; // e.g. "CGSS", "Website Development", "MSME"
   Internal_Team_Type: string; // e.g. "Team Funding", "Team Compliance", etc.
@@ -21,6 +27,7 @@ export interface InternalOperationRecord {
   CA_CS1?: string;
   CA_CS2?: string;
   After_Allocation?: 'Yes' | 'No';
+  After_Allocation_Workflow?: 'Yes' | 'No' | string;
   Company_Type?: CompanyType;
 
   // Assignment controls managed by Operations HOD
@@ -32,6 +39,7 @@ export interface InternalOperationRecord {
   } | null;
   Team_Leader_ID?: string;
   Team_Leader_Name?: string;
+  Team_Leader_TL?: any; // Zoho CRM Lookup to Employee module for Team Leader (TL)
 
   Team_Member?: {
     id: string;
@@ -41,6 +49,7 @@ export interface InternalOperationRecord {
   } | null;
   Team_Member_ID?: string;
   Team_Member_Name?: string;
+  Team_Member_TM?: any; // Zoho CRM Lookup to Employee module for Team Member (TM)
 
   // Allocation Tracking & Status
   Allocation_Status: 'Pending Allocation' | 'Allocated' | 'In Progress' | 'Completed';
@@ -51,6 +60,95 @@ export interface InternalOperationRecord {
 
   // Dynamic UI Sections Data Store (Phase 3 & 4)
   sectionsData?: Record<string, any>;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Doc collection section)
+  Doc_collection_name?: string;
+  Doc_collection_Date?: string;
+  Doc_collection_status?: string;
+  Doc_collection_File_Upload?: any;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Name Application / Accounting section)
+  Name_Application_name?: string;
+  Name_Application_approved_name?: string;
+  Name_Application_date?: string;
+  Name_Application_status?: string;
+  Name_Application_File_Upload?: any;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - DSC Creation section)
+  DSC_Creation_name?: string;
+  DSC_Creation_Date?: string;
+  DSC_Creation_status?: string;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Final Filing section)
+  Final_Filing_name?: string;
+  Final_Filing_Final_Approval_Name?: string;
+  Final_Filing_Date?: string;
+  Final_Filing_DOI_Date?: string;
+  Final_Filing_status?: string;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Board Resolution / Audit section)
+  Board_Resolution_name?: string;
+  Board_Resolution_Date?: string;
+  Board_Resolution_status?: string;
+  Board_Resolution_File_Upload?: any;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - 2-Share Certificate / MGT-7 / 7A section)
+  Share_Certificate_name?: string;
+  Share_Certificate_Date?: string;
+  Share_Certificate_status?: string;
+  Share_Certificate_File_Upload?: any;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - MSME section)
+  MSME_Certificate?: string;
+  MSME_Certificate_Date?: string;
+  MSME_Certificate_status?: string;
+  MSME_Certificate_File_Upload?: any;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - ADT-1 section)
+  ADT_1_name?: string;
+  ADT_1_Auditor_name?: string;
+  ADT_1_date?: string;
+  ADT_1_status?: string;
+  ADT_1_File_Upload?: any;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - INC 20-A / DPT 3 section)
+  INC_20_A_name?: string;
+  INC_20_A_Date?: string;
+  INC_20_A_status?: string;
+  INC_20_A_File_Upload?: any;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Form 3 / Finance & Projected Financials section)
+  Finance_Projected_Financials_name?: string;
+  Finance_Projected_Financials_Date?: string;
+  Finance_Projected_Financials_Status?: string;
+  Finance_Projected_Financials_File_Upload?: any;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - LLP Agreement / Application Submission section)
+  Application_submission_name?: string;
+  Application_submission_Submission_Date?: string;
+  Application_submission_status?: string;
+  Application_submission_File_Upload?: any;
+  Application_submission?: string;
+  Application_submission_Portal_User_ID?: string;
+  Application_submission_Portal_Password?: string;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Director ITR & Company ITR section)
+  Director_ITR_Doc_collection?: string;
+  Director_ITR_File_required?: string;
+  Director_ITR_Company_ITR_name?: string;
+  Director_ITR_Company_ITR_Date?: string;
+  Director_ITR_Company_ITR_status?: string;
+  Director_ITR_Company_ITR_File_Upload?: any;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - AOC-4 section)
+  AOC_4_name?: string;
+  AOC_4_Director_Audit_report?: string;
+
+  // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - DPR / Pitch deck creation / INC section)
+  DPR_Pitch_deck_creation_name?: string;
+  DPR_Pitch_deck_creation_Date?: string;
+  DPR_Pitch_deck_creation_status?: string;
+  DPR_Pitch_deck_creation_File_Upload?: any;
 
   Created_Time: string;
   Modified_Time?: string;

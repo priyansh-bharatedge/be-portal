@@ -83,7 +83,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Normalized Team Type (Incorporation, Compliance, Funding, Certification, Digital Marketing)
-  const [teamType, setTeamType] = useState<string>(() => normalizeTeamType(record.Internal_Team_Type));
+  const [teamType, setTeamType] = useState<string>(() => normalizeTeamType(record.Team_Type || record.Internal_Team_Type));
 
   // Dynamic available stages based on the current Team Type
   const availableStages = useMemo(() => {
@@ -92,27 +92,360 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
 
   // Common Fields State (Phase 2)
   const [stage, setStage] = useState<OperationStage>(() => {
+    if (record.Operation_Stage) return record.Operation_Stage as OperationStage;
     if (record.Stage) return record.Stage;
-    const initialStages = getOperationStagesForTeamType(record.Internal_Team_Type);
+    const initialStages = getOperationStagesForTeamType(record.Team_Type || record.Internal_Team_Type);
     return initialStages[0] || 'Doc collection';
   });
   const [caCs1, setCaCs1] = useState<string>(record.CA_CS1 || '');
   const [caCs2, setCaCs2] = useState<string>(record.CA_CS2 || '');
   const [selectedTlId, setSelectedTlId] = useState<string>(
-    record.Team_Leader?.id || record.Team_Leader_ID || ''
+    record.Team_Leader?.id || record.Team_Leader_TL?.id || (typeof record.Team_Leader_TL === 'string' ? record.Team_Leader_TL : '') || record.Team_Leader_ID || ''
   );
   const [selectedTmId, setSelectedTmId] = useState<string>(
-    record.Team_Member?.id || record.Team_Member_ID || ''
+    record.Team_Member?.id || record.Team_Member_TM?.id || (typeof record.Team_Member_TM === 'string' ? record.Team_Member_TM : '') || record.Team_Member_ID || ''
   );
 
   // Dynamic Sections State Store
   const [sections, setSections] = useState<Record<string, any>>(() => {
-    return record.sectionsData || {};
+    const s = record.sectionsData ? { ...record.sectionsData } : {};
+
+    // Map Zoho CRM Doc collection fields if available on record
+    const zohoDocName = record.Doc_collection_name || '';
+    const zohoDocDate = record.Doc_collection_Date || '';
+    const zohoDocStatus = record.Doc_collection_status || '';
+    const zohoDocFiles = Array.isArray(record.Doc_collection_File_Upload) ? record.Doc_collection_File_Upload : [];
+
+    if (!s.docCollection) s.docCollection = {};
+    if (!s.docCollection.name && zohoDocName) s.docCollection.name = zohoDocName;
+    if (!s.docCollection.date && zohoDocDate) s.docCollection.date = zohoDocDate;
+    if (!s.docCollection.status && zohoDocStatus) s.docCollection.status = zohoDocStatus;
+    if ((!s.docCollection.files || s.docCollection.files.length === 0) && zohoDocFiles.length > 0) {
+      s.docCollection.files = zohoDocFiles;
+    }
+
+    if (!s.compDocCollection) s.compDocCollection = {};
+    if (!s.compDocCollection.name && zohoDocName) s.compDocCollection.name = zohoDocName;
+    if (!s.compDocCollection.date && zohoDocDate) s.compDocCollection.date = zohoDocDate;
+    if (!s.compDocCollection.status && zohoDocStatus) s.compDocCollection.status = zohoDocStatus;
+    if ((!s.compDocCollection.files || s.compDocCollection.files.length === 0) && zohoDocFiles.length > 0) {
+      s.compDocCollection.files = zohoDocFiles;
+    }
+
+    if (!s.certDocCollection) s.certDocCollection = {};
+    if (!s.certDocCollection.name && zohoDocName) s.certDocCollection.name = zohoDocName;
+    if (!s.certDocCollection.date && zohoDocDate) s.certDocCollection.date = zohoDocDate;
+    if (!s.certDocCollection.status && zohoDocStatus) s.certDocCollection.status = zohoDocStatus;
+    if ((!s.certDocCollection.files || s.certDocCollection.files.length === 0) && zohoDocFiles.length > 0) {
+      s.certDocCollection.files = zohoDocFiles;
+    }
+
+    // Map Zoho CRM Name Application / Accounting fields if available on record
+    const zohoNameAppName = record.Name_Application_name || '';
+    const zohoNameAppApprovedName = record.Name_Application_approved_name || '';
+    const zohoNameAppDate = record.Name_Application_date || '';
+    const zohoNameAppStatus = record.Name_Application_status || '';
+    const zohoNameAppFiles = Array.isArray(record.Name_Application_File_Upload) ? record.Name_Application_File_Upload : [];
+
+    if (!s.nameApp) s.nameApp = {};
+    if (!s.nameApp.name && zohoNameAppName) s.nameApp.name = zohoNameAppName;
+    if (!s.nameApp.approvedName && zohoNameAppApprovedName) s.nameApp.approvedName = zohoNameAppApprovedName;
+    if (!s.nameApp.date && zohoNameAppDate) s.nameApp.date = zohoNameAppDate;
+    if (!s.nameApp.status && zohoNameAppStatus) s.nameApp.status = zohoNameAppStatus;
+    if ((!s.nameApp.files || s.nameApp.files.length === 0) && zohoNameAppFiles.length > 0) {
+      s.nameApp.files = zohoNameAppFiles;
+    }
+
+    if (!s.accounting) s.accounting = {};
+    if (!s.accounting.name && zohoNameAppName) s.accounting.name = zohoNameAppName;
+    if (!s.accounting.date && zohoNameAppDate) s.accounting.date = zohoNameAppDate;
+    if (!s.accounting.status && zohoNameAppStatus) s.accounting.status = zohoNameAppStatus;
+    if ((!s.accounting.files || s.accounting.files.length === 0) && zohoNameAppFiles.length > 0) {
+      s.accounting.files = zohoNameAppFiles;
+    }
+
+    // Map Zoho CRM DSC Creation fields if available on record
+    const zohoDscName = record.DSC_Creation_name || '';
+    const zohoDscDate = record.DSC_Creation_Date || '';
+    const zohoDscStatus = record.DSC_Creation_status || '';
+
+    if (!s.dscCreation) s.dscCreation = {};
+    if (!s.dscCreation.name && zohoDscName) s.dscCreation.name = zohoDscName;
+    if (!s.dscCreation.date && zohoDscDate) s.dscCreation.date = zohoDscDate;
+    if (!s.dscCreation.status && zohoDscStatus) s.dscCreation.status = zohoDscStatus;
+
+    // Map Zoho CRM Final Filing fields if available on record
+    const zohoFinalFilingName = record.Final_Filing_name || '';
+    const zohoFinalFilingApprovalName = record.Final_Filing_Final_Approval_Name || '';
+    const zohoFinalFilingDate = record.Final_Filing_Date || '';
+    const zohoFinalFilingDoiDate = record.Final_Filing_DOI_Date || '';
+    const zohoFinalFilingStatus = record.Final_Filing_status || '';
+
+    if (!s.finalFiling) s.finalFiling = {};
+    if (!s.finalFiling.name && zohoFinalFilingName) s.finalFiling.name = zohoFinalFilingName;
+    if (!s.finalFiling.finalApprovalName && zohoFinalFilingApprovalName) s.finalFiling.finalApprovalName = zohoFinalFilingApprovalName;
+    if (!s.finalFiling.date && zohoFinalFilingDate) s.finalFiling.date = zohoFinalFilingDate;
+    if (!s.finalFiling.doiDate && zohoFinalFilingDoiDate) s.finalFiling.doiDate = zohoFinalFilingDoiDate;
+    if (!s.finalFiling.status && zohoFinalFilingStatus) s.finalFiling.status = zohoFinalFilingStatus;
+
+    // Map Zoho CRM Board Resolution / Audit fields if available on record
+    const zohoBrName = record.Board_Resolution_name || '';
+    const zohoBrDate = record.Board_Resolution_Date || '';
+    const zohoBrStatus = record.Board_Resolution_status || '';
+    const zohoBrFiles = Array.isArray(record.Board_Resolution_File_Upload) ? record.Board_Resolution_File_Upload : [];
+
+    if (!s.boardResolution) s.boardResolution = {};
+    if (!s.boardResolution.name && zohoBrName) s.boardResolution.name = zohoBrName;
+    if (!s.boardResolution.date && zohoBrDate) s.boardResolution.date = zohoBrDate;
+    if (!s.boardResolution.status && zohoBrStatus) s.boardResolution.status = zohoBrStatus;
+    if ((!s.boardResolution.files || s.boardResolution.files.length === 0) && zohoBrFiles.length > 0) {
+      s.boardResolution.files = zohoBrFiles;
+    }
+
+    if (!s.audit) s.audit = {};
+    if (!s.audit.name && zohoBrName) s.audit.name = zohoBrName;
+    if (!s.audit.date && zohoBrDate) s.audit.date = zohoBrDate;
+    if (!s.audit.status && zohoBrStatus) s.audit.status = zohoBrStatus;
+    if ((!s.audit.files || s.audit.files.length === 0) && zohoBrFiles.length > 0) {
+      s.audit.files = zohoBrFiles;
+    }
+
+    // Map Zoho CRM 2-Share Certificate / MGT-7 / 7A fields if available on record
+    const zohoScName = record.Share_Certificate_name || '';
+    const zohoScDate = record.Share_Certificate_Date || '';
+    const zohoScStatus = record.Share_Certificate_status || '';
+    const zohoScFiles = Array.isArray(record.Share_Certificate_File_Upload) ? record.Share_Certificate_File_Upload : [];
+
+    if (!s.shareCertificate) s.shareCertificate = {};
+    if (!s.shareCertificate.name && zohoScName) s.shareCertificate.name = zohoScName;
+    if (!s.shareCertificate.date && zohoScDate) s.shareCertificate.date = zohoScDate;
+    if (!s.shareCertificate.status && zohoScStatus) s.shareCertificate.status = zohoScStatus;
+    if ((!s.shareCertificate.files || s.shareCertificate.files.length === 0) && zohoScFiles.length > 0) {
+      s.shareCertificate.files = zohoScFiles;
+    }
+
+    if (!s.mgt7) s.mgt7 = {};
+    if (!s.mgt7.name && zohoScName) s.mgt7.name = zohoScName;
+    if (!s.mgt7.date && zohoScDate) s.mgt7.date = zohoScDate;
+    if (!s.mgt7.status && zohoScStatus) s.mgt7.status = zohoScStatus;
+    if ((!s.mgt7.files || s.mgt7.files.length === 0) && zohoScFiles.length > 0) {
+      s.mgt7.files = zohoScFiles;
+    }
+
+    // Map Zoho CRM MSME Certificate fields if available on record
+    const zohoMsmeDate = record.MSME_Certificate_Date || '';
+    const zohoMsmeStatus = record.MSME_Certificate_status || '';
+    const zohoMsmeFileStr = record.MSME_Certificate || '';
+    const zohoMsmeFiles = Array.isArray(record.MSME_Certificate_File_Upload)
+      ? record.MSME_Certificate_File_Upload
+      : (zohoMsmeFileStr ? [{ name: zohoMsmeFileStr, url: zohoMsmeFileStr }] : []);
+
+    if (!s.msmeCertificate) s.msmeCertificate = {};
+    if (!s.msmeCertificate.date && zohoMsmeDate) s.msmeCertificate.date = zohoMsmeDate;
+    if (!s.msmeCertificate.status && zohoMsmeStatus) s.msmeCertificate.status = zohoMsmeStatus;
+    if ((!s.msmeCertificate.files || s.msmeCertificate.files.length === 0) && zohoMsmeFiles.length > 0) {
+      s.msmeCertificate.files = zohoMsmeFiles;
+    }
+
+    if (!s.msmeCertificateLlp) s.msmeCertificateLlp = {};
+    if (!s.msmeCertificateLlp.date && zohoMsmeDate) s.msmeCertificateLlp.date = zohoMsmeDate;
+    if (!s.msmeCertificateLlp.status && zohoMsmeStatus) s.msmeCertificateLlp.status = zohoMsmeStatus;
+    if ((!s.msmeCertificateLlp.files || s.msmeCertificateLlp.files.length === 0) && zohoMsmeFiles.length > 0) {
+      s.msmeCertificateLlp.files = zohoMsmeFiles;
+    }
+
+    // Map Zoho CRM AOC-4 fields if available on record
+    const zohoAoc4Name = record.AOC_4_name || '';
+    const zohoAoc4DirectorAudit = record.AOC_4_Director_Audit_report || '';
+
+    if (!s.aoc4) s.aoc4 = {};
+    if (!s.aoc4.name && zohoAoc4Name) s.aoc4.name = zohoAoc4Name;
+    if (!s.aoc4.directorAuditReport && zohoAoc4DirectorAudit) s.aoc4.directorAuditReport = zohoAoc4DirectorAudit;
+    if (!s.aoc4.date && zohoMsmeDate) s.aoc4.date = zohoMsmeDate;
+    if (!s.aoc4.status && zohoMsmeStatus) s.aoc4.status = zohoMsmeStatus;
+    if ((!s.aoc4.files || s.aoc4.files.length === 0) && zohoMsmeFiles.length > 0) {
+      s.aoc4.files = zohoMsmeFiles;
+    }
+
+    // Map Zoho CRM ADT-1 fields if available on record
+    const zohoAdt1Name = record.ADT_1_name || '';
+    const zohoAdt1Auditor = record.ADT_1_Auditor_name || '';
+    const zohoAdt1Date = record.ADT_1_date || '';
+    const zohoAdt1Status = record.ADT_1_status || '';
+    const zohoAdt1Files = Array.isArray(record.ADT_1_File_Upload) ? record.ADT_1_File_Upload : [];
+
+    if (!s.adt1) s.adt1 = {};
+    if (!s.adt1.name && zohoAdt1Name) s.adt1.name = zohoAdt1Name;
+    if (!s.adt1.auditorName && zohoAdt1Auditor) s.adt1.auditorName = zohoAdt1Auditor;
+    if (!s.adt1.date && zohoAdt1Date) s.adt1.date = zohoAdt1Date;
+    if (!s.adt1.status && zohoAdt1Status) s.adt1.status = zohoAdt1Status;
+    if ((!s.adt1.files || s.adt1.files.length === 0) && zohoAdt1Files.length > 0) {
+      s.adt1.files = zohoAdt1Files;
+    }
+
+    if (!s.compAdt1) s.compAdt1 = {};
+    if (!s.compAdt1.name && zohoAdt1Name) s.compAdt1.name = zohoAdt1Name;
+    if (!s.compAdt1.date && zohoAdt1Date) s.compAdt1.date = zohoAdt1Date;
+    if (!s.compAdt1.status && zohoAdt1Status) s.compAdt1.status = zohoAdt1Status;
+    if ((!s.compAdt1.files || s.compAdt1.files.length === 0) && zohoAdt1Files.length > 0) {
+      s.compAdt1.files = zohoAdt1Files;
+    }
+
+    // Map Zoho CRM INC 20-A / DPT 3 fields if available on record
+    const zohoInc20AName = record.INC_20_A_name || '';
+    const zohoInc20ADate = record.INC_20_A_Date || '';
+    const zohoInc20AStatus = record.INC_20_A_status || '';
+    const zohoInc20AFiles = Array.isArray(record.INC_20_A_File_Upload) ? record.INC_20_A_File_Upload : [];
+
+    if (!s.inc20A) s.inc20A = {};
+    if (!s.inc20A.name && zohoInc20AName) s.inc20A.name = zohoInc20AName;
+    if (!s.inc20A.date && zohoInc20ADate) s.inc20A.date = zohoInc20ADate;
+    if (!s.inc20A.status && zohoInc20AStatus) s.inc20A.status = zohoInc20AStatus;
+    if ((!s.inc20A.files || s.inc20A.files.length === 0) && zohoInc20AFiles.length > 0) {
+      s.inc20A.files = zohoInc20AFiles;
+    }
+
+    if (!s.dpt3) s.dpt3 = {};
+    if (!s.dpt3.name && zohoInc20AName) s.dpt3.name = zohoInc20AName;
+    if (!s.dpt3.date && zohoInc20ADate) s.dpt3.date = zohoInc20ADate;
+    if (!s.dpt3.status && zohoInc20AStatus) s.dpt3.status = zohoInc20AStatus;
+    if ((!s.dpt3.files || s.dpt3.files.length === 0) && zohoInc20AFiles.length > 0) {
+      s.dpt3.files = zohoInc20AFiles;
+    }
+
+    // Map Zoho CRM Form 3 (Finance / Projected Financials) fields if available on record
+    const zohoForm3Name = record.Finance_Projected_Financials_name || '';
+    const zohoForm3Date = record.Finance_Projected_Financials_Date || '';
+    const zohoForm3Status = record.Finance_Projected_Financials_Status || '';
+    const zohoForm3Files = Array.isArray(record.Finance_Projected_Financials_File_Upload) ? record.Finance_Projected_Financials_File_Upload : [];
+
+    if (!s.form3) s.form3 = {};
+    if (!s.form3.name && zohoForm3Name) s.form3.name = zohoForm3Name;
+    if (!s.form3.date && zohoForm3Date) s.form3.date = zohoForm3Date;
+    if (!s.form3.status && zohoForm3Status) s.form3.status = zohoForm3Status;
+    if ((!s.form3.files || s.form3.files.length === 0) && zohoForm3Files.length > 0) {
+      s.form3.files = zohoForm3Files;
+    }
+
+    if (!s.compForm3) s.compForm3 = {};
+    if (!s.compForm3.name && zohoForm3Name) s.compForm3.name = zohoForm3Name;
+    if (!s.compForm3.date && zohoForm3Date) s.compForm3.date = zohoForm3Date;
+    if (!s.compForm3.status && zohoForm3Status) s.compForm3.status = zohoForm3Status;
+    if ((!s.compForm3.files || s.compForm3.files.length === 0) && zohoForm3Files.length > 0) {
+      s.compForm3.files = zohoForm3Files;
+    }
+
+    if (!s.fundingFinance) s.fundingFinance = {};
+    if (!s.fundingFinance.name && zohoForm3Name) s.fundingFinance.name = zohoForm3Name;
+    if (!s.fundingFinance.date && zohoForm3Date) s.fundingFinance.date = zohoForm3Date;
+    if (!s.fundingFinance.status && zohoForm3Status) s.fundingFinance.status = zohoForm3Status;
+    if ((!s.fundingFinance.files || s.fundingFinance.files.length === 0) && zohoForm3Files.length > 0) {
+      s.fundingFinance.files = zohoForm3Files;
+    }
+
+    // Map Zoho CRM LLP Agreement / Application Submission fields if available on record
+    const zohoLlpName = record.Application_submission_name || '';
+    const zohoLlpDate = record.Application_submission_Submission_Date || '';
+    const zohoLlpStatus = record.Application_submission_status || '';
+    const zohoLlpFiles = Array.isArray(record.Application_submission_File_Upload) ? record.Application_submission_File_Upload : [];
+    const zohoAppRegNumber = record.Application_submission || '';
+    const zohoAppUserId = record.Application_submission_Portal_User_ID || '';
+    const zohoAppPassword = record.Application_submission_Portal_Password || '';
+
+    if (!s.llpAgreement) s.llpAgreement = {};
+    if (!s.llpAgreement.name && zohoLlpName) s.llpAgreement.name = zohoLlpName;
+    if (!s.llpAgreement.date && zohoLlpDate) s.llpAgreement.date = zohoLlpDate;
+    if (!s.llpAgreement.status && zohoLlpStatus) s.llpAgreement.status = zohoLlpStatus;
+    if ((!s.llpAgreement.files || s.llpAgreement.files.length === 0) && zohoLlpFiles.length > 0) {
+      s.llpAgreement.files = zohoLlpFiles;
+    }
+
+    if (!s.appSubmission) s.appSubmission = {};
+    if (!s.appSubmission.name && zohoLlpName) s.appSubmission.name = zohoLlpName;
+    if (!s.appSubmission.date && zohoLlpDate) s.appSubmission.date = zohoLlpDate;
+    if (!s.appSubmission.status && zohoLlpStatus) s.appSubmission.status = zohoLlpStatus;
+    if ((!s.appSubmission.files || s.appSubmission.files.length === 0) && zohoLlpFiles.length > 0) {
+      s.appSubmission.files = zohoLlpFiles;
+    }
+    if (!s.appSubmission.portalId && zohoAppUserId) s.appSubmission.portalId = zohoAppUserId;
+    if (!s.appSubmission.portalPassword && zohoAppPassword) s.appSubmission.portalPassword = zohoAppPassword;
+    if (!s.appSubmission.registrationNumber && zohoAppRegNumber) s.appSubmission.registrationNumber = zohoAppRegNumber;
+
+    if (!s.certFinalApp) s.certFinalApp = {};
+    if (!s.certFinalApp.name && zohoLlpName) s.certFinalApp.name = zohoLlpName;
+    if (!s.certFinalApp.date && zohoLlpDate) s.certFinalApp.date = zohoLlpDate;
+    if (!s.certFinalApp.status && zohoLlpStatus) s.certFinalApp.status = zohoLlpStatus;
+    if ((!s.certFinalApp.files || s.certFinalApp.files.length === 0) && zohoLlpFiles.length > 0) {
+      s.certFinalApp.files = zohoLlpFiles;
+    }
+
+    // Map Zoho CRM Director ITR & Company ITR fields if available on record
+    const zohoItrName = record.Director_ITR_Company_ITR_name || '';
+    const zohoItrDate = record.Director_ITR_Company_ITR_Date || '';
+    const zohoItrStatus = record.Director_ITR_Company_ITR_status || '';
+    const zohoItrFiles = Array.isArray(record.Director_ITR_Company_ITR_File_Upload) ? record.Director_ITR_Company_ITR_File_Upload : [];
+    const zohoItrDocCollection = record.Director_ITR_Doc_collection || '';
+    const zohoItrFileRequired = record.Director_ITR_File_required || '';
+
+    if (!s.directorItr) s.directorItr = {};
+    if (!s.directorItr.name && zohoItrName) s.directorItr.name = zohoItrName;
+    if (!s.directorItr.date && zohoItrDate) s.directorItr.date = zohoItrDate;
+    if (!s.directorItr.status && zohoItrStatus) s.directorItr.status = zohoItrStatus;
+    if ((!s.directorItr.files || s.directorItr.files.length === 0) && zohoItrFiles.length > 0) {
+      s.directorItr.files = zohoItrFiles;
+    }
+    if (!s.directorItr.docCollection && zohoItrDocCollection) s.directorItr.docCollection = zohoItrDocCollection;
+    if (!s.directorItr.fileRequired && zohoItrFileRequired) s.directorItr.fileRequired = zohoItrFileRequired;
+
+    if (!s.companyItr) s.companyItr = {};
+    if (!s.companyItr.name && zohoItrName) s.companyItr.name = zohoItrName;
+    if (!s.companyItr.date && zohoItrDate) s.companyItr.date = zohoItrDate;
+    if (!s.companyItr.status && zohoItrStatus) s.companyItr.status = zohoItrStatus;
+    if ((!s.companyItr.files || s.companyItr.files.length === 0) && zohoItrFiles.length > 0) {
+      s.companyItr.files = zohoItrFiles;
+    }
+
+    // Map Zoho CRM DPR / Pitch deck creation / INC fields if available on record
+    const zohoDprName = record.DPR_Pitch_deck_creation_name || '';
+    const zohoDprDate = record.DPR_Pitch_deck_creation_Date || '';
+    const zohoDprStatus = record.DPR_Pitch_deck_creation_status || '';
+    const zohoDprFiles = Array.isArray(record.DPR_Pitch_deck_creation_File_Upload) ? record.DPR_Pitch_deck_creation_File_Upload : [];
+
+    if (!s.dprCreation) s.dprCreation = {};
+    if (!s.dprCreation.name && zohoDprName) s.dprCreation.name = zohoDprName;
+    if (!s.dprCreation.date && zohoDprDate) s.dprCreation.date = zohoDprDate;
+    if (!s.dprCreation.status && zohoDprStatus) s.dprCreation.status = zohoDprStatus;
+    if ((!s.dprCreation.files || s.dprCreation.files.length === 0) && zohoDprFiles.length > 0) {
+      s.dprCreation.files = zohoDprFiles;
+    }
+
+    if (!s.compInc) s.compInc = {};
+    if (!s.compInc.name && zohoDprName) s.compInc.name = zohoDprName;
+    if (!s.compInc.date && zohoDprDate) s.compInc.date = zohoDprDate;
+    if (!s.compInc.status && zohoDprStatus) s.compInc.status = zohoDprStatus;
+    if ((!s.compInc.files || s.compInc.files.length === 0) && zohoDprFiles.length > 0) {
+      s.compInc.files = zohoDprFiles;
+    }
+
+    if (!s.inc) s.inc = {};
+    if (!s.inc.name && zohoDprName) s.inc.name = zohoDprName;
+    if (!s.inc.date && zohoDprDate) s.inc.date = zohoDprDate;
+    if (!s.inc.status && zohoDprStatus) s.inc.status = zohoDprStatus;
+    if ((!s.inc.files || s.inc.files.length === 0) && zohoDprFiles.length > 0) {
+      s.inc.files = zohoDprFiles;
+    }
+
+    return s;
   });
 
   // Company Type & After Allocation
   const [afterAllocation, setAfterAllocation] = useState<'Yes' | 'No'>(() => {
-    return record.After_Allocation || (sections.afterAllocation as 'Yes' | 'No') || 'No';
+    return (
+      (record.After_Allocation_Workflow as 'Yes' | 'No') ||
+      record.After_Allocation ||
+      (sections.afterAllocation as 'Yes' | 'No') ||
+      'No'
+    );
   });
 
   const [companyType, setCompanyType] = useState<CompanyType>(() => {
@@ -213,32 +546,594 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
       const isFullyAllocated = Boolean(tlUser && tmUser);
       const isPartiallyAllocated = Boolean(tlUser || tmUser);
 
+      // Extract active Doc collection fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const isCompliance = teamType.toLowerCase().includes('compliance');
+      const isCertification = teamType.toLowerCase().includes('certification');
+      const activeDocCollection = isCertification
+        ? sections.certDocCollection
+        : isCompliance
+          ? sections.compDocCollection
+          : sections.docCollection;
+      const fallbackDocCollection = isCertification
+        ? (sections.compDocCollection || sections.docCollection)
+        : isCompliance
+          ? sections.docCollection
+          : sections.compDocCollection;
+
+      const docName = activeDocCollection?.name !== undefined && activeDocCollection?.name !== ''
+        ? activeDocCollection.name
+        : (fallbackDocCollection?.name || record.Doc_collection_name || '');
+      const docDate = activeDocCollection?.date !== undefined && activeDocCollection?.date !== ''
+        ? activeDocCollection.date
+        : (fallbackDocCollection?.date || record.Doc_collection_Date || '');
+      const docStatus = activeDocCollection?.status !== undefined && activeDocCollection?.status !== ''
+        ? activeDocCollection.status
+        : (fallbackDocCollection?.status || record.Doc_collection_status || '');
+      const docFiles = (activeDocCollection?.files && activeDocCollection.files.length > 0)
+        ? activeDocCollection.files
+        : (fallbackDocCollection?.files || record.Doc_collection_File_Upload || []);
+
+      // Extract active Name Application / Accounting fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const activeNameAppAcc = isCompliance ? sections.accounting : sections.nameApp;
+      const fallbackNameAppAcc = isCompliance ? sections.nameApp : sections.accounting;
+
+      const nameAppName = activeNameAppAcc?.name !== undefined && activeNameAppAcc?.name !== ''
+        ? activeNameAppAcc.name
+        : (fallbackNameAppAcc?.name || record.Name_Application_name || '');
+      const nameAppApprovedName = sections.nameApp?.approvedName || record.Name_Application_approved_name || '';
+      const nameAppDate = activeNameAppAcc?.date !== undefined && activeNameAppAcc?.date !== ''
+        ? activeNameAppAcc.date
+        : (fallbackNameAppAcc?.date || record.Name_Application_date || '');
+      const nameAppStatus = activeNameAppAcc?.status !== undefined && activeNameAppAcc?.status !== ''
+        ? activeNameAppAcc.status
+        : (fallbackNameAppAcc?.status || record.Name_Application_status || '');
+      const nameAppFiles = (activeNameAppAcc?.files && activeNameAppAcc.files.length > 0)
+        ? activeNameAppAcc.files
+        : (fallbackNameAppAcc?.files || record.Name_Application_File_Upload || []);
+
+      // Extract DSC Creation fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const dscName = sections.dscCreation?.name || record.DSC_Creation_name || '';
+      const dscDate = sections.dscCreation?.date || record.DSC_Creation_Date || '';
+      const dscStatus = sections.dscCreation?.status || record.DSC_Creation_status || '';
+
+      // Extract Final Filing fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const finalFilingName = sections.finalFiling?.name || record.Final_Filing_name || '';
+      const finalFilingApprovalName = sections.finalFiling?.finalApprovalName || record.Final_Filing_Final_Approval_Name || '';
+      const finalFilingDate = sections.finalFiling?.date || record.Final_Filing_Date || '';
+      const finalFilingDoiDate = sections.finalFiling?.doiDate || record.Final_Filing_DOI_Date || '';
+      const finalFilingStatus = sections.finalFiling?.status || record.Final_Filing_status || '';
+
+      // Extract Board Resolution / Audit fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const activeBrAudit = isCompliance ? sections.audit : sections.boardResolution;
+      const fallbackBrAudit = isCompliance ? sections.boardResolution : sections.audit;
+
+      const brName = activeBrAudit?.name !== undefined && activeBrAudit?.name !== ''
+        ? activeBrAudit.name
+        : (fallbackBrAudit?.name || record.Board_Resolution_name || '');
+      const brDate = activeBrAudit?.date !== undefined && activeBrAudit?.date !== ''
+        ? activeBrAudit.date
+        : (fallbackBrAudit?.date || record.Board_Resolution_Date || '');
+      const brStatus = activeBrAudit?.status !== undefined && activeBrAudit?.status !== ''
+        ? activeBrAudit.status
+        : (fallbackBrAudit?.status || record.Board_Resolution_status || '');
+      const brFiles = (activeBrAudit?.files && activeBrAudit.files.length > 0)
+        ? activeBrAudit.files
+        : (fallbackBrAudit?.files || record.Board_Resolution_File_Upload || []);
+
+      // Extract 2-Share Certificate / MGT-7 / 7A fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const activeScMgt7 = isCompliance ? sections.mgt7 : sections.shareCertificate;
+      const fallbackScMgt7 = isCompliance ? sections.shareCertificate : sections.mgt7;
+
+      const scName = activeScMgt7?.name !== undefined && activeScMgt7?.name !== ''
+        ? activeScMgt7.name
+        : (fallbackScMgt7?.name || record.Share_Certificate_name || '');
+      const scDate = activeScMgt7?.date !== undefined && activeScMgt7?.date !== ''
+        ? activeScMgt7.date
+        : (fallbackScMgt7?.date || record.Share_Certificate_Date || '');
+      const scStatus = activeScMgt7?.status !== undefined && activeScMgt7?.status !== ''
+        ? activeScMgt7.status
+        : (fallbackScMgt7?.status || record.Share_Certificate_status || '');
+      const scFiles = (activeScMgt7?.files && activeScMgt7.files.length > 0)
+        ? activeScMgt7.files
+        : (fallbackScMgt7?.files || record.Share_Certificate_File_Upload || []);
+
+      // Extract MSME Certificate / AOC-4 fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const activeMsme = companyType === 'LLP' ? sections.msmeCertificateLlp : sections.msmeCertificate;
+      const fallbackMsme = companyType === 'LLP' ? sections.msmeCertificate : sections.msmeCertificateLlp;
+      const activeMsmeAoc4 = isCompliance ? sections.aoc4 : activeMsme;
+      const fallbackMsmeAoc4 = isCompliance ? activeMsme : sections.aoc4;
+
+      const msmeDate = activeMsmeAoc4?.date !== undefined && activeMsmeAoc4?.date !== ''
+        ? activeMsmeAoc4.date
+        : (fallbackMsmeAoc4?.date || record.MSME_Certificate_Date || '');
+      const msmeStatus = activeMsmeAoc4?.status !== undefined && activeMsmeAoc4?.status !== ''
+        ? activeMsmeAoc4.status
+        : (fallbackMsmeAoc4?.status || record.MSME_Certificate_status || '');
+      const msmeFiles = (activeMsmeAoc4?.files && activeMsmeAoc4.files.length > 0)
+        ? activeMsmeAoc4.files
+        : (fallbackMsmeAoc4?.files || record.MSME_Certificate_File_Upload || (record.MSME_Certificate ? [{ name: record.MSME_Certificate, url: record.MSME_Certificate }] : []));
+      const msmeFileVal = msmeFiles.length > 0
+        ? (typeof msmeFiles[0] === 'string' ? msmeFiles[0] : (msmeFiles[0]?.url || msmeFiles[0]?.name || ''))
+        : (record.MSME_Certificate || '');
+
+      const aoc4Name = sections.aoc4?.name !== undefined && sections.aoc4?.name !== ''
+        ? sections.aoc4.name
+        : (record.AOC_4_name || '');
+      const aoc4DirectorAudit = sections.aoc4?.directorAuditReport !== undefined && sections.aoc4?.directorAuditReport !== ''
+        ? sections.aoc4.directorAuditReport
+        : (record.AOC_4_Director_Audit_report || 'Prepared');
+
+      // Extract ADT-1 fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const activeAdt1 = isCompliance ? (sections.compAdt1 || sections.adt1) : sections.adt1;
+      const fallbackAdt1 = isCompliance ? sections.adt1 : (sections.compAdt1 || sections.adt1);
+
+      const adt1Name = activeAdt1?.name !== undefined && activeAdt1?.name !== ''
+        ? activeAdt1.name
+        : (fallbackAdt1?.name || record.ADT_1_name || '');
+      const adt1Auditor = !isCompliance
+        ? (activeAdt1?.auditorName !== undefined && activeAdt1?.auditorName !== ''
+            ? activeAdt1.auditorName
+            : (fallbackAdt1?.auditorName || record.ADT_1_Auditor_name || ''))
+        : (record.ADT_1_Auditor_name || '');
+      const adt1Date = activeAdt1?.date !== undefined && activeAdt1?.date !== ''
+        ? activeAdt1.date
+        : (fallbackAdt1?.date || record.ADT_1_date || '');
+      const adt1Status = activeAdt1?.status !== undefined && activeAdt1?.status !== ''
+        ? activeAdt1.status
+        : (fallbackAdt1?.status || record.ADT_1_status || '');
+      const adt1Files = (activeAdt1?.files && activeAdt1.files.length > 0)
+        ? activeAdt1.files
+        : (fallbackAdt1?.files || record.ADT_1_File_Upload || []);
+
+      // Extract INC 20-A / DPT 3 fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const activeIncDpt = isCompliance ? sections.dpt3 : sections.inc20A;
+      const fallbackIncDpt = isCompliance ? sections.inc20A : sections.dpt3;
+
+      const inc20AName = activeIncDpt?.name !== undefined && activeIncDpt?.name !== ''
+        ? activeIncDpt.name
+        : (fallbackIncDpt?.name || record.INC_20_A_name || '');
+      const inc20ADate = activeIncDpt?.date !== undefined && activeIncDpt?.date !== ''
+        ? activeIncDpt.date
+        : (fallbackIncDpt?.date || record.INC_20_A_Date || '');
+      const inc20AStatus = activeIncDpt?.status !== undefined && activeIncDpt?.status !== ''
+        ? activeIncDpt.status
+        : (fallbackIncDpt?.status || record.INC_20_A_status || '');
+      const inc20AFiles = (activeIncDpt?.files && activeIncDpt.files.length > 0)
+        ? activeIncDpt.files
+        : (fallbackIncDpt?.files || record.INC_20_A_File_Upload || []);
+
+      // Extract Form 3 (Finance / Projected Financials) fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const isFunding = teamType === 'Funding';
+      const activeForm3 = isFunding
+        ? sections.fundingFinance
+        : isCompliance
+          ? (sections.compForm3 || sections.form3)
+          : sections.form3;
+      const fallbackForm3 = isFunding
+        ? (sections.compForm3 || sections.form3)
+        : isCompliance
+          ? (sections.fundingFinance || sections.form3)
+          : (sections.fundingFinance || sections.compForm3);
+
+      const form3Name = activeForm3?.name !== undefined && activeForm3?.name !== ''
+        ? activeForm3.name
+        : (fallbackForm3?.name || record.Finance_Projected_Financials_name || '');
+      const form3Date = activeForm3?.date !== undefined && activeForm3?.date !== ''
+        ? activeForm3.date
+        : (fallbackForm3?.date || record.Finance_Projected_Financials_Date || '');
+      const form3Status = activeForm3?.status !== undefined && activeForm3?.status !== ''
+        ? activeForm3.status
+        : (fallbackForm3?.status || record.Finance_Projected_Financials_Status || '');
+      const form3Files = (activeForm3?.files && activeForm3.files.length > 0)
+        ? activeForm3.files
+        : (fallbackForm3?.files || record.Finance_Projected_Financials_File_Upload || []);
+
+      // Extract LLP Agreement / Application Submission fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const activeLlp = isCertification
+        ? sections.certFinalApp
+        : isFunding
+          ? sections.appSubmission
+          : sections.llpAgreement;
+      const fallbackLlp = isCertification
+        ? (sections.appSubmission || sections.llpAgreement)
+        : isFunding
+          ? sections.llpAgreement
+          : sections.appSubmission;
+
+      const llpName = activeLlp?.name !== undefined && activeLlp?.name !== ''
+        ? activeLlp.name
+        : (fallbackLlp?.name || record.Application_submission_name || '');
+      const llpDate = activeLlp?.date !== undefined && activeLlp?.date !== ''
+        ? activeLlp.date
+        : (fallbackLlp?.date || record.Application_submission_Submission_Date || '');
+      const llpStatus = activeLlp?.status !== undefined && activeLlp?.status !== ''
+        ? activeLlp.status
+        : (fallbackLlp?.status || record.Application_submission_status || '');
+      const llpFiles = (activeLlp?.files && activeLlp.files.length > 0)
+        ? activeLlp.files
+        : (fallbackLlp?.files || record.Application_submission_File_Upload || []);
+
+      const appPortalId = sections.appSubmission?.portalId !== undefined && sections.appSubmission?.portalId !== ''
+        ? sections.appSubmission.portalId
+        : (record.Application_submission_Portal_User_ID || '');
+      const appPortalPwd = sections.appSubmission?.portalPassword !== undefined && sections.appSubmission?.portalPassword !== ''
+        ? sections.appSubmission.portalPassword
+        : (record.Application_submission_Portal_Password || '');
+      const appSubmissionVal = sections.appSubmission?.registrationNumber !== undefined && sections.appSubmission?.registrationNumber !== ''
+        ? sections.appSubmission.registrationNumber
+        : (sections.appSubmission?.applicationSubmission || record.Application_submission || '');
+
+      // Extract Director ITR & Company ITR fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const isCompanyItrService = (record.Service_Scheme || '').toLowerCase().includes('company itr');
+      const primaryItr = isCompanyItrService ? sections.companyItr : sections.directorItr;
+      const secondaryItr = isCompanyItrService ? sections.directorItr : sections.companyItr;
+
+      const itrName = (primaryItr?.name !== undefined && primaryItr?.name !== '')
+        ? primaryItr.name
+        : (secondaryItr?.name !== undefined && secondaryItr?.name !== '')
+          ? secondaryItr.name
+          : (record.Director_ITR_Company_ITR_name || '');
+      const itrDate = (primaryItr?.date !== undefined && primaryItr?.date !== '')
+        ? primaryItr.date
+        : (secondaryItr?.date !== undefined && secondaryItr?.date !== '')
+          ? secondaryItr.date
+          : (record.Director_ITR_Company_ITR_Date || '');
+      const itrStatus = (primaryItr?.status !== undefined && primaryItr?.status !== '')
+        ? primaryItr.status
+        : (secondaryItr?.status !== undefined && secondaryItr?.status !== '')
+          ? secondaryItr.status
+          : (record.Director_ITR_Company_ITR_status || '');
+      const itrFiles = (primaryItr?.files && primaryItr.files.length > 0)
+        ? primaryItr.files
+        : (secondaryItr?.files && secondaryItr.files.length > 0)
+          ? secondaryItr.files
+          : (record.Director_ITR_Company_ITR_File_Upload || []);
+      const itrDocCollection = sections.directorItr?.docCollection !== undefined && sections.directorItr?.docCollection !== ''
+        ? sections.directorItr.docCollection
+        : (record.Director_ITR_Doc_collection || 'Pending');
+      const itrFileRequired = sections.directorItr?.fileRequired !== undefined && sections.directorItr?.fileRequired !== ''
+        ? sections.directorItr.fileRequired
+        : (record.Director_ITR_File_required || 'Yes');
+
+      // Extract DPR / Pitch deck creation / INC fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
+      const activeDprInc = isCompliance ? (sections.compInc || sections.inc) : sections.dprCreation;
+      const fallbackDprInc = isCompliance ? sections.dprCreation : (sections.compInc || sections.inc);
+
+      const dprName = (activeDprInc?.name !== undefined && activeDprInc?.name !== '')
+        ? activeDprInc.name
+        : (fallbackDprInc?.name !== undefined && fallbackDprInc?.name !== '')
+          ? fallbackDprInc.name
+          : (record.DPR_Pitch_deck_creation_name || '');
+      const dprDate = (activeDprInc?.date !== undefined && activeDprInc?.date !== '')
+        ? activeDprInc.date
+        : (fallbackDprInc?.date !== undefined && fallbackDprInc?.date !== '')
+          ? fallbackDprInc.date
+          : (record.DPR_Pitch_deck_creation_Date || '');
+      const dprStatus = (activeDprInc?.status !== undefined && activeDprInc?.status !== '')
+        ? activeDprInc.status
+        : (fallbackDprInc?.status !== undefined && fallbackDprInc?.status !== '')
+          ? fallbackDprInc.status
+          : (record.DPR_Pitch_deck_creation_status || '');
+      const dprFiles = (activeDprInc?.files && activeDprInc.files.length > 0)
+        ? activeDprInc.files
+        : (fallbackDprInc?.files && fallbackDprInc.files.length > 0)
+          ? fallbackDprInc.files
+          : (record.DPR_Pitch_deck_creation_File_Upload || []);
+
       const updatedRecord: InternalOperationRecord = {
         ...record,
         Internal_Team_Type: teamType,
+        Team_Type: teamType,
         Stage: stage,
+        Operation_Stage: stage,
+        Name: record.Service_Scheme || record.Name || '',
+        Service_Scheme: record.Service_Scheme || record.Name || '',
+        Parent_Record_Deal: record.Parent_Record_Deal || (record.Deal_ID ? (/^\d{15,}$/.test(String(record.Deal_ID)) ? { id: String(record.Deal_ID), name: record.Deal_Name } : record.Deal_ID) : undefined),
         CA_CS1: caCs1,
         CA_CS2: caCs2,
         After_Allocation: afterAllocation,
+        After_Allocation_Workflow: afterAllocation,
         Company_Type: companyType,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Doc collection section)
+        Doc_collection_name: docName,
+        Doc_collection_Date: docDate,
+        Doc_collection_status: docStatus,
+        Doc_collection_File_Upload: docFiles,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Name Application / Accounting section)
+        Name_Application_name: nameAppName,
+        Name_Application_approved_name: nameAppApprovedName,
+        Name_Application_date: nameAppDate,
+        Name_Application_status: nameAppStatus,
+        Name_Application_File_Upload: nameAppFiles,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - DSC Creation section)
+        DSC_Creation_name: dscName,
+        DSC_Creation_Date: dscDate,
+        DSC_Creation_status: dscStatus,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Final Filing section)
+        Final_Filing_name: finalFilingName,
+        Final_Filing_Final_Approval_Name: finalFilingApprovalName,
+        Final_Filing_Date: finalFilingDate,
+        Final_Filing_DOI_Date: finalFilingDoiDate,
+        Final_Filing_status: finalFilingStatus,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Board Resolution / Audit section)
+        Board_Resolution_name: brName,
+        Board_Resolution_Date: brDate,
+        Board_Resolution_status: brStatus,
+        Board_Resolution_File_Upload: brFiles,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - 2-Share Certificate / MGT-7 / 7A section)
+        Share_Certificate_name: scName,
+        Share_Certificate_Date: scDate,
+        Share_Certificate_status: scStatus,
+        Share_Certificate_File_Upload: scFiles,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - MSME / AOC-4 section)
+        MSME_Certificate: msmeFileVal,
+        MSME_Certificate_Date: msmeDate,
+        MSME_Certificate_status: msmeStatus,
+        MSME_Certificate_File_Upload: msmeFiles,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - AOC-4 section)
+        AOC_4_name: aoc4Name,
+        AOC_4_Director_Audit_report: aoc4DirectorAudit,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - ADT-1 section)
+        ADT_1_name: adt1Name,
+        ADT_1_Auditor_name: adt1Auditor,
+        ADT_1_date: adt1Date,
+        ADT_1_status: adt1Status,
+        ADT_1_File_Upload: adt1Files,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - INC 20-A / DPT 3 section)
+        INC_20_A_name: inc20AName,
+        INC_20_A_Date: inc20ADate,
+        INC_20_A_status: inc20AStatus,
+        INC_20_A_File_Upload: inc20AFiles,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Form 3 section)
+        Finance_Projected_Financials_name: form3Name,
+        Finance_Projected_Financials_Date: form3Date,
+        Finance_Projected_Financials_Status: form3Status,
+        Finance_Projected_Financials_File_Upload: form3Files,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - LLP Agreement / Application Submission section)
+        Application_submission_name: llpName,
+        Application_submission_Submission_Date: llpDate,
+        Application_submission_status: llpStatus,
+        Application_submission_File_Upload: llpFiles,
+        Application_submission: appSubmissionVal,
+        Application_submission_Portal_User_ID: appPortalId,
+        Application_submission_Portal_Password: appPortalPwd,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Director ITR & Company ITR section)
+        Director_ITR_Doc_collection: itrDocCollection,
+        Director_ITR_File_required: itrFileRequired,
+        Director_ITR_Company_ITR_name: itrName,
+        Director_ITR_Company_ITR_Date: itrDate,
+        Director_ITR_Company_ITR_status: itrStatus,
+        Director_ITR_Company_ITR_File_Upload: itrFiles,
+        // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - DPR / Pitch deck creation / INC section)
+        DPR_Pitch_deck_creation_name: dprName,
+        DPR_Pitch_deck_creation_Date: dprDate,
+        DPR_Pitch_deck_creation_status: dprStatus,
+        DPR_Pitch_deck_creation_File_Upload: dprFiles,
         Team_Leader: tlUser ? { id: tlUser.id, name: tlUser.name, email: tlUser.email, empId: tlUser.id } : null,
         Team_Leader_ID: tlUser?.id || '',
         Team_Leader_Name: tlUser?.name || '',
+        Team_Leader_TL: tlUser?.id ? (/^\d{15,}$/.test(String(tlUser.id)) ? { id: String(tlUser.id), name: tlUser.name } : tlUser.id) : null,
         Team_Member: tmUser ? { id: tmUser.id, name: tmUser.name, email: tmUser.email, empId: tmUser.id } : null,
         Team_Member_ID: tmUser?.id || '',
         Team_Member_Name: tmUser?.name || '',
+        Team_Member_TM: tmUser?.id ? (/^\d{15,}$/.test(String(tmUser.id)) ? { id: String(tmUser.id), name: tmUser.name } : tmUser.id) : null,
         Allocation_Status: isFullyAllocated ? 'Allocated' : isPartiallyAllocated ? 'In Progress' : 'Pending Allocation',
         sectionsData: {
           ...sections,
           afterAllocation,
           docCollection: {
             ...(sections.docCollection || {}),
+            name: (!isCompliance && !isCertification) ? docName : (sections.docCollection?.name || docName),
+            date: (!isCompliance && !isCertification) ? docDate : (sections.docCollection?.date || docDate),
+            status: (!isCompliance && !isCertification) ? docStatus : (sections.docCollection?.status || docStatus),
+            files: (!isCompliance && !isCertification) ? docFiles : (sections.docCollection?.files || docFiles),
             companyType
           },
           compDocCollection: {
             ...(sections.compDocCollection || {}),
+            name: isCompliance ? docName : (sections.compDocCollection?.name || docName),
+            date: isCompliance ? docDate : (sections.compDocCollection?.date || docDate),
+            status: isCompliance ? docStatus : (sections.compDocCollection?.status || docStatus),
+            files: isCompliance ? docFiles : (sections.compDocCollection?.files || docFiles),
             companyType
-          }
+          },
+          certDocCollection: {
+            ...(sections.certDocCollection || {}),
+            name: isCertification ? docName : (sections.certDocCollection?.name || docName),
+            date: isCertification ? docDate : (sections.certDocCollection?.date || docDate),
+            status: isCertification ? docStatus : (sections.certDocCollection?.status || docStatus),
+            files: isCertification ? docFiles : (sections.certDocCollection?.files || docFiles)
+          },
+          nameApp: {
+            ...(sections.nameApp || {}),
+            name: !isCompliance ? nameAppName : (sections.nameApp?.name || nameAppName),
+            approvedName: nameAppApprovedName,
+            date: !isCompliance ? nameAppDate : (sections.nameApp?.date || nameAppDate),
+            status: !isCompliance ? nameAppStatus : (sections.nameApp?.status || nameAppStatus),
+            files: !isCompliance ? nameAppFiles : (sections.nameApp?.files || nameAppFiles)
+          },
+          dscCreation: {
+            ...(sections.dscCreation || {}),
+            name: dscName,
+            date: dscDate,
+            status: dscStatus
+          },
+          finalFiling: {
+            ...(sections.finalFiling || {}),
+            name: finalFilingName,
+            finalApprovalName: finalFilingApprovalName,
+            date: finalFilingDate,
+            doiDate: finalFilingDoiDate,
+            status: finalFilingStatus
+          },
+          boardResolution: {
+            ...(sections.boardResolution || {}),
+            name: !isCompliance ? brName : (sections.boardResolution?.name || brName),
+            date: !isCompliance ? brDate : (sections.boardResolution?.date || brDate),
+            status: !isCompliance ? brStatus : (sections.boardResolution?.status || brStatus),
+            files: !isCompliance ? brFiles : (sections.boardResolution?.files || brFiles)
+          },
+          audit: {
+            ...(sections.audit || {}),
+            name: isCompliance ? brName : (sections.audit?.name || brName),
+            date: isCompliance ? brDate : (sections.audit?.date || brDate),
+            status: isCompliance ? brStatus : (sections.audit?.status || brStatus),
+            files: isCompliance ? brFiles : (sections.audit?.files || brFiles)
+          },
+          shareCertificate: {
+            ...(sections.shareCertificate || {}),
+            name: !isCompliance ? scName : (sections.shareCertificate?.name || scName),
+            date: !isCompliance ? scDate : (sections.shareCertificate?.date || scDate),
+            status: !isCompliance ? scStatus : (sections.shareCertificate?.status || scStatus),
+            files: !isCompliance ? scFiles : (sections.shareCertificate?.files || scFiles)
+          },
+          mgt7: {
+            ...(sections.mgt7 || {}),
+            name: isCompliance ? scName : (sections.mgt7?.name || scName),
+            date: isCompliance ? scDate : (sections.mgt7?.date || scDate),
+            status: isCompliance ? scStatus : (sections.mgt7?.status || scStatus),
+            files: isCompliance ? scFiles : (sections.mgt7?.files || scFiles)
+          },
+          msmeCertificate: {
+            ...(sections.msmeCertificate || {}),
+            date: !isCompliance ? msmeDate : (sections.msmeCertificate?.date || msmeDate),
+            status: !isCompliance ? msmeStatus : (sections.msmeCertificate?.status || msmeStatus),
+            files: !isCompliance ? msmeFiles : (sections.msmeCertificate?.files || msmeFiles)
+          },
+          msmeCertificateLlp: {
+            ...(sections.msmeCertificateLlp || {}),
+            date: !isCompliance ? msmeDate : (sections.msmeCertificateLlp?.date || msmeDate),
+            status: !isCompliance ? msmeStatus : (sections.msmeCertificateLlp?.status || msmeStatus),
+            files: !isCompliance ? msmeFiles : (sections.msmeCertificateLlp?.files || msmeFiles)
+          },
+          adt1: {
+            ...(sections.adt1 || {}),
+            name: adt1Name,
+            auditorName: !isCompliance ? adt1Auditor : (sections.adt1?.auditorName || adt1Auditor),
+            date: adt1Date,
+            status: adt1Status,
+            files: adt1Files
+          },
+          compAdt1: {
+            ...(sections.compAdt1 || {}),
+            name: adt1Name,
+            date: adt1Date,
+            status: adt1Status,
+            files: adt1Files
+          },
+          inc20A: {
+            ...(sections.inc20A || {}),
+            name: !isCompliance ? inc20AName : (sections.inc20A?.name || inc20AName),
+            date: !isCompliance ? inc20ADate : (sections.inc20A?.date || inc20ADate),
+            status: !isCompliance ? inc20AStatus : (sections.inc20A?.status || inc20AStatus),
+            files: !isCompliance ? inc20AFiles : (sections.inc20A?.files || inc20AFiles)
+          },
+          dpt3: {
+            ...(sections.dpt3 || {}),
+            name: isCompliance ? inc20AName : (sections.dpt3?.name || inc20AName),
+            date: isCompliance ? inc20ADate : (sections.dpt3?.date || inc20ADate),
+            status: isCompliance ? inc20AStatus : (sections.dpt3?.status || inc20AStatus),
+            files: isCompliance ? inc20AFiles : (sections.dpt3?.files || inc20AFiles)
+          },
+          form3: {
+            ...(sections.form3 || {}),
+            name: form3Name,
+            date: form3Date,
+            status: form3Status,
+            files: form3Files
+          },
+          compForm3: {
+            ...(sections.compForm3 || {}),
+            name: form3Name,
+            date: form3Date,
+            status: form3Status,
+            files: form3Files
+          },
+          fundingFinance: {
+            ...(sections.fundingFinance || {}),
+            name: form3Name,
+            date: form3Date,
+            status: form3Status,
+            files: form3Files
+          },
+          llpAgreement: {
+            ...(sections.llpAgreement || {}),
+            name: llpName,
+            date: llpDate,
+            status: llpStatus,
+            files: llpFiles
+          },
+          appSubmission: {
+            ...(sections.appSubmission || {}),
+            name: llpName,
+            date: llpDate,
+            status: llpStatus,
+            files: llpFiles,
+            portalId: appPortalId,
+            portalPassword: appPortalPwd,
+            registrationNumber: appSubmissionVal
+          },
+          certFinalApp: {
+            ...(sections.certFinalApp || {}),
+            name: isCertification ? llpName : (sections.certFinalApp?.name || llpName),
+            date: isCertification ? llpDate : (sections.certFinalApp?.date || llpDate),
+            status: isCertification ? llpStatus : (sections.certFinalApp?.status || llpStatus),
+            files: isCertification ? llpFiles : (sections.certFinalApp?.files || llpFiles)
+          },
+          dprCreation: {
+            ...(sections.dprCreation || {}),
+            name: !isCompliance ? dprName : (sections.dprCreation?.name || dprName),
+            date: !isCompliance ? dprDate : (sections.dprCreation?.date || dprDate),
+            status: !isCompliance ? dprStatus : (sections.dprCreation?.status || dprStatus),
+            files: !isCompliance ? dprFiles : (sections.dprCreation?.files || dprFiles)
+          },
+          compInc: {
+            ...(sections.compInc || {}),
+            name: isCompliance ? dprName : (sections.compInc?.name || dprName),
+            date: isCompliance ? dprDate : (sections.compInc?.date || dprDate),
+            status: isCompliance ? dprStatus : (sections.compInc?.status || dprStatus),
+            files: isCompliance ? dprFiles : (sections.compInc?.files || dprFiles)
+          },
+          inc: {
+            ...(sections.inc || {}),
+            name: isCompliance ? dprName : (sections.inc?.name || dprName),
+            date: isCompliance ? dprDate : (sections.inc?.date || dprDate),
+            status: isCompliance ? dprStatus : (sections.inc?.status || dprStatus),
+            files: isCompliance ? dprFiles : (sections.inc?.files || dprFiles)
+          },
+          ...(isCompliance ? {
+            accounting: {
+              ...(sections.accounting || {}),
+              name: isCompliance ? nameAppName : (sections.accounting?.name || nameAppName),
+              date: isCompliance ? nameAppDate : (sections.accounting?.date || nameAppDate),
+              status: isCompliance ? nameAppStatus : (sections.accounting?.status || nameAppStatus),
+              files: isCompliance ? nameAppFiles : (sections.accounting?.files || nameAppFiles)
+            },
+            aoc4: {
+              ...(sections.aoc4 || {}),
+              name: aoc4Name,
+              directorAuditReport: aoc4DirectorAudit,
+              date: msmeDate,
+              status: msmeStatus,
+              files: msmeFiles
+            },
+            directorItr: {
+              ...(sections.directorItr || {}),
+              name: isCompanyItrService ? (sections.directorItr?.name || itrName) : itrName,
+              date: isCompanyItrService ? (sections.directorItr?.date || itrDate) : itrDate,
+              status: isCompanyItrService ? (sections.directorItr?.status || itrStatus) : itrStatus,
+              files: isCompanyItrService ? (sections.directorItr?.files || itrFiles) : itrFiles,
+              docCollection: itrDocCollection,
+              fileRequired: itrFileRequired
+            },
+            companyItr: {
+              ...(sections.companyItr || {}),
+              name: isCompanyItrService ? itrName : (sections.companyItr?.name || itrName),
+              date: isCompanyItrService ? itrDate : (sections.companyItr?.date || itrDate),
+              status: isCompanyItrService ? itrStatus : (sections.companyItr?.status || itrStatus),
+              files: isCompanyItrService ? itrFiles : (sections.companyItr?.files || itrFiles)
+            }
+          } : {})
         },
         Modified_Time: new Date().toISOString()
       };

@@ -1013,7 +1013,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                         {canManageAllocations ? (
                           <div className="flex items-center gap-1.5">
                             <select
-                              value={resolveSelectedId(item.Team_Leader?.id || item.Team_Leader_ID, item.Team_Leader?.name || item.Team_Leader_Name)}
+                              value={resolveSelectedId(item.Team_Leader?.id || item.Team_Leader_TL?.id || (typeof item.Team_Leader_TL === 'string' ? item.Team_Leader_TL : '') || item.Team_Leader_ID, item.Team_Leader?.name || item.Team_Leader_TL?.name || item.Team_Leader_Name)}
                               onChange={(e) => handleInlineTlChange(item, e.target.value)}
                               disabled={isSyncing}
                               className="px-2.5 py-1.5 bg-amber-50/40 hover:bg-white focus:bg-white border border-amber-200 hover:border-amber-300 focus:border-amber-500 rounded-lg text-xs font-semibold text-gray-800 outline-none transition-all cursor-pointer w-full max-w-[210px]"
@@ -1028,10 +1028,10 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5">
-                            {item.Team_Leader?.name || item.Team_Leader_Name ? (
+                            {item.Team_Leader?.name || item.Team_Leader_TL?.name || item.Team_Leader_Name ? (
                               <span className="text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
                                 <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                {item.Team_Leader?.name || item.Team_Leader_Name}
+                                {item.Team_Leader?.name || item.Team_Leader_TL?.name || item.Team_Leader_Name}
                               </span>
                             ) : (
                               <span className="text-xs text-gray-400 italic">Not Assigned</span>
@@ -1045,7 +1045,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                         {canManageAllocations ? (
                           <div className="flex items-center gap-1.5">
                             <select
-                              value={resolveSelectedId(item.Team_Member?.id || item.Team_Member_ID, item.Team_Member?.name || item.Team_Member_Name)}
+                              value={resolveSelectedId(item.Team_Member?.id || item.Team_Member_TM?.id || (typeof item.Team_Member_TM === 'string' ? item.Team_Member_TM : '') || item.Team_Member_ID, item.Team_Member?.name || item.Team_Member_TM?.name || item.Team_Member_Name)}
                               onChange={(e) => handleInlineTmChange(item, e.target.value)}
                               disabled={isSyncing}
                               className="px-2.5 py-1.5 bg-emerald-50/40 hover:bg-white focus:bg-white border border-emerald-200 hover:border-emerald-300 focus:border-emerald-500 rounded-lg text-xs font-semibold text-gray-800 outline-none transition-all cursor-pointer w-full max-w-[210px]"
@@ -1060,10 +1060,10 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5">
-                            {item.Team_Member?.name || item.Team_Member_Name ? (
+                            {item.Team_Member?.name || item.Team_Member_TM?.name || item.Team_Member_Name ? (
                               <span className="text-xs font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
                                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                {item.Team_Member?.name || item.Team_Member_Name}
+                                {item.Team_Member?.name || item.Team_Member_TM?.name || item.Team_Member_Name}
                               </span>
                             ) : (
                               <span className="text-xs text-gray-400 italic">Not Assigned</span>
