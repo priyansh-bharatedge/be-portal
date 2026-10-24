@@ -692,15 +692,19 @@ export function filterRecordsByRbac<T = any>(
       const isLegalHOD = user.role === 'HOD' && userDept.includes('legal');
       if (isSuperAdmin || isOpsHOD || isLegalHOD) return true;
 
-      // TL check: Assigned as TL
-      const tlId = String(rec.Team_Leader?.id || rec.Team_Leader_ID || '').toLowerCase();
-      const tlName = String(rec.Team_Leader?.name || rec.Team_Leader_Name || '').toLowerCase();
+      // TL check: Assigned as TL (checks Team_Leader_TL, Team_Leader lookup object, ID, or Name)
+      const tl = rec.Team_Leader_TL || rec.Team_Leader;
+      if (tl && isAccessiblePerson(tl)) return true;
+      const tlId = String(rec.Team_Leader_TL?.id || rec.Team_Leader?.id || rec.Team_Leader_ID || (typeof tl === 'string' ? tl : '') || '').toLowerCase();
+      const tlName = String(rec.Team_Leader_TL?.name || rec.Team_Leader?.name || rec.Team_Leader_Name || '').toLowerCase();
       if (tlId && idSet.has(tlId)) return true;
       if (tlName && isAccessiblePerson(tlName)) return true;
 
-      // TM check: Assigned as TM
-      const tmId = String(rec.Team_Member?.id || rec.Team_Member_ID || '').toLowerCase();
-      const tmName = String(rec.Team_Member?.name || rec.Team_Member_Name || '').toLowerCase();
+      // TM check: Assigned as TM (checks Team_Member_TM, Team_Member lookup object, ID, or Name)
+      const tm = rec.Team_Member_TM || rec.Team_Member;
+      if (tm && isAccessiblePerson(tm)) return true;
+      const tmId = String(rec.Team_Member_TM?.id || rec.Team_Member?.id || rec.Team_Member_ID || (typeof tm === 'string' ? tm : '') || '').toLowerCase();
+      const tmName = String(rec.Team_Member_TM?.name || rec.Team_Member?.name || rec.Team_Member_Name || '').toLowerCase();
       if (tmId && idSet.has(tmId)) return true;
       if (tmName && isAccessiblePerson(tmName)) return true;
 

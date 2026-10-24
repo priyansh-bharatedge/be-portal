@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { InternalOperationsAllocationTable, checkUserMatchesStaff } from '../../components/crm/InternalOperationsAllocationTable';
+import { InternalOperationsAllocationTable, checkRecordAssignedToUser } from '../../components/crm/InternalOperationsAllocationTable';
 import { getStoredInternalOperations } from '../../services/internalOperationsService';
 import { useAuth } from '../../context/AuthContext';
 import { Briefcase, Layers, ShieldCheck, UserCheck } from 'lucide-react';
 
 export const InternalOperations = () => {
   const navigate = useNavigate();
-  const { currentUser, isOperationsHOD, isLegalHOD, isSuperAdmin, isSales } = useAuth();
+  const { currentUser, isOperationsHOD, isLegalHOD, isSuperAdmin, isSales, isTL } = useAuth();
   const [stats, setStats] = useState({ total: 0, pending: 0, allocated: 0, myAssigned: 0 });
 
   const isSalesDeptUser = !isSuperAdmin && Boolean(
@@ -26,13 +26,17 @@ export const InternalOperations = () => {
   }, [isSalesDeptUser, navigate]);
 
   const isIndividualContributor = !isSuperAdmin && !isOperationsHOD && !isLegalHOD;
+  const isTeamLeader = Boolean(
+    isTL || 
+    currentUser?.role === 'TL' || 
+    currentUser?.role?.includes('Team Leader') || 
+    currentUser?.designation?.includes('TL') || 
+    currentUser?.designation?.includes('Leader')
+  );
 
   const updateStats = () => {
     const list = getStoredInternalOperations();
-    const myCount = list.filter(r => 
-      checkUserMatchesStaff(currentUser, r.Team_Leader, r.Team_Leader_ID, r.Team_Leader_Name) ||
-      checkUserMatchesStaff(currentUser, r.Team_Member, r.Team_Member_ID, r.Team_Member_Name)
-    ).length;
+    const myCount = list.filter(r => checkRecordAssignedToUser(r, currentUser)).length;
 
     setStats({
       total: list.length,
@@ -84,7 +88,7 @@ export const InternalOperations = () => {
                       {stats.myAssigned} Assigned {stats.myAssigned === 1 ? 'Service' : 'Services'}
                     </span>
                     <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-full border border-emerald-200">
-                      Team Member View
+                      {isTeamLeader ? 'Team Leader View' : 'Team Member View'}
                     </span>
                   </>
                 ) : (

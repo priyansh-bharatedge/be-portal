@@ -51,6 +51,8 @@ export interface NormalizedStaff {
   systemRole: string;
   dept: string;
   email: string;
+  empId?: string;
+  zohoId?: string;
   isTL: boolean;
   isTM: boolean;
 }
@@ -58,9 +60,9 @@ export interface NormalizedStaff {
 /**
  * Robustly checks if an active user (AuthUser) matches an assigned staff member on an Internal Operation record.
  * Supports matching via:
- * 1. User IDs (id, empId, zohoId)
+ * 1. User IDs (id, empId, zohoId, Employment_ID)
  * 2. Email addresses (case-insensitive)
- * 3. Exact and tokenized/middle-name fuzzy matching (e.g. "Simran Haresh Lakhpati" matches "Simran Lakhpati")
+ * 3. Exact and tokenized/middle-name fuzzy matching (e.g. "Pratham" matches "Pratham Kantilal Chouhan")
  */
 export function checkUserMatchesStaff(
   user: any,
@@ -70,27 +72,27 @@ export function checkUserMatchesStaff(
 ): boolean {
   if (!user) return false;
 
-  const staffId = String(staffObj?.id || fallbackId || '').trim().toLowerCase();
-  const staffName = String(staffObj?.name || fallbackName || '').trim();
+  const staffId = String(staffObj?.id || fallbackId || (typeof staffObj === 'string' ? staffObj : '') || '').trim().toLowerCase();
+  const staffName = String(staffObj?.name || staffObj?.lookup_label || fallbackName || '').trim();
   const staffEmail = String(staffObj?.email || '').trim().toLowerCase();
 
   // If no staff info is present on the record, no match
   if (!staffId && !staffName && !staffEmail) return false;
 
   const uId = String(user.id || '').trim().toLowerCase();
-  const uEmpId = String(user.empId || '').trim().toLowerCase();
+  const uEmpId = String(user.empId || user.Employment_ID || '').trim().toLowerCase();
   const uZohoId = String(user.zohoId || '').trim().toLowerCase();
-  const uEmail = String(user.email || '').trim().toLowerCase();
+  const uEmail = String(user.email || user.workEmail || user.personalEmail || '').trim().toLowerCase();
   const uName = String(user.name || '').trim();
 
-  // 1. Direct ID matches
+  // 1. Direct ID matches (checking all permutations of user IDs)
   const candidateIds = [uId, uEmpId, uZohoId].filter(Boolean);
   if (staffId && candidateIds.includes(staffId)) return true;
 
   // 2. Direct Email matches
   if (staffEmail && uEmail && staffEmail === uEmail) return true;
 
-  // 3. Robust Name matches (handles middle names, e.g. "Simran Haresh Lakhpati" vs "simran lakhpati")
+  // 3. Robust Name matches (handles middle names & substrings, e.g. "Pratham" vs "Pratham Kantilal Chouhan")
   if (staffName && uName) {
     if (staffName.toLowerCase() === uName.toLowerCase()) return true;
     if (isMatchingName(uName, staffName)) return true;
@@ -102,6 +104,28 @@ export function checkUserMatchesStaff(
   return false;
 }
 
+/**
+ * Checks whether an InternalOperationRecord is assigned to a specific user (either as TL or TM).
+ * Inspects both lookup objects (Team_Leader_TL, Team_Member_TM) and mapped fields (Team_Leader, Team_Member).
+ */
+export function checkRecordAssignedToUser(record: any, user: any): boolean {
+  if (!user || !record) return false;
+
+  // 1. Check TL assignment
+  const tlObj = record.Team_Leader_TL || record.Team_Leader;
+  const tlId = tlObj?.id || record.Team_Leader_ID || (typeof tlObj === 'string' ? tlObj : '');
+  const tlName = tlObj?.name || record.Team_Leader_Name || '';
+  if (checkUserMatchesStaff(user, tlObj, tlId, tlName)) return true;
+
+  // 2. Check TM assignment
+  const tmObj = record.Team_Member_TM || record.Team_Member;
+  const tmId = tmObj?.id || record.Team_Member_ID || (typeof tmObj === 'string' ? tmObj : '');
+  const tmName = tmObj?.name || record.Team_Member_Name || '';
+  if (checkUserMatchesStaff(user, tmObj, tmId, tmName)) return true;
+
+  return false;
+}
+
 export function normalizeStaffRecord(e: any): NormalizedStaff {
   const firstName = e.Name || e.First_Name || e.firstName || '';
   const middleName = e.Middle_Name || e.middleName || '';
@@ -109,8 +133,15 @@ export function normalizeStaffRecord(e: any): NormalizedStaff {
   const compositeName = [firstName, middleName, lastName].filter(Boolean).join(' ');
 
   const name = String(e.name || compositeName || e.Employee_Name || e.fullName || e.email || e.Personal_Email_Address || 'Staff Member').trim();
-  const id = String(e.id || e.empId || e.Employment_ID || e.zohoId || e.email || '').trim();
+  
+  // Prefer real 15+ digit Zoho CRM record ID so lookups in Zoho CRM match correctly
+  const zohoRecordId = (e.zohoId && /^\d{15,}$/.test(String(e.zohoId).trim()))
+    ? String(e.zohoId).trim()
+    : (/^\d{15,}$/.test(String(e.id || '').trim()) ? String(e.id).trim() : '');
+
+  const id = zohoRecordId || String(e.id || e.empId || e.Employment_ID || e.zohoId || e.email || '').trim();
   const email = String(e.email || e.Personal_Email_Address || e.Email || e.formData?.workEmail || e.formData?.email || '').trim();
+  const empId = String(e.empId || e.Employment_ID || e.id || '').trim();
   
   const rawRole = String(e.systemRole || e.System_Role || e.role || e.Designation_Job_Title || e.designation || 'TM').trim();
   const rawDesig = String(e.Designation_Job_Title || e.designation || e.role || '').trim();
@@ -155,6 +186,8 @@ export function normalizeStaffRecord(e: any): NormalizedStaff {
     systemRole: isTL ? 'TL' : (isTM ? 'TM' : rawRole),
     dept,
     email,
+    empId,
+    zohoId: zohoRecordId || undefined,
     isTL,
     isTM
   };
@@ -489,10 +522,13 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     try {
       const matchedUser = allExistingEmployees.find(u => 
         u.id.toLowerCase() === newTlId.toLowerCase() || 
+        (u.empId && u.empId.toLowerCase() === newTlId.toLowerCase()) ||
+        (u.zohoId && u.zohoId.toLowerCase() === newTlId.toLowerCase()) ||
         u.name.toLowerCase() === newTlId.toLowerCase() ||
         isMatchingName(u.name, newTlId)
       );
-      const tlPayload = matchedUser ? { id: matchedUser.id, name: matchedUser.name, email: matchedUser.email, empId: matchedUser.id } : null;
+      const effectiveId = matchedUser?.zohoId || (/^\d{15,}$/.test(String(matchedUser?.id || '')) ? matchedUser?.id : '') || matchedUser?.id || newTlId;
+      const tlPayload = matchedUser ? { id: effectiveId, name: matchedUser.name, email: matchedUser.email, empId: matchedUser.empId || matchedUser.id } : null;
       const updated = await assignStaffToOperation(
         record.id,
         tlPayload,
@@ -520,10 +556,13 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     try {
       const matchedUser = allExistingEmployees.find(u => 
         u.id.toLowerCase() === newTmId.toLowerCase() || 
+        (u.empId && u.empId.toLowerCase() === newTmId.toLowerCase()) ||
+        (u.zohoId && u.zohoId.toLowerCase() === newTmId.toLowerCase()) ||
         u.name.toLowerCase() === newTmId.toLowerCase() ||
         isMatchingName(u.name, newTmId)
       );
-      const tmPayload = matchedUser ? { id: matchedUser.id, name: matchedUser.name, email: matchedUser.email, empId: matchedUser.id } : null;
+      const effectiveId = matchedUser?.zohoId || (/^\d{15,}$/.test(String(matchedUser?.id || '')) ? matchedUser?.id : '') || matchedUser?.id || newTmId;
+      const tmPayload = matchedUser ? { id: effectiveId, name: matchedUser.name, email: matchedUser.email, empId: matchedUser.empId || matchedUser.id } : null;
       const updated = await assignStaffToOperation(
         record.id,
         record.Team_Leader || null,
@@ -558,19 +597,26 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     try {
       const tlUser = allExistingEmployees.find(u => 
         u.id.toLowerCase() === modalSelectedTl.toLowerCase() || 
+        (u.empId && u.empId.toLowerCase() === modalSelectedTl.toLowerCase()) ||
+        (u.zohoId && u.zohoId.toLowerCase() === modalSelectedTl.toLowerCase()) ||
         u.name.toLowerCase() === modalSelectedTl.toLowerCase() ||
         isMatchingName(u.name, modalSelectedTl)
       );
       const tmUser = allExistingEmployees.find(u => 
         u.id.toLowerCase() === modalSelectedTm.toLowerCase() || 
+        (u.empId && u.empId.toLowerCase() === modalSelectedTm.toLowerCase()) ||
+        (u.zohoId && u.zohoId.toLowerCase() === modalSelectedTm.toLowerCase()) ||
         u.name.toLowerCase() === modalSelectedTm.toLowerCase() ||
         isMatchingName(u.name, modalSelectedTm)
       );
 
+      const effectiveTlId = tlUser?.zohoId || (/^\d{15,}$/.test(String(tlUser?.id || '')) ? tlUser?.id : '') || tlUser?.id || modalSelectedTl;
+      const effectiveTmId = tmUser?.zohoId || (/^\d{15,}$/.test(String(tmUser?.id || '')) ? tmUser?.id : '') || tmUser?.id || modalSelectedTm;
+
       const updated = await assignStaffToOperation(
         assigningRecord.id,
-        tlUser ? { id: tlUser.id, name: tlUser.name, email: tlUser.email, empId: tlUser.id } : null,
-        tmUser ? { id: tmUser.id, name: tmUser.name, email: tmUser.email, empId: tmUser.id } : null,
+        tlUser ? { id: effectiveTlId, name: tlUser.name, email: tlUser.email, empId: tlUser.empId || tlUser.id } : null,
+        tmUser ? { id: effectiveTmId, name: tmUser.name, email: tmUser.email, empId: tmUser.empId || tmUser.id } : null,
         { id: currentUser.id, name: currentUser.name }
       );
 
@@ -618,9 +664,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     return records.filter(r => {
       // 1. Assigned to me check (for individual contributors or when toggle is active)
       if (onlyAssignedToMe) {
-        const isMyTL = checkUserMatchesStaff(currentUser, r.Team_Leader, r.Team_Leader_ID, r.Team_Leader_Name);
-        const isMyTM = checkUserMatchesStaff(currentUser, r.Team_Member, r.Team_Member_ID, r.Team_Member_Name);
-        if (!isMyTL && !isMyTM) {
+        if (!checkRecordAssignedToUser(r, currentUser)) {
           return false;
         }
       }
@@ -632,8 +676,8 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
         const dMatch = (r.Deal_Name || '').toLowerCase().includes(q);
         const cMatch = (r.Client_Name || '').toLowerCase().includes(q);
         const tMatch = (r.Internal_Team_Type || '').toLowerCase().includes(q);
-        const tlMatch = (r.Team_Leader?.name || r.Team_Leader_Name || '').toLowerCase().includes(q);
-        const tmMatch = (r.Team_Member?.name || r.Team_Member_Name || '').toLowerCase().includes(q);
+        const tlMatch = (r.Team_Leader?.name || r.Team_Leader_TL?.name || r.Team_Leader_Name || '').toLowerCase().includes(q);
+        const tmMatch = (r.Team_Member?.name || r.Team_Member_TM?.name || r.Team_Member_Name || '').toLowerCase().includes(q);
         const stgMatch = (r.Stage || 'Doc collection').toLowerCase().includes(q);
         const ca1Match = (r.CA_CS1 || '').toLowerCase().includes(q);
         const ca2Match = (r.CA_CS2 || '').toLowerCase().includes(q);
@@ -681,10 +725,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     const uniqueDeals = new Set(records.map(r => r.Deal_ID)).size;
 
     // Scoped for the current user (TL or TM)
-    const myAssignedRecords = records.filter(r =>
-      checkUserMatchesStaff(currentUser, r.Team_Leader, r.Team_Leader_ID, r.Team_Leader_Name) ||
-      checkUserMatchesStaff(currentUser, r.Team_Member, r.Team_Member_ID, r.Team_Member_Name)
-    );
+    const myAssignedRecords = records.filter(r => checkRecordAssignedToUser(r, currentUser));
     const myTotal = myAssignedRecords.length;
     const myDocCollection = myAssignedRecords.filter(r => !r.Stage || r.Stage === 'Doc collection' || r.Stage === 'Document pending from client').length;
     const myInProgress = myAssignedRecords.filter(r => 

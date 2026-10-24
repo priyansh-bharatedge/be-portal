@@ -67,16 +67,25 @@ export function deduplicateInternalOperations(records: InternalOperationRecord[]
       const preferred = isCurrentZoho && !isExistingZoho ? r : existing;
       const secondary = preferred === r ? existing : r;
 
+      const pickTl = (preferred.Team_Leader?.id || preferred.Team_Leader?.name) ? preferred.Team_Leader : secondary.Team_Leader;
+      const pickTm = (preferred.Team_Member?.id || preferred.Team_Member?.name) ? preferred.Team_Member : secondary.Team_Member;
+      const pickTlTL = preferred.Team_Leader_TL || secondary.Team_Leader_TL || (pickTl ? { id: pickTl.id, name: pickTl.name } : null);
+      const pickTmTM = preferred.Team_Member_TM || secondary.Team_Member_TM || (pickTm ? { id: pickTm.id, name: pickTm.name } : null);
+
       const merged: InternalOperationRecord = {
         ...secondary,
         ...preferred,
         id: preferred.id,
         Name: preferred.Name || preferred.Service_Scheme || secondary.Name || secondary.Service_Scheme || '',
         Service_Scheme: preferred.Service_Scheme || preferred.Name || secondary.Service_Scheme || secondary.Name || '',
-        Team_Leader: preferred.Team_Leader?.id ? preferred.Team_Leader : secondary.Team_Leader,
-        Team_Member: preferred.Team_Member?.id ? preferred.Team_Member : secondary.Team_Member,
-        Team_Leader_TL: preferred.Team_Leader_TL || secondary.Team_Leader_TL,
-        Team_Member_TM: preferred.Team_Member_TM || secondary.Team_Member_TM,
+        Team_Leader: pickTl,
+        Team_Member: pickTm,
+        Team_Leader_TL: pickTlTL,
+        Team_Member_TM: pickTmTM,
+        Team_Leader_ID: preferred.Team_Leader_ID || secondary.Team_Leader_ID || pickTl?.id || '',
+        Team_Leader_Name: preferred.Team_Leader_Name || secondary.Team_Leader_Name || pickTl?.name || '',
+        Team_Member_ID: preferred.Team_Member_ID || secondary.Team_Member_ID || pickTm?.id || '',
+        Team_Member_Name: preferred.Team_Member_Name || secondary.Team_Member_Name || pickTm?.name || '',
         Stage: preferred.Stage || secondary.Stage,
         Operation_Stage: preferred.Operation_Stage || secondary.Operation_Stage,
         CA_CS1: preferred.CA_CS1 || secondary.CA_CS1,
@@ -831,13 +840,13 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const rawTl = r.Team_Leader_TL || r.Team_Leader;
   const tlId = rawTl?.id || (typeof rawTl === 'string' ? rawTl : '') || r.Team_Leader_ID || '';
   const tlName = rawTl?.name || (typeof rawTl === 'object' && rawTl?.lookup_label ? rawTl.lookup_label : '') || r.Team_Leader_Name || '';
-  const tlUser = tlId ? { id: tlId, name: tlName, email: rawTl?.email, empId: tlId } : null;
+  const tlUser = (tlId || tlName) ? { id: tlId, name: tlName, email: rawTl?.email, empId: tlId } : null;
 
   // Extract TM (Lookup to Employees module: Team_Member_TM)
   const rawTm = r.Team_Member_TM || r.Team_Member;
   const tmId = rawTm?.id || (typeof rawTm === 'string' ? rawTm : '') || r.Team_Member_ID || '';
   const tmName = rawTm?.name || (typeof rawTm === 'object' && rawTm?.lookup_label ? rawTm.lookup_label : '') || r.Team_Member_Name || '';
-  const tmUser = tmId ? { id: tmId, name: tmName, email: rawTm?.email, empId: tmId } : null;
+  const tmUser = (tmId || tmName) ? { id: tmId, name: tmName, email: rawTm?.email, empId: tmId } : null;
 
   return {
     ...r,
@@ -853,11 +862,11 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
     Team_Leader: tlUser || r.Team_Leader || null,
     Team_Leader_ID: tlId || r.Team_Leader_ID || '',
     Team_Leader_Name: tlName || r.Team_Leader_Name || '',
-    Team_Leader_TL: r.Team_Leader_TL || (tlId ? { id: tlId, name: tlName } : null),
+    Team_Leader_TL: r.Team_Leader_TL || (tlId ? { id: tlId, name: tlName } : (tlName ? { id: '', name: tlName } : null)),
     Team_Member: tmUser || r.Team_Member || null,
     Team_Member_ID: tmId || r.Team_Member_ID || '',
     Team_Member_Name: tmName || r.Team_Member_Name || '',
-    Team_Member_TM: r.Team_Member_TM || (tmId ? { id: tmId, name: tmName } : null),
+    Team_Member_TM: r.Team_Member_TM || (tmId ? { id: tmId, name: tmName } : (tmName ? { id: '', name: tmName } : null)),
     After_Allocation: afterAllocation,
     After_Allocation_Workflow: afterAllocation,
     Doc_collection_name: docName,
@@ -1277,16 +1286,48 @@ export async function assignStaffToOperation(
   const isFullyAllocated = Boolean(tl?.id && tm?.id);
   const isPartiallyAllocated = Boolean(tl?.id || tm?.id);
 
+  let resolvedTlId = tl?.id || '';
+  if (resolvedTlId && !/^\d{15,}$/.test(resolvedTlId)) {
+    try {
+      const emps = JSON.parse(localStorage.getItem('be_employees') || '[]');
+      const found = emps.find((e: any) => 
+        (e.id && String(e.id).toLowerCase() === resolvedTlId.toLowerCase()) ||
+        (e.Employment_ID && String(e.Employment_ID).toLowerCase() === resolvedTlId.toLowerCase()) ||
+        (e.name && tl?.name && e.name.toLowerCase() === tl.name.toLowerCase()) ||
+        (e.Name && tl?.name && e.Name.toLowerCase() === tl.name.toLowerCase())
+      );
+      if (found?.zohoId && /^\d{15,}$/.test(String(found.zohoId))) {
+        resolvedTlId = String(found.zohoId);
+      }
+    } catch (_) {}
+  }
+
+  let resolvedTmId = tm?.id || '';
+  if (resolvedTmId && !/^\d{15,}$/.test(resolvedTmId)) {
+    try {
+      const emps = JSON.parse(localStorage.getItem('be_employees') || '[]');
+      const found = emps.find((e: any) => 
+        (e.id && String(e.id).toLowerCase() === resolvedTmId.toLowerCase()) ||
+        (e.Employment_ID && String(e.Employment_ID).toLowerCase() === resolvedTmId.toLowerCase()) ||
+        (e.name && tm?.name && e.name.toLowerCase() === tm.name.toLowerCase()) ||
+        (e.Name && tm?.name && e.Name.toLowerCase() === tm.name.toLowerCase())
+      );
+      if (found?.zohoId && /^\d{15,}$/.test(String(found.zohoId))) {
+        resolvedTmId = String(found.zohoId);
+      }
+    } catch (_) {}
+  }
+
   const updatedRecord: InternalOperationRecord = {
     ...record,
-    Team_Leader: tl ? { id: tl.id, name: tl.name, email: tl.email, empId: tl.empId } : null,
-    Team_Leader_ID: tl?.id || '',
+    Team_Leader: tl ? { id: resolvedTlId || tl.id, name: tl.name, email: tl.email, empId: tl.empId || tl.id } : null,
+    Team_Leader_ID: resolvedTlId || tl?.id || '',
     Team_Leader_Name: tl?.name || '',
-    Team_Leader_TL: tl?.id ? (/^\d{15,}$/.test(String(tl.id)) ? { id: String(tl.id), name: tl.name } : tl.id) : null,
-    Team_Member: tm ? { id: tm.id, name: tm.name, email: tm.email, empId: tm.empId } : null,
-    Team_Member_ID: tm?.id || '',
+    Team_Leader_TL: (resolvedTlId || tl?.id) ? (/^\d{15,}$/.test(String(resolvedTlId)) ? { id: String(resolvedTlId), name: tl?.name } : { id: String(resolvedTlId), name: tl?.name }) : null,
+    Team_Member: tm ? { id: resolvedTmId || tm.id, name: tm.name, email: tm.email, empId: tm.empId || tm.id } : null,
+    Team_Member_ID: resolvedTmId || tm?.id || '',
     Team_Member_Name: tm?.name || '',
-    Team_Member_TM: tm?.id ? (/^\d{15,}$/.test(String(tm.id)) ? { id: String(tm.id), name: tm.name } : tm.id) : null,
+    Team_Member_TM: (resolvedTmId || tm?.id) ? (/^\d{15,}$/.test(String(resolvedTmId)) ? { id: String(resolvedTmId), name: tm?.name } : { id: String(resolvedTmId), name: tm?.name }) : null,
     Allocation_Status: isFullyAllocated ? 'Allocated' : isPartiallyAllocated ? 'In Progress' : 'Pending Allocation',
     Allocated_At: (tl || tm) ? nowIso : record.Allocated_At,
     Allocated_By: allocatedBy?.id || record.Allocated_By,

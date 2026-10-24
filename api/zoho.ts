@@ -2979,12 +2979,15 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         const serviceName = r.Name || r.Service_Scheme || '';
         const teamType = r.Team_Type || r.Internal_Team_Type || '';
         const opStage = r.Operation_Stage || r.Stage || '';
-        const tlId = r.Team_Leader?.id || r.Team_Leader_ID || r.Team_Leader_TL?.id || (typeof r.Team_Leader_TL === 'string' ? r.Team_Leader_TL : '');
-        const tmId = r.Team_Member?.id || r.Team_Member_ID || r.Team_Member_TM?.id || (typeof r.Team_Member_TM === 'string' ? r.Team_Member_TM : '');
+        const tlId = r.Team_Leader?.id || r.Team_Leader_ID || r.Team_Leader_TL?.id || (typeof r.Team_Leader_TL === 'string' ? r.Team_Leader_TL : '') || (r.Team_Leader as any)?.zohoId;
+        const tmId = r.Team_Member?.id || r.Team_Member_ID || r.Team_Member_TM?.id || (typeof r.Team_Member_TM === 'string' ? r.Team_Member_TM : '') || (r.Team_Member as any)?.zohoId;
+
+        const effectiveTlId = (/^\d{15,}$/.test(String(tlId || '').trim())) ? String(tlId).trim() : (/^\d{15,}$/.test(String((r.Team_Leader as any)?.zohoId || '').trim()) ? String((r.Team_Leader as any)?.zohoId).trim() : '');
+        const effectiveTmId = (/^\d{15,}$/.test(String(tmId || '').trim())) ? String(tmId).trim() : (/^\d{15,}$/.test(String((r.Team_Member as any)?.zohoId || '').trim()) ? String((r.Team_Member as any)?.zohoId).trim() : '');
 
         const isDealNumeric = /^\d{15,}$/.test(String(dealId || '').trim());
-        const isTlNumeric = /^\d{15,}$/.test(String(tlId || '').trim());
-        const isTmNumeric = /^\d{15,}$/.test(String(tmId || '').trim());
+        const isTlNumeric = Boolean(effectiveTlId);
+        const isTmNumeric = Boolean(effectiveTmId);
 
         const payload: any = {
           ...(r.zohoId && /^\d{15,}$/.test(String(r.zohoId)) ? { id: String(r.zohoId) } : {}),
@@ -3000,10 +3003,10 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           Team_Type: teamType || 'Team Funding',
           Operation_Stage: opStage || 'Document pending from client',
           ...(isTlNumeric ? {
-            Team_Leader_TL: { id: String(tlId).trim() }
+            Team_Leader_TL: { id: effectiveTlId }
           } : {}),
           ...(isTmNumeric ? {
-            Team_Member_TM: { id: String(tmId).trim() }
+            Team_Member_TM: { id: effectiveTmId }
           } : {}),
           ...(r.CA_CS1 || r.CA_CS_1 ? { CA_CS_1: r.CA_CS_1 || r.CA_CS1 } : {}),
           ...(r.CA_CS2 || r.CA_CS_2 ? { CA_CS_2: r.CA_CS_2 || r.CA_CS2 } : {}),
@@ -3426,13 +3429,13 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         const rawTl = r.Team_Leader_TL || r.Team_Leader;
         const tlId = rawTl?.id || (typeof rawTl === 'string' ? rawTl : '') || r.Team_Leader_ID || '';
         const tlName = rawTl?.name || (typeof rawTl === 'object' && rawTl?.lookup_label ? rawTl.lookup_label : '') || r.Team_Leader_Name || '';
-        const tlUser = tlId ? { id: tlId, name: tlName, email: rawTl?.email, empId: tlId } : null;
+        const tlUser = (tlId || tlName) ? { id: tlId, name: tlName, email: rawTl?.email, empId: tlId } : null;
 
         // Extract TM (Lookup to Employees module: Team_Member_TM)
         const rawTm = r.Team_Member_TM || r.Team_Member;
         const tmId = rawTm?.id || (typeof rawTm === 'string' ? rawTm : '') || r.Team_Member_ID || '';
         const tmName = rawTm?.name || (typeof rawTm === 'object' && rawTm?.lookup_label ? rawTm.lookup_label : '') || r.Team_Member_Name || '';
-        const tmUser = tmId ? { id: tmId, name: tmName, email: rawTm?.email, empId: tmId } : null;
+        const tmUser = (tmId || tmName) ? { id: tmId, name: tmName, email: rawTm?.email, empId: tmId } : null;
 
         return {
           ...r,
@@ -3448,11 +3451,11 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           Team_Leader: tlUser || r.Team_Leader || null,
           Team_Leader_ID: tlId || r.Team_Leader_ID || '',
           Team_Leader_Name: tlName || r.Team_Leader_Name || '',
-          Team_Leader_TL: r.Team_Leader_TL || (tlId ? { id: tlId, name: tlName } : null),
+          Team_Leader_TL: r.Team_Leader_TL || (tlId ? { id: tlId, name: tlName } : (tlName ? { id: '', name: tlName } : null)),
           Team_Member: tmUser || r.Team_Member || null,
           Team_Member_ID: tmId || r.Team_Member_ID || '',
           Team_Member_Name: tmName || r.Team_Member_Name || '',
-          Team_Member_TM: r.Team_Member_TM || (tmId ? { id: tmId, name: tmName } : null),
+          Team_Member_TM: r.Team_Member_TM || (tmId ? { id: tmId, name: tmName } : (tmName ? { id: '', name: tmName } : null)),
           After_Allocation: afterAllocation,
           After_Allocation_Workflow: afterAllocation,
           Doc_collection_name: docName,
@@ -3689,12 +3692,17 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
             const dealIdNum = zohoRecord.Parent_Record_Deal?.id || (typeof zohoRecord.Parent_Record_Deal === 'string' && /^\d{15,}$/.test(zohoRecord.Parent_Record_Deal) ? zohoRecord.Parent_Record_Deal : null);
             if (dealIdNum && zohoRecord.Name) {
               try {
-                const searchRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=id,Name&criteria=(Parent_Record_Deal.id:equals:${dealIdNum})`, {
+                const searchRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=id,Name,Parent_Record_Deal&per_page=200`, {
                   headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                 });
                 if (searchRes.status === 200) {
                   const sData: any = await searchRes.json();
-                  const found = (sData.data || []).find((rec: any) => (rec.Name || rec.Service_Scheme) === zohoRecord.Name);
+                  const normTarget = String(zohoRecord.Name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                  const found = (sData.data || []).find((rec: any) => {
+                    const pId = String(rec.Parent_Record_Deal?.id || '').trim();
+                    const rName = String(rec.Name || rec.Service_Scheme || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                    return pId === String(dealIdNum).trim() && (rName === normTarget || rName.includes(normTarget) || normTarget.includes(rName));
+                  });
                   if (found?.id) {
                     zohoRecord.id = String(found.id);
                   }
