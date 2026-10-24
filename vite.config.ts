@@ -398,7 +398,13 @@ function zohoApiPlugin(): Plugin {
         body: JSON.stringify(bodyPayload),
       });
 
-      const data: any = await res.json();
+      const resText = await res.text().catch(() => '');
+      let data: any = {};
+      try {
+        data = resText ? JSON.parse(resText) : {};
+      } catch {
+        data = { message: resText };
+      }
       console.log(`[Vite Zoho Plugin] Blueprint Transition Response (Status ${res.status}):`, JSON.stringify(data));
 
       const result = Array.isArray(data?.blueprint) ? data.blueprint[0] : (data?.data?.[0] || data);
@@ -2244,7 +2250,7 @@ function zohoApiPlugin(): Plugin {
                     headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
                   });
                   if (sRes.ok) {
-                    const sData: any = await sRes.json();
+                    const sData: any = await sRes.json().catch(() => ({}));
                     const list: any[] = sData.data || [];
                     const matched = list.find((d: any) => String(d.id) === String(dealZohoId) || (dealZohoId && String(d.Deal_Name || '').includes(String(dealZohoId))));
                     if (matched?.id) {
@@ -2295,7 +2301,7 @@ function zohoApiPlugin(): Plugin {
                     headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
                   });
                   if (checkRes.ok) {
-                    const checkData: any = await checkRes.json();
+                    const checkData: any = await checkRes.json().catch(() => ({}));
                     const liveStage = String(checkData?.data?.[0]?.Stage || '').toLowerCase().trim();
                     const isAlreadyReached = isDealStageAtOrPastTransition(String(transitionId).trim(), liveStage);
                     if (isAlreadyReached) {
@@ -2337,7 +2343,7 @@ function zohoApiPlugin(): Plugin {
                         headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                       });
                       if (dealRes.ok) {
-                        const dealJson: any = await dealRes.json();
+                        const dealJson: any = await dealRes.json().catch(() => ({}));
                         const d = dealJson?.data?.[0];
                         if (d) {
                           dealName = d.Deal_Name || dealName;
