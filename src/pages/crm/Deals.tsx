@@ -2878,14 +2878,27 @@ export const Deals = () => {
       safeSaveDealsToStorage(updatedList);
 
       // 2. Automatically generate sub-child service allocation records in Internal Operations module
+      let dealAllocations: any[] = [];
       try {
-        generateServiceAllocationsForDeal(updatedDeal);
+        const genRes = generateServiceAllocationsForDeal(updatedDeal);
+        const targetDealId = String(updatedDeal.id || deal.id || '').toLowerCase();
+        const targetZohoId = String(currentZohoId || updatedDeal.zohoId || deal.zohoId || '').toLowerCase();
+        dealAllocations = genRes.all.filter(r => {
+          const dId = String(r.Deal_ID || (r.Parent_Record_Deal?.id || r.Parent_Record_Deal) || '').toLowerCase();
+          const zId = String((r as any).zohoDealId || '').toLowerCase();
+          return (targetDealId && (dId === targetDealId || zId === targetDealId)) ||
+                 (targetZohoId && (dId === targetZohoId || zId === targetZohoId));
+        });
       } catch (genErr) {
         console.warn('[Deals] Service allocation creation warning:', genErr);
       }
 
       // 3. Execute Zoho CRM Blueprint Transition: Legal to Operations Allocator ("1078476000000492099")
-      const zohoRes = await moveDealToOperationsAllocator(currentZohoId || deal.zohoId || deal.id);
+      const zohoRes = await moveDealToOperationsAllocator(
+        currentZohoId || deal.zohoId || deal.id,
+        'Sent to Operations Allocator from Legal Handover',
+        { allocations: dealAllocations }
+      );
       if (zohoRes.success) {
         setToast({
           type: 'success',

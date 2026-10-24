@@ -20,7 +20,78 @@ function formatValue(val: any, fallback = ''): string {
 }
 
 /**
- * Helper to get all Internal Operations records from localStorage
+ * Normalizes service scheme or name for reliable case-insensitive deduplication and lookup
+ */
+export function normalizeServiceName(name: string): string {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Robustly deduplicates Internal Operations records by Deal ID and normalized Service Name.
+ * If multiple records exist for the same service under the same deal, merges them into
+ * a single record, prioritizing real numeric Zoho IDs and preserving assigned TL/TM and stages.
+ */
+export function deduplicateInternalOperations(records: InternalOperationRecord[]): InternalOperationRecord[] {
+  if (!Array.isArray(records)) return [];
+  const map = new Map<string, InternalOperationRecord>();
+
+  for (const r of records) {
+    if (!r) continue;
+    const dealId = String(
+      r.Deal_ID ||
+      (r.Parent_Record_Deal?.id || r.Parent_Record_Deal) ||
+      (r as any).zohoDealId ||
+      ''
+    ).trim().toLowerCase();
+
+    const sName = normalizeServiceName(r.Service_Scheme || r.Name || '');
+    if (!dealId || !sName) {
+      if (r.id && !map.has(String(r.id))) {
+        map.set(String(r.id), r);
+      }
+      continue;
+    }
+
+    const key = `${dealId}__${sName}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, r);
+    } else {
+      // Prefer real Zoho numeric ID over temporary IO-... ID
+      const isExistingZoho = /^\d{15,}$/.test(String(existing.id));
+      const isCurrentZoho = /^\d{15,}$/.test(String(r.id));
+      const preferred = isCurrentZoho && !isExistingZoho ? r : existing;
+      const secondary = preferred === r ? existing : r;
+
+      const merged: InternalOperationRecord = {
+        ...secondary,
+        ...preferred,
+        id: preferred.id,
+        Name: preferred.Name || preferred.Service_Scheme || secondary.Name || secondary.Service_Scheme || '',
+        Service_Scheme: preferred.Service_Scheme || preferred.Name || secondary.Service_Scheme || secondary.Name || '',
+        Team_Leader: preferred.Team_Leader?.id ? preferred.Team_Leader : secondary.Team_Leader,
+        Team_Member: preferred.Team_Member?.id ? preferred.Team_Member : secondary.Team_Member,
+        Team_Leader_TL: preferred.Team_Leader_TL || secondary.Team_Leader_TL,
+        Team_Member_TM: preferred.Team_Member_TM || secondary.Team_Member_TM,
+        Stage: preferred.Stage || secondary.Stage,
+        Operation_Stage: preferred.Operation_Stage || secondary.Operation_Stage,
+        CA_CS1: preferred.CA_CS1 || secondary.CA_CS1,
+        CA_CS2: preferred.CA_CS2 || secondary.CA_CS2,
+        sectionsData: { ...(secondary.sectionsData || {}), ...(preferred.sectionsData || {}) }
+      };
+      map.set(key, merged);
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+/**
+ * Helper to get all Internal Operations records from localStorage with automatic deduplication
  */
 export function getStoredInternalOperations(): InternalOperationRecord[] {
   if (typeof window === 'undefined') return [];
@@ -28,7 +99,9 @@ export function getStoredInternalOperations(): InternalOperationRecord[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        return deduplicateInternalOperations(parsed);
+      }
     }
   } catch (err) {
     console.warn('[Internal Operations] Failed to read from localStorage:', err);
@@ -42,8 +115,9 @@ export function getStoredInternalOperations(): InternalOperationRecord[] {
 export function setStoredInternalOperations(records: InternalOperationRecord[]): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    window.dispatchEvent(new CustomEvent('be_internal_operations_updated', { detail: records }));
+    const deduplicated = deduplicateInternalOperations(records);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(deduplicated));
+    window.dispatchEvent(new CustomEvent('be_internal_operations_updated', { detail: deduplicated }));
   } catch (err) {
     console.warn('[Internal Operations] Failed to write to localStorage:', err);
   }
@@ -125,7 +199,17 @@ export function generateServiceAllocationsForDeal(
     }];
   }
 
-  // All service rows from Legal subform - exact 1-to-1 matching (no deduplication dropping services)
+  // Deduplicate subform rows so identical service names only yield 1 child record
+  const seenServiceKeys = new Set<string>();
+  const uniqueSubformRows = subformRows.filter((row: any) => {
+    const rawName = row.schema || row.Legal_Schemas || row.Schemas || row.Service_Name || row.name || '';
+    const norm = normalizeServiceName(rawName);
+    if (!norm) return true;
+    if (seenServiceKeys.has(norm)) return false;
+    seenServiceKeys.add(norm);
+    return true;
+  });
+
   const currentRecords = [...existingList];
   const dealRecords = currentRecords.filter(r => String(r.Deal_ID || '').trim().toLowerCase() === dealId.toLowerCase());
   const otherRecords = currentRecords.filter(r => String(r.Deal_ID || '').trim().toLowerCase() !== dealId.toLowerCase());
@@ -137,7 +221,7 @@ export function generateServiceAllocationsForDeal(
 
   const nowIso = new Date().toISOString();
 
-  subformRows.forEach((row: any, idx: number) => {
+  uniqueSubformRows.forEach((row: any, idx: number) => {
     const serviceScheme = formatValue(
       row.schema || row.Legal_Schemas || row.Schemas || row.Service_Name || row.name || `Service ${idx + 1}`
     );
@@ -161,10 +245,11 @@ export function generateServiceAllocationsForDeal(
     // 1. By Subform_Row_ID
     let existingIndex = dealRecords.findIndex(r => !matchedExistingIds.has(r.id) && r.Subform_Row_ID === subformRowId);
 
-    // 2. Fallback: By Service_Scheme
+    // 2. Fallback: By normalized Service_Scheme / Name
     if (existingIndex < 0) {
+      const normTarget = normalizeServiceName(serviceScheme);
       existingIndex = dealRecords.findIndex(
-        r => !matchedExistingIds.has(r.id) && String(r.Service_Scheme || '').trim().toLowerCase() === serviceScheme.toLowerCase()
+        r => !matchedExistingIds.has(r.id) && normalizeServiceName(r.Service_Scheme || r.Name || '') === normTarget
       );
     }
 
@@ -380,7 +465,8 @@ export function generateServiceAllocationsForDeal(
     }
   });
 
-  const finalRecords = [...otherRecords, ...resultingDealRecords];
+  const rawFinal = [...otherRecords, ...resultingDealRecords];
+  const finalRecords = deduplicateInternalOperations(rawFinal);
 
   if (created.length > 0 || updated.length > 0) {
     setStoredInternalOperations(finalRecords);
@@ -851,20 +937,9 @@ export async function fetchInternalOperations(options?: { dealId?: string }): Pr
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        // Merge server records with local storage records
-        const serverMap = new Map<string, InternalOperationRecord>();
-        data.data.forEach((rawR: any) => {
-          const r = normalizeInternalOperationFromZoho(rawR);
-          if (r.id) serverMap.set(String(r.id), r);
-        });
-
-        records.forEach(r => {
-          if (r.id && !serverMap.has(String(r.id))) {
-            serverMap.set(String(r.id), r);
-          }
-        });
-
-        records = Array.from(serverMap.values());
+        // Deduplicate and merge server records with local storage records
+        const serverNormalized = data.data.map(normalizeInternalOperationFromZoho);
+        records = deduplicateInternalOperations([...serverNormalized, ...records]);
         setStoredInternalOperations(records);
       }
     }

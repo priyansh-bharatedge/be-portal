@@ -2645,29 +2645,64 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
             }
 
             if (allocPayloads.length > 0) {
-              // Check existing records for this deal in Operation_Internal_CRM with fields parameter
+              const normServiceName = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '');
+
+              // 1. Deduplicate incoming alloc payloads
+              const seenAlloc = new Set<string>();
+              allocPayloads = allocPayloads.filter((al: any) => {
+                const norm = normServiceName(al.Name);
+                if (!norm) return true;
+                if (seenAlloc.has(norm)) return false;
+                seenAlloc.add(norm);
+                return true;
+              });
+
+              // 2. Fetch existing records for this deal in Operation_Internal_CRM
               let existingList: any[] = [];
               try {
-                const existingRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=id,Name&criteria=(Parent_Record_Deal.id:equals:${dealZohoId})`, {
+                const existingRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=id,Name,Parent_Record_Deal,Team_Type,Operation_Stage,Modified_Time&per_page=200`, {
                   headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                 });
                 if (existingRes.status === 200) {
                   const existingData: any = await existingRes.json();
-                  existingList = existingData?.data || [];
+                  existingList = (existingData?.data || []).filter((ex: any) =>
+                    String(ex.Parent_Record_Deal?.id || '').trim() === String(dealZohoId).trim()
+                  );
                 }
               } catch (_) {}
 
               const toInsert: any[] = [];
               const toUpdate: any[] = [];
+              const extraDuplicatesToDelete: string[] = [];
 
               allocPayloads.forEach((alloc: any) => {
-                const matched = existingList.find((ex: any) => (ex.Name || ex.Service_Scheme) === alloc.Name);
-                if (matched?.id) {
-                  toUpdate.push({ ...alloc, id: String(matched.id) });
+                const normAlloc = normServiceName(alloc.Name);
+                const matches = existingList.filter((ex: any) => normServiceName(ex.Name || ex.Service_Scheme) === normAlloc);
+
+                if (matches.length > 0) {
+                  const primary = matches[0];
+                  toUpdate.push({ ...alloc, id: String(primary.id) });
+                  // Any extra matching records in Zoho CRM are duplicates, mark for deletion
+                  for (let i = 1; i < matches.length; i++) {
+                    if (matches[i].id) extraDuplicatesToDelete.push(String(matches[i].id));
+                  }
                 } else {
                   toInsert.push(alloc);
                 }
               });
+
+              // Delete any extra duplicate records found in Zoho CRM for this deal
+              if (extraDuplicatesToDelete.length > 0) {
+                try {
+                  await fetch(`${apiBase}/crm/v8/${opsModuleName}?ids=${extraDuplicatesToDelete.join(',')}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                  });
+                  console.log('[Zoho API Handler] Auto-deleted duplicate internal operations on transition:', extraDuplicatesToDelete);
+                } catch (delErr) {
+                  console.warn('[Zoho API Handler] Duplicate cleanup warning:', delErr);
+                }
+              }
 
               if (toInsert.length > 0) {
                 const insRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}`, {
@@ -3489,24 +3524,25 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         const dealId = urlObj.searchParams.get('deal_id') || urlObj.searchParams.get('dealId');
         const fieldsParam = 'id,Name,Parent_Record_Deal,Team_Type,Operation_Stage,Team_Leader_TL,Team_Member_TM,Modified_Time';
         try {
-          let crmRes: any = null;
-          if (dealId) {
-            let numericDealId = dealId;
-            if (!/^\d{15,}$/.test(String(numericDealId).trim())) {
-              const resId = await resolveZohoDealId(dealId, accessToken, apiBase);
-              if (resId) numericDealId = resId;
-            }
-            crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${fieldsParam}&criteria=(Parent_Record_Deal.id:equals:${numericDealId})`, {
-              headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
-            });
-          } else {
-            crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${fieldsParam}&per_page=200`, {
-              headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
-            });
+          let numericDealId = dealId;
+          if (dealId && !/^\d{15,}$/.test(String(numericDealId).trim())) {
+            const resId = await resolveZohoDealId(dealId, accessToken, apiBase);
+            if (resId) numericDealId = resId;
           }
+          const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${fieldsParam}&per_page=200`, {
+            headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+          });
           if (crmRes && crmRes.status === 200) {
             const crmData: any = await crmRes.json();
-            const normalized = (crmData.data || []).map(normalizeZohoOperationRecord);
+            let rawList = crmData.data || [];
+            if (dealId) {
+              const targetDId = String(numericDealId || dealId).trim().toLowerCase();
+              rawList = rawList.filter((r: any) => {
+                const parentId = String(r.Parent_Record_Deal?.id || '').trim().toLowerCase();
+                return parentId === targetDId;
+              });
+            }
+            const normalized = rawList.map(normalizeZohoOperationRecord);
             return sendJson(res, 200, { success: true, data: normalized });
           } else if (crmRes && crmRes.status === 204) {
             return sendJson(res, 200, { success: true, data: [] });
@@ -3534,29 +3570,46 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         const zohoRecords = rawRecords.map(formatRecordForZohoOperation);
         try {
           // Identify existing records in Zoho CRM to update vs new to insert
+          let existingCrmList: any[] = [];
+          try {
+            const exRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=id,Name,Parent_Record_Deal,Team_Type,Operation_Stage&per_page=200`, {
+              headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+            });
+            if (exRes.status === 200) {
+              const exData: any = await exRes.json();
+              existingCrmList = exData?.data || [];
+            }
+          } catch (_) {}
+
+          const normServiceName = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '');
+
           const toInsert: any[] = [];
           const toUpdate: any[] = [];
+          const seenIncoming = new Set<string>();
 
           for (const zr of zohoRecords) {
             const dealIdNum = zr.Parent_Record_Deal?.id || (typeof zr.Parent_Record_Deal === 'string' && /^\d{15,}$/.test(zr.Parent_Record_Deal) ? zr.Parent_Record_Deal : null);
+            const normService = normServiceName(zr.Name);
+
+            if (dealIdNum && normService) {
+              const inKey = `${dealIdNum}__${normService}`;
+              if (seenIncoming.has(inKey)) continue;
+              seenIncoming.add(inKey);
+            }
+
             if (zr.id && /^\d{15,}$/.test(String(zr.id))) {
               toUpdate.push(zr);
-            } else if (dealIdNum && zr.Name) {
-              try {
-                const searchRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=id,Name&criteria=(Parent_Record_Deal.id:equals:${dealIdNum})`, {
-                  headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
-                });
-                if (searchRes.status === 200) {
-                  const sData: any = await searchRes.json();
-                  const found = (sData.data || []).find((rec: any) => (rec.Name || rec.Service_Scheme) === zr.Name);
-                  if (found?.id) {
-                    zr.id = String(found.id);
-                    toUpdate.push(zr);
-                    continue;
-                  }
-                }
-              } catch (_) {}
-              toInsert.push(zr);
+            } else if (dealIdNum && normService) {
+              const found = existingCrmList.find((rec: any) =>
+                String(rec.Parent_Record_Deal?.id || '').trim() === String(dealIdNum).trim() &&
+                normServiceName(rec.Name || rec.Service_Scheme) === normService
+              );
+              if (found?.id) {
+                zr.id = String(found.id);
+                toUpdate.push(zr);
+              } else {
+                toInsert.push(zr);
+              }
             } else {
               toInsert.push(zr);
             }
