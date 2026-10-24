@@ -7,6 +7,7 @@ import {
   getStoredInternalOperations,
   fetchInternalOperations,
   saveInternalOperation,
+  deleteInternalOperation,
   assignStaffToOperation,
   generateServiceAllocationsForDeal,
   normalizeTeamType
@@ -35,10 +36,12 @@ import {
   Eye,
   Building,
   Award,
-  Share2
+  Share2,
+  Trash2
 } from 'lucide-react';
 import { INTERNAL_TEAM_TYPES } from '../../pages/crm/DealDetails';
 import { InternalOperationDetailModal } from './InternalOperationDetailModal';
+import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
 import { isMatchingName, normalizeName } from '../../utils/employeeUtils';
 
 export interface NormalizedStaff {
@@ -209,10 +212,37 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
   // Permission Checks:
   // - Operations HOD & Super Admin have full management & assignment rights.
   // - Legal HOD has supervisory oversight (view & audit status and assigned staff).
+  // - Legal HOD, Operations HOD & Super Admin have allocation deletion rights.
   const canManageAllocations = Boolean(isSuperAdmin || isOperationsHOD || (isHOD && !isLegal && !isSalesDeptUser));
   const hasSupervisoryOversight = Boolean(isLegalHOD || isLegal);
+  const canDeleteAllocations = Boolean(isSuperAdmin || isOperationsHOD || isLegalHOD || hasSupervisoryOversight || canManageAllocations);
   const isIndividualContributor = !canManageAllocations && !hasSupervisoryOversight;
   const [onlyAssignedToMe, setOnlyAssignedToMe] = useState<boolean>(isIndividualContributor);
+
+  // Deletion Modal State
+  const [recordToDelete, setRecordToDelete] = useState<InternalOperationRecord | null>(null);
+  const [isDeletingRecord, setIsDeletingRecord] = useState<boolean>(false);
+
+  const handleConfirmDelete = async () => {
+    if (!recordToDelete) return;
+    setIsDeletingRecord(true);
+    try {
+      await deleteInternalOperation(recordToDelete.id);
+      setRecords(prev => prev.filter(r => r.id !== recordToDelete.id));
+      setToastMessage({
+        type: 'success',
+        text: `Service allocation "${recordToDelete.Service_Scheme || 'Record'}" deleted successfully.`
+      });
+    } catch (err: any) {
+      setToastMessage({
+        type: 'error',
+        text: err?.message || 'Failed to delete service allocation.'
+      });
+    } finally {
+      setIsDeletingRecord(false);
+      setRecordToDelete(null);
+    }
+  };
 
   // Load and merge all existing employees across storage, RBAC, and live API
   const [allExistingEmployees, setAllExistingEmployees] = useState<NormalizedStaff[]>(() => {
@@ -1178,6 +1208,16 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                               <span>Assign</span>
                             </button>
                           )}
+                          {canDeleteAllocations && (
+                            <button
+                              type="button"
+                              onClick={() => setRecordToDelete(item)}
+                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Allocation"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1318,12 +1358,33 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
             setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
             setSelectedRecordForDetails(updated);
           }}
+          onDelete={async (rec) => {
+            setSelectedRecordForDetails(null);
+            await deleteInternalOperation(rec.id);
+            setRecords(prev => prev.filter(r => r.id !== rec.id));
+            setToastMessage({
+              type: 'success',
+              text: `Service allocation "${rec.Service_Scheme || 'Record'}" deleted successfully.`
+            });
+          }}
           allStaff={allExistingEmployees}
           allTeamLeaders={allTeamLeaders}
           allTeamMembers={allTeamMembers}
           canManage={canManageAllocations}
+          canDelete={canDeleteAllocations}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={Boolean(recordToDelete)}
+        onClose={() => !isDeletingRecord && setRecordToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Service Allocation"
+        itemName={recordToDelete?.Service_Scheme || 'Service Allocation'}
+        message={`Are you sure you want to delete the service allocation "${recordToDelete?.Service_Scheme || ''}"? This will remove the record from internal operations.`}
+        isDeleting={isDeletingRecord}
+      />
     </div>
   );
 };

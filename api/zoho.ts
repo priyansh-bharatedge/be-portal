@@ -5238,6 +5238,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       else if (action === 'delete-policy') moduleName = process.env.VITE_ZOHO_COMPANY_POLICIES_MODULE_NAME || 'Company_Policies';
       else if (action === 'delete-calendar') moduleName = process.env.VITE_ZOHO_CALENDAR_MODULE_NAME || 'Company_Calendar';
       else if (action === 'delete-dsr') moduleName = process.env.VITE_ZOHO_DSR_MODULE_NAME || 'DSR';
+      else if (action === 'delete-internal-operation' || action === 'internal-operations' || action === 'internal-operation') {
+        moduleName = process.env.VITE_ZOHO_INTERNAL_OPERATIONS_MODULE_NAME || 'Operation_Internal_CRM';
+      }
       else if (parsedBody.module || urlObj.searchParams.get('module')) {
         moduleName = parsedBody.module || urlObj.searchParams.get('module')!;
       }

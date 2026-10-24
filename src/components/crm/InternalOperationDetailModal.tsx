@@ -54,32 +54,40 @@ import {
   Hash,
   AlertTriangle,
   PlusCircle,
-  UserCheck
+  UserCheck,
+  Trash2
 } from 'lucide-react';
+import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
 
 interface InternalOperationDetailModalProps {
   record: InternalOperationRecord;
   onClose: () => void;
   onSaved?: (updatedRecord: InternalOperationRecord) => void;
+  onDelete?: (record: InternalOperationRecord) => void | Promise<void>;
   allStaff?: NormalizedStaff[];
   allTeamLeaders?: NormalizedStaff[];
   allTeamMembers?: NormalizedStaff[];
   canManage?: boolean;
+  canDelete?: boolean;
 }
 
 export const InternalOperationDetailModal: React.FC<InternalOperationDetailModalProps> = ({
   record,
   onClose,
   onSaved,
+  onDelete,
   allStaff = [],
   allTeamLeaders = [],
   allTeamMembers = [],
-  canManage = false
+  canManage = false,
+  canDelete = false
 }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
 
   const [saving, setSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Normalized Team Type (Incorporation, Compliance, Funding, Certification, Digital Marketing)
@@ -2364,22 +2372,37 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between p-4 bg-gray-50/80 border-t border-gray-100">
-          <div className="text-xs text-gray-400">
-            Last Modified: {record.Modified_Time ? new Date(record.Modified_Time).toLocaleString() : 'Just now'}
+        <div className="flex items-center justify-between p-4 bg-gray-50/80 border-t border-gray-100 flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            {canDelete && onDelete && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={saving || isDeleting}
+                className="px-3.5 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 hover:border-red-300 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Delete Service Allocation"
+              >
+                <Trash2 size={13} />
+                <span>Delete Allocation</span>
+              </button>
+            )}
+            <div className="text-xs text-gray-400">
+              Last Modified: {record.Modified_Time ? new Date(record.Modified_Time).toLocaleString() : 'Just now'}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-200/60 rounded-xl transition-all cursor-pointer"
+              disabled={saving || isDeleting}
+              className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-200/60 rounded-xl transition-all cursor-pointer disabled:opacity-50"
             >
               Close
             </button>
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || isDeleting}
               className="px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
@@ -2388,6 +2411,30 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {canDelete && onDelete && (
+        <DeleteConfirmModal
+          isOpen={showDeleteConfirm}
+          onClose={() => !isDeleting && setShowDeleteConfirm(false)}
+          onConfirm={async () => {
+            setIsDeleting(true);
+            try {
+              await onDelete(record);
+              setShowDeleteConfirm(false);
+              onClose();
+            } catch (err: any) {
+              setToast({ type: 'error', text: err?.message || 'Failed to delete record' });
+            } finally {
+              setIsDeleting(false);
+            }
+          }}
+          title="Delete Service Allocation"
+          itemName={record.Service_Scheme || 'Service Allocation'}
+          message={`Are you sure you want to delete the service allocation "${record.Service_Scheme || ''}"? This will remove the record from internal operations.`}
+          isDeleting={isDeleting}
+        />
+      )}
     </div>
   );
 };

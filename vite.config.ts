@@ -5773,8 +5773,8 @@ function zohoApiPlugin(): Plugin {
           return;
         }
 
-        // Delete leave, employee, company, client, deal, quotation, policy, calendar, dsr, query or generic record endpoint (Module API Name: Leave_Management, Employee, Companies, Clients, Deals, Quotations, Company_Policies, Company_Calendar, DSR, Cases, etc.)
-        if ((pathname === '/api/zoho/delete-leave' || pathname === '/api/zoho/delete-employee' || pathname === '/api/zoho/delete-company' || pathname === '/api/zoho/delete-client' || pathname === '/api/zoho/delete-deal' || pathname === '/api/zoho/delete-quotation' || pathname === '/api/zoho/delete-policy' || pathname === '/api/zoho/delete-calendar' || pathname === '/api/zoho/delete-dsr' || pathname === '/api/zoho/delete-query' || pathname === '/api/zoho/delete-record') && req.method === 'DELETE') {
+        // Delete leave, employee, company, client, deal, quotation, policy, calendar, dsr, query, internal-operation or generic record endpoint (Module API Name: Leave_Management, Employee, Companies, Clients, Deals, Quotations, Company_Policies, Company_Calendar, DSR, Cases, Operation_Internal_CRM, etc.)
+        if ((pathname === '/api/zoho/delete-leave' || pathname === '/api/zoho/delete-employee' || pathname === '/api/zoho/delete-company' || pathname === '/api/zoho/delete-client' || pathname === '/api/zoho/delete-deal' || pathname === '/api/zoho/delete-quotation' || pathname === '/api/zoho/delete-policy' || pathname === '/api/zoho/delete-calendar' || pathname === '/api/zoho/delete-dsr' || pathname === '/api/zoho/delete-query' || pathname === '/api/zoho/delete-internal-operation' || pathname === '/api/zoho/delete-record') && req.method === 'DELETE') {
           let body = '';
           req.on('data', chunk => { body += chunk; });
           req.on('end', async () => {
@@ -5790,6 +5790,7 @@ function zohoApiPlugin(): Plugin {
               else if (pathname === '/api/zoho/delete-policy') moduleName = env.VITE_ZOHO_COMPANY_POLICIES_MODULE_NAME || 'Company_Policies';
               else if (pathname === '/api/zoho/delete-calendar') moduleName = env.VITE_ZOHO_CALENDAR_MODULE_NAME || 'Company_Calendar';
               else if (pathname === '/api/zoho/delete-dsr') moduleName = env.VITE_ZOHO_DSR_MODULE_NAME || 'DSR';
+              else if (pathname === '/api/zoho/delete-internal-operation') moduleName = env.VITE_ZOHO_INTERNAL_OPERATIONS_MODULE_NAME || 'Operation_Internal_CRM';
 
               if (body) {
                 try {

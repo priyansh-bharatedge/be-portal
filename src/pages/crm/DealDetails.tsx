@@ -7,7 +7,7 @@ import {
   Briefcase, Calendar, Layers, Tag, ExternalLink, User, RefreshCw, Loader2,
   AlertTriangle, Bell, Eye, Upload, Paperclip, X, FileSpreadsheet, Image as ImageIcon,
   Check, Maximize2, Minimize2, FileCode, HardDrive, CheckCircle, Users, Percent, Calculator, Info,
-  UserCheck, Scale, FileCheck2, Send, Save, Lock
+  UserCheck, Scale, FileCheck2, Send, Save, Lock, Trash2
 } from 'lucide-react';
 import { getDocument, saveDocument, getAllDocuments } from '../../lib/db';
 import { 
@@ -1165,6 +1165,16 @@ export const DealDetails = () => {
     } finally {
       setIsSavingLegalSubform(false);
     }
+  };
+
+  const handleRemoveLegalSubformRow = (idxToRemove: number) => {
+    const itemToRemove = legalSubformItems[idxToRemove];
+    const newItems = legalSubformItems.filter((_, idx) => idx !== idxToRemove);
+    setLegalSubformItems(newItems);
+    setWorkflowToast({
+      type: 'success',
+      message: `Removed "${itemToRemove?.schema || 'Service'}" from Legal Details. Click Submit Legal Details to save changes.`
+    });
   };
 
   const handleSaveLegalHandover = async (silent = false) => {
@@ -3149,6 +3159,9 @@ export const DealDetails = () => {
                         <th className="px-4 py-3 min-w-[210px]">Types of Legal Documents</th>
                         <th className="px-4 py-3 min-w-[170px]">Agreement Terms</th>
                         <th className="px-4 py-3 min-w-[220px]">Remark</th>
+                        {shouldShowLegalSection && (
+                          <th className="px-4 py-3 text-right min-w-[80px]">Action</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-gray-800">
@@ -3273,6 +3286,20 @@ export const DealDetails = () => {
                               <span className="text-xs text-gray-600 italic">{formatZohoValue(item.remark || '—')}</span>
                             )}
                           </td>
+
+                          {/* 7. Action / Delete Button */}
+                          {shouldShowLegalSection && (
+                            <td className="px-4 py-3.5 align-middle text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveLegalSubformRow(idx)}
+                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                title="Delete Service from Legal Details"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

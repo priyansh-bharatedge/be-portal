@@ -1238,3 +1238,32 @@ async function syncAllocationsToBackend(records: InternalOperationRecord[]): Pro
     // Graceful background sync failure
   }
 }
+
+/**
+ * Deletes an Internal Operation record from storage and optionally Zoho CRM
+ */
+export async function deleteInternalOperation(id: string): Promise<{ success: boolean; message: string }> {
+  if (!id) return { success: false, message: 'Invalid ID' };
+
+  const current = getStoredInternalOperations();
+  const recordToDelete = current.find(r => r.id === id);
+  const updatedList = current.filter(r => r.id !== id);
+  setStoredInternalOperations(updatedList);
+
+  const realZohoId = (recordToDelete?.zohoId && /^\d{15,}$/.test(String(recordToDelete.zohoId)))
+    ? String(recordToDelete.zohoId)
+    : (/^\d{15,}$/.test(String(id)) ? id : null);
+
+  if (realZohoId) {
+    try {
+      await fetch(`/api/zoho/delete-internal-operation?id=${realZohoId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.warn('[Internal Operations] Zoho delete error:', err);
+    }
+  }
+
+  return { success: true, message: 'Service allocation deleted successfully' };
+}
