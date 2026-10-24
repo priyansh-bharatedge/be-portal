@@ -67,10 +67,17 @@ export function deduplicateInternalOperations(records: InternalOperationRecord[]
       const preferred = isCurrentZoho && !isExistingZoho ? r : existing;
       const secondary = preferred === r ? existing : r;
 
-      const pickTl = (preferred.Team_Leader?.id || preferred.Team_Leader?.name) ? preferred.Team_Leader : secondary.Team_Leader;
-      const pickTm = (preferred.Team_Member?.id || preferred.Team_Member?.name) ? preferred.Team_Member : secondary.Team_Member;
-      const pickTlTL = preferred.Team_Leader_TL || secondary.Team_Leader_TL || (pickTl ? { id: pickTl.id, name: pickTl.name } : null);
-      const pickTmTM = preferred.Team_Member_TM || secondary.Team_Member_TM || (pickTm ? { id: pickTm.id, name: pickTm.name } : null);
+      const isRealStaff = (s: any) => {
+        if (!s || (!s.name && !s.id)) return false;
+        const n = String(s.name || '');
+        if (n.includes('(DL-') || n.includes(' - FORM') || n.includes('PRIVATE LIMITED') || n.includes('PVT LTD') || n.includes('LLP')) return false;
+        return true;
+      };
+
+      const pickTl = isRealStaff(preferred.Team_Leader) ? preferred.Team_Leader : (isRealStaff(secondary.Team_Leader) ? secondary.Team_Leader : (preferred.Team_Leader || secondary.Team_Leader));
+      const pickTm = isRealStaff(preferred.Team_Member) ? preferred.Team_Member : (isRealStaff(secondary.Team_Member) ? secondary.Team_Member : (preferred.Team_Member || secondary.Team_Member));
+      const pickTlTL = isRealStaff(preferred.Team_Leader_TL) ? preferred.Team_Leader_TL : (isRealStaff(secondary.Team_Leader_TL) ? secondary.Team_Leader_TL : (pickTl ? { id: pickTl.id, name: pickTl.name } : null));
+      const pickTmTM = isRealStaff(preferred.Team_Member_TM) ? preferred.Team_Member_TM : (isRealStaff(secondary.Team_Member_TM) ? secondary.Team_Member_TM : (pickTm ? { id: pickTm.id, name: pickTm.name } : null));
 
       const merged: InternalOperationRecord = {
         ...secondary,
@@ -82,10 +89,10 @@ export function deduplicateInternalOperations(records: InternalOperationRecord[]
         Team_Member: pickTm,
         Team_Leader_TL: pickTlTL,
         Team_Member_TM: pickTmTM,
-        Team_Leader_ID: preferred.Team_Leader_ID || secondary.Team_Leader_ID || pickTl?.id || '',
-        Team_Leader_Name: preferred.Team_Leader_Name || secondary.Team_Leader_Name || pickTl?.name || '',
-        Team_Member_ID: preferred.Team_Member_ID || secondary.Team_Member_ID || pickTm?.id || '',
-        Team_Member_Name: preferred.Team_Member_Name || secondary.Team_Member_Name || pickTm?.name || '',
+        Team_Leader_ID: pickTl?.id || preferred.Team_Leader_ID || secondary.Team_Leader_ID || '',
+        Team_Leader_Name: pickTl?.name || preferred.Team_Leader_Name || secondary.Team_Leader_Name || '',
+        Team_Member_ID: pickTm?.id || preferred.Team_Member_ID || secondary.Team_Member_ID || '',
+        Team_Member_Name: pickTm?.name || preferred.Team_Member_Name || secondary.Team_Member_Name || '',
         Stage: preferred.Stage || secondary.Stage,
         Operation_Stage: preferred.Operation_Stage || secondary.Operation_Stage,
         CA_CS1: preferred.CA_CS1 || secondary.CA_CS1,
@@ -489,6 +496,25 @@ export function generateServiceAllocationsForDeal(
   return { created, updated, all: finalRecords };
 }
 
+export function normalizeFileList(rawFiles: any): any[] {
+  if (!rawFiles) return [];
+  const list = Array.isArray(rawFiles) ? rawFiles : [rawFiles];
+  return list.filter(Boolean).map((f: any) => {
+    if (typeof f === 'string') {
+      return { id: f, name: f, size: 0, url: f, dataUrl: f };
+    }
+    return {
+      id: f.id || f.File_Id__s || f.fileId || `file_${Math.random().toString(36).substring(2, 7)}`,
+      name: f.File_Name__s || f.name || f.fileName || 'document',
+      size: Number(f.Size__s || f.size) || 0,
+      fileId: f.File_Id__s || f.file_id || f.fileId || f.id,
+      type: f.type || 'application/octet-stream',
+      dataUrl: f.dataUrl || f.url || '',
+      uploadedAt: f.Created_Time__s || f.uploadedAt || new Date().toISOString()
+    };
+  });
+}
+
 /**
  * Normalizes an operation record fetched from Zoho CRM Operation_Internal_CRM module
  * by mapping Doc_collection_* fields to sectionsData (for both Incorporation and Compliance)
@@ -499,7 +525,8 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const docName = r.Doc_collection_name || sectionsData.docCollection?.name || sectionsData.compDocCollection?.name || sectionsData.certDocCollection?.name || '';
   const docDate = r.Doc_collection_Date || sectionsData.docCollection?.date || sectionsData.compDocCollection?.date || sectionsData.certDocCollection?.date || '';
   const docStatus = r.Doc_collection_status || sectionsData.docCollection?.status || sectionsData.compDocCollection?.status || sectionsData.certDocCollection?.status || '';
-  const docFiles = r.Doc_collection_File_Upload || sectionsData.docCollection?.files || sectionsData.compDocCollection?.files || sectionsData.certDocCollection?.files || [];
+  const rawDocFiles = r.Doc_collection_File_Upload || sectionsData.docCollection?.files || sectionsData.compDocCollection?.files || sectionsData.certDocCollection?.files || [];
+  const docFiles = normalizeFileList(rawDocFiles);
 
   if (!sectionsData.docCollection) sectionsData.docCollection = {};
   if (docName && !sectionsData.docCollection.name) sectionsData.docCollection.name = docName;
@@ -530,7 +557,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const nameAppApprovedName = r.Name_Application_approved_name || sectionsData.nameApp?.approvedName || '';
   const nameAppDate = r.Name_Application_date || sectionsData.nameApp?.date || sectionsData.accounting?.date || '';
   const nameAppStatus = r.Name_Application_status || sectionsData.nameApp?.status || sectionsData.accounting?.status || '';
-  const nameAppFiles = r.Name_Application_File_Upload || sectionsData.nameApp?.files || sectionsData.accounting?.files || [];
+  const nameAppFiles = normalizeFileList(r.Name_Application_File_Upload || sectionsData.nameApp?.files || sectionsData.accounting?.files || []);
 
   if (!sectionsData.nameApp) sectionsData.nameApp = {};
   if (nameAppName && !sectionsData.nameApp.name) sectionsData.nameApp.name = nameAppName;
@@ -577,7 +604,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const brName = r.Board_Resolution_name || sectionsData.boardResolution?.name || sectionsData.audit?.name || '';
   const brDate = r.Board_Resolution_Date || sectionsData.boardResolution?.date || sectionsData.audit?.date || '';
   const brStatus = r.Board_Resolution_status || sectionsData.boardResolution?.status || sectionsData.audit?.status || '';
-  const brFiles = r.Board_Resolution_File_Upload || sectionsData.boardResolution?.files || sectionsData.audit?.files || [];
+  const brFiles = normalizeFileList(r.Board_Resolution_File_Upload || sectionsData.boardResolution?.files || sectionsData.audit?.files || []);
 
   if (!sectionsData.boardResolution) sectionsData.boardResolution = {};
   if (brName && !sectionsData.boardResolution.name) sectionsData.boardResolution.name = brName;
@@ -599,7 +626,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const scName = r.Share_Certificate_name || sectionsData.shareCertificate?.name || sectionsData.mgt7?.name || '';
   const scDate = r.Share_Certificate_Date || sectionsData.shareCertificate?.date || sectionsData.mgt7?.date || '';
   const scStatus = r.Share_Certificate_status || sectionsData.shareCertificate?.status || sectionsData.mgt7?.status || '';
-  const scFiles = r.Share_Certificate_File_Upload || sectionsData.shareCertificate?.files || sectionsData.mgt7?.files || [];
+  const scFiles = normalizeFileList(r.Share_Certificate_File_Upload || sectionsData.shareCertificate?.files || sectionsData.mgt7?.files || []);
 
   if (!sectionsData.shareCertificate) sectionsData.shareCertificate = {};
   if (scName && !sectionsData.shareCertificate.name) sectionsData.shareCertificate.name = scName;
@@ -621,7 +648,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const msmeDate = r.MSME_Certificate_Date || sectionsData.msmeCertificate?.date || sectionsData.msmeCertificateLlp?.date || '';
   const msmeStatus = r.MSME_Certificate_status || sectionsData.msmeCertificate?.status || sectionsData.msmeCertificateLlp?.status || '';
   const msmeFileVal = r.MSME_Certificate || sectionsData.msmeCertificate?.fileUpload || sectionsData.msmeCertificateLlp?.fileUpload || '';
-  const msmeFiles = r.MSME_Certificate_File_Upload || sectionsData.msmeCertificate?.files || sectionsData.msmeCertificateLlp?.files || (msmeFileVal ? [{ name: msmeFileVal, url: msmeFileVal }] : []);
+  const msmeFiles = normalizeFileList(r.MSME_Certificate_File_Upload || sectionsData.msmeCertificate?.files || sectionsData.msmeCertificateLlp?.files || (msmeFileVal ? [{ name: msmeFileVal, url: msmeFileVal }] : []));
 
   if (!sectionsData.msmeCertificate) sectionsData.msmeCertificate = {};
   if (msmeDate && !sectionsData.msmeCertificate.date) sectionsData.msmeCertificate.date = msmeDate;
@@ -654,7 +681,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const dprName = r.DPR_Pitch_deck_creation_name || sectionsData.dprCreation?.name || sectionsData.compInc?.name || sectionsData.inc?.name || '';
   const dprDate = r.DPR_Pitch_deck_creation_Date || sectionsData.dprCreation?.date || sectionsData.compInc?.date || sectionsData.inc?.date || '';
   const dprStatus = r.DPR_Pitch_deck_creation_status || sectionsData.dprCreation?.status || sectionsData.compInc?.status || sectionsData.inc?.status || '';
-  const dprFiles = r.DPR_Pitch_deck_creation_File_Upload || r.DPR_Pitch_deck_creation_File_U || sectionsData.dprCreation?.files || sectionsData.compInc?.files || sectionsData.inc?.files || [];
+  const dprFiles = normalizeFileList(r.DPR_Pitch_deck_creation_File_Upload || r.DPR_Pitch_deck_creation_File_U || sectionsData.dprCreation?.files || sectionsData.compInc?.files || sectionsData.inc?.files || []);
 
   if (!sectionsData.dprCreation) sectionsData.dprCreation = {};
   if (dprName && !sectionsData.dprCreation.name) sectionsData.dprCreation.name = dprName;
@@ -685,7 +712,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const adt1Auditor = r.ADT_1_Auditor_name || sectionsData.adt1?.auditorName || '';
   const adt1Date = r.ADT_1_date || sectionsData.adt1?.date || sectionsData.compAdt1?.date || '';
   const adt1Status = r.ADT_1_status || sectionsData.adt1?.status || sectionsData.compAdt1?.status || '';
-  const adt1Files = r.ADT_1_File_Upload || sectionsData.adt1?.files || sectionsData.compAdt1?.files || [];
+  const adt1Files = normalizeFileList(r.ADT_1_File_Upload || sectionsData.adt1?.files || sectionsData.compAdt1?.files || []);
 
   if (!sectionsData.adt1) sectionsData.adt1 = {};
   if (adt1Name && !sectionsData.adt1.name) sectionsData.adt1.name = adt1Name;
@@ -708,7 +735,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const inc20AName = r.INC_20_A_name || sectionsData.inc20A?.name || sectionsData.dpt3?.name || '';
   const inc20ADate = r.INC_20_A_Date || sectionsData.inc20A?.date || sectionsData.dpt3?.date || '';
   const inc20AStatus = r.INC_20_A_status || sectionsData.inc20A?.status || sectionsData.dpt3?.status || '';
-  const inc20AFiles = r.INC_20_A_File_Upload || sectionsData.inc20A?.files || sectionsData.dpt3?.files || [];
+  const inc20AFiles = normalizeFileList(r.INC_20_A_File_Upload || sectionsData.inc20A?.files || sectionsData.dpt3?.files || []);
 
   if (!sectionsData.inc20A) sectionsData.inc20A = {};
   if (inc20AName && !sectionsData.inc20A.name) sectionsData.inc20A.name = inc20AName;
@@ -730,7 +757,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const form3Name = r.Finance_Projected_Financials_name || sectionsData.form3?.name || sectionsData.compForm3?.name || sectionsData.fundingFinance?.name || '';
   const form3Date = r.Finance_Projected_Financials_Date || sectionsData.form3?.date || sectionsData.compForm3?.date || sectionsData.fundingFinance?.date || '';
   const form3Status = r.Finance_Projected_Financials_Status || sectionsData.form3?.status || sectionsData.compForm3?.status || sectionsData.fundingFinance?.status || '';
-  const form3Files = r.Finance_Projected_Financials_File_Upload || sectionsData.form3?.files || sectionsData.compForm3?.files || sectionsData.fundingFinance?.files || [];
+  const form3Files = normalizeFileList(r.Finance_Projected_Financials_File_Upload || sectionsData.form3?.files || sectionsData.compForm3?.files || sectionsData.fundingFinance?.files || []);
 
   if (!sectionsData.form3) sectionsData.form3 = {};
   if (form3Name && !sectionsData.form3.name) sectionsData.form3.name = form3Name;
@@ -766,7 +793,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const llpName = r.Application_submission_name || (isCertificationRec ? certAppObj.name : isFundingRec ? appSubObj.name : llpObj.name) || certAppObj.name || appSubObj.name || llpObj.name || '';
   const llpDate = r.Application_submission_Submission_Date || (isCertificationRec ? certAppObj.date : isFundingRec ? appSubObj.date : llpObj.date) || certAppObj.date || appSubObj.date || llpObj.date || '';
   const llpStatus = r.Application_submission_status || (isCertificationRec ? certAppObj.status : isFundingRec ? appSubObj.status : llpObj.status) || certAppObj.status || appSubObj.status || llpObj.status || '';
-  const llpFiles = r.Application_submission_File_Upload || (isCertificationRec ? certAppObj.files : isFundingRec ? appSubObj.files : llpObj.files) || certAppObj.files || appSubObj.files || llpObj.files || [];
+  const llpFiles = normalizeFileList(r.Application_submission_File_Upload || (isCertificationRec ? certAppObj.files : isFundingRec ? appSubObj.files : llpObj.files) || certAppObj.files || appSubObj.files || llpObj.files || []);
   const appSubVal = r.Application_submission || appSubObj.registrationNumber || appSubObj.applicationSubmission || '';
   const appPortalId = r.Application_submission_Portal_User_ID || appSubObj.portalId || '';
   const appPortalPwd = r.Application_submission_Portal_Password || appSubObj.portalPassword || '';
@@ -803,7 +830,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const itrName = r.Director_ITR_Company_ITR_name || (isCompanyItrService ? sectionsData.companyItr?.name : sectionsData.directorItr?.name) || sectionsData.directorItr?.name || sectionsData.companyItr?.name || '';
   const itrDate = r.Director_ITR_Company_ITR_Date || (isCompanyItrService ? sectionsData.companyItr?.date : sectionsData.directorItr?.date) || sectionsData.directorItr?.date || sectionsData.companyItr?.date || '';
   const itrStatus = r.Director_ITR_Company_ITR_status || (isCompanyItrService ? sectionsData.companyItr?.status : sectionsData.directorItr?.status) || sectionsData.directorItr?.status || sectionsData.companyItr?.status || '';
-  const itrFiles = r.Director_ITR_Company_ITR_File_Upload || (isCompanyItrService ? sectionsData.companyItr?.files : sectionsData.directorItr?.files) || sectionsData.directorItr?.files || sectionsData.companyItr?.files || [];
+  const itrFiles = normalizeFileList(r.Director_ITR_Company_ITR_File_Upload || (isCompanyItrService ? sectionsData.companyItr?.files : sectionsData.directorItr?.files) || sectionsData.directorItr?.files || sectionsData.companyItr?.files || []);
   const itrDocCollection = r.Director_ITR_Doc_collection || sectionsData.directorItr?.docCollection || '';
   const itrFileRequired = r.Director_ITR_File_required || sectionsData.directorItr?.fileRequired || '';
 
@@ -843,10 +870,17 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const tlUser = (tlId || tlName) ? { id: tlId, name: tlName, email: rawTl?.email, empId: tlId } : null;
 
   // Extract TM (Lookup to Employees module: Team_Member_TM)
-  const rawTm = r.Team_Member_TM || r.Team_Member;
+  const isDealName = (n: any) => {
+    const s = String(n || '');
+    return s.includes('(DL-') || s.includes(' - FORM') || s.includes('PRIVATE LIMITED') || s.includes('PVT LTD') || s.includes('LLP');
+  };
+
+  const rawTmCandidate = r.Team_Member_TM;
+  const isRawTmDeal = isDealName(rawTmCandidate?.name || rawTmCandidate?.lookup_label);
+  const rawTm = (!isRawTmDeal && rawTmCandidate) ? rawTmCandidate : r.Team_Member;
   const tmId = rawTm?.id || (typeof rawTm === 'string' ? rawTm : '') || r.Team_Member_ID || '';
   const tmName = rawTm?.name || (typeof rawTm === 'object' && rawTm?.lookup_label ? rawTm.lookup_label : '') || r.Team_Member_Name || '';
-  const tmUser = (tmId || tmName) ? { id: tmId, name: tmName, email: rawTm?.email, empId: tmId } : null;
+  const tmUser = (tmId || tmName) && !isDealName(tmName) ? { id: tmId, name: tmName, email: rawTm?.email, empId: tmId } : (r.Team_Member && !isDealName(r.Team_Member.name) ? r.Team_Member : null);
 
   return {
     ...r,
@@ -863,10 +897,10 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
     Team_Leader_ID: tlId || r.Team_Leader_ID || '',
     Team_Leader_Name: tlName || r.Team_Leader_Name || '',
     Team_Leader_TL: r.Team_Leader_TL || (tlId ? { id: tlId, name: tlName } : (tlName ? { id: '', name: tlName } : null)),
-    Team_Member: tmUser || r.Team_Member || null,
-    Team_Member_ID: tmId || r.Team_Member_ID || '',
-    Team_Member_Name: tmName || r.Team_Member_Name || '',
-    Team_Member_TM: r.Team_Member_TM || (tmId ? { id: tmId, name: tmName } : (tmName ? { id: '', name: tmName } : null)),
+    Team_Member: tmUser || (r.Team_Member && !isDealName(r.Team_Member.name) ? r.Team_Member : null),
+    Team_Member_ID: tmUser?.id || (!isDealName(r.Team_Member_Name) ? r.Team_Member_ID : '') || '',
+    Team_Member_Name: tmUser?.name || (!isDealName(r.Team_Member_Name) ? r.Team_Member_Name : '') || '',
+    Team_Member_TM: tmUser ? { id: tmUser.id, name: tmUser.name } : null,
     After_Allocation: afterAllocation,
     After_Allocation_Workflow: afterAllocation,
     Doc_collection_name: docName,

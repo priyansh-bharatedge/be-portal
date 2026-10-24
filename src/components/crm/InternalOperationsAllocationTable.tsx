@@ -248,6 +248,18 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
   // - Legal HOD, Operations HOD & Super Admin have allocation deletion rights.
   const canManageAllocations = Boolean(isSuperAdmin || isOperationsHOD || (isHOD && !isLegal && !isSalesDeptUser));
   const hasSupervisoryOversight = Boolean(isLegalHOD || isLegal);
+  const isTeamLeader = Boolean(
+    currentUser?.role === 'TL' || 
+    (currentUser as any)?.systemRole === 'TL' || 
+    (currentUser?.role && currentUser.role.toLowerCase().includes('team leader')) || 
+    (currentUser?.role && currentUser.role.toLowerCase().includes('tl')) ||
+    (currentUser?.designation && (
+      currentUser.designation.toLowerCase().includes('team leader') || 
+      currentUser.designation.toLowerCase().includes('lead')
+    ))
+  );
+  // Team Leaders (TL) can assign Team Members (TM)
+  const canAssignTM = Boolean(canManageAllocations || isTeamLeader);
   const canDeleteAllocations = Boolean(isSuperAdmin || isOperationsHOD || isLegalHOD || hasSupervisoryOversight || canManageAllocations);
   const isIndividualContributor = !canManageAllocations && !hasSupervisoryOversight;
   const [onlyAssignedToMe, setOnlyAssignedToMe] = useState<boolean>(isIndividualContributor);
@@ -1161,7 +1173,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
 
                       {/* 5. Assigned TM (Team Member) */}
                       <td className="px-4 py-3.5 align-middle">
-                        {canManageAllocations ? (
+                        {(canManageAllocations || canAssignTM) ? (
                           <div className="flex items-center gap-1.5">
                             <select
                               value={resolveSelectedId(item.Team_Member?.id || item.Team_Member_TM?.id || (typeof item.Team_Member_TM === 'string' ? item.Team_Member_TM : '') || item.Team_Member_ID, item.Team_Member?.name || item.Team_Member_TM?.name || item.Team_Member_Name)}
@@ -1412,6 +1424,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
           allTeamLeaders={allTeamLeaders}
           allTeamMembers={allTeamMembers}
           canManage={canManageAllocations}
+          canAssignTM={canAssignTM}
           canDelete={canDeleteAllocations}
         />
       )}

@@ -58,6 +58,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
+import { isMatchingName } from '../../utils/employeeUtils';
 
 interface InternalOperationDetailModalProps {
   record: InternalOperationRecord;
@@ -68,6 +69,7 @@ interface InternalOperationDetailModalProps {
   allTeamLeaders?: NormalizedStaff[];
   allTeamMembers?: NormalizedStaff[];
   canManage?: boolean;
+  canAssignTM?: boolean;
   canDelete?: boolean;
 }
 
@@ -80,6 +82,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   allTeamLeaders = [],
   allTeamMembers = [],
   canManage = false,
+  canAssignTM = false,
   canDelete = false
 }) => {
   const navigate = useNavigate();
@@ -548,8 +551,21 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   const handleSave = async () => {
     setSaving(true);
     try {
-      const tlUser = allStaff.find(u => u.id === selectedTlId || u.name.toLowerCase() === selectedTlId.toLowerCase());
-      const tmUser = allStaff.find(u => u.id === selectedTmId || u.name.toLowerCase() === selectedTmId.toLowerCase());
+      const tlUser = (selectedTlId ? (allStaff.find(u => 
+        u.id === selectedTlId || 
+        (u.zohoId && u.zohoId === selectedTlId) ||
+        (u.empId && u.empId === selectedTlId) ||
+        u.name.toLowerCase() === selectedTlId.toLowerCase() ||
+        isMatchingName(u.name, selectedTlId)
+      ) || (record.Team_Leader?.id === selectedTlId ? record.Team_Leader : null)) : null) || (record.Team_Leader || null);
+
+      const tmUser = (selectedTmId ? (allStaff.find(u => 
+        u.id === selectedTmId || 
+        (u.zohoId && u.zohoId === selectedTmId) ||
+        (u.empId && u.empId === selectedTmId) ||
+        u.name.toLowerCase() === selectedTmId.toLowerCase() ||
+        isMatchingName(u.name, selectedTmId)
+      ) || (record.Team_Member?.id === selectedTmId ? record.Team_Member : null)) : null) || (record.Team_Member || null);
 
       const isFullyAllocated = Boolean(tlUser && tmUser);
       const isPartiallyAllocated = Boolean(tlUser || tmUser);
@@ -917,14 +933,14 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         DPR_Pitch_deck_creation_Date: dprDate,
         DPR_Pitch_deck_creation_status: dprStatus,
         DPR_Pitch_deck_creation_File_Upload: dprFiles,
-        Team_Leader: tlUser ? { id: tlUser.id, name: tlUser.name, email: tlUser.email, empId: tlUser.id } : null,
-        Team_Leader_ID: tlUser?.id || '',
+        Team_Leader: tlUser ? { id: (tlUser as any)?.zohoId || tlUser.id, name: tlUser.name, email: tlUser.email, empId: tlUser.empId || tlUser.id } : null,
+        Team_Leader_ID: (tlUser as any)?.zohoId || tlUser?.id || '',
         Team_Leader_Name: tlUser?.name || '',
-        Team_Leader_TL: tlUser?.id ? (/^\d{15,}$/.test(String(tlUser.id)) ? { id: String(tlUser.id), name: tlUser.name } : tlUser.id) : null,
-        Team_Member: tmUser ? { id: tmUser.id, name: tmUser.name, email: tmUser.email, empId: tmUser.id } : null,
-        Team_Member_ID: tmUser?.id || '',
+        Team_Leader_TL: tlUser ? { id: (tlUser as any)?.zohoId || (/^\d{15,}$/.test(String(tlUser.id)) ? String(tlUser.id) : tlUser.id), name: tlUser.name } : null,
+        Team_Member: tmUser ? { id: (tmUser as any)?.zohoId || tmUser.id, name: tmUser.name, email: tmUser.email, empId: tmUser.empId || tmUser.id } : null,
+        Team_Member_ID: (tmUser as any)?.zohoId || tmUser?.id || '',
         Team_Member_Name: tmUser?.name || '',
-        Team_Member_TM: tmUser?.id ? (/^\d{15,}$/.test(String(tmUser.id)) ? { id: String(tmUser.id), name: tmUser.name } : tmUser.id) : null,
+        Team_Member_TM: tmUser ? { id: (tmUser as any)?.zohoId || (/^\d{15,}$/.test(String(tmUser.id)) ? String(tmUser.id) : tmUser.id), name: tmUser.name } : null,
         Allocation_Status: isFullyAllocated ? 'Allocated' : isPartiallyAllocated ? 'In Progress' : 'Pending Allocation',
         sectionsData: {
           ...sections,
@@ -1452,7 +1468,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     <span className="text-[10px] text-emerald-700 font-semibold">Assigned</span>
                   )}
                 </label>
-                {canManage ? (
+                {(canManage || canAssignTM) ? (
                   <select
                     value={selectedTmId}
                     onChange={(e) => setSelectedTmId(e.target.value)}

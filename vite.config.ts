@@ -2,6 +2,8 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import nodemailer from 'nodemailer'
+import fs from 'fs'
+import path from 'path'
 import dealsHandler from './api/deals.ts'
 
 function zohoApiPlugin(): Plugin {
@@ -2509,6 +2511,221 @@ function zohoApiPlugin(): Plugin {
           return;
         }
 
+        const ALLOCATIONS_FILE = path.resolve(process.cwd(), 'data', 'internal_operations_allocations.json');
+
+        const getStoredAllocations = (): Record<string, any> => {
+          try {
+            if (fs.existsSync(ALLOCATIONS_FILE)) {
+              const content = fs.readFileSync(ALLOCATIONS_FILE, 'utf-8');
+              return JSON.parse(content || '{}');
+            }
+          } catch (e) {
+            console.warn('[Allocations Store] Error reading file:', e);
+          }
+          return {};
+        };
+
+        const saveStoredAllocations = (data: Record<string, any>) => {
+          try {
+            const dir = path.dirname(ALLOCATIONS_FILE);
+            if (!fs.existsSync(dir)) {
+              fs.mkdirSync(dir, { recursive: true });
+            }
+            fs.writeFileSync(ALLOCATIONS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+          } catch (e) {
+            console.warn('[Allocations Store] Error writing file:', e);
+          }
+        };
+
+        const normalizeFileList = (rawFiles: any) => {
+          if (!rawFiles) return [];
+          const arr = Array.isArray(rawFiles) ? rawFiles : [rawFiles];
+          return arr.map((f: any, idx: number) => {
+            if (typeof f === 'string') {
+              return { id: `file_${idx}`, name: f, size: 0, type: 'application/octet-stream', uploadedAt: new Date().toISOString() };
+            }
+            return {
+              id: f.id || f.File_Id__s || `file_${idx}`,
+              name: f.name || f.File_Name__s || 'Document',
+              size: f.size || f.Size__s || 0,
+              type: f.type || 'application/octet-stream',
+              fileId: f.fileId || f.File_Id__s || f.id,
+              dataUrl: f.dataUrl,
+              url: f.url,
+              uploadedAt: f.uploadedAt || f.Created_Time__s || new Date().toISOString()
+            };
+          });
+        };
+
+        const processRecordFilesAndUpload = async (
+          record: any,
+          accessToken: string,
+          apiBase: string,
+          opsModuleName: string,
+          existingZohoRecord?: any
+        ) => {
+          const fileFieldKeys = [
+            { key: 'Doc_collection_File_Upload', sectionPath: ['compDocCollection', 'docCollection', 'certDocCollection'] },
+            { key: 'Name_Application_File_Upload', sectionPath: ['nameApp', 'accounting'] },
+            { key: 'Board_Resolution_File_Upload', sectionPath: ['boardResolution', 'audit'] },
+            { key: 'Share_Certificate_File_Upload', sectionPath: ['shareCertificate', 'mgt7'] },
+            { key: 'Application_submission_File_Upload', sectionPath: ['appSubmission', 'llpAgreement', 'certFinalApp'] },
+            { key: 'Director_ITR_Company_ITR_File_Upload', sectionPath: ['directorItr', 'companyItr'] },
+            { key: 'DPR_Pitch_deck_creation_File_Upload', sectionPath: ['dprCreation', 'compInc', 'inc'] },
+            { key: 'ADT_1_File_Upload', sectionPath: ['adt1', 'compAdt1'] },
+            { key: 'INC_20_A_File_Upload', sectionPath: ['inc20A', 'dpt3'] },
+            { key: 'Finance_Projected_Financials_File_Upload', sectionPath: ['form3', 'compForm3', 'fundingFinance'] }
+          ];
+
+          const recordId = (record.id && /^\d{15,}$/.test(String(record.id)))
+            ? String(record.id)
+            : ((record.zohoId && /^\d{15,}$/.test(String(record.zohoId))) ? String(record.zohoId) : null);
+
+          for (const item of fileFieldKeys) {
+            let files = record[item.key];
+            if (!Array.isArray(files) || files.length === 0) {
+              if (record.sectionsData) {
+                for (const sp of item.sectionPath) {
+                  if (Array.isArray(record.sectionsData[sp]?.files) && record.sectionsData[sp].files.length > 0) {
+                    files = record.sectionsData[sp].files;
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (!Array.isArray(files) || files.length === 0) continue;
+
+            const fileIds: string[] = [];
+
+            for (const f of files) {
+              if (!f) continue;
+              const fName = typeof f === 'string' ? f : (f.name || 'document');
+              const dataUrl = typeof f === 'object' ? f.dataUrl : null;
+              let existingFileId = typeof f === 'object' ? (f.fileId || (f.id && !String(f.id).startsWith('file_') ? f.id : null)) : null;
+
+              if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+                try {
+                  const parts = dataUrl.split(';base64,');
+                  if (parts.length === 2) {
+                    const mimeType = parts[0].replace('data:', '') || 'application/octet-stream';
+                    const buffer = Buffer.from(parts[1], 'base64');
+
+                    const blob = new Blob([buffer], { type: mimeType });
+                    const form = new FormData();
+                    form.append('file', blob, fName);
+
+                    const fRes = await fetch(`${apiBase}/crm/v8/files`, {
+                      method: 'POST',
+                      headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+                      body: form
+                    });
+                    const fData: any = await fRes.json().catch(() => ({}));
+                    const uploadedId = fData?.data?.[0]?.details?.id;
+                    if (uploadedId) {
+                      existingFileId = uploadedId;
+                      if (typeof f === 'object') {
+                        f.fileId = uploadedId;
+                      }
+                    }
+
+                    if (recordId) {
+                      try {
+                        const attBlob = new Blob([buffer], { type: mimeType });
+                        const attForm = new FormData();
+                        attForm.append('file', attBlob, fName);
+                        await fetch(`${apiBase}/crm/v8/${opsModuleName}/${recordId}/Attachments`, {
+                          method: 'POST',
+                          headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+                          body: attForm
+                        });
+                      } catch (_) {}
+                    }
+                  }
+                } catch (uploadErr) {
+                  console.error(`[Zoho File Upload Error for ${fName}]`, uploadErr);
+                }
+              }
+
+              if (existingFileId) {
+                fileIds.push(existingFileId);
+              }
+            }
+
+            if (fileIds.length > 0) {
+              const existingZohoFiles = existingZohoRecord?.[item.key] || [];
+              const oldZohoFile = Array.isArray(existingZohoFiles) && existingZohoFiles[0]?.id ? existingZohoFiles[0] : null;
+
+              if (oldZohoFile?.id && oldZohoFile.id !== fileIds[0]) {
+                record[item.key] = [
+                  { id: oldZohoFile.id, _delete: null },
+                  fileIds[0]
+                ];
+              } else {
+                record[item.key] = [fileIds[0]];
+              }
+            }
+          }
+        };
+
+        // File Download Proxy Endpoint (/api/zoho/internal-operations/download)
+        if (pathname === '/api/zoho/internal-operations/download' && req.method === 'GET') {
+          try {
+            const fileId = urlObj.searchParams.get('file_id') || urlObj.searchParams.get('id');
+            const fileName = urlObj.searchParams.get('name') || 'download';
+            const recordId = urlObj.searchParams.get('record_id');
+            const attachmentId = urlObj.searchParams.get('attachment_id');
+            const accessToken = await getAccessToken(env);
+            const opsModuleName = env.VITE_ZOHO_INTERNAL_OPERATIONS_MODULE_NAME || 'Operation_Internal_CRM';
+            const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+
+            if (attachmentId && recordId) {
+              const attRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/${recordId}/Attachments/${attachmentId}`, {
+                headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+              });
+              if (attRes.ok) {
+                const contentType = attRes.headers.get('content-type') || 'application/octet-stream';
+                res.setHeader('Content-Type', contentType);
+                res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+                const buffer = Buffer.from(await attRes.arrayBuffer());
+                return res.end(buffer);
+              }
+            }
+
+            const store = getStoredAllocations();
+            for (const k of Object.keys(store)) {
+              const rec = store[k];
+              const allFiles = [
+                ...(rec.Doc_collection_File_Upload || []),
+                ...(rec.Name_Application_File_Upload || []),
+                ...(rec.Board_Resolution_File_Upload || []),
+                ...(rec.Share_Certificate_File_Upload || []),
+                ...(rec.Application_submission_File_Upload || []),
+                ...(rec.Director_ITR_Company_ITR_File_Upload || []),
+                ...(rec.DPR_Pitch_deck_creation_File_Upload || []),
+                ...(rec.ADT_1_File_Upload || []),
+                ...(rec.INC_20_A_File_Upload || []),
+                ...(rec.Finance_Projected_Financials_File_Upload || [])
+              ];
+              const matched = allFiles.find((f: any) => (f.fileId === fileId || f.id === fileId || f.name === fileName));
+              if (matched?.dataUrl && matched.dataUrl.startsWith('data:')) {
+                const parts = matched.dataUrl.split(';base64,');
+                const mimeType = parts[0].replace('data:', '') || 'application/octet-stream';
+                const buf = Buffer.from(parts[1], 'base64');
+                res.setHeader('Content-Type', mimeType);
+                res.setHeader('Content-Disposition', `attachment; filename="${matched.name || fileName}"`);
+                return res.end(buf);
+              }
+            }
+
+            res.statusCode = 404;
+            return res.end(JSON.stringify({ success: false, message: 'File not found' }));
+          } catch (err: any) {
+            res.statusCode = 500;
+            return res.end(JSON.stringify({ success: false, message: err.message }));
+          }
+        }
+
         // Internal Operations Module Endpoints (/api/zoho/internal-operations)
         if (pathname === '/api/zoho/internal-operations') {
           try {
@@ -2739,6 +2956,7 @@ function zohoApiPlugin(): Plugin {
               const opStage = r.Operation_Stage || r.Stage || '';
               const tlId = r.Team_Leader?.id || r.Team_Leader_ID || r.Team_Leader_TL?.id || (typeof r.Team_Leader_TL === 'string' ? r.Team_Leader_TL : '') || (r.Team_Leader as any)?.zohoId;
               const tmId = r.Team_Member?.id || r.Team_Member_ID || r.Team_Member_TM?.id || (typeof r.Team_Member_TM === 'string' ? r.Team_Member_TM : '') || (r.Team_Member as any)?.zohoId;
+              const tmName = r.Team_Member?.name || r.Team_Member_Name || (typeof r.Team_Member_TM === 'object' ? r.Team_Member_TM?.name : '') || '';
 
               const effectiveTlId = (/^\d{15,}$/.test(String(tlId || '').trim())) ? String(tlId).trim() : (/^\d{15,}$/.test(String((r.Team_Leader as any)?.zohoId || '').trim()) ? String((r.Team_Leader as any)?.zohoId).trim() : '');
               const effectiveTmId = (/^\d{15,}$/.test(String(tmId || '').trim())) ? String(tmId).trim() : (/^\d{15,}$/.test(String((r.Team_Member as any)?.zohoId || '').trim()) ? String((r.Team_Member as any)?.zohoId).trim() : '');
@@ -2763,9 +2981,22 @@ function zohoApiPlugin(): Plugin {
                 ...(isTlNumeric ? {
                   Team_Leader_TL: { id: effectiveTlId }
                 } : {}),
-                ...(isTmNumeric ? {
+                // Tag TM in Zoho CRM so it is visible in Zoho CRM without throwing 400 INVALID_DATA
+                ...(tmName ? { Tag: [{ name: `TM: ${tmName}` }] } : {}),
+                // Only send Team_Member_TM if it points to a Deal (Zoho CRM module schema constraint)
+                ...(isTmNumeric && /^\d{15,}$/.test(String(dealId || '')) && effectiveTmId === String(dealId) ? {
                   Team_Member_TM: { id: effectiveTmId }
                 } : {}),
+                ...(Array.isArray(r.Doc_collection_File_Upload) && r.Doc_collection_File_Upload.length > 0 ? { Doc_collection_File_Upload: r.Doc_collection_File_Upload } : {}),
+                ...(Array.isArray(r.Name_Application_File_Upload) && r.Name_Application_File_Upload.length > 0 ? { Name_Application_File_Upload: r.Name_Application_File_Upload } : {}),
+                ...(Array.isArray(r.Board_Resolution_File_Upload) && r.Board_Resolution_File_Upload.length > 0 ? { Board_Resolution_File_Upload: r.Board_Resolution_File_Upload } : {}),
+                ...(Array.isArray(r.Share_Certificate_File_Upload) && r.Share_Certificate_File_Upload.length > 0 ? { Share_Certificate_File_Upload: r.Share_Certificate_File_Upload } : {}),
+                ...(Array.isArray(r.Application_submission_File_Upload) && r.Application_submission_File_Upload.length > 0 ? { Application_submission_File_Upload: r.Application_submission_File_Upload } : {}),
+                ...(Array.isArray(r.Director_ITR_Company_ITR_File_Upload) && r.Director_ITR_Company_ITR_File_Upload.length > 0 ? { Director_ITR_Company_ITR_File_Upload: r.Director_ITR_Company_ITR_File_Upload } : {}),
+                ...(Array.isArray(r.DPR_Pitch_deck_creation_File_Upload) && r.DPR_Pitch_deck_creation_File_Upload.length > 0 ? { DPR_Pitch_deck_creation_File_Upload: r.DPR_Pitch_deck_creation_File_Upload } : {}),
+                ...(Array.isArray(r.ADT_1_File_Upload) && r.ADT_1_File_Upload.length > 0 ? { ADT_1_File_Upload: r.ADT_1_File_Upload } : {}),
+                ...(Array.isArray(r.INC_20_A_File_Upload) && r.INC_20_A_File_Upload.length > 0 ? { INC_20_A_File_Upload: r.INC_20_A_File_Upload } : {}),
+                ...(Array.isArray(r.Finance_Projected_Financials_File_Upload) && r.Finance_Projected_Financials_File_Upload.length > 0 ? { Finance_Projected_Financials_File_Upload: r.Finance_Projected_Financials_File_Upload } : {}),
                 ...(r.CA_CS1 || r.CA_CS_1 ? { CA_CS_1: r.CA_CS_1 || r.CA_CS1 } : {}),
                 ...(r.CA_CS2 || r.CA_CS_2 ? { CA_CS_2: r.CA_CS_2 || r.CA_CS2 } : {}),
                 ...(r.After_Allocation_Workflow ? { After_Allocation_Workflow: r.After_Allocation_Workflow } : (r.After_Allocation ? { After_Allocation_Workflow: r.After_Allocation } : (r.sectionsData?.afterAllocation ? { After_Allocation_Workflow: r.sectionsData.afterAllocation } : {}))),
@@ -2843,63 +3074,81 @@ function zohoApiPlugin(): Plugin {
             const normalizeZohoOperationRecord = (r: any) => {
               const sectionsData = r.sectionsData ? (typeof r.sectionsData === 'string' ? JSON.parse(r.sectionsData) : { ...r.sectionsData }) : {};
 
-              const docName = r.Doc_collection_name || sectionsData.docCollection?.name || sectionsData.compDocCollection?.name || sectionsData.certDocCollection?.name || '';
-              const docDate = r.Doc_collection_Date || sectionsData.docCollection?.date || sectionsData.compDocCollection?.date || sectionsData.certDocCollection?.date || '';
-              const docStatus = r.Doc_collection_status || sectionsData.docCollection?.status || sectionsData.compDocCollection?.status || sectionsData.certDocCollection?.status || '';
-              const docFiles = r.Doc_collection_File_Upload || sectionsData.docCollection?.files || sectionsData.compDocCollection?.files || sectionsData.certDocCollection?.files || [];
+              const store = getStoredAllocations();
+              const normServiceName = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '');
+              const dealId = r.Parent_Record_Deal?.id || (typeof r.Parent_Record_Deal === 'string' ? r.Parent_Record_Deal : '') || (r.Deal_ID?.id || (typeof r.Deal_ID === 'string' ? r.Deal_ID : '')) || '';
+              const serviceName = r.Name || r.Service_Scheme || '';
+              const normService = normServiceName(serviceName);
+
+              const storeKey = r.id ? String(r.id) : (dealId ? `${dealId}__${normService}` : '');
+              const storedEntry = (r.id && store[String(r.id)]) || (dealId && normService && store[`${dealId}__${normService}`]) || null;
+
+              const mergeFiles = (recFiles: any, secFiles: any, storedFiles: any) => {
+                const list = [
+                  ...(Array.isArray(recFiles) ? recFiles : (recFiles ? [recFiles] : [])),
+                  ...(Array.isArray(secFiles) ? secFiles : (secFiles ? [secFiles] : [])),
+                  ...(Array.isArray(storedFiles) ? storedFiles : (storedFiles ? [storedFiles] : []))
+                ];
+                const seen = new Set();
+                const deduped: any[] = [];
+                for (const f of list) {
+                  if (!f) continue;
+                  const key = typeof f === 'string' ? f : (f.fileId || f.id || f.name);
+                  if (key && !seen.has(key)) {
+                    seen.add(key);
+                    deduped.push(f);
+                  }
+                }
+                return normalizeFileList(deduped);
+              };
+
+              const docName = r.Doc_collection_name || sectionsData.docCollection?.name || sectionsData.compDocCollection?.name || sectionsData.certDocCollection?.name || storedEntry?.Doc_collection_name || '';
+              const docDate = r.Doc_collection_Date || sectionsData.docCollection?.date || sectionsData.compDocCollection?.date || sectionsData.certDocCollection?.date || storedEntry?.Doc_collection_Date || '';
+              const docStatus = r.Doc_collection_status || sectionsData.docCollection?.status || sectionsData.compDocCollection?.status || sectionsData.certDocCollection?.status || storedEntry?.Doc_collection_status || '';
+              const docFiles = mergeFiles(r.Doc_collection_File_Upload, sectionsData.docCollection?.files || sectionsData.compDocCollection?.files || sectionsData.certDocCollection?.files, storedEntry?.Doc_collection_File_Upload);
 
               if (!sectionsData.docCollection) sectionsData.docCollection = {};
               if (docName && !sectionsData.docCollection.name) sectionsData.docCollection.name = docName;
               if (docDate && !sectionsData.docCollection.date) sectionsData.docCollection.date = docDate;
               if (docStatus && !sectionsData.docCollection.status) sectionsData.docCollection.status = docStatus;
-              if (docFiles && (!sectionsData.docCollection.files || sectionsData.docCollection.files.length === 0)) {
-                sectionsData.docCollection.files = docFiles;
-              }
+              sectionsData.docCollection.files = docFiles;
 
               if (!sectionsData.compDocCollection) sectionsData.compDocCollection = {};
               if (docName && !sectionsData.compDocCollection.name) sectionsData.compDocCollection.name = docName;
               if (docDate && !sectionsData.compDocCollection.date) sectionsData.compDocCollection.date = docDate;
               if (docStatus && !sectionsData.compDocCollection.status) sectionsData.compDocCollection.status = docStatus;
-              if (docFiles && (!sectionsData.compDocCollection.files || sectionsData.compDocCollection.files.length === 0)) {
-                sectionsData.compDocCollection.files = docFiles;
-              }
+              sectionsData.compDocCollection.files = docFiles;
 
               if (!sectionsData.certDocCollection) sectionsData.certDocCollection = {};
               if (docName && !sectionsData.certDocCollection.name) sectionsData.certDocCollection.name = docName;
               if (docDate && !sectionsData.certDocCollection.date) sectionsData.certDocCollection.date = docDate;
               if (docStatus && !sectionsData.certDocCollection.status) sectionsData.certDocCollection.status = docStatus;
-              if (docFiles && (!sectionsData.certDocCollection.files || sectionsData.certDocCollection.files.length === 0)) {
-                sectionsData.certDocCollection.files = docFiles;
-              }
+              sectionsData.certDocCollection.files = docFiles;
 
               // Map Name Application / Accounting fields
-              const nameAppName = r.Name_Application_name || sectionsData.nameApp?.name || sectionsData.accounting?.name || '';
-              const nameAppApprovedName = r.Name_Application_approved_name || sectionsData.nameApp?.approvedName || '';
-              const nameAppDate = r.Name_Application_date || sectionsData.nameApp?.date || sectionsData.accounting?.date || '';
-              const nameAppStatus = r.Name_Application_status || sectionsData.nameApp?.status || sectionsData.accounting?.status || '';
-              const nameAppFiles = r.Name_Application_File_Upload || sectionsData.nameApp?.files || sectionsData.accounting?.files || [];
+              const nameAppName = r.Name_Application_name || sectionsData.nameApp?.name || sectionsData.accounting?.name || storedEntry?.Name_Application_name || '';
+              const nameAppApprovedName = r.Name_Application_approved_name || sectionsData.nameApp?.approvedName || storedEntry?.Name_Application_approved_name || '';
+              const nameAppDate = r.Name_Application_date || sectionsData.nameApp?.date || sectionsData.accounting?.date || storedEntry?.Name_Application_date || '';
+              const nameAppStatus = r.Name_Application_status || sectionsData.nameApp?.status || sectionsData.accounting?.status || storedEntry?.Name_Application_status || '';
+              const nameAppFiles = mergeFiles(r.Name_Application_File_Upload, sectionsData.nameApp?.files || sectionsData.accounting?.files, storedEntry?.Name_Application_File_Upload);
 
               if (!sectionsData.nameApp) sectionsData.nameApp = {};
               if (nameAppName && !sectionsData.nameApp.name) sectionsData.nameApp.name = nameAppName;
               if (nameAppApprovedName && !sectionsData.nameApp.approvedName) sectionsData.nameApp.approvedName = nameAppApprovedName;
               if (nameAppDate && !sectionsData.nameApp.date) sectionsData.nameApp.date = nameAppDate;
               if (nameAppStatus && !sectionsData.nameApp.status) sectionsData.nameApp.status = nameAppStatus;
-              if (nameAppFiles && (!sectionsData.nameApp.files || sectionsData.nameApp.files.length === 0)) {
-                sectionsData.nameApp.files = nameAppFiles;
-              }
+              sectionsData.nameApp.files = nameAppFiles;
 
               if (!sectionsData.accounting) sectionsData.accounting = {};
               if (nameAppName && !sectionsData.accounting.name) sectionsData.accounting.name = nameAppName;
               if (nameAppDate && !sectionsData.accounting.date) sectionsData.accounting.date = nameAppDate;
               if (nameAppStatus && !sectionsData.accounting.status) sectionsData.accounting.status = nameAppStatus;
-              if (nameAppFiles && (!sectionsData.accounting.files || sectionsData.accounting.files.length === 0)) {
-                sectionsData.accounting.files = nameAppFiles;
-              }
+              sectionsData.accounting.files = nameAppFiles;
 
               // Map DSC Creation fields
-              const dscName = r.DSC_Creation_name || sectionsData.dscCreation?.name || '';
-              const dscDate = r.DSC_Creation_Date || sectionsData.dscCreation?.date || '';
-              const dscStatus = r.DSC_Creation_status || sectionsData.dscCreation?.status || '';
+              const dscName = r.DSC_Creation_name || sectionsData.dscCreation?.name || storedEntry?.DSC_Creation_name || '';
+              const dscDate = r.DSC_Creation_Date || sectionsData.dscCreation?.date || storedEntry?.DSC_Creation_Date || '';
+              const dscStatus = r.DSC_Creation_status || sectionsData.dscCreation?.status || storedEntry?.DSC_Creation_status || '';
 
               if (!sectionsData.dscCreation) sectionsData.dscCreation = {};
               if (dscName && !sectionsData.dscCreation.name) sectionsData.dscCreation.name = dscName;
@@ -2907,11 +3156,11 @@ function zohoApiPlugin(): Plugin {
               if (dscStatus && !sectionsData.dscCreation.status) sectionsData.dscCreation.status = dscStatus;
 
               // Map Final Filing fields
-              const finalFilingName = r.Final_Filing_name || sectionsData.finalFiling?.name || '';
-              const finalFilingApprovalName = r.Final_Filing_Final_Approval_Name || sectionsData.finalFiling?.finalApprovalName || '';
-              const finalFilingDate = r.Final_Filing_Date || sectionsData.finalFiling?.date || '';
-              const finalFilingDoiDate = r.Final_Filing_DOI_Date || sectionsData.finalFiling?.doiDate || '';
-              const finalFilingStatus = r.Final_Filing_status || sectionsData.finalFiling?.status || '';
+              const finalFilingName = r.Final_Filing_name || sectionsData.finalFiling?.name || storedEntry?.Final_Filing_name || '';
+              const finalFilingApprovalName = r.Final_Filing_Final_Approval_Name || sectionsData.finalFiling?.finalApprovalName || storedEntry?.Final_Filing_Final_Approval_Name || '';
+              const finalFilingDate = r.Final_Filing_Date || sectionsData.finalFiling?.date || storedEntry?.Final_Filing_Date || '';
+              const finalFilingDoiDate = r.Final_Filing_DOI_Date || sectionsData.finalFiling?.doiDate || storedEntry?.Final_Filing_DOI_Date || '';
+              const finalFilingStatus = r.Final_Filing_status || sectionsData.finalFiling?.status || storedEntry?.Final_Filing_status || '';
 
               if (!sectionsData.finalFiling) sectionsData.finalFiling = {};
               if (finalFilingName && !sectionsData.finalFiling.name) sectionsData.finalFiling.name = finalFilingName;
@@ -2921,187 +3170,153 @@ function zohoApiPlugin(): Plugin {
               if (finalFilingStatus && !sectionsData.finalFiling.status) sectionsData.finalFiling.status = finalFilingStatus;
 
               // Map Board Resolution / Audit fields
-              const brName = r.Board_Resolution_name || sectionsData.boardResolution?.name || sectionsData.audit?.name || '';
-              const brDate = r.Board_Resolution_Date || sectionsData.boardResolution?.date || sectionsData.audit?.date || '';
-              const brStatus = r.Board_Resolution_status || sectionsData.boardResolution?.status || sectionsData.audit?.status || '';
-              const brFiles = r.Board_Resolution_File_Upload || sectionsData.boardResolution?.files || sectionsData.audit?.files || [];
+              const brName = r.Board_Resolution_name || sectionsData.boardResolution?.name || sectionsData.audit?.name || storedEntry?.Board_Resolution_name || '';
+              const brDate = r.Board_Resolution_Date || sectionsData.boardResolution?.date || sectionsData.audit?.date || storedEntry?.Board_Resolution_Date || '';
+              const brStatus = r.Board_Resolution_status || sectionsData.boardResolution?.status || sectionsData.audit?.status || storedEntry?.Board_Resolution_status || '';
+              const brFiles = mergeFiles(r.Board_Resolution_File_Upload, sectionsData.boardResolution?.files || sectionsData.audit?.files, storedEntry?.Board_Resolution_File_Upload);
 
               if (!sectionsData.boardResolution) sectionsData.boardResolution = {};
               if (brName && !sectionsData.boardResolution.name) sectionsData.boardResolution.name = brName;
               if (brDate && !sectionsData.boardResolution.date) sectionsData.boardResolution.date = brDate;
               if (brStatus && !sectionsData.boardResolution.status) sectionsData.boardResolution.status = brStatus;
-              if (brFiles && (!sectionsData.boardResolution.files || sectionsData.boardResolution.files.length === 0)) {
-                sectionsData.boardResolution.files = brFiles;
-              }
+              sectionsData.boardResolution.files = brFiles;
 
               if (!sectionsData.audit) sectionsData.audit = {};
               if (brName && !sectionsData.audit.name) sectionsData.audit.name = brName;
               if (brDate && !sectionsData.audit.date) sectionsData.audit.date = brDate;
               if (brStatus && !sectionsData.audit.status) sectionsData.audit.status = brStatus;
-              if (brFiles && (!sectionsData.audit.files || sectionsData.audit.files.length === 0)) {
-                sectionsData.audit.files = brFiles;
-              }
+              sectionsData.audit.files = brFiles;
 
               // Map 2-Share Certificate / MGT-7 / 7A fields
-              const scName = r.Share_Certificate_name || sectionsData.shareCertificate?.name || sectionsData.mgt7?.name || '';
-              const scDate = r.Share_Certificate_Date || sectionsData.shareCertificate?.date || sectionsData.mgt7?.date || '';
-              const scStatus = r.Share_Certificate_status || sectionsData.shareCertificate?.status || sectionsData.mgt7?.status || '';
-              const scFiles = r.Share_Certificate_File_Upload || sectionsData.shareCertificate?.files || sectionsData.mgt7?.files || [];
+              const scName = r.Share_Certificate_name || sectionsData.shareCertificate?.name || sectionsData.mgt7?.name || storedEntry?.Share_Certificate_name || '';
+              const scDate = r.Share_Certificate_Date || sectionsData.shareCertificate?.date || sectionsData.mgt7?.date || storedEntry?.Share_Certificate_Date || '';
+              const scStatus = r.Share_Certificate_status || sectionsData.shareCertificate?.status || sectionsData.mgt7?.status || storedEntry?.Share_Certificate_status || '';
+              const scFiles = mergeFiles(r.Share_Certificate_File_Upload, sectionsData.shareCertificate?.files || sectionsData.mgt7?.files, storedEntry?.Share_Certificate_File_Upload);
 
               if (!sectionsData.shareCertificate) sectionsData.shareCertificate = {};
               if (scName && !sectionsData.shareCertificate.name) sectionsData.shareCertificate.name = scName;
               if (scDate && !sectionsData.shareCertificate.date) sectionsData.shareCertificate.date = scDate;
               if (scStatus && !sectionsData.shareCertificate.status) sectionsData.shareCertificate.status = scStatus;
-              if (scFiles && (!sectionsData.shareCertificate.files || sectionsData.shareCertificate.files.length === 0)) {
-                sectionsData.shareCertificate.files = scFiles;
-              }
+              sectionsData.shareCertificate.files = scFiles;
 
               if (!sectionsData.mgt7) sectionsData.mgt7 = {};
               if (scName && !sectionsData.mgt7.name) sectionsData.mgt7.name = scName;
               if (scDate && !sectionsData.mgt7.date) sectionsData.mgt7.date = scDate;
               if (scStatus && !sectionsData.mgt7.status) sectionsData.mgt7.status = scStatus;
-              if (scFiles && (!sectionsData.mgt7.files || sectionsData.mgt7.files.length === 0)) {
-                sectionsData.mgt7.files = scFiles;
-              }
+              sectionsData.mgt7.files = scFiles;
 
               // Map MSME Certificate fields
-              const msmeDate = r.MSME_Certificate_Date || sectionsData.msmeCertificate?.date || sectionsData.msmeCertificateLlp?.date || '';
-              const msmeStatus = r.MSME_Certificate_status || sectionsData.msmeCertificate?.status || sectionsData.msmeCertificateLlp?.status || '';
-              const msmeFileVal = r.MSME_Certificate || sectionsData.msmeCertificate?.fileUpload || sectionsData.msmeCertificateLlp?.fileUpload || '';
-              const msmeFiles = r.MSME_Certificate_File_Upload || sectionsData.msmeCertificate?.files || sectionsData.msmeCertificateLlp?.files || (msmeFileVal ? [{ name: msmeFileVal, url: msmeFileVal }] : []);
+              const msmeDate = r.MSME_Certificate_Date || sectionsData.msmeCertificate?.date || sectionsData.msmeCertificateLlp?.date || storedEntry?.MSME_Certificate_Date || '';
+              const msmeStatus = r.MSME_Certificate_status || sectionsData.msmeCertificate?.status || sectionsData.msmeCertificateLlp?.status || storedEntry?.MSME_Certificate_status || '';
+              const msmeFileVal = r.MSME_Certificate || sectionsData.msmeCertificate?.fileUpload || sectionsData.msmeCertificateLlp?.fileUpload || storedEntry?.MSME_Certificate || '';
+              const msmeFiles = mergeFiles(r.MSME_Certificate_File_Upload, sectionsData.msmeCertificate?.files || sectionsData.msmeCertificateLlp?.files, storedEntry?.MSME_Certificate_File_Upload);
 
               if (!sectionsData.msmeCertificate) sectionsData.msmeCertificate = {};
               if (msmeDate && !sectionsData.msmeCertificate.date) sectionsData.msmeCertificate.date = msmeDate;
               if (msmeStatus && !sectionsData.msmeCertificate.status) sectionsData.msmeCertificate.status = msmeStatus;
-              if (msmeFiles && (!sectionsData.msmeCertificate.files || sectionsData.msmeCertificate.files.length === 0)) {
-                sectionsData.msmeCertificate.files = msmeFiles;
-              }
+              sectionsData.msmeCertificate.files = msmeFiles;
 
               if (!sectionsData.msmeCertificateLlp) sectionsData.msmeCertificateLlp = {};
               if (msmeDate && !sectionsData.msmeCertificateLlp.date) sectionsData.msmeCertificateLlp.date = msmeDate;
               if (msmeStatus && !sectionsData.msmeCertificateLlp.status) sectionsData.msmeCertificateLlp.status = msmeStatus;
-              if (msmeFiles && (!sectionsData.msmeCertificateLlp.files || sectionsData.msmeCertificateLlp.files.length === 0)) {
-                sectionsData.msmeCertificateLlp.files = msmeFiles;
-              }
+              sectionsData.msmeCertificateLlp.files = msmeFiles;
 
               // Map AOC-4 fields
-              const aoc4Name = r.AOC_4_name || sectionsData.aoc4?.name || '';
-              const aoc4DirectorAudit = r.AOC_4_Director_Audit_report || sectionsData.aoc4?.directorAuditReport || '';
+              const aoc4Name = r.AOC_4_name || sectionsData.aoc4?.name || storedEntry?.AOC_4_name || '';
+              const aoc4DirectorAudit = r.AOC_4_Director_Audit_report || sectionsData.aoc4?.directorAuditReport || storedEntry?.AOC_4_Director_Audit_report || '';
 
               if (!sectionsData.aoc4) sectionsData.aoc4 = {};
               if (aoc4Name && !sectionsData.aoc4.name) sectionsData.aoc4.name = aoc4Name;
               if (aoc4DirectorAudit && !sectionsData.aoc4.directorAuditReport) sectionsData.aoc4.directorAuditReport = aoc4DirectorAudit;
               if (msmeDate && !sectionsData.aoc4.date) sectionsData.aoc4.date = msmeDate;
               if (msmeStatus && !sectionsData.aoc4.status) sectionsData.aoc4.status = msmeStatus;
-              if (msmeFiles && (!sectionsData.aoc4.files || sectionsData.aoc4.files.length === 0)) {
-                sectionsData.aoc4.files = msmeFiles;
-              }
+              sectionsData.aoc4.files = msmeFiles;
 
               // Map DPR / Pitch deck creation / INC fields
-              const dprName = r.DPR_Pitch_deck_creation_name || sectionsData.dprCreation?.name || sectionsData.compInc?.name || sectionsData.inc?.name || '';
-              const dprDate = r.DPR_Pitch_deck_creation_Date || sectionsData.dprCreation?.date || sectionsData.compInc?.date || sectionsData.inc?.date || '';
-              const dprStatus = r.DPR_Pitch_deck_creation_status || sectionsData.dprCreation?.status || sectionsData.compInc?.status || sectionsData.inc?.status || '';
-              const dprFiles = r.DPR_Pitch_deck_creation_File_Upload || r.DPR_Pitch_deck_creation_File_U || sectionsData.dprCreation?.files || sectionsData.compInc?.files || sectionsData.inc?.files || [];
+              const dprName = r.DPR_Pitch_deck_creation_name || sectionsData.dprCreation?.name || sectionsData.compInc?.name || sectionsData.inc?.name || storedEntry?.DPR_Pitch_deck_creation_name || '';
+              const dprDate = r.DPR_Pitch_deck_creation_Date || sectionsData.dprCreation?.date || sectionsData.compInc?.date || sectionsData.inc?.date || storedEntry?.DPR_Pitch_deck_creation_Date || '';
+              const dprStatus = r.DPR_Pitch_deck_creation_status || sectionsData.dprCreation?.status || sectionsData.compInc?.status || sectionsData.inc?.status || storedEntry?.DPR_Pitch_deck_creation_status || '';
+              const dprFiles = mergeFiles(r.DPR_Pitch_deck_creation_File_Upload || r.DPR_Pitch_deck_creation_File_U, sectionsData.dprCreation?.files || sectionsData.compInc?.files || sectionsData.inc?.files, storedEntry?.DPR_Pitch_deck_creation_File_Upload);
 
               if (!sectionsData.dprCreation) sectionsData.dprCreation = {};
               if (dprName && !sectionsData.dprCreation.name) sectionsData.dprCreation.name = dprName;
               if (dprDate && !sectionsData.dprCreation.date) sectionsData.dprCreation.date = dprDate;
               if (dprStatus && !sectionsData.dprCreation.status) sectionsData.dprCreation.status = dprStatus;
-              if (dprFiles && (!sectionsData.dprCreation.files || sectionsData.dprCreation.files.length === 0)) {
-                sectionsData.dprCreation.files = dprFiles;
-              }
+              sectionsData.dprCreation.files = dprFiles;
 
               if (!sectionsData.compInc) sectionsData.compInc = {};
               if (dprName && !sectionsData.compInc.name) sectionsData.compInc.name = dprName;
               if (dprDate && !sectionsData.compInc.date) sectionsData.compInc.date = dprDate;
               if (dprStatus && !sectionsData.compInc.status) sectionsData.compInc.status = dprStatus;
-              if (dprFiles && (!sectionsData.compInc.files || sectionsData.compInc.files.length === 0)) {
-                sectionsData.compInc.files = dprFiles;
-              }
+              sectionsData.compInc.files = dprFiles;
 
               if (!sectionsData.inc) sectionsData.inc = {};
               if (dprName && !sectionsData.inc.name) sectionsData.inc.name = dprName;
               if (dprDate && !sectionsData.inc.date) sectionsData.inc.date = dprDate;
               if (dprStatus && !sectionsData.inc.status) sectionsData.inc.status = dprStatus;
-              if (dprFiles && (!sectionsData.inc.files || sectionsData.inc.files.length === 0)) {
-                sectionsData.inc.files = dprFiles;
-              }
+              sectionsData.inc.files = dprFiles;
 
               // Map ADT-1 fields
-              const adt1Name = r.ADT_1_name || sectionsData.adt1?.name || sectionsData.compAdt1?.name || '';
-              const adt1Auditor = r.ADT_1_Auditor_name || sectionsData.adt1?.auditorName || '';
-              const adt1Date = r.ADT_1_date || sectionsData.adt1?.date || sectionsData.compAdt1?.date || '';
-              const adt1Status = r.ADT_1_status || sectionsData.adt1?.status || sectionsData.compAdt1?.status || '';
-              const adt1Files = r.ADT_1_File_Upload || sectionsData.adt1?.files || sectionsData.compAdt1?.files || [];
+              const adt1Name = r.ADT_1_name || sectionsData.adt1?.name || sectionsData.compAdt1?.name || storedEntry?.ADT_1_name || '';
+              const adt1Auditor = r.ADT_1_Auditor_name || sectionsData.adt1?.auditorName || storedEntry?.ADT_1_Auditor_name || '';
+              const adt1Date = r.ADT_1_date || sectionsData.adt1?.date || sectionsData.compAdt1?.date || storedEntry?.ADT_1_date || '';
+              const adt1Status = r.ADT_1_status || sectionsData.adt1?.status || sectionsData.compAdt1?.status || storedEntry?.ADT_1_status || '';
+              const adt1Files = mergeFiles(r.ADT_1_File_Upload, sectionsData.adt1?.files || sectionsData.compAdt1?.files, storedEntry?.ADT_1_File_Upload);
 
               if (!sectionsData.adt1) sectionsData.adt1 = {};
               if (adt1Name && !sectionsData.adt1.name) sectionsData.adt1.name = adt1Name;
               if (adt1Auditor && !sectionsData.adt1.auditorName) sectionsData.adt1.auditorName = adt1Auditor;
               if (adt1Date && !sectionsData.adt1.date) sectionsData.adt1.date = adt1Date;
               if (adt1Status && !sectionsData.adt1.status) sectionsData.adt1.status = adt1Status;
-              if (adt1Files && (!sectionsData.adt1.files || sectionsData.adt1.files.length === 0)) {
-                sectionsData.adt1.files = adt1Files;
-              }
+              sectionsData.adt1.files = adt1Files;
 
               if (!sectionsData.compAdt1) sectionsData.compAdt1 = {};
               if (adt1Name && !sectionsData.compAdt1.name) sectionsData.compAdt1.name = adt1Name;
               if (adt1Date && !sectionsData.compAdt1.date) sectionsData.compAdt1.date = adt1Date;
               if (adt1Status && !sectionsData.compAdt1.status) sectionsData.compAdt1.status = adt1Status;
-              if (adt1Files && (!sectionsData.compAdt1.files || sectionsData.compAdt1.files.length === 0)) {
-                sectionsData.compAdt1.files = adt1Files;
-              }
+              sectionsData.compAdt1.files = adt1Files;
 
               // Map INC 20-A / DPT 3 fields
-              const inc20AName = r.INC_20_A_name || sectionsData.inc20A?.name || sectionsData.dpt3?.name || '';
-              const inc20ADate = r.INC_20_A_Date || sectionsData.inc20A?.date || sectionsData.dpt3?.date || '';
-              const inc20AStatus = r.INC_20_A_status || sectionsData.inc20A?.status || sectionsData.dpt3?.status || '';
-              const inc20AFiles = r.INC_20_A_File_Upload || sectionsData.inc20A?.files || sectionsData.dpt3?.files || [];
+              const inc20AName = r.INC_20_A_name || sectionsData.inc20A?.name || sectionsData.dpt3?.name || storedEntry?.INC_20_A_name || '';
+              const inc20ADate = r.INC_20_A_Date || sectionsData.inc20A?.date || sectionsData.dpt3?.date || storedEntry?.INC_20_A_Date || '';
+              const inc20AStatus = r.INC_20_A_status || sectionsData.inc20A?.status || sectionsData.dpt3?.status || storedEntry?.INC_20_A_status || '';
+              const inc20AFiles = mergeFiles(r.INC_20_A_File_Upload, sectionsData.inc20A?.files || sectionsData.dpt3?.files, storedEntry?.INC_20_A_File_Upload);
 
               if (!sectionsData.inc20A) sectionsData.inc20A = {};
               if (inc20AName && !sectionsData.inc20A.name) sectionsData.inc20A.name = inc20AName;
               if (inc20ADate && !sectionsData.inc20A.date) sectionsData.inc20A.date = inc20ADate;
               if (inc20AStatus && !sectionsData.inc20A.status) sectionsData.inc20A.status = inc20AStatus;
-              if (inc20AFiles && (!sectionsData.inc20A.files || sectionsData.inc20A.files.length === 0)) {
-                sectionsData.inc20A.files = inc20AFiles;
-              }
+              sectionsData.inc20A.files = inc20AFiles;
 
               if (!sectionsData.dpt3) sectionsData.dpt3 = {};
               if (inc20AName && !sectionsData.dpt3.name) sectionsData.dpt3.name = inc20AName;
               if (inc20ADate && !sectionsData.dpt3.date) sectionsData.dpt3.date = inc20ADate;
               if (inc20AStatus && !sectionsData.dpt3.status) sectionsData.dpt3.status = inc20AStatus;
-              if (inc20AFiles && (!sectionsData.dpt3.files || sectionsData.dpt3.files.length === 0)) {
-                sectionsData.dpt3.files = inc20AFiles;
-              }
+              sectionsData.dpt3.files = inc20AFiles;
 
               // Map Form 3 (Finance / Projected Financials) fields
-              const form3Name = r.Finance_Projected_Financials_name || sectionsData.form3?.name || sectionsData.compForm3?.name || sectionsData.fundingFinance?.name || '';
-              const form3Date = r.Finance_Projected_Financials_Date || sectionsData.form3?.date || sectionsData.compForm3?.date || sectionsData.fundingFinance?.date || '';
-              const form3Status = r.Finance_Projected_Financials_Status || sectionsData.form3?.status || sectionsData.compForm3?.status || sectionsData.fundingFinance?.status || '';
-              const form3Files = r.Finance_Projected_Financials_File_Upload || sectionsData.form3?.files || sectionsData.compForm3?.files || sectionsData.fundingFinance?.files || [];
+              const form3Name = r.Finance_Projected_Financials_name || sectionsData.form3?.name || sectionsData.compForm3?.name || sectionsData.fundingFinance?.name || storedEntry?.Finance_Projected_Financials_name || '';
+              const form3Date = r.Finance_Projected_Financials_Date || sectionsData.form3?.date || sectionsData.compForm3?.date || sectionsData.fundingFinance?.date || storedEntry?.Finance_Projected_Financials_Date || '';
+              const form3Status = r.Finance_Projected_Financials_Status || sectionsData.form3?.status || sectionsData.compForm3?.status || sectionsData.fundingFinance?.status || storedEntry?.Finance_Projected_Financials_Status || '';
+              const form3Files = mergeFiles(r.Finance_Projected_Financials_File_Upload, sectionsData.form3?.files || sectionsData.compForm3?.files || sectionsData.fundingFinance?.files, storedEntry?.Finance_Projected_Financials_File_Upload);
 
               if (!sectionsData.form3) sectionsData.form3 = {};
               if (form3Name && !sectionsData.form3.name) sectionsData.form3.name = form3Name;
               if (form3Date && !sectionsData.form3.date) sectionsData.form3.date = form3Date;
               if (form3Status && !sectionsData.form3.status) sectionsData.form3.status = form3Status;
-              if (form3Files && (!sectionsData.form3.files || sectionsData.form3.files.length === 0)) {
-                sectionsData.form3.files = form3Files;
-              }
+              sectionsData.form3.files = form3Files;
 
               if (!sectionsData.compForm3) sectionsData.compForm3 = {};
               if (form3Name && !sectionsData.compForm3.name) sectionsData.compForm3.name = form3Name;
               if (form3Date && !sectionsData.compForm3.date) sectionsData.compForm3.date = form3Date;
               if (form3Status && !sectionsData.compForm3.status) sectionsData.compForm3.status = form3Status;
-              if (form3Files && (!sectionsData.compForm3.files || sectionsData.compForm3.files.length === 0)) {
-                sectionsData.compForm3.files = form3Files;
-              }
+              sectionsData.compForm3.files = form3Files;
 
               if (!sectionsData.fundingFinance) sectionsData.fundingFinance = {};
               if (form3Name && !sectionsData.fundingFinance.name) sectionsData.fundingFinance.name = form3Name;
               if (form3Date && !sectionsData.fundingFinance.date) sectionsData.fundingFinance.date = form3Date;
               if (form3Status && !sectionsData.fundingFinance.status) sectionsData.fundingFinance.status = form3Status;
-              if (form3Files && (!sectionsData.fundingFinance.files || sectionsData.fundingFinance.files.length === 0)) {
-                sectionsData.fundingFinance.files = form3Files;
-              }
+              sectionsData.fundingFinance.files = form3Files;
 
               // Map LLP Agreement / Application Submission fields
               const isFundingRec = (r.Internal_Team_Type || '').toLowerCase().includes('funding');
@@ -3110,29 +3325,25 @@ function zohoApiPlugin(): Plugin {
               const appSubObj = sectionsData.appSubmission || {};
               const llpObj = sectionsData.llpAgreement || {};
 
-              const llpName = r.Application_submission_name || (isCertificationRec ? certAppObj.name : isFundingRec ? appSubObj.name : llpObj.name) || certAppObj.name || appSubObj.name || llpObj.name || '';
-              const llpDate = r.Application_submission_Submission_Date || (isCertificationRec ? certAppObj.date : isFundingRec ? appSubObj.date : llpObj.date) || certAppObj.date || appSubObj.date || llpObj.date || '';
-              const llpStatus = r.Application_submission_status || (isCertificationRec ? certAppObj.status : isFundingRec ? appSubObj.status : llpObj.status) || certAppObj.status || appSubObj.status || llpObj.status || '';
-              const llpFiles = r.Application_submission_File_Upload || (isCertificationRec ? certAppObj.files : isFundingRec ? appSubObj.files : llpObj.files) || certAppObj.files || appSubObj.files || llpObj.files || [];
-              const appSubVal = r.Application_submission || appSubObj.registrationNumber || appSubObj.applicationSubmission || '';
-              const appPortalId = r.Application_submission_Portal_User_ID || appSubObj.portalId || '';
-              const appPortalPwd = r.Application_submission_Portal_Password || appSubObj.portalPassword || '';
+              const llpName = r.Application_submission_name || (isCertificationRec ? certAppObj.name : isFundingRec ? appSubObj.name : llpObj.name) || certAppObj.name || appSubObj.name || llpObj.name || storedEntry?.Application_submission_name || '';
+              const llpDate = r.Application_submission_Submission_Date || (isCertificationRec ? certAppObj.date : isFundingRec ? appSubObj.date : llpObj.date) || certAppObj.date || appSubObj.date || llpObj.date || storedEntry?.Application_submission_Submission_Date || '';
+              const llpStatus = r.Application_submission_status || (isCertificationRec ? certAppObj.status : isFundingRec ? appSubObj.status : llpObj.status) || certAppObj.status || appSubObj.status || llpObj.status || storedEntry?.Application_submission_status || '';
+              const llpFiles = mergeFiles(r.Application_submission_File_Upload, (isCertificationRec ? certAppObj.files : isFundingRec ? appSubObj.files : llpObj.files) || certAppObj.files || appSubObj.files || llpObj.files, storedEntry?.Application_submission_File_Upload);
+              const appSubVal = r.Application_submission || appSubObj.registrationNumber || appSubObj.applicationSubmission || storedEntry?.Application_submission || '';
+              const appPortalId = r.Application_submission_Portal_User_ID || appSubObj.portalId || storedEntry?.Application_submission_Portal_User_ID || '';
+              const appPortalPwd = r.Application_submission_Portal_Password || appSubObj.portalPassword || storedEntry?.Application_submission_Portal_Password || '';
 
               if (!sectionsData.llpAgreement) sectionsData.llpAgreement = {};
               if (llpName && !sectionsData.llpAgreement.name) sectionsData.llpAgreement.name = llpName;
               if (llpDate && !sectionsData.llpAgreement.date) sectionsData.llpAgreement.date = llpDate;
               if (llpStatus && !sectionsData.llpAgreement.status) sectionsData.llpAgreement.status = llpStatus;
-              if (llpFiles && (!sectionsData.llpAgreement.files || sectionsData.llpAgreement.files.length === 0)) {
-                sectionsData.llpAgreement.files = llpFiles;
-              }
+              sectionsData.llpAgreement.files = llpFiles;
 
               if (!sectionsData.appSubmission) sectionsData.appSubmission = {};
               if (llpName && !sectionsData.appSubmission.name) sectionsData.appSubmission.name = llpName;
               if (llpDate && !sectionsData.appSubmission.date) sectionsData.appSubmission.date = llpDate;
               if (llpStatus && !sectionsData.appSubmission.status) sectionsData.appSubmission.status = llpStatus;
-              if (llpFiles && (!sectionsData.appSubmission.files || sectionsData.appSubmission.files.length === 0)) {
-                sectionsData.appSubmission.files = llpFiles;
-              }
+              sectionsData.appSubmission.files = llpFiles;
               if (appSubVal && !sectionsData.appSubmission.registrationNumber) sectionsData.appSubmission.registrationNumber = appSubVal;
               if (appPortalId && !sectionsData.appSubmission.portalId) sectionsData.appSubmission.portalId = appPortalId;
               if (appPortalPwd && !sectionsData.appSubmission.portalPassword) sectionsData.appSubmission.portalPassword = appPortalPwd;
@@ -3141,26 +3352,22 @@ function zohoApiPlugin(): Plugin {
               if (llpName && !sectionsData.certFinalApp.name) sectionsData.certFinalApp.name = llpName;
               if (llpDate && !sectionsData.certFinalApp.date) sectionsData.certFinalApp.date = llpDate;
               if (llpStatus && !sectionsData.certFinalApp.status) sectionsData.certFinalApp.status = llpStatus;
-              if (llpFiles && (!sectionsData.certFinalApp.files || sectionsData.certFinalApp.files.length === 0)) {
-                sectionsData.certFinalApp.files = llpFiles;
-              }
+              sectionsData.certFinalApp.files = llpFiles;
 
               // Map Director ITR & Company ITR fields
               const isCompanyItrService = (r.Service_Scheme || '').toLowerCase().includes('company itr');
-              const itrName = r.Director_ITR_Company_ITR_name || (isCompanyItrService ? sectionsData.companyItr?.name : sectionsData.directorItr?.name) || sectionsData.directorItr?.name || sectionsData.companyItr?.name || '';
-              const itrDate = r.Director_ITR_Company_ITR_Date || (isCompanyItrService ? sectionsData.companyItr?.date : sectionsData.directorItr?.date) || sectionsData.directorItr?.date || sectionsData.companyItr?.date || '';
-              const itrStatus = r.Director_ITR_Company_ITR_status || (isCompanyItrService ? sectionsData.companyItr?.status : sectionsData.directorItr?.status) || sectionsData.directorItr?.status || sectionsData.companyItr?.status || '';
-              const itrFiles = r.Director_ITR_Company_ITR_File_Upload || (isCompanyItrService ? sectionsData.companyItr?.files : sectionsData.directorItr?.files) || sectionsData.directorItr?.files || sectionsData.companyItr?.files || [];
-              const itrDocCollection = r.Director_ITR_Doc_collection || sectionsData.directorItr?.docCollection || '';
-              const itrFileRequired = r.Director_ITR_File_required || sectionsData.directorItr?.fileRequired || '';
+              const itrName = r.Director_ITR_Company_ITR_name || (isCompanyItrService ? sectionsData.companyItr?.name : sectionsData.directorItr?.name) || sectionsData.directorItr?.name || sectionsData.companyItr?.name || storedEntry?.Director_ITR_Company_ITR_name || '';
+              const itrDate = r.Director_ITR_Company_ITR_Date || (isCompanyItrService ? sectionsData.companyItr?.date : sectionsData.directorItr?.date) || sectionsData.directorItr?.date || sectionsData.companyItr?.date || storedEntry?.Director_ITR_Company_ITR_Date || '';
+              const itrStatus = r.Director_ITR_Company_ITR_status || (isCompanyItrService ? sectionsData.companyItr?.status : sectionsData.directorItr?.status) || sectionsData.directorItr?.status || sectionsData.companyItr?.status || storedEntry?.Director_ITR_Company_ITR_status || '';
+              const itrFiles = mergeFiles(r.Director_ITR_Company_ITR_File_Upload, (isCompanyItrService ? sectionsData.companyItr?.files : sectionsData.directorItr?.files) || sectionsData.directorItr?.files || sectionsData.companyItr?.files, storedEntry?.Director_ITR_Company_ITR_File_Upload);
+              const itrDocCollection = r.Director_ITR_Doc_collection || sectionsData.directorItr?.docCollection || storedEntry?.Director_ITR_Doc_collection || '';
+              const itrFileRequired = r.Director_ITR_File_required || sectionsData.directorItr?.fileRequired || storedEntry?.Director_ITR_File_required || '';
 
               if (!sectionsData.directorItr) sectionsData.directorItr = {};
               if (itrName && !sectionsData.directorItr.name) sectionsData.directorItr.name = itrName;
               if (itrDate && !sectionsData.directorItr.date) sectionsData.directorItr.date = itrDate;
               if (itrStatus && !sectionsData.directorItr.status) sectionsData.directorItr.status = itrStatus;
-              if (itrFiles && (!sectionsData.directorItr.files || sectionsData.directorItr.files.length === 0)) {
-                sectionsData.directorItr.files = itrFiles;
-              }
+              sectionsData.directorItr.files = itrFiles;
               if (itrDocCollection && !sectionsData.directorItr.docCollection) sectionsData.directorItr.docCollection = itrDocCollection;
               if (itrFileRequired && !sectionsData.directorItr.fileRequired) sectionsData.directorItr.fileRequired = itrFileRequired;
 
@@ -3168,32 +3375,44 @@ function zohoApiPlugin(): Plugin {
               if (itrName && !sectionsData.companyItr.name) sectionsData.companyItr.name = itrName;
               if (itrDate && !sectionsData.companyItr.date) sectionsData.companyItr.date = itrDate;
               if (itrStatus && !sectionsData.companyItr.status) sectionsData.companyItr.status = itrStatus;
-              if (itrFiles && (!sectionsData.companyItr.files || sectionsData.companyItr.files.length === 0)) {
-                sectionsData.companyItr.files = itrFiles;
-              }
+              sectionsData.companyItr.files = itrFiles;
 
               // Map After Allocation Workflow
-              const afterAllocation = r.After_Allocation_Workflow || r.After_Allocation || sectionsData.afterAllocation || 'No';
+              const afterAllocation = r.After_Allocation_Workflow || r.After_Allocation || sectionsData.afterAllocation || storedEntry?.After_Allocation_Workflow || storedEntry?.After_Allocation || 'No';
               sectionsData.afterAllocation = afterAllocation;
 
               // Map Core Zoho CRM Fields (Module: Operation_Internal_CRM)
-              const dealId = r.Parent_Record_Deal?.id || (typeof r.Parent_Record_Deal === 'string' ? r.Parent_Record_Deal : '') || (r.Deal_ID?.id || (typeof r.Deal_ID === 'string' ? r.Deal_ID : '')) || '';
-              const dealName = r.Parent_Record_Deal?.name || (typeof r.Parent_Record_Deal === 'object' && r.Parent_Record_Deal?.lookup_label ? r.Parent_Record_Deal.lookup_label : '') || r.Deal_Name || '';
-              const serviceName = r.Name || r.Service_Scheme || '';
-              const teamType = r.Team_Type || r.Internal_Team_Type || '';
-              const opStage = r.Operation_Stage || r.Stage || 'Document pending from client';
+              const dealName = r.Parent_Record_Deal?.name || (typeof r.Parent_Record_Deal === 'object' && r.Parent_Record_Deal?.lookup_label ? r.Parent_Record_Deal.lookup_label : '') || r.Deal_Name || storedEntry?.Deal_Name || '';
+              const teamType = r.Team_Type || r.Internal_Team_Type || storedEntry?.Team_Type || storedEntry?.Internal_Team_Type || '';
+              const opStage = r.Operation_Stage || r.Stage || storedEntry?.Operation_Stage || storedEntry?.Stage || 'Document pending from client';
 
               // Extract TL (Lookup to Employees module: Team_Leader_TL)
-              const rawTl = r.Team_Leader_TL || r.Team_Leader;
-              const tlId = rawTl?.id || (typeof rawTl === 'string' ? rawTl : '') || r.Team_Leader_ID || '';
-              const tlName = rawTl?.name || (typeof rawTl === 'object' && rawTl?.lookup_label ? rawTl.lookup_label : '') || r.Team_Leader_Name || '';
-              const tlUser = (tlId || tlName) ? { id: tlId, name: tlName, email: rawTl?.email, empId: tlId } : null;
+              const rawTl = r.Team_Leader_TL || r.Team_Leader || storedEntry?.Team_Leader || storedEntry?.Team_Leader_TL;
+              const tlId = rawTl?.id || (typeof rawTl === 'string' ? rawTl : '') || r.Team_Leader_ID || storedEntry?.Team_Leader_ID || '';
+              const tlName = rawTl?.name || (typeof rawTl === 'object' && rawTl?.lookup_label ? rawTl.lookup_label : '') || r.Team_Leader_Name || storedEntry?.Team_Leader_Name || '';
+              const tlUser = (tlId || tlName) ? { id: tlId, name: tlName, email: rawTl?.email || storedEntry?.Team_Leader?.email, empId: tlId } : null;
 
-              // Extract TM (Lookup to Employees module: Team_Member_TM)
+              // Extract TM - check tag and stored allocations first since Team_Member_TM in Zoho is a lookup to Deals
+              let tmTag = '';
+              if (Array.isArray(r.Tag)) {
+                const tagObj = r.Tag.find((t: any) => t?.name && String(t.name).startsWith('TM: '));
+                if (tagObj) {
+                  tmTag = tagObj.name.replace(/^TM:\s*/, '').trim();
+                }
+              }
+
               const rawTm = r.Team_Member_TM || r.Team_Member;
-              const tmId = rawTm?.id || (typeof rawTm === 'string' ? rawTm : '') || r.Team_Member_ID || '';
-              const tmName = rawTm?.name || (typeof rawTm === 'object' && rawTm?.lookup_label ? rawTm.lookup_label : '') || r.Team_Member_Name || '';
-              const tmUser = (tmId || tmName) ? { id: tmId, name: tmName, email: rawTm?.email, empId: tmId } : null;
+              const rawTmName = rawTm?.name || (typeof rawTm === 'object' && rawTm?.lookup_label ? rawTm.lookup_label : '') || r.Team_Member_Name || '';
+              const rawTmId = rawTm?.id || (typeof rawTm === 'string' ? rawTm : '') || r.Team_Member_ID || '';
+              const isDealRef = Boolean(rawTmName && (rawTmName === dealName || rawTmName === r.Deal_Name || /DL-\d+/i.test(rawTmName) || rawTmId === dealId));
+
+              const validTmFromRec = !isDealRef && (rawTmId || rawTmName) ? { id: rawTmId, name: rawTmName, email: rawTm?.email, empId: rawTmId } : null;
+              const tmStored = storedEntry?.Team_Member || (storedEntry?.Team_Member_Name ? { id: storedEntry.Team_Member_ID || '', name: storedEntry.Team_Member_Name, email: storedEntry.Team_Member?.email, empId: storedEntry.Team_Member_ID || '' } : null);
+              const tmFromTag = tmTag ? { id: '', name: tmTag, empId: '' } : null;
+
+              const tmUser = tmStored || validTmFromRec || tmFromTag || null;
+              const tmId = tmUser?.id || '';
+              const tmName = tmUser?.name || '';
 
               return {
                 ...r,
@@ -3281,9 +3500,23 @@ function zohoApiPlugin(): Plugin {
               };
             };
 
+            const internalOpsFieldsParam = [
+              'id', 'Name', 'Parent_Record_Deal', 'Team_Type', 'Operation_Stage', 'Team_Leader_TL', 'Team_Member_TM', 'Modified_Time',
+              'Doc_collection_name', 'Doc_collection_Date', 'Doc_collection_status', 'Doc_collection_File_Upload',
+              'Name_Application_name', 'Name_Application_approved_name', 'Name_Application_date', 'Name_Application_status', 'Name_Application_File_Upload',
+              'DSC_Creation_name', 'DSC_Creation_Date', 'DSC_Creation_status',
+              'Final_Filing_name', 'Final_Filing_Final_Approval_Name', 'Final_Filing_Date', 'Final_Filing_DOI_Date', 'Final_Filing_status',
+              'Board_Resolution_name', 'Board_Resolution_Date', 'Board_Resolution_status', 'Board_Resolution_File_Upload',
+              'Share_Certificate_name', 'Share_Certificate_Date', 'Share_Certificate_status', 'Share_Certificate_File_Upload',
+              'Application_submission_name', 'Application_submission_Submission_Date', 'Application_submission_status', 'Application_submission_File_Upload',
+              'Director_ITR_Company_ITR_name', 'Director_ITR_Company_ITR_status', 'Director_ITR_Company_ITR_File_Upload',
+              'DPR_Pitch_deck_creation_name', 'DPR_Pitch_deck_creation_File_Upload',
+              'ADT_1_File_Upload', 'INC_20_A_File_Upload',
+              'After_Allocation_Workflow', 'CA_CS_1', 'CA_CS_2', 'Company_Type', 'Tag'
+            ].join(',');
+
             if (req.method === 'GET') {
               const dealId = urlObj.searchParams.get('deal_id') || urlObj.searchParams.get('dealId');
-              const fieldsParam = 'id,Name,Parent_Record_Deal,Team_Type,Operation_Stage,Team_Leader_TL,Team_Member_TM,Modified_Time';
               res.setHeader('Content-Type', 'application/json');
               try {
                 let accessToken = await getAccessToken(env);
@@ -3303,7 +3536,7 @@ function zohoApiPlugin(): Plugin {
                     }
                   } catch (_) {}
                 }
-                const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${fieldsParam}&per_page=200`, {
+                const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
                   headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                 });
                 if (crmRes && crmRes.status === 200) {
@@ -3362,6 +3595,22 @@ function zohoApiPlugin(): Plugin {
                   }
                 }
 
+                // Save in local persistent allocations store
+                try {
+                  const store = getStoredAllocations();
+                  const normServiceName = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '');
+                  for (const r of rawRecords) {
+                    const recId = r.id || r.zohoId;
+                    const dId = r.Parent_Record_Deal?.id || (typeof r.Parent_Record_Deal === 'string' ? r.Parent_Record_Deal : '') || (r.Deal_ID?.id || (typeof r.Deal_ID === 'string' ? r.Deal_ID : ''));
+                    const sName = normServiceName(r.Name || r.Service_Scheme);
+                    if (recId) store[String(recId)] = { ...(store[String(recId)] || {}), ...r };
+                    if (dId && sName) store[`${dId}__${sName}`] = { ...(store[`${dId}__${sName}`] || {}), ...r };
+                  }
+                  saveStoredAllocations(store);
+                } catch (stErr) {
+                  console.warn('[Vite Plugin] Warning saving stored allocations:', stErr);
+                }
+
                 const zohoRecords = rawRecords.map(formatRecordForZohoOperation);
                 try {
                   // Fetch existing records in Zoho CRM to match by normalized service name
@@ -3382,7 +3631,9 @@ function zohoApiPlugin(): Plugin {
                   const toUpdate: any[] = [];
                   const seenIncoming = new Set<string>();
 
-                  for (const zr of zohoRecords) {
+                  for (let i = 0; i < zohoRecords.length; i++) {
+                    const zr = zohoRecords[i];
+                    const rawRec = rawRecords[i];
                     const dealIdNum = zr.Parent_Record_Deal?.id || (typeof zr.Parent_Record_Deal === 'string' && /^\d{15,}$/.test(zr.Parent_Record_Deal) ? zr.Parent_Record_Deal : null);
                     const normService = normServiceName(zr.Name);
 
@@ -3392,19 +3643,26 @@ function zohoApiPlugin(): Plugin {
                       seenIncoming.add(inKey);
                     }
 
+                    let existingMatch = null;
                     if (zr.id && /^\d{15,}$/.test(String(zr.id))) {
-                      toUpdate.push(zr);
+                      existingMatch = existingCrmList.find((rec: any) => String(rec.id) === String(zr.id));
                     } else if (dealIdNum && normService) {
-                      const found = existingCrmList.find((rec: any) =>
+                      existingMatch = existingCrmList.find((rec: any) =>
                         String(rec.Parent_Record_Deal?.id || '').trim() === String(dealIdNum).trim() &&
                         normServiceName(rec.Name || rec.Service_Scheme) === normService
                       );
-                      if (found?.id) {
-                        zr.id = String(found.id);
-                        toUpdate.push(zr);
-                      } else {
-                        toInsert.push(zr);
-                      }
+                      if (existingMatch?.id) zr.id = String(existingMatch.id);
+                    }
+
+                    // Process and upload attached files to Zoho Files & Attachments API
+                    try {
+                      await processRecordFilesAndUpload(zr, accessToken, apiBase, opsModuleName, existingMatch);
+                    } catch (fErr) {
+                      console.warn('[Vite Plugin] Warning processing files for upload:', fErr);
+                    }
+
+                    if (zr.id && /^\d{15,}$/.test(String(zr.id))) {
+                      toUpdate.push(zr);
                     } else {
                       toInsert.push(zr);
                     }
@@ -3492,12 +3750,28 @@ function zohoApiPlugin(): Plugin {
                 let zohoRecord = formatRecordForZohoOperation(parsed);
                 const hasZohoId = Boolean(zohoRecord.id && /^\d{15,}$/.test(String(zohoRecord.id)));
 
+                // Persist immediately to local allocations store
                 try {
+                  const store = getStoredAllocations();
+                  const normServiceName = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '');
+                  const recId = zohoRecord.id || parsed.id || parsed.zohoId;
+                  const dId = zohoRecord.Parent_Record_Deal?.id || (typeof zohoRecord.Parent_Record_Deal === 'string' ? zohoRecord.Parent_Record_Deal : '') || parsed.Parent_Record_Deal?.id || (typeof parsed.Parent_Record_Deal === 'string' ? parsed.Parent_Record_Deal : '');
+                  const sName = normServiceName(zohoRecord.Name || parsed.Name || parsed.Service_Scheme);
+                  if (recId) store[String(recId)] = { ...(store[String(recId)] || {}), ...parsed, ...zohoRecord };
+                  if (dId && sName) store[`${dId}__${sName}`] = { ...(store[`${dId}__${sName}`] || {}), ...parsed, ...zohoRecord };
+                  saveStoredAllocations(store);
+                } catch (stErr) {
+                  console.warn('[Vite Plugin] Warning saving allocation store in PUT:', stErr);
+                }
+
+                try {
+                  let existingZohoRecord: any = null;
+
                   if (!hasZohoId) {
                     const dealIdNum = zohoRecord.Parent_Record_Deal?.id || (typeof zohoRecord.Parent_Record_Deal === 'string' && /^\d{15,}$/.test(zohoRecord.Parent_Record_Deal) ? zohoRecord.Parent_Record_Deal : null);
                     if (dealIdNum && zohoRecord.Name) {
                       try {
-                        const searchRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=id,Name,Parent_Record_Deal&per_page=200`, {
+                        const searchRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
                           headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                         });
                         if (searchRes.ok) {
@@ -3510,10 +3784,28 @@ function zohoApiPlugin(): Plugin {
                           });
                           if (found?.id) {
                             zohoRecord.id = String(found.id);
+                            existingZohoRecord = found;
                           }
                         }
                       } catch (_) {}
                     }
+                  } else {
+                    try {
+                      const getRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/${zohoRecord.id}?fields=${internalOpsFieldsParam}`, {
+                        headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                      });
+                      if (getRes.ok) {
+                        const gData: any = await getRes.json();
+                        existingZohoRecord = (gData.data || [])[0];
+                      }
+                    } catch (_) {}
+                  }
+
+                  // Process and upload attached files to Zoho CRM Files & Attachments APIs
+                  try {
+                    await processRecordFilesAndUpload(zohoRecord, accessToken, apiBase, opsModuleName, existingZohoRecord);
+                  } catch (fErr) {
+                    console.warn('[Vite Plugin] Warning processing files in PUT:', fErr);
                   }
 
                   if (zohoRecord.id && /^\d{15,}$/.test(String(zohoRecord.id))) {

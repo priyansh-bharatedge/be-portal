@@ -432,6 +432,8 @@ export interface UploadedFileMeta {
   type: string;
   uploadedAt: string;
   dataUrl?: string;
+  url?: string;
+  fileId?: string;
 }
 
 export interface ServiceAllocationPayload {

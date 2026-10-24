@@ -94,8 +94,13 @@ export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
       link.href = file.dataUrl;
       link.download = file.name;
       link.click();
+    } else if (file.url) {
+      window.open(file.url, '_blank');
+    } else if (file.fileId || file.id) {
+      const downloadUrl = `/api/zoho/internal-operations/download?file_id=${file.fileId || file.id}&name=${encodeURIComponent(file.name)}`;
+      window.open(downloadUrl, '_blank');
     } else {
-      alert(`File "${file.name}" was registered in frontend demo state.`);
+      alert(`File "${file.name}" was registered without downloadable content.`);
     }
   };
 
