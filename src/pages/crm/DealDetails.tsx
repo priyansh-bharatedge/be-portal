@@ -1373,10 +1373,15 @@ export const DealDetails = () => {
         window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: updatedDeal }));
       } catch (e) {}
 
-      // 1. Sync updated deal data & legal fields to Zoho CRM
+      // 1. Sync updated deal data & legal fields to Zoho CRM (preserving current stage and skipping auto-blueprint)
       let currentZohoId = deal.zohoId || (id && /^\d{15,}$/.test(id) ? id : '');
       try {
-        const dealZohoRes = await saveOrUpdateZohoDeal(updatedDeal);
+        const dealZohoRes = await saveOrUpdateZohoDeal({
+          ...updatedDeal,
+          skipBlueprint: true,
+          stage: deal.stage || 'Legal',
+          Stage: deal.stage || 'Legal',
+        });
         if (dealZohoRes?.success && dealZohoRes?.zohoId) {
           currentZohoId = dealZohoRes.zohoId;
           updatedDeal.zohoId = currentZohoId;
@@ -4293,12 +4298,21 @@ export const DealDetails = () => {
 
               {/* Footer Banner with Actions */}
               <div className="px-6 py-4 bg-gray-50/80 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2 text-gray-500">
-                  <Info size={14} className="text-blue-500 shrink-0" />
-                  <span>
-                    Saving stores data locally and syncs to Zoho CRM. Forwarding executes Blueprint Transition to <strong>Operations Allocator</strong>.
-                  </span>
-                </div>
+                {isLegalStage ? (
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Info size={14} className="text-blue-500 shrink-0" />
+                    <span>
+                      Saving stores data locally and syncs to Zoho CRM. Forwarding executes Blueprint Transition to <strong>Operations Allocator</strong>.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-emerald-800 bg-emerald-50/80 border border-emerald-200/80 px-3 py-1.5 rounded-xl font-medium">
+                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                    <span>
+                      Deal has already been forwarded to <strong>{deal.stage || raw.Stage || 'Operations Allocator'}</strong> stage. You can edit and save legal details anytime.
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 ml-auto">
                   <button
                     type="button"
@@ -4307,17 +4321,24 @@ export const DealDetails = () => {
                     className="px-3.5 py-2 text-gray-700 hover:text-gray-900 font-bold bg-white border border-gray-200 hover:border-gray-300 rounded-xl shadow-xs transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
                   >
                     <Save size={13} />
-                    <span>Save Draft</span>
+                    <span>{isLegalStage ? 'Save Draft' : 'Save Legal Details'}</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSendToOperationsAllocator}
-                    disabled={isActionInProgress || isSavingLegalHandover}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-sm hover:shadow-md transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
-                  >
-                    {isActionInProgress ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                    <span>Send to Operations Allocator</span>
-                  </button>
+                  {isLegalStage ? (
+                    <button
+                      type="button"
+                      onClick={handleSendToOperationsAllocator}
+                      disabled={isActionInProgress || isSavingLegalHandover}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-sm hover:shadow-md transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
+                    >
+                      {isActionInProgress ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                      <span>Send to Operations Allocator</span>
+                    </button>
+                  ) : (
+                    <div className="px-3.5 py-2 bg-emerald-50 border border-emerald-200/80 text-emerald-700 font-bold rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-default">
+                      <CheckCircle2 size={13} className="text-emerald-600" />
+                      <span>Forwarded to Allocator</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

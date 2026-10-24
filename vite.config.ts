@@ -309,6 +309,62 @@ function zohoApiPlugin(): Plugin {
     'operations_allocator_to_operations_executors': '1078476000001938757',
   };
 
+  function isDealStageAtOrPastTransition(transitionId: string, currentStageLower: string): boolean {
+    if (!currentStageLower) return false;
+    const s = currentStageLower.trim().toLowerCase();
+    // 1. Sales to Account ("1078476000000489153")
+    if (transitionId === '1078476000000489153') {
+      return (
+        s.includes('account') ||
+        s.includes('legal') ||
+        s.includes('allocat') ||
+        s.includes('execut') ||
+        s.includes('quality') ||
+        s.includes('won') ||
+        s.includes('completed')
+      );
+    }
+    // 2. Account to Legal ("1078476000000492001")
+    if (transitionId === '1078476000000492001') {
+      return (
+        s.includes('legal') ||
+        s.includes('allocat') ||
+        s.includes('execut') ||
+        s.includes('quality') ||
+        s.includes('won') ||
+        s.includes('completed')
+      );
+    }
+    // 3. Legal to Operations Allocator ("1078476000000492099")
+    if (transitionId === '1078476000000492099') {
+      return (
+        s.includes('allocat') ||
+        s.includes('execut') ||
+        s.includes('quality') ||
+        s.includes('won') ||
+        s.includes('completed')
+      );
+    }
+    // 4. Operations Allocator to Operations Executors ("1078476000001938757")
+    if (transitionId === '1078476000001938757') {
+      return (
+        s.includes('execut') ||
+        s.includes('quality') ||
+        s.includes('won') ||
+        s.includes('completed')
+      );
+    }
+    // 5. Send to Quality ("1078476000000492289")
+    if (transitionId === '1078476000000492289') {
+      return (
+        s.includes('quality') ||
+        s.includes('won') ||
+        s.includes('completed')
+      );
+    }
+    return false;
+  }
+
   async function executeZohoDealBlueprintTransition(
     recordId: string,
     transitionId: string,
@@ -2025,10 +2081,11 @@ function zohoApiPlugin(): Plugin {
                 delete payload.Partner_BDM;
               }
 
-              // Automatically trigger Blueprint Transition if target Stage has a registered Transition ID
+              // Automatically trigger Blueprint Transition if target Stage has a registered Transition ID and not skipped
               const requestedStage = String(deal.stage || deal.Stage || payload.Stage || '').toLowerCase().trim();
               const autoTransitionId = ZOHO_DEAL_TRANSITION_MAP[requestedStage];
-              if (isUpdate && deal.zohoId && autoTransitionId) {
+              const skipBp = Boolean(deal.skipBlueprint || deal.isPartial);
+              if (!skipBp && isUpdate && deal.zohoId && autoTransitionId) {
                 try {
                   const bpRes = await executeZohoDealBlueprintTransition(
                     String(deal.zohoId),
@@ -2229,6 +2286,30 @@ function zohoApiPlugin(): Plugin {
                   apiBase,
                   additionalData
                 );
+              }
+
+              // If transition failed with "invalid transition" or INVALID_DATA, check if Deal is already at or past target stage in Zoho CRM
+              if (!bpResult.success) {
+                try {
+                  const checkRes = await fetch(`${apiBase}/crm/v8/Deals/${dealZohoId}?fields=Stage,Deal_Name`, {
+                    headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                  });
+                  if (checkRes.ok) {
+                    const checkData: any = await checkRes.json();
+                    const liveStage = String(checkData?.data?.[0]?.Stage || '').toLowerCase().trim();
+                    const isAlreadyReached = isDealStageAtOrPastTransition(String(transitionId).trim(), liveStage);
+                    if (isAlreadyReached) {
+                      console.log(`[Vite Zoho Plugin] Deal #${dealZohoId} is already at or past target stage (current stage: "${checkData?.data?.[0]?.Stage}"). Marking transition as successful.`);
+                      bpResult = {
+                        success: true,
+                        message: `Deal is already in "${checkData?.data?.[0]?.Stage}" stage in Zoho CRM`,
+                        data: { alreadyTransitioned: true, currentStage: checkData?.data?.[0]?.Stage }
+                      };
+                    }
+                  }
+                } catch (checkErr) {
+                  console.warn('[Vite Zoho Plugin] Check live stage error:', checkErr);
+                }
               }
 
               res.setHeader('Content-Type', 'application/json');

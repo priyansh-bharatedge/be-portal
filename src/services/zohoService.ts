@@ -1520,7 +1520,7 @@ export async function transitionZohoDealBlueprint(
     });
 
     const data = await safeParseResponse(response);
-    if (response.ok && data.success) {
+    if ((response.ok && data.success) || data?.alreadyTransitioned) {
       return {
         success: true,
         zohoId: data.dealZohoId || dealIdOrZohoId,

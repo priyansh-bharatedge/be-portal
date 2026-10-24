@@ -2859,9 +2859,12 @@ export const Deals = () => {
         }
       };
 
-      // 1. Sync updated deal data to Zoho CRM Deals module first to ensure valid Zoho record ID
+      // 1. Sync updated deal data to Zoho CRM Deals module first to ensure valid Zoho record ID (preserving current stage & skipping auto-blueprint)
       try {
-        const dealZohoRes = await saveOrUpdateZohoDeal(updatedDeal);
+        const dealZohoRes = await saveOrUpdateZohoDeal({
+          ...deal,
+          skipBlueprint: true,
+        });
         if (dealZohoRes?.success && dealZohoRes?.zohoId) {
           currentZohoId = dealZohoRes.zohoId;
           updatedDeal.zohoId = currentZohoId;
