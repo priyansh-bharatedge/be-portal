@@ -2,6 +2,7 @@ import type { InternalOperationRecord } from '../types/operations';
 import { getOperationStagesForTeamType } from '../types/operations';
 import type { ZohoApiResponse } from './zohoService';
 import { isValidServiceName } from '../utils/dealSplitUtils';
+import { isMatchingName } from '../utils/employeeUtils';
 
 const STORAGE_KEY = 'be_internal_operations';
 
@@ -1431,4 +1432,179 @@ export async function deleteInternalOperation(id: string): Promise<{ success: bo
   }
 
   return { success: true, message: 'Service allocation deleted successfully' };
+}
+
+/**
+ * Normalizes short or varied team types to the standard Zoho CRM Legal Details subform format:
+ * e.g. 'Funding' -> 'Team Funding', 'Compliance' -> 'Team Compliance'
+ */
+export function toInternalTeamType(teamType: string): string {
+  const norm = normalizeTeamType(teamType);
+  switch (norm) {
+    case 'Incorporation':
+      return 'Team Incorporation';
+    case 'Compliance':
+      return 'Team Compliance';
+    case 'Funding':
+      return 'Team Funding';
+    case 'Certification':
+      return 'Team Certification';
+    case 'Digital Marketing':
+      return 'Team Digital Marketing';
+    default:
+      return teamType.startsWith('Team ') ? teamType : `Team ${teamType}`;
+  }
+}
+
+/**
+ * Synchronizes an updated Team Type from an Internal Operation record back to the
+ * parent Deal's Legal Details Subform (both in localStorage and via Zoho CRM Deals API).
+ */
+export async function syncTeamTypeToLegalSubform(
+  operationRecord: InternalOperationRecord,
+  newTeamType: string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const parentDealId = operationRecord.Deal_ID || 
+      (operationRecord.Parent_Record_Deal && typeof operationRecord.Parent_Record_Deal === 'object' ? operationRecord.Parent_Record_Deal.id : operationRecord.Parent_Record_Deal) ||
+      operationRecord.zohoDealId || '';
+    
+    const parentDealName = operationRecord.Deal_Name || 
+      (operationRecord.Parent_Record_Deal && typeof operationRecord.Parent_Record_Deal === 'object' ? operationRecord.Parent_Record_Deal.name : '') || '';
+    
+    const subformRowId = operationRecord.Subform_Row_ID || operationRecord.id || '';
+    const serviceScheme = (operationRecord.Service_Scheme || operationRecord.Name || '').trim().toLowerCase();
+    const zohoTeamType = toInternalTeamType(newTeamType);
+    const normTeamType = normalizeTeamType(newTeamType);
+
+    // 1. Update in localStorage 'be_deals'
+    let matchedDeal: any = null;
+    let targetZohoDealId = '';
+    const storedDeals = localStorage.getItem('be_deals');
+    if (storedDeals) {
+      try {
+        const deals = JSON.parse(storedDeals);
+        if (Array.isArray(deals)) {
+          const dealIdx = deals.findIndex((d: any) => 
+            (parentDealId && (
+              String(d.id || '').toLowerCase() === String(parentDealId).toLowerCase() ||
+              String(d.zohoId || '').toLowerCase() === String(parentDealId).toLowerCase()
+            )) ||
+            (parentDealName && String(d.name || d.Deal_Name || '').trim().toLowerCase() === parentDealName.trim().toLowerCase())
+          );
+
+          if (dealIdx >= 0) {
+            matchedDeal = deals[dealIdx];
+            targetZohoDealId = String(
+              matchedDeal.zohoId || 
+              (matchedDeal.id && /^\d{15,}$/.test(String(matchedDeal.id)) ? matchedDeal.id : '') || 
+              ''
+            ).trim();
+
+            const updateSubformRows = (rows: any[]) => {
+              if (!Array.isArray(rows)) return rows;
+              return rows.map((row: any) => {
+                const rowId = String(row.id || '');
+                const rowScheme = String(row.Legal_Schemas || row.Schemas || row.schema || row.Service_Name || '').trim().toLowerCase();
+                const isMatch = (subformRowId && rowId && rowId === String(subformRowId)) ||
+                                (rowScheme && serviceScheme && (rowScheme === serviceScheme || isMatchingName(rowScheme, serviceScheme)));
+                if (isMatch) {
+                  return {
+                    ...row,
+                    Internal_team_type: zohoTeamType,
+                    internalTeamType: zohoTeamType,
+                    Team_Type: normTeamType
+                  };
+                }
+                return row;
+              });
+            };
+
+            if (matchedDeal.Legal) matchedDeal.Legal = updateSubformRows(matchedDeal.Legal);
+            if (matchedDeal.legalData) matchedDeal.legalData = updateSubformRows(matchedDeal.legalData);
+            if (matchedDeal.rawZohoDeal?.Legal) matchedDeal.rawZohoDeal.Legal = updateSubformRows(matchedDeal.rawZohoDeal.Legal);
+            if (matchedDeal.formData?.legalData) matchedDeal.formData.legalData = updateSubformRows(matchedDeal.formData.legalData);
+            if (matchedDeal.formData?.Legal) matchedDeal.formData.Legal = updateSubformRows(matchedDeal.formData.Legal);
+
+            deals[dealIdx] = matchedDeal;
+            localStorage.setItem('be_deals', JSON.stringify(deals));
+
+            // Notify real-time global deal updates
+            try {
+              window.dispatchEvent(new CustomEvent('be_deals_updated', { detail: matchedDeal }));
+            } catch (_) {}
+          }
+        }
+      } catch (err) {
+        console.warn('[Sync] Failed updating deal in localStorage:', err);
+      }
+    }
+
+    // 2. Also update in-memory / stored operations list
+    try {
+      const storedOps = localStorage.getItem('be_internal_operations');
+      if (storedOps) {
+        const ops = JSON.parse(storedOps);
+        if (Array.isArray(ops)) {
+          let opUpdated = false;
+          const updatedOps = ops.map((op: any) => {
+            if (op.id === operationRecord.id || (subformRowId && op.Subform_Row_ID === subformRowId)) {
+              opUpdated = true;
+              return {
+                ...op,
+                Internal_Team_Type: normTeamType,
+                Team_Type: normTeamType
+              };
+            }
+            return op;
+          });
+          if (opUpdated) {
+            localStorage.setItem('be_internal_operations', JSON.stringify(updatedOps));
+            try {
+              window.dispatchEvent(new CustomEvent('be_internal_ops_updated', { detail: operationRecord }));
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 3. Sync to Zoho CRM Deals API to persist to Legal Details subform in CRM
+    const zohoIdToUse = targetZohoDealId || (/^\d{15,}$/.test(String(parentDealId)) ? String(parentDealId) : '');
+    if (zohoIdToUse && matchedDeal) {
+      const existingLegal = matchedDeal.rawZohoDeal?.Legal || matchedDeal.Legal || [];
+      if (Array.isArray(existingLegal) && existingLegal.length > 0) {
+        const formattedLegal = existingLegal.map((lg: any) => ({
+          ...(lg.id && /^\d{15,}$/.test(String(lg.id)) ? { id: lg.id } : {}),
+          Legal_Schemas: lg.Legal_Schemas || lg.schema || lg.Schemas || 'Service',
+          Internal_team_type: lg.Internal_team_type || lg.internalTeamType || zohoTeamType,
+          Internal_legal_status: lg.Internal_legal_status || lg.legalStatus || 'RECEIVED',
+          Remark: lg.Remark || lg.remark || '',
+          Types_of_legal_documents: lg.Types_of_legal_documents || lg.docTypes || '',
+          Agreement_Terms_I: lg.Agreement_Terms_I || lg.terms1 || '',
+          Agreement_Terms_II: lg.Agreement_Terms_II || lg.terms2 || '',
+          Tenure_of_Service: lg.Tenure_of_Service || lg.tenure || ''
+        }));
+
+        try {
+          await fetch('/api/zoho/update-deal', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: zohoIdToUse,
+              zohoId: zohoIdToUse,
+              Legal: formattedLegal,
+              isPartial: true
+            })
+          });
+        } catch (apiErr) {
+          console.warn('[Sync] Failed updating Legal subform in Zoho CRM Deal:', apiErr);
+        }
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('[Sync] Error in syncTeamTypeToLegalSubform:', err);
+    return { success: false, message: err?.message };
+  }
 }

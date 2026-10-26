@@ -781,6 +781,32 @@ export const DealDetails = () => {
     }
   }, [id, deal, loadAttachments]);
 
+  // Listen for real-time deal updates (e.g. when Team Type is updated in Internal Operations)
+  useEffect(() => {
+    const handleGlobalDealUpdate = (e: any) => {
+      const updated = e.detail;
+      if (!updated) return;
+      const currentDealId = String(deal?.id || id || '').toLowerCase();
+      const currentZohoId = String(deal?.zohoId || '').toLowerCase();
+      const updatedId = String(updated.id || '').toLowerCase();
+      const updatedZohoId = String(updated.zohoId || '').toLowerCase();
+
+      const isCurrentDeal = (currentDealId && (currentDealId === updatedId || currentDealId === updatedZohoId)) ||
+                            (currentZohoId && (currentZohoId === updatedId || currentZohoId === updatedZohoId));
+
+      if (isCurrentDeal) {
+        setDeal((prev: any) => prev ? { ...prev, ...updated } : updated);
+        const subform = updated.legalData || updated.Legal || updated.rawZohoDeal?.Legal;
+        if (Array.isArray(subform)) {
+          setLegalSubformItems(subform);
+        }
+      }
+    };
+
+    window.addEventListener('be_deals_updated', handleGlobalDealUpdate);
+    return () => window.removeEventListener('be_deals_updated', handleGlobalDealUpdate);
+  }, [id, deal?.id, deal?.zohoId]);
+
   const handleSendToAccounts = async () => {
     if (!deal) return;
     setIsActionInProgress(true);

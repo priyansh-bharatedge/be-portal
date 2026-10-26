@@ -1466,7 +1466,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
           allStaff={allExistingEmployees}
           allTeamLeaders={allTeamLeaders}
           allTeamMembers={allTeamMembers}
-          canManage={canManageAllocations}
+          canManage={canManageAllocations || hasSupervisoryOversight}
           canAssignTM={canAssignTM}
           canDelete={canDeleteAllocations}
         />

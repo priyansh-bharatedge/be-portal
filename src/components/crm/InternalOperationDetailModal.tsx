@@ -29,7 +29,8 @@ import {
 } from '../../types/operations';
 import {
   normalizeTeamType,
-  saveInternalOperation
+  saveInternalOperation,
+  syncTeamTypeToLegalSubform
 } from '../../services/internalOperationsService';
 import { FileUploadWidget } from './FileUploadWidget';
 import type { NormalizedStaff } from './InternalOperationsAllocationTable';
@@ -324,6 +325,20 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
 }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+
+  const isSuperAdmin = Boolean(
+    currentUser?.role === 'Super Admin' ||
+    (currentUser as any)?.systemRole === 'Super Admin' ||
+    currentUser?.email === 'admin@bharat-edge.com'
+  );
+  const userDept = (currentUser?.department || (currentUser as any)?.dept || '').toLowerCase();
+  const userRole = (currentUser?.role || (currentUser as any)?.systemRole || '').toLowerCase();
+  const isLegalUser = userDept.includes('legal') || Boolean((currentUser as any)?.isLegal);
+  const isHODUser = userRole.includes('hod') || userRole.includes('head') || userRole.includes('admin');
+  const isLegalHOD = isSuperAdmin || (isHODUser && isLegalUser) || (String(currentUser?.role || '') === 'Admin (HOD)' && isLegalUser);
+
+  // Legal HOD, Operations HOD, Super Admin, and managers can edit the Team Type
+  const canEditTeamType = Boolean(canManage || isLegalHOD || isSuperAdmin);
 
   const [saving, setSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1510,7 +1525,10 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
       };
 
       await saveInternalOperation(updatedRecord);
-      setToast({ type: 'success', text: 'Internal Operation record saved successfully.' });
+      // Synchronize team type back to parent Deal's Legal details subform (Zoho CRM & localStorage)
+      await syncTeamTypeToLegalSubform(updatedRecord, teamType);
+
+      setToast({ type: 'success', text: 'Internal Operation record saved and synced with Legal.' });
       if (onSaved) onSaved(updatedRecord);
 
       setTimeout(() => {
@@ -1675,7 +1693,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-0.5">
                     Team Type (Inherited)
                   </span>
-                  {canManage ? (
+                  {canEditTeamType ? (
                     <select
                       value={teamType}
                       onChange={(e) => {
