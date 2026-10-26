@@ -224,6 +224,79 @@ export const StaffNameSelect: React.FC<{
   );
 };
 
+export const AUDITOR_OPTIONS = [
+  'Dipen shah',
+  'Pooja Shah',
+  'Komal thakkar'
+];
+
+export const AuditorNameSelect: React.FC<{
+  label?: string;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}> = ({
+  label = 'Auditor Name',
+  value,
+  onChange,
+  placeholder = 'Select Auditor...'
+}) => {
+  const [isCustom, setIsCustom] = useState<boolean>(false);
+  const hasCurrentInList = value && AUDITOR_OPTIONS.some(
+    opt => opt.toLowerCase() === value.trim().toLowerCase()
+  );
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
+          <span>{label}</span>
+        </label>
+        <button
+          type="button"
+          onClick={() => setIsCustom(!isCustom)}
+          className="text-[10px] font-semibold text-be-orange hover:text-orange-700 transition-colors cursor-pointer"
+        >
+          {isCustom ? 'Choose from list' : '+ Custom name'}
+        </button>
+      </div>
+
+      {isCustom ? (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Type auditor name..."
+          className="w-full px-3 py-2 bg-white border border-be-orange/40 focus:border-be-orange rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs"
+        />
+      ) : (
+        <select
+          value={value}
+          onChange={(e) => {
+            if (e.target.value === '__custom__') {
+              setIsCustom(true);
+            } else {
+              onChange(e.target.value);
+            }
+          }}
+          className="w-full px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 focus:border-be-orange rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs cursor-pointer"
+        >
+          <option value="">{placeholder}</option>
+          {value && !hasCurrentInList && (
+            <option value={value}>{value} (Current)</option>
+          )}
+          {AUDITOR_OPTIONS.map((auditor) => (
+            <option key={auditor} value={auditor}>
+              {auditor}
+            </option>
+          ))}
+          <option value="__custom__">+ Enter custom auditor...</option>
+        </select>
+      )}
+    </div>
+  );
+};
+
 interface InternalOperationDetailModalProps {
   record: InternalOperationRecord;
   onClose: () => void;
@@ -530,11 +603,15 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
 
     if (!s.compAdt1) s.compAdt1 = {};
     if (!s.compAdt1.name && zohoAdt1Name) s.compAdt1.name = zohoAdt1Name;
+    if (!s.compAdt1.auditorName && zohoAdt1Auditor) s.compAdt1.auditorName = zohoAdt1Auditor;
     if (!s.compAdt1.date && zohoAdt1Date) s.compAdt1.date = zohoAdt1Date;
     if (!s.compAdt1.status && zohoAdt1Status) s.compAdt1.status = zohoAdt1Status;
     if ((!s.compAdt1.files || s.compAdt1.files.length === 0) && zohoAdt1Files.length > 0) {
       s.compAdt1.files = zohoAdt1Files;
     }
+
+    if (!s.audit) s.audit = {};
+    if (!s.audit.auditorName && zohoAdt1Auditor) s.audit.auditorName = zohoAdt1Auditor;
 
     // Map Zoho CRM INC 20-A / DPT 3 fields if available on record
     const zohoInc20AName = record.INC_20_A_name || '';
@@ -965,11 +1042,9 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
       const adt1Name = activeAdt1?.name !== undefined && activeAdt1?.name !== ''
         ? activeAdt1.name
         : (fallbackAdt1?.name || record.ADT_1_name || '');
-      const adt1Auditor = !isCompliance
-        ? (activeAdt1?.auditorName !== undefined && activeAdt1?.auditorName !== ''
-            ? activeAdt1.auditorName
-            : (fallbackAdt1?.auditorName || record.ADT_1_Auditor_name || ''))
-        : (record.ADT_1_Auditor_name || '');
+      const adt1Auditor = (activeAdt1?.auditorName !== undefined && activeAdt1?.auditorName !== '')
+        ? activeAdt1.auditorName
+        : (fallbackAdt1?.auditorName || sections.audit?.auditorName || record.ADT_1_Auditor_name || '');
       const adt1Date = activeAdt1?.date !== undefined && activeAdt1?.date !== ''
         ? activeAdt1.date
         : (fallbackAdt1?.date || record.ADT_1_date || '');
@@ -1312,6 +1387,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
           compAdt1: {
             ...(sections.compAdt1 || {}),
             name: adt1Name,
+            auditorName: adt1Auditor,
             date: adt1Date,
             status: adt1Status,
             files: adt1Files
@@ -2285,11 +2361,10 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                             onChange={(val) => updateSection('adt1', 'name', val)}
                             placeholder="Select Operations staff..."
                           />
-                          <TextInput
+                          <AuditorNameSelect
                             label="Auditor Name"
                             value={sections.adt1?.auditorName || ''}
                             onChange={(val) => updateSection('adt1', 'auditorName', val)}
-                            placeholder="e.g. M/s Khanna & Co."
                           />
                           <DateInput
                             label="Date"
@@ -2397,15 +2472,49 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                         </span>
                       </div>
 
-                      {/* 1. ADT-1: [Name, Date, Status, File Upload] */}
-                      <StandardSection
+                      {/* 1. ADT-1: [Name, Auditor Name, Date, Status, File Upload] */}
+                      <SectionContainer
                         title="ADT-1"
                         badge="Auditor Filing"
                         badgeColor="bg-indigo-100 text-indigo-800 border-indigo-200"
-                        data={sections.compAdt1 || sections.adt1 || {}}
-                        statusOptions={POST_INCORPORATION_STATUSES}
-                        onChange={(k, v) => updateCompSection('compAdt1', 'adt1', k, v)}
-                      />
+                      >
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          <StaffNameSelect
+                            label="Name"
+                            value={(sections.compAdt1 || sections.adt1)?.name || ''}
+                            onChange={(val) => updateCompSection('compAdt1', 'adt1', 'name', val)}
+                            placeholder="Select Operations staff..."
+                          />
+                          <AuditorNameSelect
+                            label="Auditor Name"
+                            value={(sections.compAdt1 || sections.adt1)?.auditorName || ''}
+                            onChange={(val) => updateCompSection('compAdt1', 'adt1', 'auditorName', val)}
+                          />
+                          <DateInput
+                            label="Date"
+                            value={(sections.compAdt1 || sections.adt1)?.date || ''}
+                            onChange={(val) => updateCompSection('compAdt1', 'adt1', 'date', val)}
+                          />
+                          <SelectInput
+                            label="Status"
+                            value={
+                              (sections.compAdt1 || sections.adt1)?.status === 'In-process'
+                                ? 'In process'
+                                : ((sections.compAdt1 || sections.adt1)?.status || 'In process')
+                            }
+                            options={POST_INCORPORATION_STATUSES}
+                            onChange={(val) => updateCompSection('compAdt1', 'adt1', 'status', val)}
+                          />
+                        </div>
+                        <div className="mt-3">
+                          <FileUploadWidget
+                            label="File Upload"
+                            files={(sections.compAdt1 || sections.adt1)?.files || []}
+                            onChange={(files) => updateCompSection('compAdt1', 'adt1', 'files', files)}
+                            multiple={true}
+                          />
+                        </div>
+                      </SectionContainer>
 
                       {/* 2. INC: [Name, Date, Status, File Upload] */}
                       <StandardSection
@@ -2577,14 +2686,19 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     </div>
                   </SectionContainer>
 
-                  {/* 4. Audit: [Name, Date, Status, File Upload] */}
+                  {/* 4. Audit: [Name, Auditor Name, Date, Status, File Upload] */}
                   <SectionContainer title="Audit" badge="Statutory Audit">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                       <StaffNameSelect
                         label="Name"
                         value={sections.audit?.name || ''}
                         onChange={(val) => updateSection('audit', 'name', val)}
                         placeholder="Select Operations staff..."
+                      />
+                      <AuditorNameSelect
+                        label="Auditor Name"
+                        value={sections.audit?.auditorName || ''}
+                        onChange={(val) => updateSection('audit', 'auditorName', val)}
                       />
                       <DateInput
                         label="Date"
