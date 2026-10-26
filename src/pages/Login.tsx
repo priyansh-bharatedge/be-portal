@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { updateZohoEmployeePassword } from '../services/zohoService';
 import type { SystemRole, AuthUser } from '../types/roles';
 
 type AuthStep = 'EMAIL' | 'PASSWORD' | 'OTP' | 'SETUP_PASSWORD' | 'SUCCESS';
@@ -86,10 +87,10 @@ export const Login: React.FC = () => {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setEmailError('');
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = email.trim();
 
     if (!cleanEmail) {
-      setEmailError('Please enter your email address.');
+      setEmailError('Please enter your email address or Employee ID.');
       return;
     }
 
@@ -100,8 +101,8 @@ export const Login: React.FC = () => {
       setLoading(false);
 
       if (!result.exists) {
-        // Scenario 1: User Not Found -> Display validation error "Email Does Not Exist"
-        setEmailError('Email Does Not Exist');
+        // Validation error
+        setEmailError(result.error || 'Email / Employee ID Does Not Exist');
         return;
       }
 
@@ -185,6 +186,13 @@ export const Login: React.FC = () => {
         // Action 3: Show "Invalid Password" error
         setPasswordError('Invalid Password');
       } else {
+        // Sync password to Zoho CRM in background if it wasn't saved yet
+        if (!storedPass || storedPass === 'admin123') {
+          updateZohoEmployeePassword(email, cleanInputPass, currentEmployee?.zohoId).catch(err => {
+            console.warn('[Login] Background password sync to Zoho failed:', err);
+          });
+        }
+
         // Action 4: Authenticate user & redirect to homepage
         const loginRes = login(email, cleanInputPass);
         if (loginRes.user) {
@@ -492,10 +500,10 @@ export const Login: React.FC = () => {
                   )}
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-700">Email Address *</label>
+                    <label className="text-xs font-bold text-gray-700">Email Address or Employee ID *</label>
                     <div className="relative">
                       <input 
-                        type="email" 
+                        type="text" 
                         value={email}
                         onChange={e => { setEmail(e.target.value); setEmailError(''); }}
                         className={`w-full pl-9 pr-3.5 py-3 rounded-2xl border bg-gray-50/50 focus:bg-white focus:ring-2 transition-all outline-none font-semibold text-xs text-gray-900 placeholder-gray-400 ${
@@ -503,7 +511,7 @@ export const Login: React.FC = () => {
                             ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20' 
                             : 'border-gray-200 focus:border-be-orange focus:ring-be-orange/20'
                         }`}
-                        placeholder="Enter your registered employee email (e.g. superadmin@be.com)"
+                        placeholder="Enter your registered email or Employee ID (e.g. sirjan@bharat-edge.com)"
                         required
                         autoFocus
                       />
@@ -612,13 +620,35 @@ export const Login: React.FC = () => {
                     </span>
                   </button>
 
-                  <div className="text-center pt-1">
+                  <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
                     <button 
                       type="button"
-                      onClick={() => setStep('EMAIL')}
-                      className="text-[11px] font-bold text-gray-500 hover:text-gray-800"
+                      onClick={() => { setStep('EMAIL'); setPasswordError(''); }}
+                      className="text-[11px] font-bold text-gray-500 hover:text-gray-800 flex items-center gap-1"
                     >
-                      ← Back to Email Lookup
+                      <ArrowLeft size={12} /> Change Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setLoading(true);
+                        const otpRes = await requestOtp(email);
+                        setLoading(false);
+                        if (otpRes.success) {
+                          setMaskedEmail(otpRes.maskedEmail || email);
+                          setActiveOtpCode(otpRes.otp || '');
+                          setOtpTimer(60);
+                          setCanResend(false);
+                          setOtpBoxes(['', '', '', '', '', '']);
+                          setOtpSuccessMsg(`OTP sent to ${otpRes.targetEmail || email}`);
+                          setStep('OTP');
+                        } else {
+                          setPasswordError(otpRes.error || 'Failed to dispatch OTP.');
+                        }
+                      }}
+                      className="text-[11px] font-bold text-be-orange hover:underline flex items-center gap-1"
+                    >
+                      Forgot Password? Log in with OTP →
                     </button>
                   </div>
                 </motion.form>
@@ -713,6 +743,21 @@ export const Login: React.FC = () => {
                       <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                     </span>
                   </button>
+
+                  <div className="pt-2 text-center border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPassword('');
+                        setPasswordError('');
+                        setStep('PASSWORD');
+                      }}
+                      className="text-xs font-bold text-be-orange hover:underline flex items-center justify-center gap-1.5 mx-auto"
+                    >
+                      <Lock size={13} />
+                      Already set your password? Log in with Password
+                    </button>
+                  </div>
                 </motion.form>
               )}
 

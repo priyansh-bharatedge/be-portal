@@ -73,6 +73,115 @@ async function getAccessToken(): Promise<string> {
   return token;
 }
 
+interface CachedEmployeeRecord {
+  id: string;
+  Name?: string;
+  Middle_Name?: string;
+  Last_Name?: string;
+  Employment_ID?: string;
+  Personal_Email_Address?: string;
+  Email?: string;
+  Password?: string | null;
+  System_Role?: string;
+  Department?: string;
+  Designation_Job_Title?: string;
+  Who_is_the_Team_Leader_TL?: string;
+  Reporting_Manager?: string;
+  Contact_Number?: string;
+  [key: string]: any;
+}
+
+let cachedEmployeeList: CachedEmployeeRecord[] | null = null;
+let cachedEmployeeListExpiry = 0;
+
+function matchesEmployeeQuery(emp: any, query: string): boolean {
+  if (!emp || !query) return false;
+  const cleanQ = query.trim().toLowerCase();
+  if (!cleanQ) return false;
+  const qWithoutEmp = cleanQ.replace(/^emp[-_\s]*/i, '');
+  const qNum = parseInt(qWithoutEmp, 10);
+
+  const empEmail = (emp.Email || '').trim().toLowerCase();
+  const empPersonal = (emp.Personal_Email_Address || '').trim().toLowerCase();
+  const empIdStr = String(emp.Employment_ID || '').trim().toLowerCase();
+  const empIdWithoutEmp = empIdStr.replace(/^emp[-_\s]*/i, '');
+  const zohoRecordId = String(emp.id || emp.zohoId || '').trim();
+
+  // 1. Direct email or personal email exact match
+  if (empEmail === cleanQ || empPersonal === cleanQ) return true;
+
+  // 2. Email domain-agnostic prefix match (e.g. sirjan@bharat-edge.com vs sirjan@bharatedgedigital.com vs sirjan@bharatedge.in)
+  if (cleanQ.includes('@') && (empEmail.includes('@') || empPersonal.includes('@'))) {
+    const qPrefix = cleanQ.split('@')[0];
+    const empEmailPrefix = empEmail.split('@')[0];
+    const empPersonalPrefix = empPersonal.split('@')[0];
+    if (qPrefix === empEmailPrefix || qPrefix === empPersonalPrefix) return true;
+  }
+
+  // 3. Username prefix match if query doesn't have @ (e.g. user typed "sirjan")
+  if (!cleanQ.includes('@')) {
+    if (empEmail && empEmail.split('@')[0] === cleanQ) return true;
+    if (empPersonal && empPersonal.split('@')[0] === cleanQ) return true;
+  }
+
+  // 4. Employment ID match (flexible: with or without EMP-, numeric)
+  if (cleanQ === empIdStr || qWithoutEmp === empIdWithoutEmp) return true;
+  if (!isNaN(qNum) && parseInt(empIdWithoutEmp, 10) === qNum) return true;
+  if (cleanQ === zohoRecordId) return true;
+
+  // 5. Name matching
+  const firstName = (emp.Name || '').trim().toLowerCase();
+  const middleName = (emp.Middle_Name || '').trim().toLowerCase();
+  const lastName = (emp.Last_Name || '').trim().toLowerCase();
+  const fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+  const firstLast = [firstName, lastName].filter(Boolean).join(' ');
+
+  if (cleanQ === firstName || cleanQ === fullName || cleanQ === firstLast) return true;
+  if (cleanQ.length >= 3 && (fullName.includes(cleanQ) || cleanQ.includes(fullName))) return true;
+
+  return false;
+}
+
+async function getCachedEmployeeRecords(forceRefresh = false): Promise<CachedEmployeeRecord[]> {
+  const now = Date.now();
+  if (!forceRefresh && cachedEmployeeList && cachedEmployeeListExpiry > now && cachedEmployeeList.length > 0) {
+    return cachedEmployeeList;
+  }
+
+  try {
+    const accessToken = await getAccessToken();
+    const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
+    const apiBase = process.env.VITE_ZOHO_API_URL || process.env.ZOHO_API_URL || 'https://www.zohoapis.in';
+    const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Personal_Email_Address,Email,Password,System_Role,Department,Designation_Job_Title,Who_is_the_Team_Leader_TL,Reporting_Manager,Contact_Number';
+
+    const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&per_page=200`;
+    let res = await fetch(listUrl, {
+      headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+    });
+
+    if (res.status === 401) {
+      cachedToken = null;
+      const newToken = await getAccessToken();
+      res = await fetch(listUrl, {
+        headers: { Authorization: `Zoho-oauthtoken ${newToken}` }
+      });
+    }
+
+    if (res.status === 200) {
+      const data: any = await res.json();
+      if (Array.isArray(data?.data)) {
+        cachedEmployeeList = data.data;
+        cachedEmployeeListExpiry = now + 2 * 60 * 1000; // 2 minutes cache
+        return cachedEmployeeList!;
+      }
+    }
+  } catch (err) {
+    console.warn('[Zoho API] getCachedEmployeeRecords error:', err);
+  }
+
+  return cachedEmployeeList || [];
+}
+
 const employeeLookupCache = new Map<string, string>();
 
 async function resolveZohoEmployeeId(empInfo: any, token: string, apiBase: string): Promise<string | null> {
@@ -4325,81 +4434,26 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
 
-      // 1. If zohoId is not provided, search by email in Employee module
-      let isCustomEmployeeRecord = false;
-      if (email) {
-        try {
-          const criteria = `(((Personal_Email_Address:equals:${email})or(Email:equals:${email}))or(Employment_ID:equals:${email}))`;
-          const searchUrl = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteria)}`;
-          
-          let searchRes = await fetch(searchUrl, {
-            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-          });
-          
-          if (searchRes.status === 401) {
-            cachedToken = null;
-            accessToken = await getAccessToken();
-            searchRes = await fetch(searchUrl, {
-              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-            });
-          }
+      // 1. Locate the employee record in Employee module using smart matcher
+      let employeeList = await getCachedEmployeeRecords();
+      let matched = employeeList.find(e => 
+        (zohoId && String(e.id) === zohoId) ||
+        (email && matchesEmployeeQuery(e, email))
+      );
 
-          if (searchRes.status === 200) {
-            const searchData: any = await searchRes.json();
-            if (searchData?.data?.[0]?.id) {
-              zohoId = String(searchData.data[0].id);
-              isCustomEmployeeRecord = true;
-            }
-          }
-
-          // Fallback: search?email=...
-          if (!isCustomEmployeeRecord && email.includes('@')) {
-            const emailSearchUrl = `${apiBase}/crm/v8/${moduleName}/search?email=${encodeURIComponent(email)}`;
-            let emailRes = await fetch(emailSearchUrl, {
-              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-            });
-            if (emailRes.status === 200) {
-              const emailData: any = await emailRes.json();
-              if (emailData?.data?.[0]?.id) {
-                zohoId = String(emailData.data[0].id);
-                isCustomEmployeeRecord = true;
-              }
-            }
-          }
-
-          // Fallback: list scan on Employee custom module
-          if (!isCustomEmployeeRecord) {
-            try {
-              const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=id,Email,Personal_Email_Address,Employment_ID,Name&per_page=200`;
-              let listRes = await fetch(listUrl, {
-                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-              });
-              if (listRes.status === 200) {
-                const listData: any = await listRes.json();
-                const matched = listData?.data?.find((x: any) =>
-                  (x.Personal_Email_Address && x.Personal_Email_Address.toLowerCase() === email.toLowerCase()) ||
-                  (x.Email && x.Email.toLowerCase() === email.toLowerCase()) ||
-                  (x.Employment_ID && String(x.Employment_ID).toLowerCase() === email.toLowerCase()) ||
-                  (x.Name && x.Name.toLowerCase() === email.toLowerCase())
-                );
-                if (matched?.id) {
-                  zohoId = String(matched.id);
-                  isCustomEmployeeRecord = true;
-                }
-              }
-            } catch (listErr) {
-              console.warn('[Zoho API Handler] Employee list scan fallback failed:', listErr);
-            }
-          }
-        } catch (searchErr) {
-          console.warn('[Zoho API Handler] Error searching employee by email:', searchErr);
-        }
+      // If not in cache, force refresh from Zoho CRM and check again
+      if (!matched) {
+        employeeList = await getCachedEmployeeRecords(true);
+        matched = employeeList.find(e => 
+          (zohoId && String(e.id) === zohoId) ||
+          (email && matchesEmployeeQuery(e, email))
+        );
       }
 
-      // 2. If it's an existing record in Employee module, update Password via PUT
-      if (isCustomEmployeeRecord && zohoId) {
+      // If matched in Employee module, update Password via PUT
+      if (matched && matched.id) {
         const updatePayload = {
-          id: zohoId,
+          id: matched.id,
           Password: password,
         };
 
@@ -4436,17 +4490,20 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
         logZohoApiCall('update-employee-password', 'PUT', crmEndpoint, updatePayload, crmRes.status, crmData);
 
+        // Update in-memory cache immediately
+        matched.Password = password;
+
         if (crmData.data?.[0]?.code === 'SUCCESS') {
           return sendJson(res, 200, {
             success: true,
-            zohoId,
+            zohoId: matched.id,
             message: `Password updated successfully in Zoho CRM for employee (${email})`,
             data: crmData.data[0],
           });
         }
       }
 
-      // 3. If not in Employee module yet, fetch user from Zoho Users and insert as Employee record
+      // 2. If record does not exist in Employee custom module, fetch from Zoho Users and insert
       let userMatch: any = null;
       try {
         let usersRes = await fetch(`${apiBase}/crm/v8/users?type=AllUsers`, {
@@ -4456,7 +4513,8 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           const uData: any = await usersRes.json();
           userMatch = uData.users?.find((u: any) =>
             (u.email && u.email.toLowerCase() === email.toLowerCase()) ||
-            (zohoId && String(u.id) === zohoId)
+            (zohoId && String(u.id) === zohoId) ||
+            (email && (u.first_name?.toLowerCase() === email.toLowerCase() || u.full_name?.toLowerCase() === email.toLowerCase()))
           );
         }
       } catch (uErr) {
@@ -4514,6 +4572,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
       logZohoApiCall('update-employee-password', 'POST', insertEndpoint, insertPayload, insertRes.status, insertData);
 
+      // Refresh employee cache with new record
+      await getCachedEmployeeRecords(true);
+
       const newZohoId = insertData.data?.[0]?.details?.id || zohoId;
       return sendJson(res, 200, {
         success: true,
@@ -4523,117 +4584,35 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       });
     }
 
-    // 5.2. Search Employee by Email in Zoho CRM
+    // 5.2. Search Employee by Email / ID / Name in Zoho CRM
     if ((action === 'search-employee' || action === 'check-employee') && (method === 'GET' || method === 'POST')) {
       let email = '';
       if (method === 'GET') {
-        email = (urlObj.searchParams.get('email') || '').trim().toLowerCase();
+        email = (urlObj.searchParams.get('email') || '').trim();
       } else {
         const body = await getRequestBody(req);
-        email = (body.email || '').trim().toLowerCase();
+        email = (body.email || '').trim();
       }
 
       if (!email) {
         return sendJson(res, 400, { success: false, message: 'Email parameter is required' });
       }
 
-      let accessToken = await getAccessToken();
-      const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
-
       try {
-        let matchedRecord: any = null;
+        // Step 1: Look in cached Employee module records first
+        let employeeList = await getCachedEmployeeRecords();
+        let matchedRecord: any = employeeList.find(e => matchesEmployeeQuery(e, email));
 
-        const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Personal_Email_Address,Email,Password,System_Role,Department,Designation_Job_Title,Who_is_the_Team_Leader_TL,Reporting_Manager,Contact_Number';
-
-        // Step 1: Criteria search on Employee module
-        try {
-          const criteria = `(((Personal_Email_Address:equals:${email})or(Email:equals:${email}))or(Employment_ID:equals:${email}))`;
-          const searchUrl = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteria)}&fields=${employeeFields}`;
-
-          let searchRes = await fetch(searchUrl, {
-            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-          });
-
-          if (searchRes.status === 401) {
-            cachedToken = null;
-            accessToken = await getAccessToken();
-            searchRes = await fetch(searchUrl, {
-              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-            });
-          }
-
-          if (searchRes.status === 200) {
-            const searchData: any = await searchRes.json();
-            if (searchData?.data?.length > 0) {
-              matchedRecord = searchData.data[0];
-            }
-          }
-        } catch (critErr) {
-          console.warn('[Zoho API Handler] Employee criteria search failed:', critErr);
+        // If not found in cache, force refresh from Zoho CRM and check again
+        if (!matchedRecord) {
+          employeeList = await getCachedEmployeeRecords(true);
+          matchedRecord = employeeList.find(e => matchesEmployeeQuery(e, email));
         }
 
-        // Step 2: Fallback search?email=...
-        if (!matchedRecord && email.includes('@')) {
-          try {
-            const emailSearchUrl = `${apiBase}/crm/v8/${moduleName}/search?email=${encodeURIComponent(email)}&fields=${employeeFields}`;
-            let emailRes = await fetch(emailSearchUrl, {
-              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-            });
-            if (emailRes.status === 200) {
-              const emailData: any = await emailRes.json();
-              if (emailData?.data?.length > 0) {
-                matchedRecord = emailData.data[0];
-              }
-            }
-          } catch (emErr) {
-            console.warn('[Zoho API Handler] Employee email search failed:', emErr);
-          }
-        }
-
-        // Step 3: Fallback list scan on Employee custom module
+        // Step 2: Fallback to Zoho CRM Users if not yet in Employee custom module
         if (!matchedRecord) {
           try {
-            const listUrl = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&per_page=200`;
-            let listRes = await fetch(listUrl, {
-              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-            });
-            if (listRes.status === 200) {
-              const listData: any = await listRes.json();
-              if (listData?.data) {
-                matchedRecord = listData.data.find((x: any) =>
-                  (x.Personal_Email_Address && x.Personal_Email_Address.toLowerCase() === email) ||
-                  (x.Email && x.Email.toLowerCase() === email) ||
-                  (x.Employment_ID && String(x.Employment_ID).toLowerCase() === email) ||
-                  (x.Name && x.Name.toLowerCase() === email)
-                );
-              }
-            }
-          } catch (listErr) {
-            console.warn('[Zoho API Handler] Employee list scan failed:', listErr);
-          }
-        }
-
-        // If matched from Employee module, fetch single record to guarantee Password field is fully retrieved
-        if (matchedRecord && matchedRecord.id) {
-          try {
-            const singleUrl = `${apiBase}/crm/v8/${moduleName}/${matchedRecord.id}`;
-            let singleRes = await fetch(singleUrl, {
-              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-            });
-            if (singleRes.status === 200) {
-              const singleData: any = await singleRes.json();
-              if (singleData?.data?.[0]) {
-                matchedRecord = { ...matchedRecord, ...singleData.data[0] };
-              }
-            }
-          } catch (singleErr) {
-            console.warn('[Zoho API Handler] Single employee record fetch failed:', singleErr);
-          }
-        }
-
-        // Step 4: Fallback search in Zoho CRM Users (/crm/v8/users?type=AllUsers)
-        if (!matchedRecord) {
-          try {
+            let accessToken = await getAccessToken();
             let usersRes = await fetch(`${apiBase}/crm/v8/users?type=AllUsers`, {
               headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
             });
@@ -4648,16 +4627,18 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
             if (usersRes.status === 200) {
               const uData: any = await usersRes.json();
               const rawUsers = uData?.users || [];
+              const cleanQ = email.toLowerCase().trim();
               const foundUser = rawUsers.find((u: any) => {
                 const uEmail = (u.email || '').toLowerCase().trim();
                 const uFirst = (u.first_name || '').toLowerCase().trim();
                 const uFull = (u.full_name || '').toLowerCase().trim();
                 const uId = String(u.id || '').toLowerCase().trim();
-                return uEmail === email ||
-                       uFirst === email ||
-                       uFull === email ||
-                       uId === email ||
-                       (email.includes('@') && uEmail && (uEmail.split('@')[0] === email.split('@')[0]));
+                return uEmail === cleanQ ||
+                       uFirst === cleanQ ||
+                       uFull === cleanQ ||
+                       uId === cleanQ ||
+                       (cleanQ.includes('@') && uEmail && (uEmail.split('@')[0] === cleanQ.split('@')[0])) ||
+                       (!cleanQ.includes('@') && uEmail && (uEmail.split('@')[0] === cleanQ));
               });
 
               if (foundUser) {

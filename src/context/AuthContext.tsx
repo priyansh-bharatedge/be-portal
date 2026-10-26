@@ -381,6 +381,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     switchUser(userForRole);
   }, [switchUser]);
 
+  const matchEmployeeRecord = (emp: any, query: string): boolean => {
+    if (!emp || !query) return false;
+    const cleanQ = query.trim().toLowerCase();
+    if (!cleanQ) return false;
+    const qWithoutEmp = cleanQ.replace(/^emp[-_\s]*/i, '');
+    const qNum = parseInt(qWithoutEmp, 10);
+
+    const empEmail = (emp.email || emp.formData?.email || emp.Email || emp.workEmail || emp.formData?.workEmail || '').trim().toLowerCase();
+    const empPersonal = (emp.personalEmail || emp.formData?.personalEmail || emp.Personal_Email_Address || '').trim().toLowerCase();
+    const empIdStr = String(emp.id || emp.empId || emp.Employment_ID || '').trim().toLowerCase();
+    const empIdWithoutEmp = empIdStr.replace(/^emp[-_\s]*/i, '');
+    const zohoRecordId = String(emp.zohoId || '').trim();
+
+    // 1. Direct email or personal email exact match
+    if (empEmail === cleanQ || empPersonal === cleanQ) return true;
+
+    // 2. Email domain-agnostic prefix match (e.g. sirjan@bharat-edge.com vs sirjan@bharatedgedigital.com)
+    if (cleanQ.includes('@') && (empEmail.includes('@') || empPersonal.includes('@'))) {
+      const qPrefix = cleanQ.split('@')[0];
+      const empEmailPrefix = empEmail.split('@')[0];
+      const empPersonalPrefix = empPersonal.split('@')[0];
+      if (qPrefix === empEmailPrefix || qPrefix === empPersonalPrefix) return true;
+    }
+
+    // 3. Username prefix match if query doesn't have @ (e.g. user typed "sirjan")
+    if (!cleanQ.includes('@')) {
+      if (empEmail && empEmail.split('@')[0] === cleanQ) return true;
+      if (empPersonal && empPersonal.split('@')[0] === cleanQ) return true;
+    }
+
+    // 4. Employment ID match (flexible: with or without EMP-, numeric)
+    if (cleanQ === empIdStr || qWithoutEmp === empIdWithoutEmp) return true;
+    if (!isNaN(qNum) && parseInt(empIdWithoutEmp, 10) === qNum) return true;
+    if (cleanQ === zohoRecordId) return true;
+
+    // 5. Name matching
+    const firstName = (emp.Name || emp.name || emp.formData?.firstName || '').trim().toLowerCase();
+    const lastName = (emp.Last_Name || emp.formData?.lastName || '').trim().toLowerCase();
+    const fullName = [firstName, lastName].filter(Boolean).join(' ') || firstName;
+    if (cleanQ === firstName || cleanQ === fullName) return true;
+    if (cleanQ.length >= 3 && (fullName.includes(cleanQ) || cleanQ.includes(fullName))) return true;
+
+    return false;
+  };
+
   const searchEmployeeInZoho = async (email: string): Promise<{ success: boolean; exists: boolean; hasPassword?: boolean; employee?: any; error?: string }> => {
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail) {
@@ -449,12 +494,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (savedEmps) {
             try {
               const empsList = JSON.parse(savedEmps);
-              const localEmp = empsList.find((e: any) => 
-                (e.email && e.email.toLowerCase() === cleanEmail) ||
-                (e.formData?.email && e.formData.email.toLowerCase() === cleanEmail) ||
-                (e.formData?.workEmail && e.formData.workEmail.toLowerCase() === cleanEmail) ||
-                (e.id && String(e.id).toLowerCase() === cleanEmail)
-              );
+              const localEmp = empsList.find((e: any) => matchEmployeeRecord(e, cleanEmail));
               if (localEmp && (localEmp.password || localEmp.formData?.password)) {
                 hasPassword = true;
                 empPassword = localEmp.password || localEmp.formData?.password;
@@ -479,13 +519,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const liveRes = await fetchZohoEmployees();
         if (liveRes.success && Array.isArray(liveRes.data) && liveRes.data.length > 0) {
-          const matched = liveRes.data.find((z: any) => {
-            const zId = (z.Employment_ID || String(z.id || '')).trim().toLowerCase();
-            const zEmail = (z.Email || '').trim().toLowerCase();
-            const zPersonalEmail = (z.Personal_Email_Address || '').trim().toLowerCase();
-            const zName = (z.Name || '').trim().toLowerCase();
-            return zId === cleanEmail || zEmail === cleanEmail || zPersonalEmail === cleanEmail || zName === cleanEmail || (cleanEmail.includes('@') && zEmail && zEmail.split('@')[0] === cleanEmail.split('@')[0]);
-          });
+          const matched = liveRes.data.find((z: any) => matchEmployeeRecord(z, cleanEmail));
           if (matched) {
             const rawPass = matched.Password || '';
             const hasPass = Boolean(rawPass && String(rawPass).trim().length > 0);
@@ -522,12 +556,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Tertiary Fallback: Check local storage / demo users
     const savedEmps = localStorage.getItem('be_employees');
     const emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
-    const localMatch = emps.find((e: any) => 
-      e.email?.trim().toLowerCase() === cleanEmail ||
-      e.formData?.email?.trim().toLowerCase() === cleanEmail ||
-      e.formData?.workEmail?.trim().toLowerCase() === cleanEmail ||
-      e.id?.toString().trim().toLowerCase() === cleanEmail
-    );
+    const localMatch = emps.find((e: any) => matchEmployeeRecord(e, cleanEmail));
     const demoMatch = DEMO_USERS.find((u: any) => 
       u.email?.trim().toLowerCase() === cleanEmail ||
       (cleanEmail === 'superadmin' && u.role === 'Super Admin')
@@ -576,27 +605,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let emps = savedEmps ? JSON.parse(savedEmps) : INITIAL_EMPLOYEES;
     
     // Find matching employee across email, workEmail, personalEmail, and ID
-    let foundEmp = emps.find((e: any) => {
-      const emailMatches = e.email?.trim().toLowerCase() === clean;
-      const personalEmailMatches = e.formData?.email?.trim().toLowerCase() === clean;
-      const workEmailMatches = e.formData?.workEmail?.trim().toLowerCase() === clean;
-      const idMatches = e.id?.toString().trim().toLowerCase() === clean || e.empId?.toString().trim().toLowerCase() === clean;
-      const nameMatches = e.name?.trim().toLowerCase() === clean;
-      return emailMatches || personalEmailMatches || workEmailMatches || idMatches || nameMatches;
-    });
+    let foundEmp = emps.find((e: any) => matchEmployeeRecord(e, clean));
 
     // If not found in local cache, query live from Zoho CRM
     if (!foundEmp) {
       try {
         const zohoRes = await fetchZohoEmployees();
         if (zohoRes.success && Array.isArray(zohoRes.data)) {
-          const zMatch = zohoRes.data.find((z: any) => {
-            const zId = (z.Employment_ID || String(z.id || '')).trim().toLowerCase();
-            const zEmail = (z.Email || '').trim().toLowerCase();
-            const zPersonalEmail = (z.Personal_Email_Address || '').trim().toLowerCase();
-            const zName = (z.Name || '').trim().toLowerCase();
-            return zId === clean || zEmail === clean || zPersonalEmail === clean || zName === clean;
-          });
+          const zMatch = zohoRes.data.find((z: any) => matchEmployeeRecord(z, clean));
           if (zMatch) {
             foundEmp = {
               id: zMatch.Employment_ID || `EMP-${String(zMatch.id).slice(-4)}`,
