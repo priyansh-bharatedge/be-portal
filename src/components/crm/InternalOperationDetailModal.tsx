@@ -111,6 +111,76 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   });
   const [caCs1, setCaCs1] = useState<string>(record.CA_CS1 || '');
   const [caCs2, setCaCs2] = useState<string>(record.CA_CS2 || '');
+  const [isCustomCaCs1, setIsCustomCaCs1] = useState<boolean>(false);
+  const [isCustomCaCs2, setIsCustomCaCs2] = useState<boolean>(false);
+  const [localEmployees, setLocalEmployees] = useState<NormalizedStaff[]>([]);
+
+  useEffect(() => {
+    if (allStaff && allStaff.length > 0) return;
+    try {
+      const stored = localStorage.getItem('be_employees');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          const mapped: NormalizedStaff[] = parsed
+            .map((e: any) => {
+              const firstName = e.Name || e.First_Name || e.firstName || '';
+              const middleName = e.Middle_Name || e.middleName || '';
+              const lastName = e.Last_Name || e.lastName || '';
+              const compositeName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+              const name = String(e.name || compositeName || e.Employee_Name || e.fullName || '').trim();
+              const dept = String(e.dept || e.department || e.Department || e.formData?.dept || 'Operations').trim();
+              const rawRole = String(e.systemRole || e.System_Role || e.role || e.Designation_Job_Title || e.designation || 'TM').trim();
+              const isTL = rawRole.toLowerCase().includes('tl') || rawRole.toLowerCase().includes('leader');
+              return {
+                id: String(e.id || e.empId || e.zohoId || name),
+                name,
+                role: isTL ? 'TL' : 'TM',
+                systemRole: isTL ? 'TL' : 'TM',
+                dept,
+                email: String(e.email || ''),
+                isTL,
+                isTM: !isTL
+              };
+            })
+            .filter((s: NormalizedStaff) => s.name && s.name !== 'Employee' && !/^\d{15,}$/.test(s.name));
+          setLocalEmployees(mapped);
+        }
+      }
+    } catch (_) {}
+  }, [allStaff]);
+
+  // Operations Department staff: all employees (TM) and Team Leaders (TL) in Operations
+  const operationsStaff = useMemo(() => {
+    const list = (allStaff && allStaff.length > 0) ? allStaff : localEmployees;
+    const seen = new Set<string>();
+    const filtered: NormalizedStaff[] = [];
+
+    list.forEach(s => {
+      if (!s.name || s.name === 'Employee' || /^\d{15,}$/.test(s.name)) return false;
+      const dept = (s.dept || '').toLowerCase();
+      // Include if dept mentions operation, or if not in non-ops departments (legal, sales, hr, accounts)
+      const isOps = dept.includes('operat') || (!dept.includes('sale') && !dept.includes('legal') && !dept.includes('hr') && !dept.includes('account'));
+      if (isOps) {
+        const key = s.name.toLowerCase().trim();
+        if (!seen.has(key)) {
+          seen.add(key);
+          filtered.push(s);
+        }
+      }
+    });
+
+    return filtered.sort((a, b) => a.name.localeCompare(b.name));
+  }, [allStaff, localEmployees]);
+
+  const operationsTLs = useMemo(() => {
+    return operationsStaff.filter(s => s.isTL);
+  }, [operationsStaff]);
+
+  const operationsTMs = useMemo(() => {
+    return operationsStaff.filter(s => !s.isTL);
+  }, [operationsStaff]);
+
   const [selectedTlId, setSelectedTlId] = useState<string>(
     record.Team_Leader?.id || record.Team_Leader_TL?.id || (typeof record.Team_Leader_TL === 'string' ? record.Team_Leader_TL : '') || record.Team_Leader_ID || ''
   );
@@ -1431,29 +1501,126 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   <span>Chartered Accountant / Company Secretary Assignment (CA / CS)</span>
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* CA/CS 1 */}
                   <div>
-                    <label className="text-[11px] font-bold text-gray-700 block mb-1">
-                      CA/CS 1 (Primary Consultant)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. CA Ramesh Sharma or select staff..."
-                      value={caCs1}
-                      onChange={(e) => setCaCs1(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 focus:border-purple-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-gray-700">
+                        CA/CS 1 (Primary Consultant)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomCaCs1(!isCustomCaCs1)}
+                        className="text-[10px] font-semibold text-purple-600 hover:text-purple-800 transition-colors cursor-pointer"
+                      >
+                        {isCustomCaCs1 ? 'Choose from list' : '+ Custom name'}
+                      </button>
+                    </div>
+                    {isCustomCaCs1 ? (
+                      <input
+                        type="text"
+                        placeholder="Type CA/CS Name..."
+                        value={caCs1}
+                        onChange={(e) => setCaCs1(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-purple-300 hover:border-purple-400 focus:border-purple-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs"
+                      />
+                    ) : (
+                      <select
+                        value={caCs1}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setIsCustomCaCs1(true);
+                          } else {
+                            setCaCs1(e.target.value);
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 focus:border-purple-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs cursor-pointer"
+                      >
+                        <option value="">Select Operations Staff (TL / Employee)...</option>
+                        {caCs1 && !operationsStaff.some(s => s.name === caCs1) && (
+                          <option value={caCs1}>{caCs1} (Current)</option>
+                        )}
+                        {operationsTLs.length > 0 && (
+                          <optgroup label="Operations Team Leaders (TL)">
+                            {operationsTLs.map(tl => (
+                              <option key={`cacs1_tl_${tl.id}`} value={tl.name}>
+                                {tl.name} (TL)
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {operationsTMs.length > 0 && (
+                          <optgroup label="Operations Team Members (TM)">
+                            {operationsTMs.map(tm => (
+                              <option key={`cacs1_tm_${tm.id}`} value={tm.name}>
+                                {tm.name} (Operations)
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        <option value="__custom__">+ Enter Custom CA / CS Name...</option>
+                      </select>
+                    )}
                   </div>
+
+                  {/* CA/CS 2 */}
                   <div>
-                    <label className="text-[11px] font-bold text-gray-700 block mb-1">
-                      CA/CS 2 (Secondary Consultant / Auditor)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. CS Priya Patel or external partner..."
-                      value={caCs2}
-                      onChange={(e) => setCaCs2(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 focus:border-purple-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-gray-700">
+                        CA/CS 2 (Secondary Consultant / Auditor)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomCaCs2(!isCustomCaCs2)}
+                        className="text-[10px] font-semibold text-purple-600 hover:text-purple-800 transition-colors cursor-pointer"
+                      >
+                        {isCustomCaCs2 ? 'Choose from list' : '+ Custom name'}
+                      </button>
+                    </div>
+                    {isCustomCaCs2 ? (
+                      <input
+                        type="text"
+                        placeholder="Type CA/CS Name..."
+                        value={caCs2}
+                        onChange={(e) => setCaCs2(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-purple-300 hover:border-purple-400 focus:border-purple-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs"
+                      />
+                    ) : (
+                      <select
+                        value={caCs2}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setIsCustomCaCs2(true);
+                          } else {
+                            setCaCs2(e.target.value);
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 focus:border-purple-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs cursor-pointer"
+                      >
+                        <option value="">Select Operations Staff (TL / Employee)...</option>
+                        {caCs2 && !operationsStaff.some(s => s.name === caCs2) && (
+                          <option value={caCs2}>{caCs2} (Current)</option>
+                        )}
+                        {operationsTLs.length > 0 && (
+                          <optgroup label="Operations Team Leaders (TL)">
+                            {operationsTLs.map(tl => (
+                              <option key={`cacs2_tl_${tl.id}`} value={tl.name}>
+                                {tl.name} (TL)
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {operationsTMs.length > 0 && (
+                          <optgroup label="Operations Team Members (TM)">
+                            {operationsTMs.map(tm => (
+                              <option key={`cacs2_tm_${tm.id}`} value={tm.name}>
+                                {tm.name} (Operations)
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        <option value="__custom__">+ Enter Custom CA / CS Name...</option>
+                      </select>
+                    )}
                   </div>
                 </div>
               </div>
