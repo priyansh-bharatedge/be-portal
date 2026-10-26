@@ -1636,7 +1636,7 @@ export async function fetchZohoDeals(options?: ZohoFetchOptions): Promise<ZohoFe
  */
 export async function fetchZohoDealsCount(): Promise<{ success: boolean; count: number }> {
   try {
-    const response = await fetch('/api/zoho/actions/count?module=Deals');
+    const response = await fetch('/api/zoho/actions/count?module=Deals&criteria=' + encodeURIComponent('(Booking_Date:greater_equal:2026-10-01)'));
     const result = await safeParseResponse(response);
     if (response.ok && result.success) {
       return { success: true, count: Number(result.count) || 0 };

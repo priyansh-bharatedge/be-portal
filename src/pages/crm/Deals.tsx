@@ -298,11 +298,11 @@ export const Deals = () => {
         if (Array.isArray(parsed) && parsed.length > 0) {
           const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
           const octOnly = parsed.filter((d: any) => {
-            const raw = d.rawZohoDeal || {};
-            const ct = d.Created_Time || raw.Created_Time || d.createdTime;
-            if (!ct) return true;
+            const raw = d.rawZohoDeal || d;
+            const ct = d.Booking_Date || raw.Booking_Date || d.Payment_Date || raw.Payment_Date || d.Closing_Date || d.Created_Time || raw.Created_Time || d.date;
+            if (!ct) return false;
             const ms = new Date(ct).getTime();
-            return !isNaN(ms) ? ms >= octStart : true;
+            return !isNaN(ms) ? ms >= octStart : false;
           });
           return octOnly.map((d: any) => {
             const raw = d.rawZohoDeal || {};
@@ -1886,10 +1886,11 @@ export const Deals = () => {
         const rawList = data.data || [];
         const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
         const octFilteredRaw = rawList.filter((d: any) => {
-          const ct = d.Created_Time || d.created_time || d.CreatedTime;
-          if (!ct) return true;
+          const raw = d.rawZohoDeal || d;
+          const ct = d.Booking_Date || raw.Booking_Date || d.Payment_Date || raw.Payment_Date || d.Closing_Date || d.Created_Time || raw.Created_Time || d.date;
+          if (!ct) return false;
           const ms = new Date(ct).getTime();
-          return !isNaN(ms) ? ms >= octStart : true;
+          return !isNaN(ms) ? ms >= octStart : false;
         });
         
         let existingDeals: any[] = [];
@@ -1899,11 +1900,11 @@ export const Deals = () => {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
               existingDeals = parsed.filter((d: any) => {
-                const raw = d.rawZohoDeal || {};
-                const ct = d.Created_Time || raw.Created_Time || d.createdTime;
-                if (!ct) return true;
+                const raw = d.rawZohoDeal || d;
+                const ct = d.Booking_Date || raw.Booking_Date || d.Payment_Date || raw.Payment_Date || d.Closing_Date || d.Created_Time || raw.Created_Time || d.date;
+                if (!ct) return false;
                 const ms = new Date(ct).getTime();
-                return !isNaN(ms) ? ms >= octStart : true;
+                return !isNaN(ms) ? ms >= octStart : false;
               });
             }
           }

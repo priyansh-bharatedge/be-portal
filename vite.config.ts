@@ -38,6 +38,18 @@ function zohoApiPlugin(): Plugin {
       return cachedToken;
     }
 
+    try {
+      const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
+      if (fs.existsSync(tokenPath)) {
+        const diskToken = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
+        if (diskToken?.token && diskToken.expiry > now + 60000) {
+          cachedToken = diskToken.token;
+          tokenExpiry = diskToken.expiry;
+          return String(diskToken.token);
+        }
+      }
+    } catch (_) {}
+
     const params = new URLSearchParams({
       refresh_token: refreshToken,
       client_id: clientId,
@@ -57,6 +69,11 @@ function zohoApiPlugin(): Plugin {
     const token: string = data.access_token;
     cachedToken = token;
     tokenExpiry = now + (Number(data.expires_in) || 3600) * 1000;
+    try {
+      const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
+      fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+      fs.writeFileSync(tokenPath, JSON.stringify({ token: cachedToken, expiry: tokenExpiry }));
+    } catch (_) {}
     return token;
   }
 
@@ -434,19 +451,27 @@ function zohoApiPlugin(): Plugin {
   }
 
   // October 2026 Filter Constants for CRM REST API
+  // Note: Zoho CRM standard Deals module does NOT support criteria search on Created_Time.
+  // Deals uses Booking_Date. Other custom CRM modules (Quotations, Companies, Clients, Operation_Internal_CRM) use Created_Time.
   const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
+  const OCTOBER_2026_DEALS_CRITERIA = '(Booking_Date:greater_equal:2026-10-01)';
   const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
 
-  function combineWithOctoberFilter(existingCriteria?: string | null): string {
+  function combineWithOctoberFilter(existingCriteria?: string | null, moduleName?: string): string {
+    const isDeals = String(moduleName || '').toLowerCase().includes('deal');
+    const targetCrit = isDeals ? OCTOBER_2026_DEALS_CRITERIA : OCTOBER_2026_CRITERIA;
     if (!existingCriteria || !existingCriteria.trim()) {
-      return OCTOBER_2026_CRITERIA;
+      return targetCrit;
     }
     const trimmed = existingCriteria.trim();
-    if (trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
+    if (isDeals && (trimmed.includes('Booking_Date:greater_equal:2026-10-01') || trimmed.includes('Booking_Date:greater_equal:'))) {
+      return trimmed;
+    }
+    if (!isDeals && trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
       return trimmed;
     }
     const wrapped = trimmed.startsWith('(') && trimmed.endsWith(')') ? trimmed : `(${trimmed})`;
-    return `((${OCTOBER_2026_CRITERIA})and${wrapped})`;
+    return `((${targetCrit})and${wrapped})`;
   }
 
   function buildZohoPaginationQuery(urlObj: URL): string {
@@ -3963,7 +3988,7 @@ function zohoApiPlugin(): Plugin {
             const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Client_Email_address,Gst_number,Pan_number,Aadhaar_Card,Billing_address,Company_address,City,State,Bank_details,Accounts_remark,Remark,Remarks,Description,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
             const milestoneFields = 'id,R1_Received_amount23,R1_Received_Screenshot,R1_Received_by_BDM1,R1_Received_by_BDM2,R1_Payment_Verification,R1_Bank_type,R1_Legal_verification,R2_Received_amount12,R2_Received_Screenshot,R2_Received_by_BDM1,R2_Received_by_BDM2,R2_Payment_Verification,R2_Bank_type,R2_Legal_verification,DPR_status_change_date,R3_Received_amount,R3_Received_Screenshot,R3_Received_by_BDM1,R3_Received_by_BDM2,R3_Payment_Verification,R3_Bank_type,R3_Legal_verification,Date_of_status_change,R4_Received_amount,R4_Received_Screenshot,R4_Payment_Verification,R4_Bank_type,R4_Legal_verification,Date_of_status_change_f,R5_Received_amount,R5_Payment_Verification,R5_Bank_type,R5_Legal_verification,Document_collection_Pitch_deck_creation_DPR_date,R6_Received_amount,R6_Payment_Verification,R6_Bank_type,R6_Legal_verification,Document_sent_date,R7_Received_amount,R7_Payment_Verification,R7_Bank_type,R7_Legal_verification,Finance_status_change_date,R8_Received_amount,R8_Payment_Verification,R8_Bank_type,R8_Legal_verification,Date_of_financedate_change';
             const rawCriteria = urlObj.searchParams.get('criteria') || '';
-            const criteria = combineWithOctoberFilter(rawCriteria);
+            const criteria = combineWithOctoberFilter(rawCriteria, 'Deals');
             urlObj.searchParams.set('criteria', criteria);
             const paginationQuery = buildZohoPaginationQuery(urlObj);
             const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?fields=${dealFields}&${paginationQuery}`;
@@ -4040,14 +4065,14 @@ function zohoApiPlugin(): Plugin {
               } catch (_) {}
             }
 
-            // Dual-layer defense: strictly filter deals by October 2026 Created_Time
+            // Dual-layer defense: strictly filter deals by October 2026 date
             if (crmData?.data && Array.isArray(crmData.data)) {
               crmData.data = crmData.data.filter((deal: any) => {
                 if (!deal) return false;
-                const ct = deal.Created_Time || deal.created_time || deal.CreatedTime;
-                if (!ct) return true;
-                const ms = new Date(ct).getTime();
-                return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : true;
+                const rawDate = deal.Booking_Date || deal.Payment_Date || deal.Closing_Date || deal.Created_Time || deal.date;
+                if (!rawDate) return false;
+                const ms = new Date(rawDate).getTime();
+                return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : false;
               });
             }
 

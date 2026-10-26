@@ -34,6 +34,18 @@ async function getAccessToken(): Promise<string> {
     return cachedToken;
   }
 
+  try {
+    const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
+    if (fs.existsSync(tokenPath)) {
+      const diskToken = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
+      if (diskToken?.token && diskToken.expiry > now + 60000) {
+        cachedToken = diskToken.token;
+        tokenExpiry = diskToken.expiry;
+        return String(diskToken.token);
+      }
+    }
+  } catch (_) {}
+
   const params = new URLSearchParams({
     refresh_token: refreshToken,
     client_id: clientId,
@@ -53,6 +65,11 @@ async function getAccessToken(): Promise<string> {
   const token: string = data.access_token;
   cachedToken = token;
   tokenExpiry = now + (Number(data.expires_in) || 3600) * 1000;
+  try {
+    const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
+    fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+    fs.writeFileSync(tokenPath, JSON.stringify({ token: cachedToken, expiry: tokenExpiry }));
+  } catch (_) {}
   return token;
 }
 
@@ -1897,19 +1914,27 @@ function buildZohoPaginationQuery(req: ApiRequest, urlObj: URL): string {
 }
 
 // October 2026 Filter Constants for CRM REST API
+// Note: Zoho CRM standard Deals module does NOT support criteria search on Created_Time.
+// Deals uses Booking_Date. Other custom CRM modules (Quotations, Companies, Clients, Operation_Internal_CRM) use Created_Time.
 const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
+const OCTOBER_2026_DEALS_CRITERIA = '(Booking_Date:greater_equal:2026-10-01)';
 const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
 
-function combineWithOctoberFilter(existingCriteria?: string | null): string {
+function combineWithOctoberFilter(moduleName: string, existingCriteria?: string | null): string {
+  const isDeals = String(moduleName || '').toLowerCase() === 'deals';
+  const targetCrit = isDeals ? OCTOBER_2026_DEALS_CRITERIA : OCTOBER_2026_CRITERIA;
   if (!existingCriteria || !existingCriteria.trim()) {
-    return OCTOBER_2026_CRITERIA;
+    return targetCrit;
   }
   const trimmed = existingCriteria.trim();
-  if (trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
+  if (isDeals && (trimmed.includes('Booking_Date:greater_equal:2026-10-01') || trimmed.includes('Booking_Date:greater_equal:'))) {
+    return trimmed;
+  }
+  if (!isDeals && trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
     return trimmed;
   }
   const wrapped = trimmed.startsWith('(') && trimmed.endsWith(')') ? trimmed : `(${trimmed})`;
-  return `((${OCTOBER_2026_CRITERIA})and${wrapped})`;
+  return `((${targetCrit})and${wrapped})`;
 }
 
 async function executeZohoGet(
@@ -1932,7 +1957,7 @@ async function executeZohoGet(
       normModule === 'companies' || normEntity === 'companies' ||
       normModule === 'clients' || normEntity === 'clients';
 
-    const criteria = isCrmModule ? combineWithOctoberFilter(rawCriteria) : rawCriteria;
+    const criteria = isCrmModule ? combineWithOctoberFilter(moduleName, rawCriteria) : rawCriteria;
     if (criteria) {
       urlObj.searchParams.set('criteria', criteria);
     }
@@ -2101,14 +2126,17 @@ async function executeZohoGet(
       }
     }
 
-    // Dual-layer defense: strictly filter CRM records by October 2026 Created_Time
+    // Dual-layer defense: strictly filter CRM records by October 2026 date
     if (isCrmModule && Array.isArray(crmData?.data)) {
       crmData.data = crmData.data.filter((item: any) => {
         if (!item) return false;
-        const ct = item.Created_Time || item.created_time || item.CreatedTime;
-        if (!ct) return true;
-        const createdMs = new Date(ct).getTime();
-        return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : true;
+        const isDeals = String(moduleName || '').toLowerCase() === 'deals' || String(entityName || '').toLowerCase() === 'deals';
+        const rawDate = isDeals
+          ? (item.Booking_Date || item.Payment_Date || item.Closing_Date || item.Created_Time || item.date)
+          : (item.Created_Time || item.created_time || item.CreatedTime || item.Booking_Date);
+        if (!rawDate) return false;
+        const createdMs = new Date(rawDate).getTime();
+        return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : false;
       });
     }
 
@@ -4144,7 +4172,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         const normTarget = String(targetModule).toLowerCase();
         const isCrm = normTarget === 'deals' || normTarget === 'quotations' || normTarget === 'companies' || normTarget === 'clients' || normTarget.includes('internal');
         const rawCriteria = urlObj.searchParams.get('criteria') || '';
-        const effectiveCriteria = isCrm ? combineWithOctoberFilter(rawCriteria) : rawCriteria;
+        const effectiveCriteria = isCrm ? combineWithOctoberFilter(targetModule, rawCriteria) : rawCriteria;
         const countEndpoint = effectiveCriteria
           ? `${apiBase}/crm/v8/${targetModule}/actions/count?criteria=${encodeURIComponent(effectiveCriteria)}`
           : `${apiBase}/crm/v8/${targetModule}/actions/count`;

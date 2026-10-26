@@ -1,4 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import fs from 'fs';
+import path from 'path';
 
 // Helper function to derive Zoho API base URL from Datacenter Accounts URL
 function getZohoApiBaseUrl(datacenterUrl: string): string {
@@ -18,8 +20,10 @@ function getZohoApiBaseUrl(datacenterUrl: string): string {
   return 'https://www.zohoapis.com';
 }
 
-// October 2026 Filter Constants for CRM REST API
-const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
+// October 2026 Filter Constants for Zoho Deals CRM REST API
+// Note: Zoho CRM standard Deals module does NOT support search criteria on system audit fields (Created_Time).
+// In Zoho CRM Deals, Booking_Date is the search-supported module date field for deal creation/booking.
+const OCTOBER_2026_CRITERIA = '(Booking_Date:greater_equal:2026-10-01)';
 const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
 
 function combineWithOctoberFilter(existingCriteria?: string | null): string {
@@ -27,7 +31,7 @@ function combineWithOctoberFilter(existingCriteria?: string | null): string {
     return OCTOBER_2026_CRITERIA;
   }
   const trimmed = existingCriteria.trim();
-  if (trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
+  if (trimmed.includes('Booking_Date:greater_equal:2026-10-01') || trimmed.includes('Booking_Date:greater_equal:')) {
     return trimmed;
   }
   const wrapped = trimmed.startsWith('(') && trimmed.endsWith(')') ? trimmed : `(${trimmed})`;
@@ -174,9 +178,23 @@ export default async function dealsHandler(req: any, res: any) {
       });
     }
 
-    // 1. Fetch Fresh Access Token using Refresh Token (with caching)
+    // 1. Fetch Fresh Access Token using Refresh Token (with memory and file caching)
     const now = Date.now();
     let accessToken = cachedToken;
+
+    if (!accessToken || tokenExpiry <= now + 60000) {
+      try {
+        const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
+        if (fs.existsSync(tokenPath)) {
+          const diskToken = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
+          if (diskToken?.token && diskToken.expiry > now + 60000) {
+            accessToken = diskToken.token;
+            cachedToken = accessToken;
+            tokenExpiry = diskToken.expiry;
+          }
+        }
+      } catch (_) {}
+    }
 
     if (!accessToken || tokenExpiry <= now + 60000) {
       const authDomain = datacenterUrl.replace(/\/$/, '');
@@ -210,6 +228,11 @@ export default async function dealsHandler(req: any, res: any) {
       accessToken = tokenData.access_token;
       cachedToken = accessToken;
       tokenExpiry = now + (Number(tokenData.expires_in) || 3600) * 1000;
+      try {
+        const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
+        fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+        fs.writeFileSync(tokenPath, JSON.stringify({ token: accessToken, expiry: tokenExpiry }));
+      } catch (_) {}
     }
 
     const apiBase = getZohoApiBaseUrl(datacenterUrl);
@@ -431,14 +454,24 @@ export default async function dealsHandler(req: any, res: any) {
       }
     }
 
-    // Dual-layer defense: strictly enforce October 2026 Created_Time filter on returned records
+    // Dual-layer defense: strictly enforce October 2026 filter on returned Deal records
     if (Array.isArray(crmData.data)) {
       crmData.data = crmData.data.filter((deal: any) => {
         if (!deal) return false;
-        const ct = deal.Created_Time || deal.created_time || deal.CreatedTime;
-        if (!ct) return true;
-        const createdMs = new Date(ct).getTime();
-        return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : true;
+        const rawDate = (
+          deal.Booking_Date ||
+          deal.Payment_Date ||
+          deal.Closing_Date ||
+          deal.Created_Time ||
+          deal.created_time ||
+          deal.CreatedTime ||
+          deal.date ||
+          (Array.isArray(deal.Subform_1) && deal.Subform_1[0]?.Payment_received_date) ||
+          (Array.isArray(deal.Subform_1) && deal.Subform_1[0]?.Created_Time)
+        );
+        if (!rawDate) return false;
+        const createdMs = new Date(rawDate).getTime();
+        return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : false;
       });
     }
 

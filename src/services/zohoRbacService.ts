@@ -332,6 +332,7 @@ export function attachCurrentUserEmployeeLookup<T = any>(record: T, customUser?:
 }
 
 export const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
+export const OCTOBER_2026_DEALS_CRITERIA = '(Booking_Date:greater_equal:2026-10-01)';
 export const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
 
 export function isCrmModuleName(moduleName: string): boolean {
@@ -345,16 +346,21 @@ export function isCrmModuleName(moduleName: string): boolean {
   );
 }
 
-export function combineWithOctoberCriteria(existingCriteria?: string | null): string {
+export function combineWithOctoberCriteria(existingCriteria?: string | null, moduleName?: string): string {
+  const isDeals = String(moduleName || '').toLowerCase().includes('deal');
+  const targetCrit = isDeals ? OCTOBER_2026_DEALS_CRITERIA : OCTOBER_2026_CRITERIA;
   if (!existingCriteria || !existingCriteria.trim()) {
-    return OCTOBER_2026_CRITERIA;
+    return targetCrit;
   }
   const trimmed = existingCriteria.trim();
-  if (trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
+  if (isDeals && (trimmed.includes('Booking_Date:greater_equal:2026-10-01') || trimmed.includes('Booking_Date:greater_equal:'))) {
+    return trimmed;
+  }
+  if (!isDeals && trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
     return trimmed;
   }
   const wrapped = trimmed.startsWith('(') && trimmed.endsWith(')') ? trimmed : `(${trimmed})`;
-  return `((${OCTOBER_2026_CRITERIA})and${wrapped})`;
+  return `((${targetCrit})and${wrapped})`;
 }
 
 /**
@@ -370,7 +376,9 @@ export function buildZohoRbacCriteria(
   const userDept = (user?.department || '').trim().toLowerCase();
   const isAccounts = userDept.includes('account') || userDept.includes('finance');
   const isLegal = userDept.includes('legal');
+  const isDeals = moduleName === 'Deals' || moduleName === 'Deal';
   const isCrm = isCrmModuleName(moduleName);
+  const crmOctoberCrit = isDeals ? OCTOBER_2026_DEALS_CRITERIA : OCTOBER_2026_CRITERIA;
 
   // Exempt modules and full-visibility roles (Super Admin, HOD, HR, Accounts, Legal) have no role filters
   if (
@@ -385,8 +393,8 @@ export function buildZohoRbacCriteria(
     user.email === 'md@bharat-edge.com'
   ) {
     return {
-      criteria: isCrm ? OCTOBER_2026_CRITERIA : '',
-      coqlWhereClause: isCrm ? "Created_Time >= '2026-10-01T00:00:00+05:30'" : '',
+      criteria: isCrm ? crmOctoberCrit : '',
+      coqlWhereClause: isCrm ? (isDeals ? "Booking_Date >= '2026-10-01'" : "Created_Time >= '2026-10-01T00:00:00+05:30'") : '',
       accessibleEmployeeIds: [],
       isUnfiltered: true,
       role: user?.role || 'Super Admin'
@@ -397,8 +405,8 @@ export function buildZohoRbacCriteria(
 
   if (isAll) {
     return {
-      criteria: isCrm ? OCTOBER_2026_CRITERIA : '',
-      coqlWhereClause: isCrm ? "Created_Time >= '2026-10-01T00:00:00+05:30'" : '',
+      criteria: isCrm ? crmOctoberCrit : '',
+      coqlWhereClause: isCrm ? (isDeals ? "Booking_Date >= '2026-10-01'" : "Created_Time >= '2026-10-01T00:00:00+05:30'") : '',
       accessibleEmployeeIds: [],
       isUnfiltered: true,
       role: user.role
@@ -411,8 +419,8 @@ export function buildZohoRbacCriteria(
   if (targetIds.length === 0) {
     const zeroCriteria = `(${lookupField}:equals:0)`;
     return {
-      criteria: isCrm ? combineWithOctoberCriteria(zeroCriteria) : zeroCriteria,
-      coqlWhereClause: isCrm ? `(Created_Time >= '2026-10-01T00:00:00+05:30' and ${lookupField}.id = 0)` : `${lookupField}.id = 0`,
+      criteria: isCrm ? combineWithOctoberCriteria(zeroCriteria, moduleName) : zeroCriteria,
+      coqlWhereClause: isCrm ? `(${isDeals ? "Booking_Date >= '2026-10-01'" : "Created_Time >= '2026-10-01T00:00:00+05:30'"} and ${lookupField}.id = 0)` : `${lookupField}.id = 0`,
       accessibleEmployeeIds: [],
       isUnfiltered: false,
       role: user.role
@@ -427,8 +435,8 @@ export function buildZohoRbacCriteria(
     const baseCoql = `(Employee.id in (${formattedCoqlIds}) or Partner_BDM.id in (${formattedCoqlIds}) or Owner.id in (${formattedCoqlIds}))`;
 
     return {
-      criteria: combineWithOctoberCriteria(combinedCriteria),
-      coqlWhereClause: `(Created_Time >= '2026-10-01T00:00:00+05:30' and ${baseCoql})`,
+      criteria: combineWithOctoberCriteria(combinedCriteria, moduleName),
+      coqlWhereClause: `(Booking_Date >= '2026-10-01' and ${baseCoql})`,
       accessibleEmployeeIds: targetIds,
       isUnfiltered: false,
       role: user.role
@@ -490,12 +498,16 @@ export function filterRecordsByRbac<T = any>(
   // Dual-layer defense: Filter CRM modules to strictly October 2026 or later for all users
   let effectiveRecords = records;
   if (isCrmModuleName(moduleName)) {
+    const isDeals = moduleName.toLowerCase().includes('deal');
     effectiveRecords = records.filter((r: any) => {
       if (!r) return false;
-      const ct = r.Created_Time || r.created_time || r.CreatedTime;
-      if (!ct) return true;
-      const ms = new Date(ct).getTime();
-      return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : true;
+      const raw = r.rawZohoDeal || r;
+      const rawDate = isDeals
+        ? (r.Booking_Date || raw.Booking_Date || r.Payment_Date || raw.Payment_Date || r.Closing_Date || raw.Closing_Date || r.Created_Time || raw.Created_Time || r.date || raw.date)
+        : (r.Created_Time || raw.Created_Time || r.created_time || r.CreatedTime || r.Booking_Date);
+      if (!rawDate) return false;
+      const ms = new Date(rawDate).getTime();
+      return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : false;
     });
   }
 
