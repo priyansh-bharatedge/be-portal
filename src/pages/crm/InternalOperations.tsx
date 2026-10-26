@@ -7,7 +7,7 @@ import { Briefcase, Layers, ShieldCheck, UserCheck } from 'lucide-react';
 
 export const InternalOperations = () => {
   const navigate = useNavigate();
-  const { currentUser, isOperationsHOD, isLegalHOD, isSuperAdmin, isSales, isTL } = useAuth();
+  const { currentUser, isOperationsHOD, isLegalHOD, isSuperAdmin, isSales, isTL, isTM } = useAuth();
   const [stats, setStats] = useState({ total: 0, pending: 0, allocated: 0, myAssigned: 0 });
 
   const isSalesDeptUser = !isSuperAdmin && Boolean(
@@ -32,6 +32,12 @@ export const InternalOperations = () => {
     currentUser?.role?.includes('Team Leader') || 
     currentUser?.designation?.includes('TL') || 
     currentUser?.designation?.includes('Leader')
+  );
+  const isTeamMember = Boolean(
+    currentUser?.role === 'TM' ||
+    (currentUser as any)?.systemRole === 'TM' ||
+    isTM ||
+    (isIndividualContributor && !isTeamLeader)
   );
 
   const updateStats = () => {
@@ -110,8 +116,10 @@ export const InternalOperations = () => {
                 )}
               </div>
               <p className="text-sm text-gray-500 mt-0.5">
-                {isIndividualContributor
-                  ? 'Manage and execute your assigned service allocations, update process stages, and upload compliance documents'
+                {isTeamMember
+                  ? 'Manage and execute your assigned child records, update process stages, and upload compliance documents'
+                  : isTeamLeader
+                  ? 'Oversee and assign service allocations for your team members, monitor execution, and update stages'
                   : isLegalHOD
                   ? 'Supervisory auditing of service lines transferred from Legal Department to Operations'
                   : 'Operations Department delegation hub for delegating service lines to Team Leaders & Members'}

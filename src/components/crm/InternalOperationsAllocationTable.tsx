@@ -37,7 +37,8 @@ import {
   Building,
   Award,
   Share2,
-  Trash2
+  Trash2,
+  UserCheck
 } from 'lucide-react';
 import { INTERNAL_TEAM_TYPES } from '../../pages/crm/DealDetails';
 import { InternalOperationDetailModal } from './InternalOperationDetailModal';
@@ -73,8 +74,8 @@ export function checkUserMatchesStaff(
   if (!user) return false;
 
   const staffId = String(staffObj?.id || fallbackId || (typeof staffObj === 'string' ? staffObj : '') || '').trim().toLowerCase();
-  const staffName = String(staffObj?.name || staffObj?.lookup_label || fallbackName || '').trim();
-  const staffEmail = String(staffObj?.email || '').trim().toLowerCase();
+  const staffName = String(staffObj?.name || staffObj?.lookup_label || staffObj?.value || fallbackName || '').trim();
+  const staffEmail = String(staffObj?.email || staffObj?.workEmail || staffObj?.Email || '').trim().toLowerCase();
 
   // If no staff info is present on the record, no match
   if (!staffId && !staffName && !staffEmail) return false;
@@ -83,7 +84,7 @@ export function checkUserMatchesStaff(
   const uEmpId = String(user.empId || user.Employment_ID || '').trim().toLowerCase();
   const uZohoId = String(user.zohoId || '').trim().toLowerCase();
   const uEmail = String(user.email || user.workEmail || user.personalEmail || '').trim().toLowerCase();
-  const uName = String(user.name || '').trim();
+  const uName = String(user.name || user.fullName || user.Employee_Name || user.First_Name || '').trim();
 
   // 1. Direct ID matches (checking all permutations of user IDs)
   const candidateIds = [uId, uEmpId, uZohoId].filter(Boolean);
@@ -123,7 +124,24 @@ export function checkRecordAssignedToUser(record: any, user: any): boolean {
   const tmName = tmObj?.name || record.Team_Member_Name || '';
   if (checkUserMatchesStaff(user, tmObj, tmId, tmName)) return true;
 
+  // 3. Fallback check for any direct assigned staff or Owner/Assigned_To
+  const assignedObj = record.Assigned_To || record.assignedTo || record.Owner || record.Owner_ID;
+  const assignedId = assignedObj?.id || (typeof assignedObj === 'string' ? assignedObj : '');
+  const assignedName = assignedObj?.name || (typeof assignedObj === 'string' ? assignedObj : '');
+  if (checkUserMatchesStaff(user, assignedObj, assignedId, assignedName)) return true;
+
   return false;
+}
+
+/**
+ * Checks whether an InternalOperationRecord is specifically assigned to a user as a Team Member (TM).
+ */
+export function checkRecordAssignedToTM(record: any, user: any): boolean {
+  if (!user || !record) return false;
+  const tmObj = record.Team_Member_TM || record.Team_Member;
+  const tmId = tmObj?.id || record.Team_Member_ID || (typeof tmObj === 'string' ? tmObj : '');
+  const tmName = tmObj?.name || record.Team_Member_Name || '';
+  return checkUserMatchesStaff(user, tmObj, tmId, tmName);
 }
 
 export function normalizeStaffRecord(e: any): NormalizedStaff {
@@ -209,7 +227,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
   canProceedToExecutors = false
 }) => {
   const navigate = useNavigate();
-  const { currentUser, isSuperAdmin, isHOD, isLegal, isOperationsHOD, isLegalHOD, isSales, availableUsers } = useAuth();
+  const { currentUser, isSuperAdmin, isHOD, isLegal, isOperationsHOD, isLegalHOD, isSales, availableUsers, isTL, isTM } = useAuth();
 
   const isSalesDeptUser = !isSuperAdmin && Boolean(
     isSales || 
@@ -249,6 +267,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
   const canManageAllocations = Boolean(isSuperAdmin || isOperationsHOD || (isHOD && !isLegal && !isSalesDeptUser));
   const hasSupervisoryOversight = Boolean(isLegalHOD || isLegal);
   const isTeamLeader = Boolean(
+    isTL || 
     currentUser?.role === 'TL' || 
     (currentUser as any)?.systemRole === 'TL' || 
     (currentUser?.role && currentUser.role.toLowerCase().includes('team leader')) || 
@@ -262,6 +281,13 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
   const canAssignTM = Boolean(canManageAllocations || isTeamLeader);
   const canDeleteAllocations = Boolean(isSuperAdmin || isOperationsHOD || isLegalHOD || hasSupervisoryOversight || canManageAllocations);
   const isIndividualContributor = !canManageAllocations && !hasSupervisoryOversight;
+  // Team Member (TM): Individual contributor who is not an Admin, HOD, or Team Leader
+  const isTeamMember = Boolean(
+    currentUser?.role === 'TM' ||
+    (currentUser as any)?.systemRole === 'TM' ||
+    isTM ||
+    (!canManageAllocations && !hasSupervisoryOversight && !isTeamLeader)
+  );
   const [onlyAssignedToMe, setOnlyAssignedToMe] = useState<boolean>(isIndividualContributor);
 
   // Deletion Modal State
@@ -674,8 +700,12 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
   // Filtered Records based on search, team type, stage, assigned-to-me, and allocation status
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
-      // 1. Assigned to me check (for individual contributors or when toggle is active)
-      if (onlyAssignedToMe) {
+      // 1. Strict Team Member isolation: Team Members must ONLY see child records assigned to them
+      if (isTeamMember) {
+        if (!checkRecordAssignedToUser(r, currentUser)) {
+          return false;
+        }
+      } else if (onlyAssignedToMe) {
         if (!checkRecordAssignedToUser(r, currentUser)) {
           return false;
         }
@@ -727,7 +757,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
 
       return true;
     });
-  }, [records, searchTerm, selectedTeamType, selectedStage, selectedStatus, onlyAssignedToMe, currentUser]);
+  }, [records, searchTerm, selectedTeamType, selectedStage, selectedStatus, onlyAssignedToMe, currentUser, isTeamMember]);
 
   // Statistics (Role-aware: computes both Department totals and Individual Contributor personal metrics)
   const stats = useMemo(() => {
@@ -984,15 +1014,22 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                 <option value="In Progress">In Progress</option>
               </select>
 
-              <label className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl text-xs font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={onlyAssignedToMe}
-                  onChange={(e) => setOnlyAssignedToMe(e.target.checked)}
-                  className="rounded text-be-orange focus:ring-orange-500 cursor-pointer"
-                />
-                <span className="whitespace-nowrap">My Assigned</span>
-              </label>
+              {isTeamMember ? (
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 shadow-2xs">
+                  <UserCheck size={13} className="text-emerald-600" />
+                  <span className="whitespace-nowrap">My Assigned Records</span>
+                </div>
+              ) : (
+                <label className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl text-xs font-semibold text-gray-700 cursor-pointer hover:bg-gray-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={onlyAssignedToMe}
+                    onChange={(e) => setOnlyAssignedToMe(e.target.checked)}
+                    className="rounded text-be-orange focus:ring-orange-500 cursor-pointer"
+                  />
+                  <span className="whitespace-nowrap">My Assigned</span>
+                </label>
+              )}
 
               {canManageAllocations && (
                 <button
@@ -1023,9 +1060,15 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
             <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
               <Briefcase size={24} />
             </div>
-            <h3 className="text-sm font-bold text-gray-800">No Service Allocations Found</h3>
+            <h3 className="text-sm font-bold text-gray-800">
+              {isTeamMember ? 'No Assigned Child Records' : 'No Service Allocations Found'}
+            </h3>
             <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-              {mode === 'deal'
+              {isTeamMember
+                ? (mode === 'deal'
+                    ? 'You do not have any child records assigned to you for this deal. When the Operations HOD assigns service records to you, they will appear here.'
+                    : 'You currently do not have any child records assigned to you. When the Operations HOD assigns service records to you, they will appear here.')
+                : mode === 'deal'
                 ? 'No sub-child service records found for this deal yet. Click "Sync from Subform" to generate allocations from the Legal Details Subform.'
                 : 'Deals transitioning from Legal to Operations Allocator will automatically instantiate service records here.'}
             </p>
