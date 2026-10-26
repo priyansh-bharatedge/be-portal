@@ -340,18 +340,16 @@ export const STANDARD_EXECUTION_STATUSES: StandardExecutionStatus[] = [
   'Transfer'
 ];
 
-export const STATUSES_WITH_REJECTED: StandardExecutionStatus[] = [
+export const NAME_APPLICATION_STATUSES: StandardExecutionStatus[] = [
   'In-process',
   'In-review',
   'Pending',
   'Filled',
   'Approved',
-  'Hold',
-  'Refund',
-  'Ineligible',
-  'Transfer',
   'Rejected'
 ];
+
+export const STATUSES_WITH_REJECTED: StandardExecutionStatus[] = NAME_APPLICATION_STATUSES;
 
 export const DSC_CREATION_STATUSES = [
   'In process',

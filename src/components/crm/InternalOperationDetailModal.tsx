@@ -12,6 +12,7 @@ import {
   OPERATION_STAGES,
   STANDARD_EXECUTION_STATUSES,
   STATUSES_WITH_REJECTED,
+  NAME_APPLICATION_STATUSES,
   DSC_CREATION_STATUSES,
   FINAL_FILING_STATUSES,
   BOARD_RESOLUTION_STATUSES,
@@ -529,22 +530,59 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         attemptNumber: currentHistory.length + 1
       };
 
+      const baseCleanName = (currentData.name || '').replace(/\s*\(Resubmission Round \d+\)/gi, '').trim();
+      const nextRound = currentHistory.length + 2;
+
       setSections(prev => ({
         ...prev,
         [historyKey]: [...currentHistory, archivedAttempt],
         [baseSectionKey]: {
-          name: `${currentData.name || ''} (Resubmission Round ${currentHistory.length + 2})`,
+          name: `${baseCleanName ? `${baseCleanName} ` : ''}(Resubmission Round ${nextRound})`,
           approvedName: '',
           finalApprovalName: '',
           date: new Date().toISOString().split('T')[0],
           doiDate: '',
-          status: 'In process',
+          status: baseSectionKey === 'nameApp' ? 'In-process' : 'In process',
           files: []
         }
       }));
     } else {
       updateSection(baseSectionKey, 'status', newStatus);
     }
+  };
+
+  // Update specific fields of an archived / previous attempt in history
+  const updateHistoryItem = (
+    historyKey: string,
+    index: number,
+    field: string,
+    value: any
+  ) => {
+    setSections(prev => {
+      const history = Array.isArray(prev[historyKey]) ? [...prev[historyKey]] : [];
+      if (history[index]) {
+        history[index] = {
+          ...history[index],
+          [field]: value
+        };
+      }
+      return {
+        ...prev,
+        [historyKey]: history
+      };
+    });
+  };
+
+  // Remove an archived / previous attempt from history
+  const removeHistoryItem = (historyKey: string, index: number) => {
+    setSections(prev => {
+      const history = Array.isArray(prev[historyKey]) ? [...prev[historyKey]] : [];
+      history.splice(index, 1);
+      return {
+        ...prev,
+        [historyKey]: history
+      };
+    });
   };
 
   // Save handler
@@ -1551,22 +1589,85 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                 >
                   {/* Previous Rejected Attempts History */}
                   {Array.isArray(sections.nameAppHistory) && sections.nameAppHistory.length > 0 && (
-                    <div className="mb-4 space-y-2 p-3 bg-rose-50/50 rounded-xl border border-rose-200">
-                      <span className="text-xs font-bold text-rose-800 block flex items-center gap-1.5">
-                        <AlertTriangle size={13} className="text-rose-600" />
-                        Previous Rejected Submissions ({sections.nameAppHistory.length})
-                      </span>
+                    <div className="mb-4 space-y-3 p-3.5 bg-rose-50/50 rounded-2xl border border-rose-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                          <AlertTriangle size={13} className="text-rose-600" />
+                          <span>Previous Rejected Submissions / Resubmissions ({sections.nameAppHistory.length})</span>
+                        </span>
+                        <span className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">Editable Attempt History</span>
+                      </div>
                       {sections.nameAppHistory.map((hist: any, hIdx: number) => (
-                        <div key={hIdx} className="p-2 bg-white rounded-lg border border-rose-100 text-xs flex justify-between items-center">
-                          <div>
-                            <span className="font-bold text-gray-900 block">Attempt #{hist.attemptNumber || hIdx + 1}: {hist.name || 'Application'}</span>
-                            <span className="text-[10px] text-gray-500">Proposed: {hist.approvedName || 'N/A'} • Date: {hist.date || 'N/A'}</span>
+                        <div key={hIdx} className="p-3 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between border-b border-rose-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-gray-900">
+                                Attempt #{hist.attemptNumber || hIdx + 1}
+                              </span>
+                              <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-black rounded-md border border-rose-200">
+                                {hist.status || 'REJECTED'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeHistoryItem('nameAppHistory', hIdx)}
+                              className="text-gray-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
+                              title="Delete this attempt"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
-                          <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-black rounded-md">
-                            REJECTED
-                          </span>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                            <TextInput
+                              label="Name"
+                              value={hist.name || ''}
+                              onChange={(val) => updateHistoryItem('nameAppHistory', hIdx, 'name', val)}
+                              placeholder="Applicant name"
+                            />
+                            <TextInput
+                              label="Proposed / Rejected Name"
+                              value={hist.approvedName || ''}
+                              onChange={(val) => updateHistoryItem('nameAppHistory', hIdx, 'approvedName', val)}
+                              placeholder="e.g. Acme Tech Pvt Ltd"
+                            />
+                            <DateInput
+                              label="Date"
+                              value={hist.date || ''}
+                              onChange={(val) => updateHistoryItem('nameAppHistory', hIdx, 'date', val)}
+                            />
+                            <SelectInput
+                              label="Status"
+                              value={(() => {
+                                const s = hist.status;
+                                if (!s || s === 'In-process' || s === 'In process') return 'In-process';
+                                const match = NAME_APPLICATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                                return match || 'Rejected';
+                              })()}
+                              options={NAME_APPLICATION_STATUSES}
+                              onChange={(val) => updateHistoryItem('nameAppHistory', hIdx, 'status', val)}
+                            />
+                          </div>
+
+                          <div className="mt-2">
+                            <FileUploadWidget
+                              label="File Upload (Attempt Files)"
+                              files={hist.files || []}
+                              onChange={(files) => updateHistoryItem('nameAppHistory', hIdx, 'files', files)}
+                              multiple={true}
+                            />
+                          </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {Array.isArray(sections.nameAppHistory) && sections.nameAppHistory.length > 0 && (
+                    <div className="pt-1 pb-1">
+                      <span className="text-[11px] font-black uppercase text-amber-900 tracking-wider flex items-center gap-1.5">
+                        <RefreshCw size={12} className="text-amber-600" />
+                        <span>Active Resubmission Round (Round {sections.nameAppHistory.length + 1})</span>
+                      </span>
                     </div>
                   )}
 
@@ -1590,8 +1691,13 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     />
                     <SelectInput
                       label="Status"
-                      value={sections.nameApp?.status || 'In-process'}
-                      options={STATUSES_WITH_REJECTED}
+                      value={(() => {
+                        const s = sections.nameApp?.status;
+                        if (!s || s === 'In-process' || s === 'In process') return 'In-process';
+                        const match = NAME_APPLICATION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                        return match || 'In-process';
+                      })()}
+                      options={NAME_APPLICATION_STATUSES}
                       onChange={(val) => handleRepeatableSectionStatusChange('nameApp', 'nameAppHistory', val)}
                     />
                   </div>
@@ -1640,26 +1746,90 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                 >
                   {/* Previous Rejected Attempts History */}
                   {Array.isArray(sections.finalFilingHistory) && sections.finalFilingHistory.length > 0 && (
-                    <div className="mb-4 space-y-2 p-3 bg-rose-50/50 rounded-xl border border-rose-200">
-                      <span className="text-xs font-bold text-rose-800 block flex items-center gap-1.5">
-                        <AlertTriangle size={13} className="text-rose-600" />
-                        Previous Rejected Final Filings ({sections.finalFilingHistory.length})
-                      </span>
+                    <div className="mb-4 space-y-3 p-3.5 bg-rose-50/50 rounded-2xl border border-rose-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                          <AlertTriangle size={13} className="text-rose-600" />
+                          <span>Previous Rejected Final Filings / Resubmissions ({sections.finalFilingHistory.length})</span>
+                        </span>
+                        <span className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">Editable Attempt History</span>
+                      </div>
                       {sections.finalFilingHistory.map((hist: any, hIdx: number) => (
-                        <div key={hIdx} className="p-2 bg-white rounded-lg border border-rose-100 text-xs flex justify-between items-center">
-                          <div>
-                            <span className="font-bold text-gray-900 block">Attempt #{hist.attemptNumber || hIdx + 1}: {hist.name || 'Filing'}</span>
-                            <span className="text-[10px] text-gray-500">
-                              {hist.finalApprovalName ? `Final Approval: ${hist.finalApprovalName} • ` : ''}
-                              Date: {hist.date || 'N/A'}
-                              {hist.doiDate ? ` • DOI: ${hist.doiDate}` : ''}
-                            </span>
+                        <div key={hIdx} className="p-3 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between border-b border-rose-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-gray-900">
+                                Attempt #{hist.attemptNumber || hIdx + 1}
+                              </span>
+                              <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-black rounded-md border border-rose-200">
+                                {hist.status || 'REJECTED'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeHistoryItem('finalFilingHistory', hIdx)}
+                              className="text-gray-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
+                              title="Delete this attempt"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
-                          <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-black rounded-md">
-                            REJECTED
-                          </span>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                            <TextInput
+                              label="Name"
+                              value={hist.name || ''}
+                              onChange={(val) => updateHistoryItem('finalFilingHistory', hIdx, 'name', val)}
+                              placeholder="Filing applicant name"
+                            />
+                            <TextInput
+                              label="Final Approval Name"
+                              value={hist.finalApprovalName || ''}
+                              onChange={(val) => updateHistoryItem('finalFilingHistory', hIdx, 'finalApprovalName', val)}
+                              placeholder="e.g. Acme Tech Pvt Ltd"
+                            />
+                            <DateInput
+                              label="Date"
+                              value={hist.date || ''}
+                              onChange={(val) => updateHistoryItem('finalFilingHistory', hIdx, 'date', val)}
+                            />
+                            <DateInput
+                              label="DOI Date"
+                              value={hist.doiDate || ''}
+                              onChange={(val) => updateHistoryItem('finalFilingHistory', hIdx, 'doiDate', val)}
+                            />
+                            <SelectInput
+                              label="Status"
+                              value={(() => {
+                                const s = hist.status;
+                                if (!s) return 'Rejected (resubmission)';
+                                if (s === 'In-process' || s === 'In process') return 'In process';
+                                const match = FINAL_FILING_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                                return match || 'Rejected (resubmission)';
+                              })()}
+                              options={FINAL_FILING_STATUSES}
+                              onChange={(val) => updateHistoryItem('finalFilingHistory', hIdx, 'status', val)}
+                            />
+                          </div>
+                          <div className="mt-2">
+                            <FileUploadWidget
+                              label="File Upload (Attempt Files)"
+                              files={hist.files || []}
+                              onChange={(files) => updateHistoryItem('finalFilingHistory', hIdx, 'files', files)}
+                              multiple={true}
+                            />
+                          </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {Array.isArray(sections.finalFilingHistory) && sections.finalFilingHistory.length > 0 && (
+                    <div className="pt-1 pb-1">
+                      <span className="text-[11px] font-black uppercase text-amber-900 tracking-wider flex items-center gap-1.5">
+                        <RefreshCw size={12} className="text-amber-600" />
+                        <span>Active Resubmission Round (Round {sections.finalFilingHistory.length + 1})</span>
+                      </span>
                     </div>
                   )}
 
@@ -2153,6 +2323,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       <StandardSection
                         title="DPT 3 Filing"
                         data={sections.dpt3 || {}}
+                        statusOptions={POST_INCORPORATION_STATUSES}
                         onChange={(k, v) => updateSection('dpt3', k, v)}
                       />
 
@@ -2201,6 +2372,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       <StandardSection
                         title="MGT-7 / 7A (Annual Return)"
                         data={sections.mgt7 || {}}
+                        statusOptions={POST_INCORPORATION_STATUSES}
                         onChange={(k, v) => updateSection('mgt7', k, v)}
                       />
                     </div>
@@ -2512,7 +2684,7 @@ const StandardSection: React.FC<StandardSectionProps> = ({
     if (data.status === 'In-review' && statusOptions.includes('In Review')) return 'In Review';
     const match = statusOptions.find(opt => opt.toLowerCase() === data.status.toLowerCase());
     if (match) return match;
-    return data.status;
+    return statusOptions.includes(data.status) ? data.status : (statusOptions[0] || data.status);
   })();
 
   const safeOptions = statusOptions.includes(currentStatus)
