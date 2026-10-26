@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { saveDocument } from '../../lib/db';
 import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal, fetchZohoQuotations, fetchZohoEmployees } from '../../services/zohoService';
-import { buildZohoRbacCriteria, getAllEmployeesList, filterRecordsByRbac } from '../../services/zohoRbacService';
+import { buildZohoRbacCriteria, getAllEmployeesList, filterRecordsByRbac, parseAnyDateToMs } from '../../services/zohoRbacService';
 import { isSubordinateOfTL, mapZohoRecordToEmployee, isRecordOwnedByTL, getRecordSubordinateMember, isRecordOwnedBySubordinate } from '../../utils/employeeUtils';
 import { downloadQuotationPDF, downloadQuotationHTML, printQuotation, generateQuotationPDFBlob } from '../../utils/quotationTemplate';
 import { Pagination } from '../../components/ui/Pagination';
@@ -411,10 +411,11 @@ export const Quotations = () => {
         if (Array.isArray(parsed)) {
           const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
           return parsed.filter((q: any) => {
-            const ct = q.Created_Time || q.created_time || q.CreatedTime;
+            const raw = q.rawZohoDeal || q;
+            const ct = q.Created_Time || raw.Created_Time || q.created_time || q.date;
             if (!ct) return true;
-            const ms = new Date(ct).getTime();
-            return !isNaN(ms) ? ms >= octStart : true;
+            const ms = parseAnyDateToMs(ct);
+            return ms !== null ? ms >= octStart : true;
           });
         }
       }
@@ -586,6 +587,9 @@ export const Quotations = () => {
           amount: z.Grand_Total || (z.Subtotal ? `₹${Number(z.Subtotal).toLocaleString()}` : '₹0'),
           status: 'Sent',
           date: z.Created_Time ? new Date(z.Created_Time).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
+          Created_Time: z.Created_Time || z.created_time || '',
+          created_time: z.Created_Time || z.created_time || '',
+          rawZohoDeal: z,
           zohoId: String(z.id),
           zohoStatus: 'synced',
           billingAddress: z.Billing_address || z.Billing_Address || '',

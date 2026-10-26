@@ -484,6 +484,30 @@ export function buildZohoRbacCriteria(
   };
 }
 
+export function parseAnyDateToMs(rawDate: any): number | null {
+  if (!rawDate) return null;
+  if (typeof rawDate === 'number') return isNaN(rawDate) ? null : rawDate;
+  if (typeof rawDate === 'string') {
+    const trimmed = rawDate.trim();
+    if (!trimmed) return null;
+    const dt = new Date(trimmed);
+    const ms = dt.getTime();
+    if (!isNaN(ms)) return ms;
+    const parts = trimmed.split(/[\/\-]/);
+    if (parts.length === 3) {
+      const d = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const y = parseInt(parts[2], 10);
+      if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
+        const fullYear = y < 100 ? 2000 + y : y;
+        const parsed = new Date(fullYear, m - 1, d).getTime();
+        if (!isNaN(parsed)) return parsed;
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Filters any in-memory or IndexedDB cached records array according to current user's RBAC scope.
  */
@@ -498,16 +522,27 @@ export function filterRecordsByRbac<T = any>(
   // Dual-layer defense: Filter CRM modules to strictly October 2026 or later for all users
   let effectiveRecords = records;
   if (isCrmModuleName(moduleName)) {
-    const isDeals = moduleName.toLowerCase().includes('deal');
     effectiveRecords = records.filter((r: any) => {
       if (!r) return false;
       const raw = r.rawZohoDeal || r;
-      const rawDate = isDeals
-        ? (r.Booking_Date || raw.Booking_Date || r.Payment_Date || raw.Payment_Date || r.Closing_Date || raw.Closing_Date || r.Created_Time || raw.Created_Time || r.date || raw.date)
-        : (r.Created_Time || raw.Created_Time || r.created_time || r.CreatedTime || r.Booking_Date);
-      if (!rawDate) return false;
-      const ms = new Date(rawDate).getTime();
-      return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : false;
+      const rawDate = (
+        r.Booking_Date || raw.Booking_Date ||
+        r.Payment_Date || raw.Payment_Date ||
+        r.Closing_Date || raw.Closing_Date ||
+        r.Created_Time || raw.Created_Time ||
+        r.created_time || raw.created_time ||
+        r.CreatedTime || raw.CreatedTime ||
+        r.addedOn || raw.addedOn ||
+        r.date || raw.date
+      );
+      if (!rawDate) {
+        return true;
+      }
+      const ms = parseAnyDateToMs(rawDate);
+      if (ms !== null) {
+        return ms >= OCTOBER_2026_START_MS;
+      }
+      return true;
     });
   }
 

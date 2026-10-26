@@ -33,6 +33,8 @@ export interface Company {
   Owner?: { id: string; name?: string };
   owner?: string;
   Created_By?: { id: string; name?: string };
+  Created_Time?: string;
+  rawZohoDeal?: any;
 }
 
 export const Companies = () => {
@@ -370,6 +372,8 @@ export const Companies = () => {
           status: (r.Status === 'Inactive' ? 'Inactive' : 'Active') as 'Active' | 'Inactive',
           source: 'Live Zoho',
           addedOn: r.Created_Time ? new Date(r.Created_Time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB'),
+          Created_Time: r.Created_Time || r.created_time || '',
+          rawZohoDeal: r,
           zohoId: String(r.id),
           zohoStatus: 'synced',
           zohoSyncedAt: new Date().toISOString(),

@@ -22,6 +22,7 @@ import {
   fetchZohoEmployees
 } from '../../services/zohoService';
 import { mapZohoRecordToEmployee } from '../../utils/employeeUtils';
+import { parseAnyDateToMs } from '../../services/zohoRbacService';
 import {
   getDealSplitBreakdown,
   isDealPartnerBdm,
@@ -45,10 +46,10 @@ export const CrmDashboard = () => {
           const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
           return parsed.filter((d: any) => {
             const raw = d.rawZohoDeal || {};
-            const ct = d.Created_Time || raw.Created_Time || d.createdTime;
+            const ct = d.Booking_Date || raw.Booking_Date || d.Payment_Date || raw.Payment_Date || d.Closing_Date || d.Created_Time || raw.Created_Time || d.date;
             if (!ct) return true;
-            const ms = new Date(ct).getTime();
-            return !isNaN(ms) ? ms >= octStart : true;
+            const ms = parseAnyDateToMs(ct);
+            return ms !== null ? ms >= octStart : true;
           });
         }
       }
@@ -64,10 +65,11 @@ export const CrmDashboard = () => {
         if (Array.isArray(parsed) && parsed.length > 0) {
           const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
           return parsed.filter((q: any) => {
-            const ct = q.Created_Time || q.created_time || q.CreatedTime;
+            const raw = q.rawZohoDeal || q;
+            const ct = q.Created_Time || raw.Created_Time || q.created_time || q.date;
             if (!ct) return true;
-            const ms = new Date(ct).getTime();
-            return !isNaN(ms) ? ms >= octStart : true;
+            const ms = parseAnyDateToMs(ct);
+            return ms !== null ? ms >= octStart : true;
           });
         }
       }
@@ -83,10 +85,11 @@ export const CrmDashboard = () => {
         if (Array.isArray(parsed) && parsed.length > 0) {
           const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
           return parsed.filter((c: any) => {
-            const ct = c.Created_Time || c.created_time || c.CreatedTime;
+            const raw = c.rawZohoDeal || c;
+            const ct = c.Created_Time || raw.Created_Time || c.created_time || c.addedOn;
             if (!ct) return true;
-            const ms = new Date(ct).getTime();
-            return !isNaN(ms) ? ms >= octStart : true;
+            const ms = parseAnyDateToMs(ct);
+            return ms !== null ? ms >= octStart : true;
           });
         }
       }
