@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import type {
@@ -60,6 +60,169 @@ import {
 } from 'lucide-react';
 import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
 import { isMatchingName } from '../../utils/employeeUtils';
+
+export interface OperationsStaffContextType {
+  operationsStaff: NormalizedStaff[];
+  operationsTLs: NormalizedStaff[];
+  operationsTMs: NormalizedStaff[];
+}
+
+export const OperationsStaffContext = createContext<OperationsStaffContextType>({
+  operationsStaff: [],
+  operationsTLs: [],
+  operationsTMs: []
+});
+
+export const useOperationsStaff = () => useContext(OperationsStaffContext);
+
+export const StaffNameSelect: React.FC<{
+  label?: string;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  badge?: string;
+}> = ({
+  label = 'Name',
+  value,
+  onChange,
+  placeholder = 'Select Operations staff...',
+  badge
+}) => {
+  const context = useContext(OperationsStaffContext);
+  const [isCustom, setIsCustom] = useState<boolean>(false);
+
+  // Fallback to localStorage if context not yet populated
+  const { staffList, tlList, tmList } = useMemo(() => {
+    let staff = (context && context.operationsStaff && context.operationsStaff.length > 0)
+      ? context.operationsStaff
+      : [];
+
+    if (staff.length === 0) {
+      try {
+        const stored = localStorage.getItem('be_employees');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            staff = parsed
+              .map((e: any) => {
+                const firstName = e.Name || e.First_Name || e.firstName || '';
+                const middleName = e.Middle_Name || e.middleName || '';
+                const lastName = e.Last_Name || e.lastName || '';
+                const composite = [firstName, middleName, lastName].filter(Boolean).join(' ');
+                const name = String(e.name || composite || e.Employee_Name || e.fullName || '').trim();
+                const dept = String(e.dept || e.department || e.Department || e.formData?.dept || 'Operations').trim();
+                const rawRole = String(e.systemRole || e.System_Role || e.role || e.Designation_Job_Title || e.designation || 'TM').trim();
+                const isTL = rawRole.toLowerCase().includes('tl') || rawRole.toLowerCase().includes('leader');
+                return {
+                  id: String(e.id || e.empId || e.zohoId || name),
+                  name,
+                  role: isTL ? 'TL' : 'TM',
+                  systemRole: isTL ? 'TL' : 'TM',
+                  dept,
+                  email: String(e.email || ''),
+                  isTL,
+                  isTM: !isTL
+                };
+              })
+              .filter((s: NormalizedStaff) => s.name && s.name !== 'Employee' && !/^\d{15,}$/.test(s.name));
+          }
+        }
+      } catch (_) {}
+    }
+
+    const seen = new Set<string>();
+    const filteredOps: NormalizedStaff[] = [];
+    staff.forEach(s => {
+      if (!s.name || s.name === 'Employee' || /^\d{15,}$/.test(s.name)) return;
+      const dept = (s.dept || '').toLowerCase();
+      const isOps = dept.includes('operat') || (!dept.includes('sale') && !dept.includes('legal') && !dept.includes('hr') && !dept.includes('account'));
+      if (isOps) {
+        const key = s.name.toLowerCase().trim();
+        if (!seen.has(key)) {
+          seen.add(key);
+          filteredOps.push(s);
+        }
+      }
+    });
+    filteredOps.sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      staffList: filteredOps,
+      tlList: filteredOps.filter(s => s.isTL),
+      tmList: filteredOps.filter(s => !s.isTL)
+    };
+  }, [context.operationsStaff]);
+
+  const hasCurrentInList = value && staffList.some(s => s.name.toLowerCase() === value.trim().toLowerCase());
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
+          <span>{label}</span>
+          {badge && (
+            <span className="text-[9px] font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+              {badge}
+            </span>
+          )}
+        </label>
+        <button
+          type="button"
+          onClick={() => setIsCustom(!isCustom)}
+          className="text-[10px] font-semibold text-be-orange hover:text-orange-700 transition-colors cursor-pointer"
+        >
+          {isCustom ? 'Choose from list' : '+ Custom name'}
+        </button>
+      </div>
+
+      {isCustom ? (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Type responsible name..."
+          className="w-full px-3 py-2 bg-white border border-be-orange/40 focus:border-be-orange rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs"
+        />
+      ) : (
+        <select
+          value={value}
+          onChange={(e) => {
+            if (e.target.value === '__custom__') {
+              setIsCustom(true);
+            } else {
+              onChange(e.target.value);
+            }
+          }}
+          className="w-full px-3 py-2 bg-white border border-gray-200 hover:border-gray-300 focus:border-be-orange rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs cursor-pointer"
+        >
+          <option value="">{placeholder}</option>
+          {value && !hasCurrentInList && (
+            <option value={value}>{value} (Current)</option>
+          )}
+          {tlList.length > 0 && (
+            <optgroup label="Operations Team Leaders (TL)">
+              {tlList.map(tl => (
+                <option key={`op_tl_${tl.id}_${tl.name}`} value={tl.name}>
+                  {tl.name} (TL)
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {tmList.length > 0 && (
+            <optgroup label="Operations Employees / Team Members (TM)">
+              {tmList.map(tm => (
+                <option key={`op_tm_${tm.id}_${tm.name}`} value={tm.name}>
+                  {tm.name} (Operations)
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <option value="__custom__">+ Enter custom name...</option>
+        </select>
+      )}
+    </div>
+  );
+};
 
 interface InternalOperationDetailModalProps {
   record: InternalOperationRecord;
@@ -1305,7 +1468,8 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   const TeamIcon = teamTypeBadge.icon;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
+    <OperationsStaffContext.Provider value={{ operationsStaff, operationsTLs, operationsTMs }}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl my-auto overflow-hidden border border-gray-100 flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-150">
         
         {/* Modal Header */}
@@ -1714,11 +1878,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                 {/* Always Show: Doc collection */}
                 <SectionContainer title="Doc collection" badge="Required">
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    <TextInput
+                    <StaffNameSelect
                       label="Name / Executive"
                       value={sections.docCollection?.name || ''}
                       onChange={(val) => updateSection('docCollection', 'name', val)}
-                      placeholder="Executive name"
+                      placeholder="Select Operations staff..."
                     />
                     <DateInput
                       label="Date"
@@ -1786,11 +1950,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                            <TextInput
+                            <StaffNameSelect
                               label="Name"
                               value={hist.name || ''}
                               onChange={(val) => updateHistoryItem('nameAppHistory', hIdx, 'name', val)}
-                              placeholder="Applicant name"
+                              placeholder="Select Operations staff..."
                             />
                             <TextInput
                               label="Proposed / Rejected Name"
@@ -1839,11 +2003,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                    <TextInput
+                    <StaffNameSelect
                       label="Name"
                       value={sections.nameApp?.name || ''}
                       onChange={(val) => updateSection('nameApp', 'name', val)}
-                      placeholder="Applicant name"
+                      placeholder="Select Operations staff..."
                     />
                     <TextInput
                       label="Approved Name"
@@ -1881,11 +2045,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                 {/* Always Show: DSC Creation */}
                 <SectionContainer title="DSC Creation" badge="Milestone">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <TextInput
+                    <StaffNameSelect
                       label="Name"
                       value={sections.dscCreation?.name || ''}
                       onChange={(val) => updateSection('dscCreation', 'name', val)}
-                      placeholder="Director/Partner name"
+                      placeholder="Select Operations staff..."
                     />
                     <DateInput
                       label="Date"
@@ -1943,11 +2107,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                            <TextInput
+                            <StaffNameSelect
                               label="Name"
                               value={hist.name || ''}
                               onChange={(val) => updateHistoryItem('finalFilingHistory', hIdx, 'name', val)}
-                              placeholder="Filing applicant name"
+                              placeholder="Select Operations staff..."
                             />
                             <TextInput
                               label="Final Approval Name"
@@ -2001,11 +2165,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                    <TextInput
+                    <StaffNameSelect
                       label="Name"
                       value={sections.finalFiling?.name || ''}
                       onChange={(val) => updateSection('finalFiling', 'name', val)}
-                      placeholder="Filing applicant name"
+                      placeholder="Select Operations staff..."
                     />
                     <TextInput
                       label="Final Approval Name"
@@ -2115,10 +2279,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       {/* 4. ADT-1 (Includes Auditor Name!) */}
                       <SectionContainer title="ADT-1" badge="Auditor Filing">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                          <TextInput
+                          <StaffNameSelect
                             label="Name"
                             value={sections.adt1?.name || ''}
                             onChange={(val) => updateSection('adt1', 'name', val)}
+                            placeholder="Select Operations staff..."
                           />
                           <TextInput
                             label="Auditor Name"
@@ -2285,10 +2450,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   {/* 1. Doc collection: [Name, Date, Status (Pending, Received), File Upload, Company type] */}
                   <SectionContainer title="Doc collection" badge="Compliance Core">
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                      <TextInput
+                      <StaffNameSelect
                         label="Name"
                         value={sections.compDocCollection?.name || ''}
                         onChange={(val) => updateSection('compDocCollection', 'name', val)}
+                        placeholder="Select Operations staff..."
                       />
                       <DateInput
                         label="Date"
@@ -2321,10 +2487,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   {/* 2. Director ITR: [Name, Date, Status, File Upload, File required (Yes/No), Doc collection (Pending/Completed)] */}
                   <SectionContainer title="Director ITR" badge="Personal Filings">
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      <TextInput
+                      <StaffNameSelect
                         label="Name"
                         value={sections.directorItr?.name || ''}
                         onChange={(val) => updateSection('directorItr', 'name', val)}
+                        placeholder="Select Operations staff..."
                       />
                       <DateInput
                         label="Date"
@@ -2377,10 +2544,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   {/* 3. Accounting: [Name, Date, Status, File Upload] */}
                   <SectionContainer title="Accounting" badge="Books of Account">
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      <TextInput
+                      <StaffNameSelect
                         label="Name"
                         value={sections.accounting?.name || ''}
                         onChange={(val) => updateSection('accounting', 'name', val)}
+                        placeholder="Select Operations staff..."
                       />
                       <DateInput
                         label="Date"
@@ -2412,10 +2580,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   {/* 4. Audit: [Name, Date, Status, File Upload] */}
                   <SectionContainer title="Audit" badge="Statutory Audit">
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      <TextInput
+                      <StaffNameSelect
                         label="Name"
                         value={sections.audit?.name || ''}
                         onChange={(val) => updateSection('audit', 'name', val)}
+                        placeholder="Select Operations staff..."
                       />
                       <DateInput
                         label="Date"
@@ -2447,10 +2616,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   {/* 5. Company ITR: [Name, Date, Status, File Upload] */}
                   <SectionContainer title="Company ITR" badge="Corporate Tax">
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      <TextInput
+                      <StaffNameSelect
                         label="Name"
                         value={sections.companyItr?.name || ''}
                         onChange={(val) => updateSection('companyItr', 'name', val)}
+                        placeholder="Select Operations staff..."
                       />
                       <DateInput
                         label="Date"
@@ -2497,10 +2667,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       {/* AOC-4: [Name, Date, Status, File Upload, Director & Audit report (Prepared/Not Prepared)] */}
                       <SectionContainer title="AOC-4" badge="Financial Statements">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                          <TextInput
+                          <StaffNameSelect
                             label="Name"
                             value={sections.aoc4?.name || ''}
                             onChange={(val) => updateSection('aoc4', 'name', val)}
+                            placeholder="Select Operations staff..."
                           />
                           <DateInput
                             label="Date"
@@ -2561,10 +2732,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       {/* Form 8 (Statement of Account & Solvency) with Audit report (Yes/No) */}
                       <SectionContainer title="Form 8 (Statement of Account & Solvency)" badge="LLP Solvency">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                          <TextInput
+                          <StaffNameSelect
                             label="Name"
                             value={sections.form8?.name || ''}
                             onChange={(val) => updateSection('form8', 'name', val)}
+                            placeholder="Select Operations staff..."
                           />
                           <DateInput
                             label="Date"
@@ -2621,10 +2793,11 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                 {/* 3. Application submission: [Name, Date, Status, File Upload, ID, Password, Registration number] */}
                 <SectionContainer title="Application submission" badge="Scheme Portal Filing">
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    <TextInput
+                    <StaffNameSelect
                       label="Applicant / Executive Name"
                       value={sections.appSubmission?.name || ''}
                       onChange={(val) => updateSection('appSubmission', 'name', val)}
+                      placeholder="Select Operations staff..."
                     />
                     <DateInput
                       label="Submission Date"
@@ -2791,6 +2964,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         />
       )}
     </div>
+    </OperationsStaffContext.Provider>
   );
 };
 
@@ -2861,11 +3035,11 @@ const StandardSection: React.FC<StandardSectionProps> = ({
   return (
     <SectionContainer title={title} badge={badge} badgeColor={badgeColor}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <TextInput
+        <StaffNameSelect
           label="Name"
           value={data.name || ''}
           onChange={(val) => onChange('name', val)}
-          placeholder="Responsible name"
+          placeholder="Select Operations staff..."
         />
         <DateInput
           label="Date"
