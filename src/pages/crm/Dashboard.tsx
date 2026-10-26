@@ -41,7 +41,16 @@ export const CrmDashboard = () => {
       const saved = localStorage.getItem('be_deals');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
+          return parsed.filter((d: any) => {
+            const raw = d.rawZohoDeal || {};
+            const ct = d.Created_Time || raw.Created_Time || d.createdTime;
+            if (!ct) return true;
+            const ms = new Date(ct).getTime();
+            return !isNaN(ms) ? ms >= octStart : true;
+          });
+        }
       }
     } catch (e) {}
     return [];
@@ -52,7 +61,15 @@ export const CrmDashboard = () => {
       const saved = localStorage.getItem('be_quotations');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
+          return parsed.filter((q: any) => {
+            const ct = q.Created_Time || q.created_time || q.CreatedTime;
+            if (!ct) return true;
+            const ms = new Date(ct).getTime();
+            return !isNaN(ms) ? ms >= octStart : true;
+          });
+        }
       }
     } catch (e) {}
     return [];
@@ -63,7 +80,15 @@ export const CrmDashboard = () => {
       const saved = localStorage.getItem('be_clients');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
+          return parsed.filter((c: any) => {
+            const ct = c.Created_Time || c.created_time || c.CreatedTime;
+            if (!ct) return true;
+            const ms = new Date(ct).getTime();
+            return !isNaN(ms) ? ms >= octStart : true;
+          });
+        }
       }
     } catch (e) {}
     return [];

@@ -433,7 +433,22 @@ function zohoApiPlugin(): Plugin {
     }
   }
 
-  
+  // October 2026 Filter Constants for CRM REST API
+  const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
+  const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
+
+  function combineWithOctoberFilter(existingCriteria?: string | null): string {
+    if (!existingCriteria || !existingCriteria.trim()) {
+      return OCTOBER_2026_CRITERIA;
+    }
+    const trimmed = existingCriteria.trim();
+    if (trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
+      return trimmed;
+    }
+    const wrapped = trimmed.startsWith('(') && trimmed.endsWith(')') ? trimmed : `(${trimmed})`;
+    return `((${OCTOBER_2026_CRITERIA})and${wrapped})`;
+  }
+
   function buildZohoPaginationQuery(urlObj: URL): string {
     const queryParts: string[] = [];
     const page = urlObj.searchParams.get('page') || '';
@@ -1893,13 +1908,13 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_MODULE_NAME || 'Quotations';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,Billing_address,Company_address,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Employee,Created_Time,Modified_Time,Owner,Created_By';
-            const criteria = urlObj.searchParams.get('criteria') || '';
+            const rawCriteria = urlObj.searchParams.get('criteria') || '';
+            const criteria = combineWithOctoberFilter(rawCriteria);
+            urlObj.searchParams.set('criteria', criteria);
             const paginationQuery = buildZohoPaginationQuery(urlObj);
-            const crmEndpoint = criteria 
-              ? `${apiBase}/crm/v8/${moduleName}/search?fields=${quotationFields}&${paginationQuery}`
-              : `${apiBase}/crm/v8/${moduleName}?fields=${quotationFields}&${paginationQuery}`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?fields=${quotationFields}&${paginationQuery}`;
 
-            console.log(`[Vite Zoho Plugin] Fetching live Quotations from Zoho CRM (${moduleName})`);
+            console.log(`[Vite Zoho Plugin] Fetching live Quotations from Zoho CRM (${moduleName}) [criteria: ${criteria}]`);
 
             let crmRes = await fetch(crmEndpoint, {
               method: 'GET',
@@ -1907,6 +1922,17 @@ function zohoApiPlugin(): Plugin {
                 'Authorization': `Zoho-oauthtoken ${accessToken}`,
               },
             });
+
+            // Fallback if search criteria returns 400 or 404
+            if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
+              const fallbackUrl = new URL(urlObj.toString());
+              fallbackUrl.searchParams.delete('criteria');
+              const fallbackQuery = buildZohoPaginationQuery(fallbackUrl);
+              crmRes = await fetch(`${apiBase}/crm/v8/${moduleName}?fields=${quotationFields}&${fallbackQuery}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+              });
+            }
 
             let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
 
@@ -1920,6 +1946,17 @@ function zohoApiPlugin(): Plugin {
                 },
               });
               crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+            }
+
+            // Dual-layer defense: strictly filter quotations by October 2026 Created_Time
+            if (crmData?.data && Array.isArray(crmData.data)) {
+              crmData.data = crmData.data.filter((q: any) => {
+                if (!q) return false;
+                const ct = q.Created_Time || q.created_time || q.CreatedTime;
+                if (!ct) return true;
+                const ms = new Date(ct).getTime();
+                return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : true;
+              });
             }
 
             res.setHeader('Content-Type', 'application/json');
@@ -3501,7 +3538,7 @@ function zohoApiPlugin(): Plugin {
             };
 
             const internalOpsFieldsParam = [
-              'id', 'Name', 'Parent_Record_Deal', 'Team_Type', 'Operation_Stage', 'Team_Leader_TL', 'Team_Member_TM', 'Modified_Time',
+              'id', 'Name', 'Parent_Record_Deal', 'Team_Type', 'Operation_Stage', 'Team_Leader_TL', 'Team_Member_TM', 'Created_Time', 'Modified_Time',
               'Doc_collection_name', 'Doc_collection_Date', 'Doc_collection_status', 'Doc_collection_File_Upload',
               'Name_Application_name', 'Name_Application_approved_name', 'Name_Application_date', 'Name_Application_status', 'Name_Application_File_Upload',
               'DSC_Creation_name', 'DSC_Creation_Date', 'DSC_Creation_status',
@@ -3536,9 +3573,14 @@ function zohoApiPlugin(): Plugin {
                     }
                   } catch (_) {}
                 }
-                const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
+                let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
                   headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                 });
+                if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
+                  crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
+                    headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                  });
+                }
                 if (crmRes && crmRes.status === 200) {
                   const crmData: any = await crmRes.json();
                   let rawList = crmData.data || [];
@@ -3549,6 +3591,14 @@ function zohoApiPlugin(): Plugin {
                       return parentId === targetDId;
                     });
                   }
+                  // Dual-layer defense: strictly filter internal operations for October 2026 or later
+                  rawList = rawList.filter((r: any) => {
+                    if (!r) return false;
+                    const ct = r.Created_Time || r.created_time || r.CreatedTime;
+                    if (!ct) return true;
+                    const createdMs = new Date(ct).getTime();
+                    return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : true;
+                  });
                   const normalized = rawList.map(normalizeZohoOperationRecord);
                   return res.end(JSON.stringify({ success: true, data: normalized }));
                 } else if (crmRes && crmRes.status === 204) {
@@ -3912,14 +3962,12 @@ function zohoApiPlugin(): Plugin {
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Client_Email_address,Gst_number,Pan_number,Aadhaar_Card,Billing_address,Company_address,City,State,Bank_details,Accounts_remark,Remark,Remarks,Description,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
             const milestoneFields = 'id,R1_Received_amount23,R1_Received_Screenshot,R1_Received_by_BDM1,R1_Received_by_BDM2,R1_Payment_Verification,R1_Bank_type,R1_Legal_verification,R2_Received_amount12,R2_Received_Screenshot,R2_Received_by_BDM1,R2_Received_by_BDM2,R2_Payment_Verification,R2_Bank_type,R2_Legal_verification,DPR_status_change_date,R3_Received_amount,R3_Received_Screenshot,R3_Received_by_BDM1,R3_Received_by_BDM2,R3_Payment_Verification,R3_Bank_type,R3_Legal_verification,Date_of_status_change,R4_Received_amount,R4_Received_Screenshot,R4_Payment_Verification,R4_Bank_type,R4_Legal_verification,Date_of_status_change_f,R5_Received_amount,R5_Payment_Verification,R5_Bank_type,R5_Legal_verification,Document_collection_Pitch_deck_creation_DPR_date,R6_Received_amount,R6_Payment_Verification,R6_Bank_type,R6_Legal_verification,Document_sent_date,R7_Received_amount,R7_Payment_Verification,R7_Bank_type,R7_Legal_verification,Finance_status_change_date,R8_Received_amount,R8_Payment_Verification,R8_Bank_type,R8_Legal_verification,Date_of_financedate_change';
-            const criteria = urlObj.searchParams.get('criteria') || '';
+            const rawCriteria = urlObj.searchParams.get('criteria') || '';
+            const criteria = combineWithOctoberFilter(rawCriteria);
+            urlObj.searchParams.set('criteria', criteria);
             const paginationQuery = buildZohoPaginationQuery(urlObj);
-            const crmEndpoint = criteria
-              ? `${apiBase}/crm/v8/${moduleName}/search?fields=${dealFields}&${paginationQuery}`
-              : `${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${paginationQuery}`;
-            const milestoneEndpoint = criteria
-              ? `${apiBase}/crm/v8/${moduleName}/search?fields=${milestoneFields}&${paginationQuery}`
-              : `${apiBase}/crm/v8/${moduleName}?fields=${milestoneFields}&${paginationQuery}`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?fields=${dealFields}&${paginationQuery}`;
+            const milestoneEndpoint = `${apiBase}/crm/v8/${moduleName}/search?fields=${milestoneFields}&${paginationQuery}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Deals from Zoho CRM (${moduleName}) [criteria: ${criteria || 'none'}]`);
 
@@ -3933,6 +3981,25 @@ function zohoApiPlugin(): Plugin {
                 headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
               }).catch(() => null)
             ]);
+
+            // Fallback if search criteria returns 400 or 404
+            if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
+              const fallbackUrl = new URL(urlObj.toString());
+              fallbackUrl.searchParams.delete('criteria');
+              const fallbackQuery = buildZohoPaginationQuery(fallbackUrl);
+              const fallbackResults = await Promise.all([
+                fetch(`${apiBase}/crm/v8/${moduleName}?fields=${dealFields}&${fallbackQuery}`, {
+                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                }),
+                fetch(`${apiBase}/crm/v8/${moduleName}?fields=${milestoneFields}&${fallbackQuery}`, {
+                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+                }).catch(() => null)
+              ]);
+              if (fallbackResults[0].ok || fallbackResults[0].status === 204) {
+                crmRes = fallbackResults[0];
+                if (fallbackResults[1]) milestoneRes = fallbackResults[1];
+              }
+            }
 
             let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
 
@@ -3971,6 +4038,17 @@ function zohoApiPlugin(): Plugin {
                   });
                 }
               } catch (_) {}
+            }
+
+            // Dual-layer defense: strictly filter deals by October 2026 Created_Time
+            if (crmData?.data && Array.isArray(crmData.data)) {
+              crmData.data = crmData.data.filter((deal: any) => {
+                if (!deal) return false;
+                const ct = deal.Created_Time || deal.created_time || deal.CreatedTime;
+                if (!ct) return true;
+                const ms = new Date(ct).getTime();
+                return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : true;
+              });
             }
 
             res.setHeader('Content-Type', 'application/json');
@@ -5026,13 +5104,13 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_COMPANIES_MODULE_NAME || 'Companies';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const companyFields = 'id,Name,Business_Type,Date_of_Incorporation,GST_Number,Email,Secondary_Email,Employee,Status,Tag,Created_Time,Modified_Time';
-            const criteria = urlObj.searchParams.get('criteria') || '';
+            const rawCriteria = urlObj.searchParams.get('criteria') || '';
+            const criteria = combineWithOctoberFilter(rawCriteria);
+            urlObj.searchParams.set('criteria', criteria);
             const paginationQuery = buildZohoPaginationQuery(urlObj);
-            const crmEndpoint = criteria
-              ? `${apiBase}/crm/v8/${moduleName}/search?fields=${companyFields}&${paginationQuery}`
-              : `${apiBase}/crm/v8/${moduleName}?fields=${companyFields}&${paginationQuery}`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?fields=${companyFields}&${paginationQuery}`;
 
-            console.log(`[Vite Zoho Plugin] Fetching live Companies from Zoho CRM (${moduleName})`);
+            console.log(`[Vite Zoho Plugin] Fetching live Companies from Zoho CRM (${moduleName}) [criteria: ${criteria}]`);
 
             let crmRes = await fetch(crmEndpoint, {
               method: 'GET',
@@ -5040,6 +5118,17 @@ function zohoApiPlugin(): Plugin {
                 'Authorization': `Zoho-oauthtoken ${accessToken}`,
               },
             });
+
+            // Fallback if search criteria returns 400 or 404
+            if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
+              const fallbackUrl = new URL(urlObj.toString());
+              fallbackUrl.searchParams.delete('criteria');
+              const fallbackQuery = buildZohoPaginationQuery(fallbackUrl);
+              crmRes = await fetch(`${apiBase}/crm/v8/${moduleName}?fields=${companyFields}&${fallbackQuery}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+              });
+            }
 
             let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
 
@@ -5053,6 +5142,17 @@ function zohoApiPlugin(): Plugin {
                 },
               });
               crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+            }
+
+            // Dual-layer defense: strictly filter companies by October 2026 Created_Time
+            if (crmData?.data && Array.isArray(crmData.data)) {
+              crmData.data = crmData.data.filter((c: any) => {
+                if (!c) return false;
+                const ct = c.Created_Time || c.created_time || c.CreatedTime;
+                if (!ct) return true;
+                const ms = new Date(ct).getTime();
+                return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : true;
+              });
             }
 
             res.setHeader('Content-Type', 'application/json');
@@ -5188,13 +5288,13 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_CLIENTS_MODULE_NAME || 'Clients';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
             const clientFields = 'id,Name,Company_Name,Email,Mobile_Number,Secondary_Email,Employee,Status,Tag,Created_Time,Modified_Time';
-            const criteria = urlObj.searchParams.get('criteria') || '';
+            const rawCriteria = urlObj.searchParams.get('criteria') || '';
+            const criteria = combineWithOctoberFilter(rawCriteria);
+            urlObj.searchParams.set('criteria', criteria);
             const paginationQuery = buildZohoPaginationQuery(urlObj);
-            const crmEndpoint = criteria
-              ? `${apiBase}/crm/v8/${moduleName}/search?fields=${clientFields}&${paginationQuery}`
-              : `${apiBase}/crm/v8/${moduleName}?fields=${clientFields}&${paginationQuery}`;
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/search?fields=${clientFields}&${paginationQuery}`;
 
-            console.log(`[Vite Zoho Plugin] Fetching live Clients from Zoho CRM (${moduleName})`);
+            console.log(`[Vite Zoho Plugin] Fetching live Clients from Zoho CRM (${moduleName}) [criteria: ${criteria}]`);
 
             let crmRes = await fetch(crmEndpoint, {
               method: 'GET',
@@ -5202,6 +5302,17 @@ function zohoApiPlugin(): Plugin {
                 'Authorization': `Zoho-oauthtoken ${accessToken}`,
               },
             });
+
+            // Fallback if search criteria returns 400 or 404
+            if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
+              const fallbackUrl = new URL(urlObj.toString());
+              fallbackUrl.searchParams.delete('criteria');
+              const fallbackQuery = buildZohoPaginationQuery(fallbackUrl);
+              crmRes = await fetch(`${apiBase}/crm/v8/${moduleName}?fields=${clientFields}&${fallbackQuery}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+              });
+            }
 
             let crmData: any = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
 
@@ -5215,6 +5326,17 @@ function zohoApiPlugin(): Plugin {
                 },
               });
               crmData = crmRes.status === 204 ? { code: 'NO_CONTENT' } : await crmRes.json();
+            }
+
+            // Dual-layer defense: strictly filter clients by October 2026 Created_Time
+            if (crmData?.data && Array.isArray(crmData.data)) {
+              crmData.data = crmData.data.filter((client: any) => {
+                if (!client) return false;
+                const ct = client.Created_Time || client.created_time || client.CreatedTime;
+                if (!ct) return true;
+                const ms = new Date(ct).getTime();
+                return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : true;
+              });
             }
 
             res.setHeader('Content-Type', 'application/json');

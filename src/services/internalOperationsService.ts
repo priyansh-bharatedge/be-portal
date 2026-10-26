@@ -116,7 +116,14 @@ export function getStoredInternalOperations(): InternalOperationRecord[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return deduplicateInternalOperations(parsed);
+        const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
+        const octOnly = parsed.filter((r: any) => {
+          const ct = r.Created_Time || r.created_time || r.CreatedTime;
+          if (!ct) return true;
+          const ms = new Date(ct).getTime();
+          return !isNaN(ms) ? ms >= octStart : true;
+        });
+        return deduplicateInternalOperations(octOnly);
       }
     }
   } catch (err) {
@@ -980,8 +987,16 @@ export async function fetchInternalOperations(options?: { dealId?: string }): Pr
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        // Dual-layer defense: strictly filter internal operations by October 2026 Created_Time
+        const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
+        const octFilteredData = data.data.filter((r: any) => {
+          const ct = r.Created_Time || r.created_time || r.CreatedTime;
+          if (!ct) return true;
+          const ms = new Date(ct).getTime();
+          return !isNaN(ms) ? ms >= octStart : true;
+        });
         // Deduplicate and merge server records with local storage records
-        const serverNormalized = data.data.map(normalizeInternalOperationFromZoho);
+        const serverNormalized = octFilteredData.map(normalizeInternalOperationFromZoho);
         records = deduplicateInternalOperations([...serverNormalized, ...records]);
         setStoredInternalOperations(records);
       }

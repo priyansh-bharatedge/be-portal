@@ -18,6 +18,22 @@ function getZohoApiBaseUrl(datacenterUrl: string): string {
   return 'https://www.zohoapis.com';
 }
 
+// October 2026 Filter Constants for CRM REST API
+const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
+const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
+
+function combineWithOctoberFilter(existingCriteria?: string | null): string {
+  if (!existingCriteria || !existingCriteria.trim()) {
+    return OCTOBER_2026_CRITERIA;
+  }
+  const trimmed = existingCriteria.trim();
+  if (trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
+    return trimmed;
+  }
+  const wrapped = trimmed.startsWith('(') && trimmed.endsWith(')') ? trimmed : `(${trimmed})`;
+  return `((${OCTOBER_2026_CRITERIA})and${wrapped})`;
+}
+
 // Generate realistic mock deals when env variables are placeholder/unset
 function generateMockDeals(page: number, perPage: number) {
   const totalMockRecords = 10485;
@@ -77,7 +93,7 @@ function generateMockDeals(page: number, perPage: number) {
         id: `acc_${accountIndex + 1}`,
       },
       Probability: stages[stageIndex] === 'Closed Won' ? 100 : stages[stageIndex] === 'Closed Lost' ? 0 : 60,
-      Created_Time: new Date(Date.now() - (startIndex + i) * 3600000).toISOString(),
+      Created_Time: new Date(OCTOBER_2026_START_MS + (startIndex + i) * 3600000).toISOString(),
     });
   }
 
@@ -197,14 +213,12 @@ export default async function dealsHandler(req: any, res: any) {
     }
 
     const apiBase = getZohoApiBaseUrl(datacenterUrl);
-    const criteria = searchParams.get('criteria') || req.query?.criteria || '';
+    const rawCriteria = searchParams.get('criteria') || req.query?.criteria || '';
+    const criteria = combineWithOctoberFilter(rawCriteria);
 
-    // 2. Build Zoho CRM Deals API URL with Pagination & Fields (Search vs Standard List)
-    let zohoApiUrl = new URL(criteria ? `${apiBase}/crm/v8/Deals/search` : `${apiBase}/crm/v8/Deals`);
-
-    if (criteria) {
-      zohoApiUrl.searchParams.set('criteria', String(criteria));
-    }
+    // 2. Build Zoho CRM Deals API URL with Pagination & Fields (Search endpoint with October 2026 filter)
+    let zohoApiUrl = new URL(`${apiBase}/crm/v8/Deals/search`);
+    zohoApiUrl.searchParams.set('criteria', String(criteria));
 
     if (pageToken) {
       zohoApiUrl.searchParams.set('page_token', String(pageToken));
@@ -218,16 +232,16 @@ export default async function dealsHandler(req: any, res: any) {
     // Parallel Milestone URL to fetch R1-R8 payment slots within Zoho's 50-field limit
     let zohoMilestoneUrl: URL | null = null;
     if (!isCustomFields) {
-      zohoMilestoneUrl = new URL(criteria ? `${apiBase}/crm/v8/Deals/search` : `${apiBase}/crm/v8/Deals`);
-      if (criteria) zohoMilestoneUrl.searchParams.set('criteria', String(criteria));
+      zohoMilestoneUrl = new URL(`${apiBase}/crm/v8/Deals/search`);
+      zohoMilestoneUrl.searchParams.set('criteria', String(criteria));
       if (pageToken) zohoMilestoneUrl.searchParams.set('page_token', String(pageToken));
       else zohoMilestoneUrl.searchParams.set('page', page.toString());
       zohoMilestoneUrl.searchParams.set('per_page', perPage.toString());
       zohoMilestoneUrl.searchParams.set('fields', MILESTONE_DEAL_FIELDS);
     }
 
-    // 3. Fetch Total Record Count from Zoho CRM API (actions/count) in parallel if unfiltered
-    const countUrl = `${apiBase}/crm/v8/Deals/actions/count`;
+    // 3. Fetch Total Record Count from Zoho CRM API (actions/count) with criteria
+    const countUrl = `${apiBase}/crm/v8/Deals/actions/count?criteria=${encodeURIComponent(criteria)}`;
 
     const [crmFetchResult, milestoneFetchResult, countFetchResult] = await Promise.all([
       fetch(zohoApiUrl.toString(), {
@@ -249,18 +263,16 @@ export default async function dealsHandler(req: any, res: any) {
             return null;
           })
         : Promise.resolve(null),
-      !criteria
-        ? fetch(countUrl, {
-            method: 'GET',
-            headers: {
-              Authorization: `Zoho-oauthtoken ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }).catch((err) => {
-            console.warn('Actions count fetch error:', err);
-            return null;
-          })
-        : Promise.resolve(null),
+      fetch(countUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Zoho-oauthtoken ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }).catch((err) => {
+        console.warn('Actions count fetch error:', err);
+        return null;
+      }),
     ]);
 
     let crmResponse = crmFetchResult;
@@ -307,15 +319,13 @@ export default async function dealsHandler(req: any, res: any) {
                 },
               }).catch(() => null)
             : Promise.resolve(null),
-          !criteria
-            ? fetch(countUrl, {
-                method: 'GET',
-                headers: {
-                  Authorization: `Zoho-oauthtoken ${accessToken}`,
-                  'Content-Type': 'application/json',
-                },
-              }).catch(() => null)
-            : Promise.resolve(null),
+          fetch(countUrl, {
+            method: 'GET',
+            headers: {
+              Authorization: `Zoho-oauthtoken ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }).catch(() => null),
         ]);
         crmResponse = retryCrm;
         milestoneResponse = retryMilestone;
@@ -421,13 +431,24 @@ export default async function dealsHandler(req: any, res: any) {
       }
     }
 
+    // Dual-layer defense: strictly enforce October 2026 Created_Time filter on returned records
+    if (Array.isArray(crmData.data)) {
+      crmData.data = crmData.data.filter((deal: any) => {
+        if (!deal) return false;
+        const ct = deal.Created_Time || deal.created_time || deal.CreatedTime;
+        if (!ct) return true;
+        const createdMs = new Date(ct).getTime();
+        return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : true;
+      });
+    }
+
     // Combine info object with total_records
     const infoObj = {
       ...(crmData.info || {}),
       per_page: perPage,
       page: page,
       count: (crmData.data || []).length,
-      total_records: totalRecords ?? crmData.info?.count_total ?? crmData.info?.total ?? null,
+      total_records: totalRecords ?? crmData.info?.count_total ?? crmData.info?.total ?? (crmData.data || []).length,
       more_records: crmData.info?.more_records ?? false,
       next_page_token: crmData.info?.next_page_token || null,
     };

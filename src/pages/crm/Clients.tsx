@@ -159,8 +159,15 @@ export const Clients = () => {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Keep only live Zoho records or active manual entries, discarding phantom 'From Deals' records
-          const validClients = parsed.filter((c: any) => c.source !== 'From Deals' && (c.zohoId || c.source === 'Manual'));
+          // Keep only live Zoho records or active manual entries, discarding phantom 'From Deals' records, strictly from October 2026 or later
+          const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
+          const validClients = parsed.filter((c: any) => {
+            if (c.source === 'From Deals' || (!c.zohoId && c.source !== 'Manual')) return false;
+            const ct = c.Created_Time || c.created_time || c.CreatedTime;
+            if (!ct) return true;
+            const ms = new Date(ct).getTime();
+            return !isNaN(ms) ? ms >= octStart : true;
+          });
           setClients(validClients);
         }
       } catch (e) {}

@@ -1896,6 +1896,22 @@ function buildZohoPaginationQuery(req: ApiRequest, urlObj: URL): string {
   return queryParts.join('&');
 }
 
+// October 2026 Filter Constants for CRM REST API
+const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
+const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
+
+function combineWithOctoberFilter(existingCriteria?: string | null): string {
+  if (!existingCriteria || !existingCriteria.trim()) {
+    return OCTOBER_2026_CRITERIA;
+  }
+  const trimmed = existingCriteria.trim();
+  if (trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
+    return trimmed;
+  }
+  const wrapped = trimmed.startsWith('(') && trimmed.endsWith(')') ? trimmed : `(${trimmed})`;
+  return `((${OCTOBER_2026_CRITERIA})and${wrapped})`;
+}
+
 async function executeZohoGet(
   apiBase: string,
   moduleName: string,
@@ -1907,7 +1923,20 @@ async function executeZohoGet(
 ) {
   try {
     let accessToken = await getAccessToken();
-    const criteria = urlObj.searchParams.get('criteria') || (typeof req.query?.criteria === 'string' ? req.query.criteria : '') || (Array.isArray(req.query?.criteria) ? req.query.criteria[0] : '');
+    const rawCriteria = urlObj.searchParams.get('criteria') || (typeof req.query?.criteria === 'string' ? req.query.criteria : '') || (Array.isArray(req.query?.criteria) ? req.query.criteria[0] : '');
+    const normModule = String(moduleName || '').toLowerCase();
+    const normEntity = String(entityName || '').toLowerCase();
+    const isCrmModule = 
+      normModule === 'deals' || normEntity === 'deals' ||
+      normModule === 'quotations' || normEntity === 'quotations' ||
+      normModule === 'companies' || normEntity === 'companies' ||
+      normModule === 'clients' || normEntity === 'clients';
+
+    const criteria = isCrmModule ? combineWithOctoberFilter(rawCriteria) : rawCriteria;
+    if (criteria) {
+      urlObj.searchParams.set('criteria', criteria);
+    }
+
     const pageStr = urlObj.searchParams.get('page') || (typeof req.query?.page === 'string' ? req.query.page : '') || (Array.isArray(req.query?.page) ? req.query.page[0] : '');
     const pageNum = parseInt(pageStr, 10) || 1;
     const perPageStr = urlObj.searchParams.get('per_page') || (typeof req.query?.per_page === 'string' ? req.query.per_page : '') || (Array.isArray(req.query?.per_page) ? req.query.per_page[0] : '');
@@ -1930,7 +1959,9 @@ async function executeZohoGet(
           : `${apiBase}/crm/v8/${moduleName}?fields=${milestoneFields}&${paginationQuery}`)
       : null;
 
-    const countUrl = `${apiBase}/crm/v8/${moduleName}/actions/count`;
+    const countUrl = criteria
+      ? `${apiBase}/crm/v8/${moduleName}/actions/count?criteria=${encodeURIComponent(criteria)}`
+      : `${apiBase}/crm/v8/${moduleName}/actions/count`;
 
     // Fetch records and total counts concurrently using Promise.all
     const [crmFetchResult, milestoneFetchResult, countFetchResult] = await Promise.all([
@@ -1944,12 +1975,10 @@ async function executeZohoGet(
             headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
           }).catch(() => null)
         : Promise.resolve(null),
-      !criteria
-        ? fetch(countUrl, {
-            method: 'GET',
-            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-          }).catch(() => null)
-        : Promise.resolve(null),
+      fetch(countUrl, {
+        method: 'GET',
+        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+      }).catch(() => null),
     ]);
 
     let crmRes = crmFetchResult;
@@ -1970,12 +1999,10 @@ async function executeZohoGet(
               headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
             }).catch(() => null)
           : Promise.resolve(null),
-        !criteria
-          ? fetch(countUrl, {
-              method: 'GET',
-              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-            }).catch(() => null)
-          : Promise.resolve(null),
+        fetch(countUrl, {
+          method: 'GET',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+        }).catch(() => null),
       ]);
       crmRes = retryCrm;
       milestoneRes = retryMilestone;
@@ -2072,6 +2099,17 @@ async function executeZohoGet(
       } catch (mErr) {
         console.warn('[Zoho CRM] Error merging milestone details:', mErr);
       }
+    }
+
+    // Dual-layer defense: strictly filter CRM records by October 2026 Created_Time
+    if (isCrmModule && Array.isArray(crmData?.data)) {
+      crmData.data = crmData.data.filter((item: any) => {
+        if (!item) return false;
+        const ct = item.Created_Time || item.created_time || item.CreatedTime;
+        if (!ct) return true;
+        const createdMs = new Date(ct).getTime();
+        return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : true;
+      });
     }
 
     if (crmData?.data) {
@@ -3747,7 +3785,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       };
 
       const internalOpsFieldsParam = [
-        'id', 'Name', 'Parent_Record_Deal', 'Team_Type', 'Operation_Stage', 'Team_Leader_TL', 'Team_Member_TM', 'Modified_Time',
+        'id', 'Name', 'Parent_Record_Deal', 'Team_Type', 'Operation_Stage', 'Team_Leader_TL', 'Team_Member_TM', 'Created_Time', 'Modified_Time',
         'Doc_collection_name', 'Doc_collection_Date', 'Doc_collection_status', 'Doc_collection_File_Upload',
         'Name_Application_name', 'Name_Application_approved_name', 'Name_Application_date', 'Name_Application_status', 'Name_Application_File_Upload',
         'DSC_Creation_name', 'DSC_Creation_Date', 'DSC_Creation_status',
@@ -3769,9 +3807,14 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
             const resId = await resolveZohoDealId(dealId, accessToken, apiBase);
             if (resId) numericDealId = resId;
           }
-          const crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
+          let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
             headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
           });
+          if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
+            crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
+              headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+            });
+          }
           if (crmRes && crmRes.status === 200) {
             const crmData: any = await crmRes.json();
             let rawList = crmData.data || [];
@@ -3782,6 +3825,14 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
                 return parentId === targetDId;
               });
             }
+            // Dual-layer defense: strictly filter for October 2026 or later
+            rawList = rawList.filter((r: any) => {
+              if (!r) return false;
+              const ct = r.Created_Time || r.created_time || r.CreatedTime;
+              if (!ct) return true;
+              const createdMs = new Date(ct).getTime();
+              return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : true;
+            });
             const normalized = rawList.map(normalizeZohoOperationRecord);
             return sendJson(res, 200, { success: true, data: normalized });
           } else if (crmRes && crmRes.status === 204) {
@@ -4090,7 +4141,13 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       try {
         let accessToken = await getAccessToken();
         const targetModule = urlObj.searchParams.get('module') || process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
-        const countEndpoint = `${apiBase}/crm/v8/${targetModule}/actions/count`;
+        const normTarget = String(targetModule).toLowerCase();
+        const isCrm = normTarget === 'deals' || normTarget === 'quotations' || normTarget === 'companies' || normTarget === 'clients' || normTarget.includes('internal');
+        const rawCriteria = urlObj.searchParams.get('criteria') || '';
+        const effectiveCriteria = isCrm ? combineWithOctoberFilter(rawCriteria) : rawCriteria;
+        const countEndpoint = effectiveCriteria
+          ? `${apiBase}/crm/v8/${targetModule}/actions/count?criteria=${encodeURIComponent(effectiveCriteria)}`
+          : `${apiBase}/crm/v8/${targetModule}/actions/count`;
         let countRes = await fetch(countEndpoint, {
           headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
         });

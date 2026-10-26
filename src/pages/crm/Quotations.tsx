@@ -408,7 +408,15 @@ export const Quotations = () => {
       const saved = localStorage.getItem('be_quotations');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
+          return parsed.filter((q: any) => {
+            const ct = q.Created_Time || q.created_time || q.CreatedTime;
+            if (!ct) return true;
+            const ms = new Date(ct).getTime();
+            return !isNaN(ms) ? ms >= octStart : true;
+          });
+        }
       }
     } catch (e) { }
     return [];

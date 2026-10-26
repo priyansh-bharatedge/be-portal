@@ -331,6 +331,32 @@ export function attachCurrentUserEmployeeLookup<T = any>(record: T, customUser?:
   return injectEmployeeLookup('Generic', record as any, customUser) as T;
 }
 
+export const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
+export const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
+
+export function isCrmModuleName(moduleName: string): boolean {
+  const norm = String(moduleName || '').toLowerCase().replace(/_/g, '-');
+  return (
+    norm === 'deals' || norm === 'deal' ||
+    norm === 'quotations' || norm === 'quotation' ||
+    norm === 'companies' || norm === 'company' ||
+    norm === 'clients' || norm === 'client' ||
+    norm === 'internal-operations' || norm === 'internal-operation' || norm === 'operation-internal-crm'
+  );
+}
+
+export function combineWithOctoberCriteria(existingCriteria?: string | null): string {
+  if (!existingCriteria || !existingCriteria.trim()) {
+    return OCTOBER_2026_CRITERIA;
+  }
+  const trimmed = existingCriteria.trim();
+  if (trimmed.includes('Created_Time:greater_equal:2026-10-01')) {
+    return trimmed;
+  }
+  const wrapped = trimmed.startsWith('(') && trimmed.endsWith(')') ? trimmed : `(${trimmed})`;
+  return `((${OCTOBER_2026_CRITERIA})and${wrapped})`;
+}
+
 /**
  * Builds System-compatible Search criteria and COQL WHERE clauses based on the user's RBAC scope.
  */
@@ -344,6 +370,7 @@ export function buildZohoRbacCriteria(
   const userDept = (user?.department || '').trim().toLowerCase();
   const isAccounts = userDept.includes('account') || userDept.includes('finance');
   const isLegal = userDept.includes('legal');
+  const isCrm = isCrmModuleName(moduleName);
 
   // Exempt modules and full-visibility roles (Super Admin, HOD, HR, Accounts, Legal) have no role filters
   if (
@@ -358,8 +385,8 @@ export function buildZohoRbacCriteria(
     user.email === 'md@bharat-edge.com'
   ) {
     return {
-      criteria: '',
-      coqlWhereClause: '',
+      criteria: isCrm ? OCTOBER_2026_CRITERIA : '',
+      coqlWhereClause: isCrm ? "Created_Time >= '2026-10-01T00:00:00+05:30'" : '',
       accessibleEmployeeIds: [],
       isUnfiltered: true,
       role: user?.role || 'Super Admin'
@@ -370,8 +397,8 @@ export function buildZohoRbacCriteria(
 
   if (isAll) {
     return {
-      criteria: '',
-      coqlWhereClause: '',
+      criteria: isCrm ? OCTOBER_2026_CRITERIA : '',
+      coqlWhereClause: isCrm ? "Created_Time >= '2026-10-01T00:00:00+05:30'" : '',
       accessibleEmployeeIds: [],
       isUnfiltered: true,
       role: user.role
@@ -382,9 +409,10 @@ export function buildZohoRbacCriteria(
   const targetIds = zohoIds.length > 0 ? zohoIds : employeeIds;
 
   if (targetIds.length === 0) {
+    const zeroCriteria = `(${lookupField}:equals:0)`;
     return {
-      criteria: `(${lookupField}:equals:0)`,
-      coqlWhereClause: `${lookupField}.id = 0`,
+      criteria: isCrm ? combineWithOctoberCriteria(zeroCriteria) : zeroCriteria,
+      coqlWhereClause: isCrm ? `(Created_Time >= '2026-10-01T00:00:00+05:30' and ${lookupField}.id = 0)` : `${lookupField}.id = 0`,
       accessibleEmployeeIds: [],
       isUnfiltered: false,
       role: user.role
@@ -396,11 +424,11 @@ export function buildZohoRbacCriteria(
     const combinedCriteria = `(((Employee.id:in:${idList})or(Partner_BDM.id:in:${idList}))or(Owner.id:in:${idList}))`;
 
     const formattedCoqlIds = targetIds.map(id => `'${id}'`).join(', ');
-    const coqlWhereClause = `(Employee.id in (${formattedCoqlIds}) or Partner_BDM.id in (${formattedCoqlIds}) or Owner.id in (${formattedCoqlIds}))`;
+    const baseCoql = `(Employee.id in (${formattedCoqlIds}) or Partner_BDM.id in (${formattedCoqlIds}) or Owner.id in (${formattedCoqlIds}))`;
 
     return {
-      criteria: combinedCriteria,
-      coqlWhereClause,
+      criteria: combineWithOctoberCriteria(combinedCriteria),
+      coqlWhereClause: `(Created_Time >= '2026-10-01T00:00:00+05:30' and ${baseCoql})`,
       accessibleEmployeeIds: targetIds,
       isUnfiltered: false,
       role: user.role
@@ -416,11 +444,11 @@ export function buildZohoRbacCriteria(
     const combinedCriteria = `((Employee.id:in:${idList})or(Owner.id:in:${idList}))`;
 
     const formattedCoqlIds = targetIds.map(id => `'${id}'`).join(', ');
-    const coqlWhereClause = `(Employee.id in (${formattedCoqlIds}) or Owner.id in (${formattedCoqlIds}))`;
+    const baseCoql = `(Employee.id in (${formattedCoqlIds}) or Owner.id in (${formattedCoqlIds}))`;
 
     return {
-      criteria: combinedCriteria,
-      coqlWhereClause,
+      criteria: combineWithOctoberCriteria(combinedCriteria),
+      coqlWhereClause: `(Created_Time >= '2026-10-01T00:00:00+05:30' and ${baseCoql})`,
       accessibleEmployeeIds: targetIds,
       isUnfiltered: false,
       role: user.role
@@ -440,8 +468,8 @@ export function buildZohoRbacCriteria(
     : `${lookupField}.id in (${formattedCoqlIds})`;
 
   return {
-    criteria,
-    coqlWhereClause,
+    criteria: isCrm ? combineWithOctoberCriteria(criteria) : criteria,
+    coqlWhereClause: isCrm ? `(Created_Time >= '2026-10-01T00:00:00+05:30' and ${coqlWhereClause})` : coqlWhereClause,
     accessibleEmployeeIds: targetIds,
     isUnfiltered: false,
     role: user.role
@@ -458,6 +486,19 @@ export function filterRecordsByRbac<T = any>(
   allEmployees: any[] = getAllEmployeesList()
 ): T[] {
   if (!Array.isArray(records) || records.length === 0) return [];
+
+  // Dual-layer defense: Filter CRM modules to strictly October 2026 or later for all users
+  let effectiveRecords = records;
+  if (isCrmModuleName(moduleName)) {
+    effectiveRecords = records.filter((r: any) => {
+      if (!r) return false;
+      const ct = r.Created_Time || r.created_time || r.CreatedTime;
+      if (!ct) return true;
+      const ms = new Date(ct).getTime();
+      return !isNaN(ms) ? ms >= OCTOBER_2026_START_MS : true;
+    });
+  }
+
   const userDept = (user?.department || '').trim().toLowerCase();
   const isAccounts = userDept.includes('account') || userDept.includes('finance');
   const isLegal = userDept.includes('legal');
@@ -473,16 +514,16 @@ export function filterRecordsByRbac<T = any>(
     user.email === 'md@bharat-edge.com' ||
     user.email === 'hrmshr@be.com'
   ) {
-    return records;
+    return effectiveRecords;
   }
 
   const config = ZOHO_MODULE_LOOKUP_MAP[moduleName];
   if (config?.isLookupExempt || moduleName === 'Company_Calendar' || moduleName === 'Company_Policies' || moduleName === 'Calendar' || moduleName === 'Policies') {
-    return records;
+    return effectiveRecords;
   }
 
   const { employeeIds, zohoIds, isAll } = resolveAccessibleEmployeeIds(user, allEmployees, moduleName);
-  if (isAll) return records;
+  if (isAll) return effectiveRecords;
 
   const idSet = new Set<string>();
   employeeIds.forEach(id => {
@@ -576,7 +617,7 @@ export function filterRecordsByRbac<T = any>(
     return false;
   };
 
-  return records.filter((rec: any) => {
+  return effectiveRecords.filter((rec: any) => {
     // 1. Check direct Employee lookup object
     const empLookup = rec.Employee || rec.rawZohoDeal?.Employee;
     if (empLookup && isAccessiblePerson(empLookup)) return true;
@@ -817,8 +858,8 @@ export async function fetchZohoWithRbac<T = any>(
 
     const baseUrl = getEndpointForModule(moduleName);
     
-    // If user has restricted role criteria, append criteria query
-    if (!isUnfiltered && criteria) {
+    // If criteria is present (role criteria or October criteria), append criteria query
+    if (criteria) {
       queryParams.set('criteria', criteria);
     } else if (options?.criteria) {
       queryParams.set('criteria', options.criteria);
@@ -831,8 +872,8 @@ export async function fetchZohoWithRbac<T = any>(
     const result = await response.json();
 
     if (response.ok && result.success && Array.isArray(result.data)) {
-      // Apply secondary RBAC filter to ensure absolute client-side data security
-      const filteredData = isUnfiltered ? result.data : filterRecordsByRbac(result.data, moduleName, user, allEmployees);
+      // Apply secondary RBAC filter to ensure absolute client-side data security & October filtering
+      const filteredData = filterRecordsByRbac(result.data, moduleName, user, allEmployees);
       return {
         success: true,
         data: filteredData,

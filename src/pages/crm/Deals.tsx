@@ -296,7 +296,15 @@ export const Deals = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((d: any) => {
+          const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
+          const octOnly = parsed.filter((d: any) => {
+            const raw = d.rawZohoDeal || {};
+            const ct = d.Created_Time || raw.Created_Time || d.createdTime;
+            if (!ct) return true;
+            const ms = new Date(ct).getTime();
+            return !isNaN(ms) ? ms >= octStart : true;
+          });
+          return octOnly.map((d: any) => {
             const raw = d.rawZohoDeal || {};
             if (!isValidServiceName(d.service, d.client, d.company, d.id) || d.service === 'Services') {
               let validSvc = '';
@@ -1876,18 +1884,33 @@ export const Deals = () => {
         }
 
         const rawList = data.data || [];
+        const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
+        const octFilteredRaw = rawList.filter((d: any) => {
+          const ct = d.Created_Time || d.created_time || d.CreatedTime;
+          if (!ct) return true;
+          const ms = new Date(ct).getTime();
+          return !isNaN(ms) ? ms >= octStart : true;
+        });
         
         let existingDeals: any[] = [];
         try {
           const saved = localStorage.getItem('be_deals');
           if (saved) {
             const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) existingDeals = parsed;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              existingDeals = parsed.filter((d: any) => {
+                const raw = d.rawZohoDeal || {};
+                const ct = d.Created_Time || raw.Created_Time || d.createdTime;
+                if (!ct) return true;
+                const ms = new Date(ct).getTime();
+                return !isNaN(ms) ? ms >= octStart : true;
+              });
+            }
           }
         } catch (e) {}
 
         const baseDeals = existingDeals.length > 0 ? existingDeals : deals;
-        const { updatedDeals } = processZohoDealsBatch(rawList, baseDeals);
+        const { updatedDeals } = processZohoDealsBatch(octFilteredRaw, baseDeals);
 
         // Retain local manual/pending deals that are not yet in Zoho or recently created drafts
         const localPending = baseDeals.filter(
