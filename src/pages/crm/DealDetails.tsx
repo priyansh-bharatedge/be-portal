@@ -2477,6 +2477,7 @@ export const DealDetails = () => {
       const bdm2Name = (activeSlot?.bdm2Name && activeSlot.bdm2Name.toLowerCase() !== 'none') ? activeSlot.bdm2Name : (hasAnyPartnerBdm ? partnerBdm : '');
       const matchedBdm2 = bdm2Name ? salesEmployees.find(e => e.name.toLowerCase() === bdm2Name.toLowerCase()) : null;
       const bdm2Id = activeSlot?.bdm2Id || matchedBdm2?.id || matchedBdm2?.zohoId || '';
+      const bdm2Email = (activeSlot as any)?.bdm2Email || matchedBdm2?.email || matchedBdm2?.Email || matchedBdm2?.workEmail || '';
       const hasPartner = Boolean(bdm2Name && bdm2Name.trim() !== '' && bdm2Name.toLowerCase() !== 'none');
 
       const screenshotName = slotScreenshots[activePaymentTab] || activeSlot?.existingScreenshotName || deal.paymentScreenshotName || '';
@@ -2504,9 +2505,11 @@ export const DealDetails = () => {
         partner_bdm_name: bdm2Name,
         partnerBdmId: bdm2Id,
         partner_bdm_id: bdm2Id,
+        partnerBdmEmail: bdm2Email,
+        partner_bdm_email: bdm2Email,
         partnerBdmAmount: partnerShare,
         partner_bdm_amount: partnerShare,
-        Partner_BDM: hasPartner && bdm2Id ? { id: bdm2Id, name: bdm2Name } : (hasPartner ? { name: bdm2Name } : null),
+        Partner_BDM: hasPartner && bdm2Id ? { id: bdm2Id, name: bdm2Name, ...(bdm2Email ? { email: bdm2Email } : {}) } : (hasPartner ? { name: bdm2Name } : null),
         Partner_BDM_Name: bdm2Name,
         Partner_BDM_Amount: partnerShare,
         Partner_BDM_ID: bdm2Id,
@@ -2537,6 +2540,8 @@ export const DealDetails = () => {
           partner_bdm_name: bdm2Name,
           partnerBdmId: bdm2Id,
           partner_bdm_id: bdm2Id,
+          partnerBdmEmail: bdm2Email,
+          partner_bdm_email: bdm2Email,
           partnerBdmAmount: partnerShare,
           partner_bdm_amount: partnerShare,
           paymentScreenshotName: screenshotName,

@@ -32,24 +32,43 @@ export function isMatchingName(name1: string, name2: string): boolean {
   // Exact match
   if (n1 === n2) return true;
 
-  // Direct substring inclusion (either direction)
-  if (n1.includes(n2) || n2.includes(n1)) return true;
-
   // Token matching (split by space)
   const tokens1 = n1.split(' ').filter(t => t.length >= 2);
   const tokens2 = n2.split(' ').filter(t => t.length >= 2);
 
-  if (tokens1.length > 0 && tokens2.length > 0) {
-    // If first name matches and has >= 3 chars (e.g. 'romil')
+  if (tokens1.length === 0 || tokens2.length === 0) return false;
+
+  // 1. Conflict Check: If BOTH names contain multiple tokens (e.g. first and last name),
+  // their last tokens (surnames) MUST NOT conflict.
+  // For example, "Jainam Sompura" vs "Jainam Patva":
+  // tokens1: ['jainam', 'sompura'], tokens2: ['jainam', 'patva']
+  // 'sompura' !== 'patva' -> MUST return false to prevent cross-account deal leakage!
+  if (tokens1.length > 1 && tokens2.length > 1) {
+    const surname1 = tokens1[tokens1.length - 1];
+    const surname2 = tokens2[tokens2.length - 1];
+    if (surname1 !== surname2) {
+      return false;
+    }
+  }
+
+  // 2. Both have matching first name and matching surname:
+  // e.g. "Romil Amrutbhai Prajapati" vs "Romil Prajapati"
+  if (tokens1[0] === tokens2[0] && tokens1[tokens1.length - 1] === tokens2[tokens2.length - 1]) {
+    return true;
+  }
+
+  // 3. If one name is a single token (e.g., just first name "Romil"):
+  // Only match if the single token equals the first name and no surname conflict exists
+  if (tokens1.length === 1 || tokens2.length === 1) {
     if (tokens1[0] === tokens2[0] && tokens1[0].length >= 3) {
       return true;
     }
+  }
 
-    // Check shared tokens
-    const common = tokens1.filter(t => tokens2.includes(t));
-    if (common.length >= 2 || (common.length === 1 && common[0].length >= 4)) {
-      return true;
-    }
+  // 4. Check shared tokens if 2 or more tokens match (e.g. middle + surname or first + middle)
+  const common = tokens1.filter(t => tokens2.includes(t));
+  if (common.length >= 2) {
+    return true;
   }
 
   return false;

@@ -1962,10 +1962,19 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       existingDeal?.formData?.partnerBdmId ||
       '');
 
+  const partnerBdmEmail =
+    partnerBdmLookup?.email ||
+    rawZoho.Partner_BDM_Email ||
+    rawZoho.partner_bdm_email ||
+    existingDeal?.partnerBdmEmail ||
+    existingDeal?.formData?.partnerBdmEmail ||
+    '';
+
   const hasPartnerBdm = Boolean(
     partnerBdmLookup?.id ||
     partnerBdmName ||
     partnerBdmId ||
+    partnerBdmEmail ||
     rawZoho.Has_Partner_BDM ||
     rawZoho.has_partner_bdm ||
     (rawZoho.Partner_BDM && rawZoho.Partner_BDM !== 'false') ||
@@ -2126,6 +2135,8 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     partner_bdm_id: partnerBdmId,
     partnerBdmName,
     partner_bdm_name: partnerBdmName,
+    partnerBdmEmail,
+    partner_bdm_email: partnerBdmEmail,
     partnerBdmAmount,
     zohoStatus: 'synced',
     zohoSyncedAt: new Date().toISOString(),
@@ -2207,6 +2218,8 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       partner_bdm_id: partnerBdmId,
       partnerBdmName,
       partner_bdm_name: partnerBdmName,
+      partnerBdmEmail,
+      partner_bdm_email: partnerBdmEmail,
       partnerBdmAmount,
       partner_bdm_amount: partnerBdmAmount,
       legalDocsSenderName: rawZoho.Legal_documents_sender_name || rawZoho.Employee_name_sent1 || rawZoho.Employee_name_sent || existingDeal?.formData?.legalDocsSenderName || existingDeal?.legalDocsSenderName || '',

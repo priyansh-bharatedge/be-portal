@@ -314,11 +314,27 @@ export const CrmDashboard = () => {
         zDeal.partner_bdm_name
       );
 
+      const partnerLookup = typeof zDeal.Partner_BDM === 'object' && zDeal.Partner_BDM !== null ? zDeal.Partner_BDM : null;
+
       const partnerBdmName =
+        partnerLookup?.name ||
         zDeal.Partner_BDM_Name ||
         zDeal.Partner_BDM_name ||
         zDeal.Partner_BDM_Names ||
         zDeal.partner_bdm_name ||
+        '';
+
+      const partnerBdmId =
+        (partnerLookup?.id ? String(partnerLookup.id) : '') ||
+        zDeal.Partner_BDM_ID ||
+        zDeal.partner_bdm_id ||
+        (typeof zDeal.Partner_BDM === 'string' && /^\d+$/.test(zDeal.Partner_BDM) ? zDeal.Partner_BDM : '') ||
+        '';
+
+      const partnerBdmEmail =
+        partnerLookup?.email ||
+        zDeal.Partner_BDM_Email ||
+        zDeal.partner_bdm_email ||
         '';
 
       const partnerBdmAmount = parseMoney(zDeal.Partner_BDM_Amount || zDeal.partner_bdm_amount || (hasPartnerBdm && recAmt > 0 ? (recAmt / 1.18) / 2 : 0));
@@ -348,6 +364,11 @@ export const CrmDashboard = () => {
         owner: dealOwnerName,
         hasPartnerBdm,
         partnerBdmName,
+        partner_bdm_name: partnerBdmName,
+        partnerBdmId,
+        partner_bdm_id: partnerBdmId,
+        partnerBdmEmail,
+        partner_bdm_email: partnerBdmEmail,
         partnerBdmAmount,
         date: zDeal.Booking_Date ? new Date(zDeal.Booking_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         rawDate: zDeal.Booking_Date || zDeal.Created_Time || new Date().toISOString(),

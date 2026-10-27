@@ -1,4 +1,5 @@
 import { ALL_SERVICES } from './servicesList';
+import { isMatchingName } from './employeeUtils';
 
 /**
  * Utility functions for Partner BDM (50/50 Pre-GST Split) calculations,
@@ -291,9 +292,56 @@ export const getDealPartnerBdmId = (d: any): string => {
     d.rawZohoDeal?.partner_bdm_id ||
     (typeof d.Partner_BDM === 'object' && d.Partner_BDM !== null ? String(d.Partner_BDM.id || '') : '') ||
     (typeof d.rawZohoDeal?.Partner_BDM === 'object' && d.rawZohoDeal.Partner_BDM !== null ? String(d.rawZohoDeal.Partner_BDM.id || '') : '') ||
+    (typeof d.Partner_BDM === 'string' && /^\d+$/.test(d.Partner_BDM) ? d.Partner_BDM : '') ||
     d.formData?.partnerBdmId ||
+    d.formData?.partner_bdm_id ||
     ''
   );
+};
+
+export const getDealPartnerBdmEmail = (d: any): string => {
+  if (!d) return '';
+  const pLookup = typeof d.Partner_BDM === 'object' && d.Partner_BDM !== null ? d.Partner_BDM : (typeof d.rawZohoDeal?.Partner_BDM === 'object' && d.rawZohoDeal?.Partner_BDM !== null ? d.rawZohoDeal.Partner_BDM : null);
+  const directEmail = (
+    d.partnerBdmEmail ||
+    d.partner_bdm_email ||
+    d.Partner_BDM_Email ||
+    pLookup?.email ||
+    d.rawZohoDeal?.Partner_BDM_Email ||
+    d.rawZohoDeal?.partner_bdm_email ||
+    d.formData?.partnerBdmEmail ||
+    d.formData?.partner_bdm_email ||
+    ''
+  );
+  if (directEmail) return String(directEmail).trim().toLowerCase();
+
+  // If email not stored directly on deal, try resolving from stored employees by partner ID
+  const pId = getDealPartnerBdmId(d).trim().toLowerCase();
+  if (pId) {
+    try {
+      const raw = localStorage.getItem('be_employees');
+      const rawSales = localStorage.getItem('be_sales_employees');
+      const all: any[] = [];
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (Array.isArray(p)) all.push(...p);
+      }
+      if (rawSales) {
+        const p = JSON.parse(rawSales);
+        if (Array.isArray(p)) all.push(...p);
+      }
+      const match = all.find((e: any) => {
+        const eId = String(e.id || e.empId || e.zohoId || '').trim().toLowerCase();
+        return eId && eId === pId;
+      });
+      if (match) {
+        const em = String(match.email || match.Email || match.workEmail || match.Personal_Email_Address || '').trim().toLowerCase();
+        if (em) return em;
+      }
+    } catch (e) {}
+  }
+
+  return '';
 };
 
 export const getDealPrimaryBdmName = (d: any): string => {
@@ -334,38 +382,152 @@ export const getDealPrimaryBdmId = (d: any): string => {
 
 export const isUserPartnerBdm = (d: any, user: any): boolean => {
   if (!d || !user || !isDealPartnerBdm(d)) return false;
-  const userName = (user.name || '').trim().toLowerCase();
-  const userId = String(user.empId || user.id || user.zohoId || '').trim().toLowerCase();
 
-  const pName = getDealPartnerBdmName(d).trim().toLowerCase();
+  // 1. Gather all candidate IDs for the logged-in user
+  const userIds = new Set<string>();
+  [
+    user.id,
+    user.empId,
+    user.zohoId,
+    user.Employment_ID,
+    user.Employee_Code,
+    user.zohoUserId,
+    user.formData?.empId,
+    user.formData?.zohoId,
+    user.formData?.employeeId
+  ].forEach(v => {
+    if (v) userIds.add(String(v).trim().toLowerCase());
+  });
+
+  // 2. Gather all candidate Emails for the logged-in user
+  const userEmails = new Set<string>();
+  [
+    user.email,
+    user.Email,
+    user.workEmail,
+    user.Personal_Email_Address,
+    user.formData?.email,
+    user.formData?.workEmail
+  ].forEach(v => {
+    if (v) userEmails.add(String(v).trim().toLowerCase());
+  });
+
+  // Supplement user IDs and Emails from stored employees
+  try {
+    const raw = localStorage.getItem('be_employees');
+    const rawSales = localStorage.getItem('be_sales_employees');
+    const allEmps: any[] = [];
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (Array.isArray(p)) allEmps.push(...p);
+    }
+    if (rawSales) {
+      const p = JSON.parse(rawSales);
+      if (Array.isArray(p)) allEmps.push(...p);
+    }
+
+    const uName = (user.name || '').trim().toLowerCase();
+    const uEmail = (user.email || '').trim().toLowerCase();
+    const uId = String(user.empId || user.id || user.zohoId || '').trim().toLowerCase();
+
+    const selfMatch = allEmps.find((e: any) => {
+      const eEmail = String(e.email || e.workEmail || '').trim().toLowerCase();
+      const eId = String(e.id || e.empId || e.zohoId || '').trim().toLowerCase();
+      const eName = String(e.name || '').trim().toLowerCase();
+      return (uEmail && eEmail === uEmail) || (uId && eId === uId) || (uName && eName === uName);
+    });
+
+    if (selfMatch) {
+      [selfMatch.id, selfMatch.empId, selfMatch.zohoId, selfMatch.Employment_ID, selfMatch.Employee_Code, selfMatch.zohoUserId].forEach(v => {
+        if (v) userIds.add(String(v).trim().toLowerCase());
+      });
+      [selfMatch.email, selfMatch.workEmail, selfMatch.Personal_Email_Address].forEach(v => {
+        if (v) userEmails.add(String(v).trim().toLowerCase());
+      });
+    }
+  } catch (e) {}
+
+  // 3. Extract deal's Partner BDM IDs
   const pId = getDealPartnerBdmId(d).trim().toLowerCase();
+  const partnerLookup = (typeof d.Partner_BDM === 'object' && d.Partner_BDM !== null) ? d.Partner_BDM : (typeof d.rawZohoDeal?.Partner_BDM === 'object' && d.rawZohoDeal?.Partner_BDM !== null ? d.rawZohoDeal.Partner_BDM : null);
+  const pLookupId = partnerLookup?.id ? String(partnerLookup.id).trim().toLowerCase() : '';
+  const pRawId = String(d.rawZohoDeal?.Partner_BDM_ID || d.rawZohoDeal?.partner_bdm_id || '').trim().toLowerCase();
 
-  if (userId && pId && userId === pId) return true;
-  if (userName && pName) {
-    if (userName === pName) return true;
-    if (userName.length >= 3 && pName.includes(userName)) return true;
-    if (pName.length >= 3 && userName.includes(pName)) return true;
+  const dealPartnerIds = [pId, pLookupId, pRawId].filter(Boolean);
+
+  // 4. Extract deal's Partner BDM Emails
+  const pEmail = getDealPartnerBdmEmail(d).trim().toLowerCase();
+  const pLookupEmail = partnerLookup?.email ? String(partnerLookup.email).trim().toLowerCase() : '';
+  const dealPartnerEmails = [pEmail, pLookupEmail].filter(Boolean);
+
+  // 5. Strict matching by unique ID or exact Email address
+  if (dealPartnerIds.some(id => userIds.has(id))) return true;
+  if (dealPartnerEmails.some(em => userEmails.has(em))) return true;
+
+  // 6. Explicit ID or Email mismatch guard:
+  // If the deal has an explicit Partner ID or Email, and NEITHER matched this user,
+  // do NOT allow loose name matching to cause data leakage to another employee.
+  if (dealPartnerIds.length > 0 || dealPartnerEmails.length > 0) {
+    return false;
   }
+
+  // 7. Safe fallback only when deal has no Partner ID and no Partner Email
+  const userName = (user.name || '').trim();
+  const pName = getDealPartnerBdmName(d).trim();
+  if (userName && pName) {
+    return isMatchingName(userName, pName);
+  }
+
   return false;
 };
 
 export const isUserPrimaryBdm = (d: any, user: any): boolean => {
   if (!d || !user) return false;
-  const userName = (user.name || '').trim().toLowerCase();
-  const userId = String(user.empId || user.id || user.zohoId || '').trim().toLowerCase();
-  const userEmail = String(user.email || '').trim().toLowerCase();
 
-  const oName = getDealPrimaryBdmName(d).trim().toLowerCase();
+  const userIds = new Set<string>();
+  [
+    user.id,
+    user.empId,
+    user.zohoId,
+    user.Employment_ID,
+    user.Employee_Code,
+    user.zohoUserId,
+    user.formData?.empId,
+    user.formData?.zohoId,
+    user.formData?.employeeId
+  ].forEach(v => {
+    if (v) userIds.add(String(v).trim().toLowerCase());
+  });
+
+  const userEmails = new Set<string>();
+  [
+    user.email,
+    user.Email,
+    user.workEmail,
+    user.Personal_Email_Address,
+    user.formData?.email,
+    user.formData?.workEmail
+  ].forEach(v => {
+    if (v) userEmails.add(String(v).trim().toLowerCase());
+  });
+
   const oId = getDealPrimaryBdmId(d).trim().toLowerCase();
   const oEmail = String(d.employeeEmail || d.formData?.employeeEmail || d.userEmail || d.formData?.userEmail || '').trim().toLowerCase();
 
-  if (userId && oId && userId === oId) return true;
-  if (userEmail && oEmail && userEmail === oEmail) return true;
-  if (userName && oName) {
-    if (userName === oName) return true;
-    if (userName.length >= 3 && oName.includes(userName)) return true;
-    if (oName.length >= 3 && userName.includes(oName)) return true;
+  if (oId && userIds.has(oId)) return true;
+  if (oEmail && userEmails.has(oEmail)) return true;
+
+  // If deal has an explicit Primary BDM ID or Email and neither matched, reject
+  if (oId || oEmail) {
+    return false;
   }
+
+  const userName = (user.name || '').trim();
+  const oName = getDealPrimaryBdmName(d).trim();
+  if (userName && oName) {
+    if (isMatchingName(userName, oName)) return true;
+  }
+
   const altNames = [
     d.salesEmployee,
     d.employeeName,
@@ -374,12 +536,14 @@ export const isUserPrimaryBdm = (d: any, user: any): boolean => {
     typeof d.Employee === 'object' ? d.Employee?.name : d.Employee,
     typeof d.rawZohoDeal?.Employee === 'object' ? d.rawZohoDeal.Employee?.name : d.rawZohoDeal?.Employee
   ].filter(Boolean);
+
   for (const alt of altNames) {
-    const a = String(alt).trim().toLowerCase();
-    if (a && userName && (userName === a || userName.includes(a) || a.includes(userName))) {
+    const a = String(alt).trim();
+    if (a && userName && isMatchingName(userName, a)) {
       return true;
     }
   }
+
   return false;
 };
 

@@ -580,9 +580,9 @@ export function filterRecordsByRbac<T = any>(
     if (id && id.trim()) idSet.add(id.trim().toLowerCase());
   });
 
-  if (user.zohoId) idSet.add(String(user.zohoId).trim().toLowerCase());
-  if (user.id) idSet.add(String(user.id).trim().toLowerCase());
-  if (user.empId) idSet.add(String(user.empId).trim().toLowerCase());
+  [user.zohoId, user.id, user.empId, (user as any).Employment_ID, (user as any).Employee_Code, (user as any).zohoUserId].forEach(id => {
+    if (id) idSet.add(String(id).trim().toLowerCase());
+  });
 
   const userName = (user.name || '').trim().toLowerCase();
   const userEmail = (user.email || '').trim().toLowerCase();
@@ -592,6 +592,9 @@ export function filterRecordsByRbac<T = any>(
 
   if (userName) accessibleNames.push(userName);
   if (userEmail) accessibleEmails.add(userEmail);
+  [(user as any).Email, (user as any).workEmail, (user as any).personalEmail, (user as any).formData?.email].forEach(em => {
+    if (em) accessibleEmails.add(String(em).trim().toLowerCase());
+  });
 
   // If user is a Team Leader (TL), gather all subordinates' names, emails, and IDs across all departments
   if (user.role === 'TL') {
@@ -648,8 +651,11 @@ export function filterRecordsByRbac<T = any>(
       if (typeof candidateNameOrId === 'object' && candidateNameOrId !== null) {
         const objId = String(candidateNameOrId.id || '').trim().toLowerCase();
         const objName = String(candidateNameOrId.name || '').trim();
-        if (objId && idSet.has(objId)) return true;
-        if (objName && isAccessiblePerson(objName)) return true;
+        const objEmail = String(candidateNameOrId.email || '').trim().toLowerCase();
+        if (objId) return idSet.has(objId);
+        if (objEmail) return accessibleEmails.has(objEmail);
+        if (objName) return accessibleNames.some(n => isMatchingName(objName, n));
+        return false;
       } else {
         const val = String(candidateNameOrId).trim();
         const valLower = val.toLowerCase();
@@ -680,15 +686,61 @@ export function filterRecordsByRbac<T = any>(
     const ownerStr = String(rec.owner || rec.Owner || rec.Created_By || rec.salesEmployee || rec.BDM_names || rec.rawZohoDeal?.Owner?.name || rec.rawZohoDeal?.salesEmployee || '').trim();
     if (ownerStr && (isAccessiblePerson(ownerStr) || isAccessiblePerson(undefined, ownerStr))) return true;
 
-    // 4. Check Partner BDM (Lookup object, ID, Name, or Form Data)
+    // 4. Check Partner BDM (Strict Unique Identifier: Lookup ID, exact Email, or explicit partner ID)
     const partnerLookup = rec.Partner_BDM || rec.rawZohoDeal?.Partner_BDM;
-    if (partnerLookup && isAccessiblePerson(partnerLookup)) return true;
+    const partnerLookupId = (typeof partnerLookup === 'object' && partnerLookup !== null && partnerLookup.id) ? String(partnerLookup.id).trim().toLowerCase() : '';
+    const partnerLookupEmail = (typeof partnerLookup === 'object' && partnerLookup !== null && partnerLookup.email) ? String(partnerLookup.email).trim().toLowerCase() : '';
 
-    const bdmId = String(rec.partnerBdmId || rec.partner_bdm_id || rec.Partner_BDM_ID || rec.rawZohoDeal?.Partner_BDM_ID || rec.rawZohoDeal?.partner_bdm_id || rec.formData?.partnerBdmId || rec.formData?.partner_bdm_id || (typeof partnerLookup === 'string' ? partnerLookup : '') || '').trim().toLowerCase();
+    const bdmId = String(
+      partnerLookupId ||
+      rec.partnerBdmId ||
+      rec.partner_bdm_id ||
+      rec.Partner_BDM_ID ||
+      rec.rawZohoDeal?.Partner_BDM_ID ||
+      rec.rawZohoDeal?.partner_bdm_id ||
+      rec.formData?.partnerBdmId ||
+      rec.formData?.partner_bdm_id ||
+      (typeof partnerLookup === 'string' && /^\d+$/.test(partnerLookup) ? partnerLookup : '') ||
+      ''
+    ).trim().toLowerCase();
+
+    const bdmEmail = String(
+      partnerLookupEmail ||
+      rec.partnerBdmEmail ||
+      rec.partner_bdm_email ||
+      rec.Partner_BDM_Email ||
+      rec.rawZohoDeal?.Partner_BDM_Email ||
+      rec.rawZohoDeal?.partner_bdm_email ||
+      rec.formData?.partnerBdmEmail ||
+      rec.formData?.partner_bdm_email ||
+      ''
+    ).trim().toLowerCase();
+
+    // Strict Unique Identifier checks for Partner BDM
     if (bdmId && idSet.has(bdmId)) return true;
+    if (bdmEmail && accessibleEmails.has(bdmEmail)) return true;
 
-    const bdmName = String(rec.partnerBdmName || rec.partner_bdm_name || rec.Partner_BDM_Name || rec.rawZohoDeal?.Partner_BDM_Name || rec.rawZohoDeal?.Partner_BDM_name || rec.rawZohoDeal?.Partner_BDM_Names || rec.rawZohoDeal?.Partner_BDM_Names_bp || rec.rawZohoDeal?.Partner_BDM_Names_st || rec.formData?.partnerBdmName || rec.formData?.partner_bdm_name || '').trim();
-    if (bdmName && isAccessiblePerson(bdmName)) return true;
+    // If deal has an explicit Partner BDM ID or Email and neither matched, reject.
+    // Do NOT fall back to loose name matching which causes cross-employee data leaks!
+    if (bdmId || bdmEmail) {
+      // Explicit partner belongs to someone else
+    } else {
+      const bdmName = String(
+        (typeof partnerLookup === 'object' && partnerLookup !== null ? partnerLookup.name : '') ||
+        rec.partnerBdmName ||
+        rec.partner_bdm_name ||
+        rec.Partner_BDM_Name ||
+        rec.rawZohoDeal?.Partner_BDM_Name ||
+        rec.rawZohoDeal?.Partner_BDM_name ||
+        rec.rawZohoDeal?.Partner_BDM_Names ||
+        rec.rawZohoDeal?.Partner_BDM_Names_bp ||
+        rec.rawZohoDeal?.Partner_BDM_Names_st ||
+        rec.formData?.partnerBdmName ||
+        rec.formData?.partner_bdm_name ||
+        ''
+      ).trim();
+      if (bdmName && isAccessiblePerson(bdmName)) return true;
+    }
 
     // 5. For HOD role, check if record's department matches HOD's department
     if (user.role === 'HOD') {

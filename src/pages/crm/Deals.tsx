@@ -88,8 +88,6 @@ const isDealOwnedByTL = (d: any, user: any): boolean => {
   if (isUserPrimaryBdm(d, user) || isUserPartnerBdm(d, user)) return true;
   const ownerName = String(d.owner || d.employeeName || d.salesEmployee || d.Owner?.name || d.rawZohoDeal?.Owner?.name || '').trim();
   if (ownerName && isMatchingName(ownerName, user.name || user.Name || '')) return true;
-  const partnerName = String(d.partnerBdmName || d.Partner_BDM_Name || d.Partner_BDM?.name || '').trim();
-  if (partnerName && isMatchingName(partnerName, user.name || user.Name || '')) return true;
   return false;
 };
 
@@ -116,15 +114,6 @@ const getDealSubordinateMember = (d: any, user: any, employees: any[]): DealSubo
   for (const sub of subordinates) {
     if (isUserPartnerBdm(d, sub)) {
       return { member: sub, role: 'Partner BDM', name: sub.name || sub.Name || '' };
-    }
-  }
-
-  const partnerName = String(d.partnerBdmName || d.Partner_BDM_Name || d.Partner_BDM?.name || '').trim();
-  if (partnerName) {
-    for (const sub of subordinates) {
-      if (isMatchingName(partnerName, sub.name || sub.Name || '')) {
-        return { member: sub, role: 'Partner BDM', name: sub.name || sub.Name || partnerName };
-      }
     }
   }
 
@@ -526,6 +515,7 @@ export const Deals = () => {
   const [hasPartnerBdm, setHasPartnerBdm] = useState<boolean>(false);
   const [partnerBdmId, setPartnerBdmId] = useState<string>('');
   const [partnerBdmName, setPartnerBdmName] = useState<string>('');
+  const [partnerBdmEmail, setPartnerBdmEmail] = useState<string>('');
   const [remark, setRemark] = useState<string>('');
 
   const loadSalesEmployees = useCallback(async () => {
@@ -787,23 +777,26 @@ export const Deals = () => {
 
   // Resolves the exact dropdown select value matching the current deal's partner BDM
   const selectedPartnerDropdownVal = useMemo(() => {
-    if (!partnerBdmId && !partnerBdmName) return '';
+    if (!partnerBdmId && !partnerBdmName && !partnerBdmEmail) return '';
     const match = eligiblePartnerBdms.find(emp =>
       (partnerBdmId && (
         String(emp.id || '').toLowerCase() === String(partnerBdmId).toLowerCase() ||
         String(emp.zohoId || '').toLowerCase() === String(partnerBdmId).toLowerCase() ||
         String(emp.empId || '').toLowerCase() === String(partnerBdmId).toLowerCase()
       )) ||
-      (partnerBdmName && (
+      (partnerBdmEmail && (
+        String(emp.email || emp.Email || emp.workEmail || '').toLowerCase().trim() === String(partnerBdmEmail).toLowerCase().trim()
+      )) ||
+      (partnerBdmName && !partnerBdmId && !partnerBdmEmail && (
         String(emp.name || '').toLowerCase().trim() === String(partnerBdmName).toLowerCase().trim() ||
-        (partnerBdmName.length >= 3 && String(emp.name || '').toLowerCase().includes(partnerBdmName.toLowerCase()))
+        isMatchingName(String(emp.name || ''), partnerBdmName)
       ))
     );
     if (match) {
       return match.zohoId || match.id || match.empId || match.name;
     }
     return partnerBdmId;
-  }, [partnerBdmId, partnerBdmName, eligiblePartnerBdms]);
+  }, [partnerBdmId, partnerBdmName, partnerBdmEmail, eligiblePartnerBdms]);
 
   useEffect(() => {
     if (toast) {
@@ -1004,8 +997,10 @@ export const Deals = () => {
       setHasPartnerBdm(hasPartner);
       const pId = deal.partnerBdmId || deal.partner_bdm_id || fd.partnerBdmId || fd.partner_bdm_id || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.id : '') || (typeof rawZ.Partner_BDM === 'object' ? rawZ.Partner_BDM?.id : '') || '';
       const pName = deal.partnerBdmName || deal.partner_bdm_name || fd.partnerBdmName || fd.partner_bdm_name || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.name : '') || (typeof rawZ.Partner_BDM === 'object' ? rawZ.Partner_BDM?.name : '') || '';
+      const pEmail = deal.partnerBdmEmail || deal.partner_bdm_email || fd.partnerBdmEmail || fd.partner_bdm_email || (typeof deal.Partner_BDM === 'object' ? deal.Partner_BDM?.email : '') || (typeof rawZ.Partner_BDM === 'object' ? rawZ.Partner_BDM?.email : '') || '';
       setPartnerBdmId(pId);
       setPartnerBdmName(pName);
+      setPartnerBdmEmail(pEmail);
 
       const rem = deal.Q_Notes || deal.q_notes || deal.notes || deal.Notes || deal.remark || deal.Remark || deal.remarks || deal.Description || fd.Q_Notes || fd.q_notes || fd.notes || fd.Notes || fd.remark || fd.Remark || fd.remarks || rawZ.Q_Notes || rawZ.q_notes || rawZ.Notes || rawZ.Remark || rawZ.Description || '';
       setRemark(rem);
@@ -1027,6 +1022,7 @@ export const Deals = () => {
       setHasPartnerBdm(false);
       setPartnerBdmId('');
       setPartnerBdmName('');
+      setPartnerBdmEmail('');
       setRemark('');
     }
   };
@@ -1677,6 +1673,13 @@ export const Deals = () => {
         (existingIdx >= 0 ? updatedDeals[existingIdx]?.partnerBdmId : '') || 
         '');
 
+      const partnerBdmEmail = 
+        partnerBdmLookup?.email ||
+        zDeal.Partner_BDM_Email ||
+        zDeal.partner_bdm_email ||
+        (existingIdx >= 0 ? updatedDeals[existingIdx]?.partnerBdmEmail : '') ||
+        '';
+
       let partnerBdmAmount = Number(zDeal.Partner_BDM_Amount || zDeal.Partner_BDM_amount || zDeal.partner_bdm_amount || 0);
       if (hasPartnerBdm && (!partnerBdmAmount || partnerBdmAmount === 0) && receivedAmountNum > 0) {
         partnerBdmAmount = Number(((receivedAmountNum / 1.18) / 2).toFixed(2));
@@ -1747,6 +1750,8 @@ export const Deals = () => {
         partner_bdm_id: partnerBdmId,
         partnerBdmName,
         partner_bdm_name: partnerBdmName,
+        partnerBdmEmail,
+        partner_bdm_email: partnerBdmEmail,
         partnerBdmAmount,
         partner_bdm_amount: partnerBdmAmount,
         zohoId: zDeal.id,
@@ -1800,6 +1805,8 @@ export const Deals = () => {
           partner_bdm_id: partnerBdmId,
           partnerBdmName,
           partner_bdm_name: partnerBdmName,
+          partnerBdmEmail,
+          partner_bdm_email: partnerBdmEmail,
           partnerBdmAmount,
           partner_bdm_amount: partnerBdmAmount,
           ...(existingIdx >= 0 ? updatedDeals[existingIdx]?.formData : {})
@@ -2337,7 +2344,7 @@ export const Deals = () => {
         source: existingDeal?.source || 'Manual',
         // Partner BDM split details & Employee Lookup
         Partner_BDM: (hasPartnerBdm && partnerBdmId && /^\d{15,}$/.test(String(partnerBdmId).trim()))
-          ? { id: String(partnerBdmId).trim(), name: partnerBdmName }
+          ? { id: String(partnerBdmId).trim(), name: partnerBdmName, ...(partnerBdmEmail ? { email: partnerBdmEmail } : {}) }
           : undefined,
         hasPartnerBdm: hasPartnerBdm,
         has_partner_bdm: hasPartnerBdm,
@@ -2345,6 +2352,8 @@ export const Deals = () => {
         partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
         partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
         partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
+        partnerBdmEmail: hasPartnerBdm ? partnerBdmEmail : '',
+        partner_bdm_email: hasPartnerBdm ? partnerBdmEmail : '',
         partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
         partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
         bookingAmount: Number(amountReceived) || 0,
@@ -2371,7 +2380,7 @@ export const Deals = () => {
           empId: existingDeal?.empId || currentUser?.empId || currentUser?.id,
           salesEmployee: existingDeal?.salesEmployee || currentUser?.name,
           Partner_BDM: (hasPartnerBdm && partnerBdmId && /^\d{15,}$/.test(String(partnerBdmId).trim()))
-            ? { id: String(partnerBdmId).trim(), name: partnerBdmName }
+            ? { id: String(partnerBdmId).trim(), name: partnerBdmName, ...(partnerBdmEmail ? { email: partnerBdmEmail } : {}) }
             : undefined,
           hasPartnerBdm,
           has_partner_bdm: hasPartnerBdm,
@@ -2379,6 +2388,8 @@ export const Deals = () => {
           partner_bdm_id: hasPartnerBdm ? partnerBdmId : '',
           partnerBdmName: hasPartnerBdm ? partnerBdmName : '',
           partner_bdm_name: hasPartnerBdm ? partnerBdmName : '',
+          partnerBdmEmail: hasPartnerBdm ? partnerBdmEmail : '',
+          partner_bdm_email: hasPartnerBdm ? partnerBdmEmail : '',
           partnerBdmAmount: hasPartnerBdm ? partnerBdmAmount : 0,
           partner_bdm_amount: hasPartnerBdm ? partnerBdmAmount : 0,
         },
@@ -4801,6 +4812,7 @@ export const Deals = () => {
                                 if (!checked) {
                                   setPartnerBdmId('');
                                   setPartnerBdmName('');
+                                  setPartnerBdmEmail('');
                                 }
                               }}
                               className="w-4 h-4 text-be-orange rounded border-gray-300 focus:ring-be-orange accent-be-orange cursor-pointer"
@@ -4846,9 +4858,11 @@ export const Deals = () => {
                                     if (found) {
                                       setPartnerBdmId(found.zohoId || found.id || found.empId || selectedVal);
                                       setPartnerBdmName(found.name);
+                                      setPartnerBdmEmail(found.email || found.Email || found.workEmail || '');
                                     } else {
                                       setPartnerBdmId(selectedVal);
                                       setPartnerBdmName('');
+                                      setPartnerBdmEmail('');
                                     }
                                   }}
                                   className={`w-full px-3 py-2 bg-white border rounded-lg text-sm font-medium text-gray-800 outline-none focus:ring-2 focus:ring-be-orange ${formErrors.partnerBdm ? 'border-red-500' : 'border-gray-300'}`}
