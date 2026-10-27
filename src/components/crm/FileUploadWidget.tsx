@@ -9,6 +9,7 @@ interface FileUploadWidgetProps {
   multiple?: boolean;
   disabled?: boolean;
   helperText?: string;
+  recordId?: string;
 }
 
 export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
@@ -17,7 +18,8 @@ export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
   onChange,
   multiple = true,
   disabled = false,
-  helperText
+  helperText,
+  recordId
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -33,47 +35,23 @@ export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
     if (!e.target.files || e.target.files.length === 0) return;
     const selectedFiles = Array.from(e.target.files);
 
-    const newMetas: UploadedFileMeta[] = await Promise.all(
-      selectedFiles.map(file => {
-        return new Promise<UploadedFileMeta>((resolve) => {
-          // If file is reasonably small (< 5MB), store data URL for preview/download
-          if (file.size < 5 * 1024 * 1024) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              resolve({
-                id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-                name: file.name,
-                size: file.size,
-                type: file.type || 'application/octet-stream',
-                uploadedAt: new Date().toISOString(),
-                dataUrl: reader.result as string,
-                rawFile: file
-              });
-            };
-            reader.onerror = () => {
-              resolve({
-                id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-                name: file.name,
-                size: file.size,
-                type: file.type || 'application/octet-stream',
-                uploadedAt: new Date().toISOString(),
-                rawFile: file
-              });
-            };
-            reader.readAsDataURL(file);
-          } else {
-            resolve({
-              id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-              name: file.name,
-              size: file.size,
-              type: file.type || 'application/octet-stream',
-              uploadedAt: new Date().toISOString(),
-              rawFile: file
-            });
-          }
-        });
-      })
-    );
+    const newMetas: UploadedFileMeta[] = selectedFiles.map(file => {
+      let localBlobUrl = '';
+      try {
+        localBlobUrl = URL.createObjectURL(file);
+      } catch (_) {}
+
+      return {
+        id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: file.name,
+        size: file.size,
+        type: file.type || 'application/octet-stream',
+        uploadedAt: new Date().toISOString(),
+        url: localBlobUrl,
+        rawFile: file,
+        recordId
+      };
+    });
 
     if (multiple) {
       onChange([...files, ...newMetas]);
@@ -92,19 +70,40 @@ export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
   };
 
   const handleDownload = (file: UploadedFileMeta) => {
-    if (file.dataUrl) {
+    const cleanName = (file.name || 'document').replace(/^\[[^\]]+\]\s*/, '');
+    if (file.url && file.url.startsWith('blob:')) {
+      const link = document.createElement('a');
+      link.href = file.url;
+      link.download = cleanName;
+      link.click();
+      return;
+    }
+    if (file.dataUrl && file.dataUrl.startsWith('data:')) {
       const link = document.createElement('a');
       link.href = file.dataUrl;
-      link.download = file.name;
+      link.download = cleanName;
       link.click();
-    } else if (file.url) {
-      window.open(file.url, '_blank');
-    } else if (file.fileId || file.id) {
-      const downloadUrl = `/api/zoho/internal-operations/download?file_id=${file.fileId || file.id}&name=${encodeURIComponent(file.name)}`;
-      window.open(downloadUrl, '_blank');
-    } else {
-      alert(`File "${file.name}" was registered without downloadable content.`);
+      return;
     }
+
+    const recId = file.recordId || recordId;
+    const attId = file.attachmentId || (file.id && /^\d{15,}$/.test(file.id) ? file.id : (file.fileId && /^\d{15,}$/.test(file.fileId) ? file.fileId : null));
+
+    if (recId && attId) {
+      const downloadUrl = `/api/zoho/download-attachment?module=Operation_Internal_CRM&recordId=${recId}&attachmentId=${attId}`;
+      window.open(downloadUrl, '_blank');
+      return;
+    }
+    if (file.url) {
+      window.open(file.url, '_blank');
+      return;
+    }
+    if (file.fileId || file.id) {
+      const downloadUrl = `/api/zoho/internal-operations/download?file_id=${file.fileId || file.id}&name=${encodeURIComponent(cleanName)}${recId ? `&record_id=${recId}` : ''}`;
+      window.open(downloadUrl, '_blank');
+      return;
+    }
+    alert(`File "${cleanName}" was registered without downloadable content.`);
   };
 
   return (
@@ -155,8 +154,8 @@ export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
               className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs text-gray-700 shadow-2xs group hover:border-gray-300 transition-all max-w-full"
             >
               <Paperclip size={11} className="text-gray-400 shrink-0" />
-              <span className="font-medium truncate max-w-[140px] sm:max-w-[200px]" title={file.name}>
-                {file.name}
+              <span className="font-medium truncate max-w-[140px] sm:max-w-[200px]" title={(file.name || 'Document').replace(/^\[[^\]]+\]\s*/, '')}>
+                {(file.name || 'Document').replace(/^\[[^\]]+\]\s*/, '')}
               </span>
               <span className="text-[10px] text-gray-400 shrink-0">
                 ({formatFileSize(file.size)})

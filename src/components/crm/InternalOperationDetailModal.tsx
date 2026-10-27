@@ -30,11 +30,10 @@ import {
 import {
   normalizeTeamType,
   saveInternalOperation,
-  syncTeamTypeToLegalSubform,
-  dataUrlToBlob
+  syncTeamTypeToLegalSubform
 } from '../../services/internalOperationsService';
-import { uploadZohoDealImageField } from '../../services/zohoService';
-import { FileUploadWidget } from './FileUploadWidget';
+import { uploadZohoAttachment, fetchZohoAttachments } from '../../services/zohoService';
+import { FileUploadWidget as BaseFileUploadWidget } from './FileUploadWidget';
 import type { NormalizedStaff } from './InternalOperationsAllocationTable';
 import {
   X,
@@ -68,6 +67,7 @@ export interface OperationsStaffContextType {
   operationsStaff: NormalizedStaff[];
   operationsTLs: NormalizedStaff[];
   operationsTMs: NormalizedStaff[];
+  recordId?: string;
 }
 
 export const OperationsStaffContext = createContext<OperationsStaffContextType>({
@@ -77,6 +77,11 @@ export const OperationsStaffContext = createContext<OperationsStaffContextType>(
 });
 
 export const useOperationsStaff = () => useContext(OperationsStaffContext);
+
+export const FileUploadWidget: React.FC<React.ComponentProps<typeof BaseFileUploadWidget>> = (props) => {
+  const staffCtx = useContext(OperationsStaffContext);
+  return <BaseFileUploadWidget recordId={props.recordId || staffCtx.recordId} {...props} />;
+};
 
 export const StaffNameSelect: React.FC<{
   label?: string;
@@ -299,6 +304,155 @@ export const AuditorNameSelect: React.FC<{
     </div>
   );
 };
+
+export const SECTION_ATTACHMENT_CONFIG: Record<string, { tag: string; label: string; fileKey: string }> = {
+  docCollection: { tag: 'Doc Collection', label: 'Doc Collection', fileKey: 'Doc_collection_File_Upload' },
+  compDocCollection: { tag: 'Doc Collection', label: 'Doc Collection', fileKey: 'Doc_collection_File_Upload' },
+  certDocCollection: { tag: 'Doc Collection', label: 'Doc Collection', fileKey: 'Doc_collection_File_Upload' },
+  nameApp: { tag: 'Name Application', label: 'Name Application', fileKey: 'Name_Application_File_Upload' },
+  accounting: { tag: 'Name Application', label: 'Accounting', fileKey: 'Name_Application_File_Upload' },
+  dscCreation: { tag: 'DSC Creation', label: 'DSC Creation', fileKey: 'DSC_Creation_File_Upload' },
+  finalFiling: { tag: 'Final Filing', label: 'Final Filing', fileKey: 'Final_Filing_File_Upload' },
+  boardResolution: { tag: 'Board Resolution', label: 'Board Resolution', fileKey: 'Board_Resolution_File_Upload' },
+  audit: { tag: 'Board Resolution', label: 'Audit', fileKey: 'Board_Resolution_File_Upload' },
+  shareCertificate: { tag: 'Share Certificate', label: 'Share Certificate', fileKey: 'Share_Certificate_File_Upload' },
+  mgt7: { tag: 'Share Certificate', label: 'MGT-7', fileKey: 'Share_Certificate_File_Upload' },
+  msmeCertificate: { tag: 'MSME', label: 'MSME Certificate', fileKey: 'MSME_Certificate_File_Upload' },
+  msmeCertificateLlp: { tag: 'MSME', label: 'MSME Certificate', fileKey: 'MSME_Certificate_File_Upload' },
+  aoc4: { tag: 'AOC-4', label: 'AOC-4', fileKey: 'AOC_4_File_Upload' },
+  adt1: { tag: 'ADT-1', label: 'ADT-1', fileKey: 'ADT_1_File_Upload' },
+  compAdt1: { tag: 'ADT-1', label: 'ADT-1', fileKey: 'ADT_1_File_Upload' },
+  inc20A: { tag: 'INC-20A', label: 'INC-20A', fileKey: 'INC_20_A_File_Upload' },
+  dpt3: { tag: 'INC-20A', label: 'DPT-3', fileKey: 'INC_20_A_File_Upload' },
+  form3: { tag: 'Finance', label: 'Finance / Projected Financials', fileKey: 'Finance_Projected_Financials_File_Upload' },
+  compForm3: { tag: 'Finance', label: 'Finance / Projected Financials', fileKey: 'Finance_Projected_Financials_File_Upload' },
+  fundingFinance: { tag: 'Finance', label: 'Finance / Projected Financials', fileKey: 'Finance_Projected_Financials_File_Upload' },
+  appSubmission: { tag: 'Application Submission', label: 'Application Submission', fileKey: 'Application_submission_File_Upload' },
+  llpAgreement: { tag: 'Application Submission', label: 'LLP Agreement', fileKey: 'Application_submission_File_Upload' },
+  certFinalApp: { tag: 'Application Submission', label: 'Application Submission', fileKey: 'Application_submission_File_Upload' },
+  directorItr: { tag: 'Director / Company ITR', label: 'Director ITR', fileKey: 'Director_ITR_Company_ITR_File_Upload' },
+  companyItr: { tag: 'Director / Company ITR', label: 'Company ITR', fileKey: 'Director_ITR_Company_ITR_File_Upload' },
+  dprCreation: { tag: 'DPR', label: 'DPR / Pitch Deck Creation', fileKey: 'DPR_Pitch_deck_creation_File_Upload' },
+  compInc: { tag: 'DPR', label: 'Incorporation', fileKey: 'DPR_Pitch_deck_creation_File_Upload' },
+  inc: { tag: 'DPR', label: 'Incorporation', fileKey: 'DPR_Pitch_deck_creation_File_Upload' },
+  form8: { tag: 'Form 8', label: 'Form 8', fileKey: 'Form_8_File_Upload' },
+  form11: { tag: 'Form 11', label: 'Form 11', fileKey: 'Form_11_File_Upload' }
+};
+
+export function mergeAttachmentsIntoSections(
+  sections: Record<string, any>,
+  attachments: any[],
+  currentRecordId?: string
+): Record<string, any> {
+  if (!Array.isArray(attachments) || attachments.length === 0) return sections;
+
+  const nextSections = { ...sections };
+
+  attachments.forEach((att) => {
+    const rawName = String(att.File_Name || att.name || 'Document');
+    const attId = String(att.id || att.attachmentId || att.$file_id || '');
+    const attSize = Number(att.Size || att.size || 0);
+    const createdTime = att.Created_Time || att.uploadedAt || new Date().toISOString();
+
+    const tagMatch = rawName.match(/^\[(.*?)\]\s*(.*)$/);
+    let targetSectionKey = '';
+    let cleanName = rawName;
+
+    if (tagMatch) {
+      const tagContent = tagMatch[1].trim().toLowerCase();
+      cleanName = tagMatch[2].trim() || rawName;
+
+      for (const [secKey, cfg] of Object.entries(SECTION_ATTACHMENT_CONFIG)) {
+        if (
+          cfg.tag.toLowerCase() === tagContent ||
+          cfg.label.toLowerCase() === tagContent ||
+          secKey.toLowerCase() === tagContent ||
+          cfg.fileKey.toLowerCase() === tagContent
+        ) {
+          targetSectionKey = secKey;
+          break;
+        }
+      }
+    }
+
+    if (!targetSectionKey) {
+      for (const secKey of Object.keys(nextSections)) {
+        const secFiles = nextSections[secKey]?.files;
+        if (Array.isArray(secFiles)) {
+          const found = secFiles.some((f: any) =>
+            f.id === attId ||
+            f.attachmentId === attId ||
+            f.name === rawName ||
+            f.name === cleanName
+          );
+          if (found) {
+            targetSectionKey = secKey;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!targetSectionKey) {
+      const lower = rawName.toLowerCase();
+      if (lower.includes('dpr') || lower.includes('pitch')) targetSectionKey = 'dprCreation';
+      else if (lower.includes('finance') || lower.includes('projected')) targetSectionKey = 'fundingFinance';
+      else if (lower.includes('doc_coll') || lower.includes('collection') || lower.includes('pan') || lower.includes('aadhar')) targetSectionKey = 'docCollection';
+      else if (lower.includes('name_app') || lower.includes('nameapp')) targetSectionKey = 'nameApp';
+      else if (lower.includes('board_res') || lower.includes('resolution')) targetSectionKey = 'boardResolution';
+      else if (lower.includes('share_cert') || lower.includes('certificate')) targetSectionKey = 'shareCertificate';
+      else if (lower.includes('msme') || lower.includes('udyam')) targetSectionKey = 'msmeCertificate';
+      else if (lower.includes('aoc') || lower.includes('aoc-4')) targetSectionKey = 'aoc4';
+      else if (lower.includes('adt') || lower.includes('adt-1')) targetSectionKey = 'adt1';
+      else if (lower.includes('inc_20') || lower.includes('inc20') || lower.includes('dpt3')) targetSectionKey = 'inc20A';
+      else if (lower.includes('submission') || lower.includes('portal') || lower.includes('ack')) targetSectionKey = 'appSubmission';
+      else if (lower.includes('itr') || lower.includes('tax')) targetSectionKey = 'directorItr';
+      else if (lower.includes('form_8') || lower.includes('form8')) targetSectionKey = 'form8';
+      else if (lower.includes('form_11') || lower.includes('form11')) targetSectionKey = 'form11';
+      else targetSectionKey = 'docCollection';
+    }
+
+    if (!nextSections[targetSectionKey]) {
+      nextSections[targetSectionKey] = {};
+    }
+    const currentList: UploadedFileMeta[] = Array.isArray(nextSections[targetSectionKey].files)
+      ? [...nextSections[targetSectionKey].files]
+      : [];
+
+    const existingIdx = currentList.findIndex(
+      (f) => f.id === attId || f.attachmentId === attId || f.name === cleanName || f.name === rawName
+    );
+
+    const fileMeta: UploadedFileMeta = {
+      id: attId || `att_${Date.now()}`,
+      attachmentId: attId,
+      fileId: attId,
+      name: cleanName,
+      size: attSize,
+      type: 'application/octet-stream',
+      uploadedAt: createdTime,
+      recordId: currentRecordId
+    };
+
+    if (existingIdx >= 0) {
+      currentList[existingIdx] = {
+        ...currentList[existingIdx],
+        ...fileMeta,
+        attachmentId: attId,
+        id: attId
+      };
+    } else {
+      currentList.push(fileMeta);
+    }
+
+    nextSections[targetSectionKey] = {
+      ...nextSections[targetSectionKey],
+      files: currentList
+    };
+  });
+
+  return nextSections;
+}
 
 interface InternalOperationDetailModalProps {
   record: InternalOperationRecord;
@@ -777,6 +931,22 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
     return s;
   });
 
+  // Fetch attachments from Zoho CRM for this record and distribute into specific fields
+  useEffect(() => {
+    const targetId = record.zohoId || record.id;
+    if (!targetId || !/^\d{15,}$/.test(String(targetId))) return;
+
+    fetchZohoAttachments('Operation_Internal_CRM', String(targetId))
+      .then((res) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setSections((prev) => mergeAttachmentsIntoSections(prev, res.data, String(targetId)));
+        }
+      })
+      .catch((err) => {
+        console.warn('[InternalOperationDetailModal] Warning fetching Zoho attachments:', err);
+      });
+  }, [record.id, record.zohoId]);
+
   // Company Type & After Allocation
   const [afterAllocation, setAfterAllocation] = useState<'Yes' | 'No'>(() => {
     return (
@@ -935,19 +1105,187 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
       const isFullyAllocated = Boolean(tlUser && tmUser);
       const isPartiallyAllocated = Boolean(tlUser || tmUser);
 
+      // Target Zoho Record ID for attachment upload
+      const targetZohoId = record.zohoId || (/^\d{15,}$/.test(String(record.id)) ? String(record.id) : null);
+      const updatedSections: Record<string, any> = { ...sections };
+
+      if (targetZohoId) {
+        for (const [secKey, secVal] of Object.entries(updatedSections)) {
+          if (secVal && Array.isArray(secVal.files) && secVal.files.length > 0) {
+            const tag = SECTION_ATTACHMENT_CONFIG[secKey]?.tag || secKey;
+            const updatedFileList: UploadedFileMeta[] = [];
+
+            for (const file of secVal.files) {
+              // Already uploaded and linked to an attachment ID in Zoho CRM
+              if (file.attachmentId && !file.rawFile && (!file.dataUrl || file.id === file.attachmentId)) {
+                updatedFileList.push(file);
+                continue;
+              }
+
+              // Determine file data to upload
+              let fileBlob: File | Blob | null = null;
+              const cleanName = (file.name || 'document').replace(/^\[[^\]]+\]\s*/, '');
+              const taggedFileName = `[${tag}] ${cleanName}`;
+
+              if (file.rawFile instanceof File) {
+                fileBlob = file.rawFile;
+              } else if (file.dataUrl && file.dataUrl.startsWith('data:')) {
+                try {
+                  const parts = file.dataUrl.split(';');
+                  const mime = parts[0].split(':')[1] || 'application/octet-stream';
+                  const base64Data = parts[1].replace(/^base64,/, '');
+                  const byteCharacters = atob(base64Data);
+                  const byteNumbers = new Array(byteCharacters.length);
+                  for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                  }
+                  const byteArray = new Uint8Array(byteNumbers);
+                  fileBlob = new Blob([byteArray], { type: mime });
+                } catch (e) {
+                  console.error('Error parsing file dataUrl for upload:', e);
+                }
+              }
+
+              if (fileBlob) {
+                try {
+                  const uploadRes = await uploadZohoAttachment(
+                    String(targetZohoId),
+                    fileBlob,
+                    taggedFileName,
+                    'Operation_Internal_CRM'
+                  );
+
+                  if (uploadRes && uploadRes.success && uploadRes.attachmentId) {
+                    const attId = String(uploadRes.attachmentId);
+                    updatedFileList.push({
+                      ...file,
+                      id: attId,
+                      attachmentId: attId,
+                      fileId: attId,
+                      name: cleanName,
+                      recordId: String(targetZohoId),
+                      rawFile: undefined,
+                      dataUrl: undefined
+                    });
+                    continue;
+                  } else {
+                    console.warn('[InternalOperationDetailModal] Failed to upload attachment to Zoho:', uploadRes?.message);
+                    const { dataUrl, rawFile, ...restFile } = file;
+                    updatedFileList.push(restFile);
+                    continue;
+                  }
+                } catch (uploadErr) {
+                  console.error('[InternalOperationDetailModal] Exception during attachment upload:', uploadErr);
+                  const { dataUrl, rawFile, ...restFile } = file;
+                  updatedFileList.push(restFile);
+                  continue;
+                }
+              }
+
+              const { dataUrl, rawFile, ...cleanFile } = file;
+              updatedFileList.push(cleanFile);
+            }
+
+            updatedSections[secKey] = {
+              ...secVal,
+              files: updatedFileList
+            };
+          }
+        }
+
+        // Also process repeatable history items if any files were attached
+        for (const historyKey of ['nameAppHistory', 'finalFilingHistory']) {
+          if (Array.isArray(updatedSections[historyKey]) && updatedSections[historyKey].length > 0) {
+            const historyList = [...updatedSections[historyKey]];
+            const tag = historyKey === 'nameAppHistory' ? 'Name Application' : 'Final Filing';
+
+            for (let h = 0; h < historyList.length; h++) {
+              const histItem = historyList[h];
+              if (histItem && Array.isArray(histItem.files) && histItem.files.length > 0) {
+                const histUpdatedFiles: UploadedFileMeta[] = [];
+                for (const file of histItem.files) {
+                  if (file.attachmentId && !file.rawFile && (!file.dataUrl || file.id === file.attachmentId)) {
+                    histUpdatedFiles.push(file);
+                    continue;
+                  }
+                  let fileBlob: File | Blob | null = null;
+                  const cleanName = (file.name || 'document').replace(/^\[[^\]]+\]\s*/, '');
+                  const taggedFileName = `[${tag}] ${cleanName}`;
+
+                  if (file.rawFile instanceof File) {
+                    fileBlob = file.rawFile;
+                  } else if (file.dataUrl && file.dataUrl.startsWith('data:')) {
+                    try {
+                      const parts = file.dataUrl.split(';');
+                      const mime = parts[0].split(':')[1] || 'application/octet-stream';
+                      const base64Data = parts[1].replace(/^base64,/, '');
+                      const byteCharacters = atob(base64Data);
+                      const byteNumbers = new Array(byteCharacters.length);
+                      for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                      }
+                      const byteArray = new Uint8Array(byteNumbers);
+                      fileBlob = new Blob([byteArray], { type: mime });
+                    } catch (e) {
+                      console.error('Error parsing history file dataUrl:', e);
+                    }
+                  }
+
+                  if (fileBlob) {
+                    try {
+                      const uploadRes = await uploadZohoAttachment(
+                        String(targetZohoId),
+                        fileBlob,
+                        taggedFileName,
+                        'Operation_Internal_CRM'
+                      );
+                      if (uploadRes && uploadRes.success && uploadRes.attachmentId) {
+                        const attId = String(uploadRes.attachmentId);
+                        histUpdatedFiles.push({
+                          ...file,
+                          id: attId,
+                          attachmentId: attId,
+                          fileId: attId,
+                          name: cleanName,
+                          recordId: String(targetZohoId),
+                          rawFile: undefined,
+                          dataUrl: undefined
+                        });
+                        continue;
+                      }
+                    } catch (err) {
+                      console.error('Error uploading history attachment:', err);
+                    }
+                  }
+                  const { dataUrl, rawFile, ...cleanFile } = file;
+                  histUpdatedFiles.push(cleanFile);
+                }
+                historyList[h] = {
+                  ...histItem,
+                  files: histUpdatedFiles
+                };
+              }
+            }
+            updatedSections[historyKey] = historyList;
+          }
+        }
+
+        setSections(updatedSections);
+      }
+
       // Extract active Doc collection fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
       const isCompliance = teamType.toLowerCase().includes('compliance');
       const isCertification = teamType.toLowerCase().includes('certification');
       const activeDocCollection = isCertification
-        ? sections.certDocCollection
+        ? updatedSections.certDocCollection
         : isCompliance
-          ? sections.compDocCollection
-          : sections.docCollection;
+          ? updatedSections.compDocCollection
+          : updatedSections.docCollection;
       const fallbackDocCollection = isCertification
-        ? (sections.compDocCollection || sections.docCollection)
+        ? (updatedSections.compDocCollection || updatedSections.docCollection)
         : isCompliance
-          ? sections.docCollection
-          : sections.compDocCollection;
+          ? updatedSections.docCollection
+          : updatedSections.compDocCollection;
 
       const docName = activeDocCollection?.name !== undefined && activeDocCollection?.name !== ''
         ? activeDocCollection.name
@@ -963,13 +1301,13 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         : (fallbackDocCollection?.files || record.Doc_collection_File_Upload || []);
 
       // Extract active Name Application / Accounting fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
-      const activeNameAppAcc = isCompliance ? sections.accounting : sections.nameApp;
-      const fallbackNameAppAcc = isCompliance ? sections.nameApp : sections.accounting;
+      const activeNameAppAcc = isCompliance ? updatedSections.accounting : updatedSections.nameApp;
+      const fallbackNameAppAcc = isCompliance ? updatedSections.nameApp : updatedSections.accounting;
 
       const nameAppName = activeNameAppAcc?.name !== undefined && activeNameAppAcc?.name !== ''
         ? activeNameAppAcc.name
         : (fallbackNameAppAcc?.name || record.Name_Application_name || '');
-      const nameAppApprovedName = sections.nameApp?.approvedName || record.Name_Application_approved_name || '';
+      const nameAppApprovedName = updatedSections.nameApp?.approvedName || record.Name_Application_approved_name || '';
       const nameAppDate = activeNameAppAcc?.date !== undefined && activeNameAppAcc?.date !== ''
         ? activeNameAppAcc.date
         : (fallbackNameAppAcc?.date || record.Name_Application_date || '');
@@ -981,20 +1319,20 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         : (fallbackNameAppAcc?.files || record.Name_Application_File_Upload || []);
 
       // Extract DSC Creation fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
-      const dscName = sections.dscCreation?.name || record.DSC_Creation_name || '';
-      const dscDate = sections.dscCreation?.date || record.DSC_Creation_Date || '';
-      const dscStatus = sections.dscCreation?.status || record.DSC_Creation_status || '';
+      const dscName = updatedSections.dscCreation?.name || record.DSC_Creation_name || '';
+      const dscDate = updatedSections.dscCreation?.date || record.DSC_Creation_Date || '';
+      const dscStatus = updatedSections.dscCreation?.status || record.DSC_Creation_status || '';
 
       // Extract Final Filing fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
-      const finalFilingName = sections.finalFiling?.name || record.Final_Filing_name || '';
-      const finalFilingApprovalName = sections.finalFiling?.finalApprovalName || record.Final_Filing_Final_Approval_Name || '';
-      const finalFilingDate = sections.finalFiling?.date || record.Final_Filing_Date || '';
-      const finalFilingDoiDate = sections.finalFiling?.doiDate || record.Final_Filing_DOI_Date || '';
-      const finalFilingStatus = sections.finalFiling?.status || record.Final_Filing_status || '';
+      const finalFilingName = updatedSections.finalFiling?.name || record.Final_Filing_name || '';
+      const finalFilingApprovalName = updatedSections.finalFiling?.finalApprovalName || record.Final_Filing_Final_Approval_Name || '';
+      const finalFilingDate = updatedSections.finalFiling?.date || record.Final_Filing_Date || '';
+      const finalFilingDoiDate = updatedSections.finalFiling?.doiDate || record.Final_Filing_DOI_Date || '';
+      const finalFilingStatus = updatedSections.finalFiling?.status || record.Final_Filing_status || '';
 
       // Extract Board Resolution / Audit fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
-      const activeBrAudit = isCompliance ? sections.audit : sections.boardResolution;
-      const fallbackBrAudit = isCompliance ? sections.boardResolution : sections.audit;
+      const activeBrAudit = isCompliance ? updatedSections.audit : updatedSections.boardResolution;
+      const fallbackBrAudit = isCompliance ? updatedSections.boardResolution : updatedSections.audit;
 
       const brName = activeBrAudit?.name !== undefined && activeBrAudit?.name !== ''
         ? activeBrAudit.name
@@ -1010,8 +1348,8 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         : (fallbackBrAudit?.files || record.Board_Resolution_File_Upload || []);
 
       // Extract 2-Share Certificate / MGT-7 / 7A fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
-      const activeScMgt7 = isCompliance ? sections.mgt7 : sections.shareCertificate;
-      const fallbackScMgt7 = isCompliance ? sections.shareCertificate : sections.mgt7;
+      const activeScMgt7 = isCompliance ? updatedSections.mgt7 : updatedSections.shareCertificate;
+      const fallbackScMgt7 = isCompliance ? updatedSections.shareCertificate : updatedSections.mgt7;
 
       const scName = activeScMgt7?.name !== undefined && activeScMgt7?.name !== ''
         ? activeScMgt7.name
@@ -1027,10 +1365,10 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         : (fallbackScMgt7?.files || record.Share_Certificate_File_Upload || []);
 
       // Extract MSME Certificate / AOC-4 fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
-      const activeMsme = companyType === 'LLP' ? sections.msmeCertificateLlp : sections.msmeCertificate;
-      const fallbackMsme = companyType === 'LLP' ? sections.msmeCertificate : sections.msmeCertificateLlp;
-      const activeMsmeAoc4 = isCompliance ? sections.aoc4 : activeMsme;
-      const fallbackMsmeAoc4 = isCompliance ? activeMsme : sections.aoc4;
+      const activeMsme = companyType === 'LLP' ? updatedSections.msmeCertificateLlp : updatedSections.msmeCertificate;
+      const fallbackMsme = companyType === 'LLP' ? updatedSections.msmeCertificate : updatedSections.msmeCertificateLlp;
+      const activeMsmeAoc4 = isCompliance ? updatedSections.aoc4 : activeMsme;
+      const fallbackMsmeAoc4 = isCompliance ? activeMsme : updatedSections.aoc4;
 
       const msmeDate = activeMsmeAoc4?.date !== undefined && activeMsmeAoc4?.date !== ''
         ? activeMsmeAoc4.date
@@ -1045,23 +1383,23 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         ? (typeof msmeFiles[0] === 'string' ? msmeFiles[0] : (msmeFiles[0]?.url || msmeFiles[0]?.name || ''))
         : (record.MSME_Certificate || '');
 
-      const aoc4Name = sections.aoc4?.name !== undefined && sections.aoc4?.name !== ''
-        ? sections.aoc4.name
+      const aoc4Name = updatedSections.aoc4?.name !== undefined && updatedSections.aoc4?.name !== ''
+        ? updatedSections.aoc4.name
         : (record.AOC_4_name || '');
-      const aoc4DirectorAudit = sections.aoc4?.directorAuditReport !== undefined && sections.aoc4?.directorAuditReport !== ''
-        ? sections.aoc4.directorAuditReport
+      const aoc4DirectorAudit = updatedSections.aoc4?.directorAuditReport !== undefined && updatedSections.aoc4?.directorAuditReport !== ''
+        ? updatedSections.aoc4.directorAuditReport
         : (record.AOC_4_Director_Audit_report || 'Prepared');
 
       // Extract ADT-1 fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
-      const activeAdt1 = isCompliance ? (sections.compAdt1 || sections.adt1) : sections.adt1;
-      const fallbackAdt1 = isCompliance ? sections.adt1 : (sections.compAdt1 || sections.adt1);
+      const activeAdt1 = isCompliance ? (updatedSections.compAdt1 || updatedSections.adt1) : updatedSections.adt1;
+      const fallbackAdt1 = isCompliance ? updatedSections.adt1 : (updatedSections.compAdt1 || updatedSections.adt1);
 
       const adt1Name = activeAdt1?.name !== undefined && activeAdt1?.name !== ''
         ? activeAdt1.name
         : (fallbackAdt1?.name || record.ADT_1_name || '');
       const adt1Auditor = (activeAdt1?.auditorName !== undefined && activeAdt1?.auditorName !== '')
         ? activeAdt1.auditorName
-        : (fallbackAdt1?.auditorName || sections.audit?.auditorName || record.ADT_1_Auditor_name || '');
+        : (fallbackAdt1?.auditorName || updatedSections.audit?.auditorName || record.ADT_1_Auditor_name || '');
       const adt1Date = activeAdt1?.date !== undefined && activeAdt1?.date !== ''
         ? activeAdt1.date
         : (fallbackAdt1?.date || record.ADT_1_date || '');
@@ -1073,8 +1411,8 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         : (fallbackAdt1?.files || record.ADT_1_File_Upload || []);
 
       // Extract INC 20-A / DPT 3 fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
-      const activeIncDpt = isCompliance ? sections.dpt3 : sections.inc20A;
-      const fallbackIncDpt = isCompliance ? sections.inc20A : sections.dpt3;
+      const activeIncDpt = isCompliance ? updatedSections.dpt3 : updatedSections.inc20A;
+      const fallbackIncDpt = isCompliance ? updatedSections.inc20A : updatedSections.dpt3;
 
       const inc20AName = activeIncDpt?.name !== undefined && activeIncDpt?.name !== ''
         ? activeIncDpt.name
@@ -1092,15 +1430,15 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
       // Extract Form 3 (Finance / Projected Financials) fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
       const isFunding = teamType === 'Funding';
       const activeForm3 = isFunding
-        ? sections.fundingFinance
+        ? updatedSections.fundingFinance
         : isCompliance
-          ? (sections.compForm3 || sections.form3)
-          : sections.form3;
+          ? (updatedSections.compForm3 || updatedSections.form3)
+          : updatedSections.form3;
       const fallbackForm3 = isFunding
-        ? (sections.compForm3 || sections.form3)
+        ? (updatedSections.compForm3 || updatedSections.form3)
         : isCompliance
-          ? (sections.fundingFinance || sections.form3)
-          : (sections.fundingFinance || sections.compForm3);
+          ? (updatedSections.fundingFinance || updatedSections.form3)
+          : (updatedSections.fundingFinance || updatedSections.compForm3);
 
       const form3Name = activeForm3?.name !== undefined && activeForm3?.name !== ''
         ? activeForm3.name
@@ -1117,15 +1455,15 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
 
       // Extract LLP Agreement / Application Submission fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
       const activeLlp = isCertification
-        ? sections.certFinalApp
+        ? updatedSections.certFinalApp
         : isFunding
-          ? sections.appSubmission
-          : sections.llpAgreement;
+          ? updatedSections.appSubmission
+          : updatedSections.llpAgreement;
       const fallbackLlp = isCertification
-        ? (sections.appSubmission || sections.llpAgreement)
+        ? (updatedSections.appSubmission || updatedSections.llpAgreement)
         : isFunding
-          ? sections.llpAgreement
-          : sections.appSubmission;
+          ? updatedSections.llpAgreement
+          : updatedSections.appSubmission;
 
       const llpName = activeLlp?.name !== undefined && activeLlp?.name !== ''
         ? activeLlp.name
@@ -1140,20 +1478,20 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         ? activeLlp.files
         : (fallbackLlp?.files || record.Application_submission_File_Upload || []);
 
-      const appPortalId = sections.appSubmission?.portalId !== undefined && sections.appSubmission?.portalId !== ''
-        ? sections.appSubmission.portalId
+      const appPortalId = updatedSections.appSubmission?.portalId !== undefined && updatedSections.appSubmission?.portalId !== ''
+        ? updatedSections.appSubmission.portalId
         : (record.Application_submission_Portal_User_ID || '');
-      const appPortalPwd = sections.appSubmission?.portalPassword !== undefined && sections.appSubmission?.portalPassword !== ''
-        ? sections.appSubmission.portalPassword
+      const appPortalPwd = updatedSections.appSubmission?.portalPassword !== undefined && updatedSections.appSubmission?.portalPassword !== ''
+        ? updatedSections.appSubmission.portalPassword
         : (record.Application_submission_Portal_Password || '');
-      const appSubmissionVal = sections.appSubmission?.registrationNumber !== undefined && sections.appSubmission?.registrationNumber !== ''
-        ? sections.appSubmission.registrationNumber
-        : (sections.appSubmission?.applicationSubmission || record.Application_submission || '');
+      const appSubmissionVal = updatedSections.appSubmission?.registrationNumber !== undefined && updatedSections.appSubmission?.registrationNumber !== ''
+        ? updatedSections.appSubmission.registrationNumber
+        : (updatedSections.appSubmission?.applicationSubmission || record.Application_submission || '');
 
       // Extract Director ITR & Company ITR fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
       const isCompanyItrService = (record.Service_Scheme || '').toLowerCase().includes('company itr');
-      const primaryItr = isCompanyItrService ? sections.companyItr : sections.directorItr;
-      const secondaryItr = isCompanyItrService ? sections.directorItr : sections.companyItr;
+      const primaryItr = isCompanyItrService ? updatedSections.companyItr : updatedSections.directorItr;
+      const secondaryItr = isCompanyItrService ? updatedSections.directorItr : updatedSections.companyItr;
 
       const itrName = (primaryItr?.name !== undefined && primaryItr?.name !== '')
         ? primaryItr.name
@@ -1175,16 +1513,16 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         : (secondaryItr?.files && secondaryItr.files.length > 0)
           ? secondaryItr.files
           : (record.Director_ITR_Company_ITR_File_Upload || []);
-      const itrDocCollection = sections.directorItr?.docCollection !== undefined && sections.directorItr?.docCollection !== ''
-        ? sections.directorItr.docCollection
+      const itrDocCollection = updatedSections.directorItr?.docCollection !== undefined && updatedSections.directorItr?.docCollection !== ''
+        ? updatedSections.directorItr.docCollection
         : (record.Director_ITR_Doc_collection || 'Pending');
-      const itrFileRequired = sections.directorItr?.fileRequired !== undefined && sections.directorItr?.fileRequired !== ''
-        ? sections.directorItr.fileRequired
+      const itrFileRequired = updatedSections.directorItr?.fileRequired !== undefined && updatedSections.directorItr?.fileRequired !== ''
+        ? updatedSections.directorItr.fileRequired
         : (record.Director_ITR_File_required || 'Yes');
 
       // Extract DPR / Pitch deck creation / INC fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
-      const activeDprInc = isCompliance ? (sections.compInc || sections.inc) : sections.dprCreation;
-      const fallbackDprInc = isCompliance ? sections.dprCreation : (sections.compInc || sections.inc);
+      const activeDprInc = isCompliance ? (updatedSections.compInc || updatedSections.inc) : updatedSections.dprCreation;
+      const fallbackDprInc = isCompliance ? updatedSections.dprCreation : (updatedSections.compInc || updatedSections.inc);
 
       const dprName = (activeDprInc?.name !== undefined && activeDprInc?.name !== '')
         ? activeDprInc.name
@@ -1306,47 +1644,47 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         Team_Member_TM: tmUser ? { id: (tmUser as any)?.zohoId || (/^\d{15,}$/.test(String(tmUser.id)) ? String(tmUser.id) : tmUser.id), name: tmUser.name } : null,
         Allocation_Status: isFullyAllocated ? 'Allocated' : isPartiallyAllocated ? 'In Progress' : 'Pending Allocation',
         sectionsData: {
-          ...sections,
+          ...updatedSections,
           afterAllocation,
           docCollection: {
-            ...(sections.docCollection || {}),
-            name: (!isCompliance && !isCertification) ? docName : (sections.docCollection?.name || docName),
-            date: (!isCompliance && !isCertification) ? docDate : (sections.docCollection?.date || docDate),
-            status: (!isCompliance && !isCertification) ? docStatus : (sections.docCollection?.status || docStatus),
-            files: (!isCompliance && !isCertification) ? docFiles : (sections.docCollection?.files || docFiles),
+            ...(updatedSections.docCollection || {}),
+            name: (!isCompliance && !isCertification) ? docName : (updatedSections.docCollection?.name || docName),
+            date: (!isCompliance && !isCertification) ? docDate : (updatedSections.docCollection?.date || docDate),
+            status: (!isCompliance && !isCertification) ? docStatus : (updatedSections.docCollection?.status || docStatus),
+            files: (!isCompliance && !isCertification) ? docFiles : (updatedSections.docCollection?.files || docFiles),
             companyType
           },
           compDocCollection: {
-            ...(sections.compDocCollection || {}),
-            name: isCompliance ? docName : (sections.compDocCollection?.name || docName),
-            date: isCompliance ? docDate : (sections.compDocCollection?.date || docDate),
-            status: isCompliance ? docStatus : (sections.compDocCollection?.status || docStatus),
-            files: isCompliance ? docFiles : (sections.compDocCollection?.files || docFiles),
+            ...(updatedSections.compDocCollection || {}),
+            name: isCompliance ? docName : (updatedSections.compDocCollection?.name || docName),
+            date: isCompliance ? docDate : (updatedSections.compDocCollection?.date || docDate),
+            status: isCompliance ? docStatus : (updatedSections.compDocCollection?.status || docStatus),
+            files: isCompliance ? docFiles : (updatedSections.compDocCollection?.files || docFiles),
             companyType
           },
           certDocCollection: {
-            ...(sections.certDocCollection || {}),
-            name: isCertification ? docName : (sections.certDocCollection?.name || docName),
-            date: isCertification ? docDate : (sections.certDocCollection?.date || docDate),
-            status: isCertification ? docStatus : (sections.certDocCollection?.status || docStatus),
-            files: isCertification ? docFiles : (sections.certDocCollection?.files || docFiles)
+            ...(updatedSections.certDocCollection || {}),
+            name: isCertification ? docName : (updatedSections.certDocCollection?.name || docName),
+            date: isCertification ? docDate : (updatedSections.certDocCollection?.date || docDate),
+            status: isCertification ? docStatus : (updatedSections.certDocCollection?.status || docStatus),
+            files: isCertification ? docFiles : (updatedSections.certDocCollection?.files || docFiles)
           },
           nameApp: {
-            ...(sections.nameApp || {}),
-            name: !isCompliance ? nameAppName : (sections.nameApp?.name || nameAppName),
+            ...(updatedSections.nameApp || {}),
+            name: !isCompliance ? nameAppName : (updatedSections.nameApp?.name || nameAppName),
             approvedName: nameAppApprovedName,
-            date: !isCompliance ? nameAppDate : (sections.nameApp?.date || nameAppDate),
-            status: !isCompliance ? nameAppStatus : (sections.nameApp?.status || nameAppStatus),
-            files: !isCompliance ? nameAppFiles : (sections.nameApp?.files || nameAppFiles)
+            date: !isCompliance ? nameAppDate : (updatedSections.nameApp?.date || nameAppDate),
+            status: !isCompliance ? nameAppStatus : (updatedSections.nameApp?.status || nameAppStatus),
+            files: !isCompliance ? nameAppFiles : (updatedSections.nameApp?.files || nameAppFiles)
           },
           dscCreation: {
-            ...(sections.dscCreation || {}),
+            ...(updatedSections.dscCreation || {}),
             name: dscName,
             date: dscDate,
             status: dscStatus
           },
           finalFiling: {
-            ...(sections.finalFiling || {}),
+            ...(updatedSections.finalFiling || {}),
             name: finalFilingName,
             finalApprovalName: finalFilingApprovalName,
             date: finalFilingDate,
@@ -1354,55 +1692,55 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
             status: finalFilingStatus
           },
           boardResolution: {
-            ...(sections.boardResolution || {}),
-            name: !isCompliance ? brName : (sections.boardResolution?.name || brName),
-            date: !isCompliance ? brDate : (sections.boardResolution?.date || brDate),
-            status: !isCompliance ? brStatus : (sections.boardResolution?.status || brStatus),
-            files: !isCompliance ? brFiles : (sections.boardResolution?.files || brFiles)
+            ...(updatedSections.boardResolution || {}),
+            name: !isCompliance ? brName : (updatedSections.boardResolution?.name || brName),
+            date: !isCompliance ? brDate : (updatedSections.boardResolution?.date || brDate),
+            status: !isCompliance ? brStatus : (updatedSections.boardResolution?.status || brStatus),
+            files: !isCompliance ? brFiles : (updatedSections.boardResolution?.files || brFiles)
           },
           audit: {
-            ...(sections.audit || {}),
-            name: isCompliance ? brName : (sections.audit?.name || brName),
-            date: isCompliance ? brDate : (sections.audit?.date || brDate),
-            status: isCompliance ? brStatus : (sections.audit?.status || brStatus),
-            files: isCompliance ? brFiles : (sections.audit?.files || brFiles)
+            ...(updatedSections.audit || {}),
+            name: isCompliance ? brName : (updatedSections.audit?.name || brName),
+            date: isCompliance ? brDate : (updatedSections.audit?.date || brDate),
+            status: isCompliance ? brStatus : (updatedSections.audit?.status || brStatus),
+            files: isCompliance ? brFiles : (updatedSections.audit?.files || brFiles)
           },
           shareCertificate: {
-            ...(sections.shareCertificate || {}),
-            name: !isCompliance ? scName : (sections.shareCertificate?.name || scName),
-            date: !isCompliance ? scDate : (sections.shareCertificate?.date || scDate),
-            status: !isCompliance ? scStatus : (sections.shareCertificate?.status || scStatus),
-            files: !isCompliance ? scFiles : (sections.shareCertificate?.files || scFiles)
+            ...(updatedSections.shareCertificate || {}),
+            name: !isCompliance ? scName : (updatedSections.shareCertificate?.name || scName),
+            date: !isCompliance ? scDate : (updatedSections.shareCertificate?.date || scDate),
+            status: !isCompliance ? scStatus : (updatedSections.shareCertificate?.status || scStatus),
+            files: !isCompliance ? scFiles : (updatedSections.shareCertificate?.files || scFiles)
           },
           mgt7: {
-            ...(sections.mgt7 || {}),
-            name: isCompliance ? scName : (sections.mgt7?.name || scName),
-            date: isCompliance ? scDate : (sections.mgt7?.date || scDate),
-            status: isCompliance ? scStatus : (sections.mgt7?.status || scStatus),
-            files: isCompliance ? scFiles : (sections.mgt7?.files || scFiles)
+            ...(updatedSections.mgt7 || {}),
+            name: isCompliance ? scName : (updatedSections.mgt7?.name || scName),
+            date: isCompliance ? scDate : (updatedSections.mgt7?.date || scDate),
+            status: isCompliance ? scStatus : (updatedSections.mgt7?.status || scStatus),
+            files: isCompliance ? scFiles : (updatedSections.mgt7?.files || scFiles)
           },
           msmeCertificate: {
-            ...(sections.msmeCertificate || {}),
-            date: !isCompliance ? msmeDate : (sections.msmeCertificate?.date || msmeDate),
-            status: !isCompliance ? msmeStatus : (sections.msmeCertificate?.status || msmeStatus),
-            files: !isCompliance ? msmeFiles : (sections.msmeCertificate?.files || msmeFiles)
+            ...(updatedSections.msmeCertificate || {}),
+            date: !isCompliance ? msmeDate : (updatedSections.msmeCertificate?.date || msmeDate),
+            status: !isCompliance ? msmeStatus : (updatedSections.msmeCertificate?.status || msmeStatus),
+            files: !isCompliance ? msmeFiles : (updatedSections.msmeCertificate?.files || msmeFiles)
           },
           msmeCertificateLlp: {
-            ...(sections.msmeCertificateLlp || {}),
-            date: !isCompliance ? msmeDate : (sections.msmeCertificateLlp?.date || msmeDate),
-            status: !isCompliance ? msmeStatus : (sections.msmeCertificateLlp?.status || msmeStatus),
-            files: !isCompliance ? msmeFiles : (sections.msmeCertificateLlp?.files || msmeFiles)
+            ...(updatedSections.msmeCertificateLlp || {}),
+            date: !isCompliance ? msmeDate : (updatedSections.msmeCertificateLlp?.date || msmeDate),
+            status: !isCompliance ? msmeStatus : (updatedSections.msmeCertificateLlp?.status || msmeStatus),
+            files: !isCompliance ? msmeFiles : (updatedSections.msmeCertificateLlp?.files || msmeFiles)
           },
           adt1: {
-            ...(sections.adt1 || {}),
+            ...(updatedSections.adt1 || {}),
             name: adt1Name,
-            auditorName: !isCompliance ? adt1Auditor : (sections.adt1?.auditorName || adt1Auditor),
+            auditorName: !isCompliance ? adt1Auditor : (updatedSections.adt1?.auditorName || adt1Auditor),
             date: adt1Date,
             status: adt1Status,
             files: adt1Files
           },
           compAdt1: {
-            ...(sections.compAdt1 || {}),
+            ...(updatedSections.compAdt1 || {}),
             name: adt1Name,
             auditorName: adt1Auditor,
             date: adt1Date,
@@ -1410,49 +1748,49 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
             files: adt1Files
           },
           inc20A: {
-            ...(sections.inc20A || {}),
-            name: !isCompliance ? inc20AName : (sections.inc20A?.name || inc20AName),
-            date: !isCompliance ? inc20ADate : (sections.inc20A?.date || inc20ADate),
-            status: !isCompliance ? inc20AStatus : (sections.inc20A?.status || inc20AStatus),
-            files: !isCompliance ? inc20AFiles : (sections.inc20A?.files || inc20AFiles)
+            ...(updatedSections.inc20A || {}),
+            name: !isCompliance ? inc20AName : (updatedSections.inc20A?.name || inc20AName),
+            date: !isCompliance ? inc20ADate : (updatedSections.inc20A?.date || inc20ADate),
+            status: !isCompliance ? inc20AStatus : (updatedSections.inc20A?.status || inc20AStatus),
+            files: !isCompliance ? inc20AFiles : (updatedSections.inc20A?.files || inc20AFiles)
           },
           dpt3: {
-            ...(sections.dpt3 || {}),
-            name: isCompliance ? inc20AName : (sections.dpt3?.name || inc20AName),
-            date: isCompliance ? inc20ADate : (sections.dpt3?.date || inc20ADate),
-            status: isCompliance ? inc20AStatus : (sections.dpt3?.status || inc20AStatus),
-            files: isCompliance ? inc20AFiles : (sections.dpt3?.files || inc20AFiles)
+            ...(updatedSections.dpt3 || {}),
+            name: isCompliance ? inc20AName : (updatedSections.dpt3?.name || inc20AName),
+            date: isCompliance ? inc20ADate : (updatedSections.dpt3?.date || inc20ADate),
+            status: isCompliance ? inc20AStatus : (updatedSections.dpt3?.status || inc20AStatus),
+            files: isCompliance ? inc20AFiles : (updatedSections.dpt3?.files || inc20AFiles)
           },
           form3: {
-            ...(sections.form3 || {}),
+            ...(updatedSections.form3 || {}),
             name: form3Name,
             date: form3Date,
             status: form3Status,
             files: form3Files
           },
           compForm3: {
-            ...(sections.compForm3 || {}),
+            ...(updatedSections.compForm3 || {}),
             name: form3Name,
             date: form3Date,
             status: form3Status,
             files: form3Files
           },
           fundingFinance: {
-            ...(sections.fundingFinance || {}),
+            ...(updatedSections.fundingFinance || {}),
             name: form3Name,
             date: form3Date,
             status: form3Status,
             files: form3Files
           },
           llpAgreement: {
-            ...(sections.llpAgreement || {}),
+            ...(updatedSections.llpAgreement || {}),
             name: llpName,
             date: llpDate,
             status: llpStatus,
             files: llpFiles
           },
           appSubmission: {
-            ...(sections.appSubmission || {}),
+            ...(updatedSections.appSubmission || {}),
             name: llpName,
             date: llpDate,
             status: llpStatus,
@@ -1462,43 +1800,43 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
             registrationNumber: appSubmissionVal
           },
           certFinalApp: {
-            ...(sections.certFinalApp || {}),
-            name: isCertification ? llpName : (sections.certFinalApp?.name || llpName),
-            date: isCertification ? llpDate : (sections.certFinalApp?.date || llpDate),
-            status: isCertification ? llpStatus : (sections.certFinalApp?.status || llpStatus),
-            files: isCertification ? llpFiles : (sections.certFinalApp?.files || llpFiles)
+            ...(updatedSections.certFinalApp || {}),
+            name: isCertification ? llpName : (updatedSections.certFinalApp?.name || llpName),
+            date: isCertification ? llpDate : (updatedSections.certFinalApp?.date || llpDate),
+            status: isCertification ? llpStatus : (updatedSections.certFinalApp?.status || llpStatus),
+            files: isCertification ? llpFiles : (updatedSections.certFinalApp?.files || llpFiles)
           },
           dprCreation: {
-            ...(sections.dprCreation || {}),
-            name: !isCompliance ? dprName : (sections.dprCreation?.name || dprName),
-            date: !isCompliance ? dprDate : (sections.dprCreation?.date || dprDate),
-            status: !isCompliance ? dprStatus : (sections.dprCreation?.status || dprStatus),
-            files: !isCompliance ? dprFiles : (sections.dprCreation?.files || dprFiles)
+            ...(updatedSections.dprCreation || {}),
+            name: !isCompliance ? dprName : (updatedSections.dprCreation?.name || dprName),
+            date: !isCompliance ? dprDate : (updatedSections.dprCreation?.date || dprDate),
+            status: !isCompliance ? dprStatus : (updatedSections.dprCreation?.status || dprStatus),
+            files: !isCompliance ? dprFiles : (updatedSections.dprCreation?.files || dprFiles)
           },
           compInc: {
-            ...(sections.compInc || {}),
-            name: isCompliance ? dprName : (sections.compInc?.name || dprName),
-            date: isCompliance ? dprDate : (sections.compInc?.date || dprDate),
-            status: isCompliance ? dprStatus : (sections.compInc?.status || dprStatus),
-            files: isCompliance ? dprFiles : (sections.compInc?.files || dprFiles)
+            ...(updatedSections.compInc || {}),
+            name: isCompliance ? dprName : (updatedSections.compInc?.name || dprName),
+            date: isCompliance ? dprDate : (updatedSections.compInc?.date || dprDate),
+            status: isCompliance ? dprStatus : (updatedSections.compInc?.status || dprStatus),
+            files: isCompliance ? dprFiles : (updatedSections.compInc?.files || dprFiles)
           },
           inc: {
-            ...(sections.inc || {}),
-            name: isCompliance ? dprName : (sections.inc?.name || dprName),
-            date: isCompliance ? dprDate : (sections.inc?.date || dprDate),
-            status: isCompliance ? dprStatus : (sections.inc?.status || dprStatus),
-            files: isCompliance ? dprFiles : (sections.inc?.files || dprFiles)
+            ...(updatedSections.inc || {}),
+            name: isCompliance ? dprName : (updatedSections.inc?.name || dprName),
+            date: isCompliance ? dprDate : (updatedSections.inc?.date || dprDate),
+            status: isCompliance ? dprStatus : (updatedSections.inc?.status || dprStatus),
+            files: isCompliance ? dprFiles : (updatedSections.inc?.files || dprFiles)
           },
           ...(isCompliance ? {
             accounting: {
-              ...(sections.accounting || {}),
-              name: isCompliance ? nameAppName : (sections.accounting?.name || nameAppName),
-              date: isCompliance ? nameAppDate : (sections.accounting?.date || nameAppDate),
-              status: isCompliance ? nameAppStatus : (sections.accounting?.status || nameAppStatus),
-              files: isCompliance ? nameAppFiles : (sections.accounting?.files || nameAppFiles)
+              ...(updatedSections.accounting || {}),
+              name: isCompliance ? nameAppName : (updatedSections.accounting?.name || nameAppName),
+              date: isCompliance ? nameAppDate : (updatedSections.accounting?.date || nameAppDate),
+              status: isCompliance ? nameAppStatus : (updatedSections.accounting?.status || nameAppStatus),
+              files: isCompliance ? nameAppFiles : (updatedSections.accounting?.files || nameAppFiles)
             },
             aoc4: {
-              ...(sections.aoc4 || {}),
+              ...(updatedSections.aoc4 || {}),
               name: aoc4Name,
               directorAuditReport: aoc4DirectorAudit,
               date: msmeDate,
@@ -1506,79 +1844,31 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
               files: msmeFiles
             },
             directorItr: {
-              ...(sections.directorItr || {}),
-              name: isCompanyItrService ? (sections.directorItr?.name || itrName) : itrName,
-              date: isCompanyItrService ? (sections.directorItr?.date || itrDate) : itrDate,
-              status: isCompanyItrService ? (sections.directorItr?.status || itrStatus) : itrStatus,
-              files: isCompanyItrService ? (sections.directorItr?.files || itrFiles) : itrFiles,
+              ...(updatedSections.directorItr || {}),
+              name: isCompanyItrService ? (updatedSections.directorItr?.name || itrName) : itrName,
+              date: isCompanyItrService ? (updatedSections.directorItr?.date || itrDate) : itrDate,
+              status: isCompanyItrService ? (updatedSections.directorItr?.status || itrStatus) : itrStatus,
+              files: isCompanyItrService ? (updatedSections.directorItr?.files || itrFiles) : itrFiles,
               docCollection: itrDocCollection,
               fileRequired: itrFileRequired
             },
             companyItr: {
-              ...(sections.companyItr || {}),
-              name: isCompanyItrService ? itrName : (sections.companyItr?.name || itrName),
-              date: isCompanyItrService ? itrDate : (sections.companyItr?.date || itrDate),
-              status: isCompanyItrService ? itrStatus : (sections.companyItr?.status || itrStatus),
-              files: isCompanyItrService ? itrFiles : (sections.companyItr?.files || itrFiles)
+              ...(updatedSections.companyItr || {}),
+              name: isCompanyItrService ? itrName : (updatedSections.companyItr?.name || itrName),
+              date: isCompanyItrService ? itrDate : (updatedSections.companyItr?.date || itrDate),
+              status: isCompanyItrService ? itrStatus : (updatedSections.companyItr?.status || itrStatus),
+              files: isCompanyItrService ? itrFiles : (updatedSections.companyItr?.files || itrFiles)
             }
           } : {})
         },
         Modified_Time: new Date().toISOString()
       };
 
-      const saveRes = await saveInternalOperation(updatedRecord);
+      await saveInternalOperation(updatedRecord);
       // Synchronize team type back to parent Deal's Legal details subform (Zoho CRM & localStorage)
       await syncTeamTypeToLegalSubform(updatedRecord, teamType);
 
-      const targetZohoId = (saveRes && (saveRes.zohoId || (saveRes.data as any)?.zohoId)) ||
-        updatedRecord.zohoId ||
-        (/^\d{15,}$/.test(String(updatedRecord.id)) ? updatedRecord.id : null);
-
-      if (targetZohoId) {
-        // Upload any newly attached files directly to Zoho CRM Files & Custom File Field via multipart/form-data
-        const fileFieldsToSync = [
-          { key: 'DPR_Pitch_deck_creation_File_Upload', files: dprFiles },
-          { key: 'Doc_collection_File_Upload', files: docFiles },
-          { key: 'Name_Application_File_Upload', files: nameAppFiles },
-          { key: 'Board_Resolution_File_Upload', files: brFiles },
-          { key: 'Share_Certificate_File_Upload', files: scFiles },
-          { key: 'MSME_Certificate_File_Upload', files: msmeFiles },
-          { key: 'ADT_1_File_Upload', files: adt1Files },
-          { key: 'INC_20_A_File_Upload', files: inc20AFiles },
-          { key: 'Finance_Projected_Financials_File_Upload', files: form3Files },
-          { key: 'Application_submission_File_Upload', files: llpFiles },
-          { key: 'Director_ITR_Company_ITR_File_Upload', files: itrFiles },
-        ];
-
-        for (const field of fileFieldsToSync) {
-          const pending = (field.files || []).filter(
-            (f: UploadedFileMeta) => (f.rawFile || (f.dataUrl && f.dataUrl.startsWith('data:'))) && (!f.fileId || String(f.id).startsWith('file_'))
-          );
-          for (const item of pending) {
-            const fileBlob = item.rawFile || (item.dataUrl ? dataUrlToBlob(item.dataUrl, item.name) : null);
-            if (fileBlob) {
-              try {
-                const upRes = await uploadZohoDealImageField(
-                  String(targetZohoId),
-                  fileBlob,
-                  field.key,
-                  item.name,
-                  'Operation_Internal_CRM'
-                );
-                if (upRes?.success && upRes.fileId) {
-                  item.fileId = upRes.fileId;
-                  delete item.dataUrl;
-                  delete item.rawFile;
-                }
-              } catch (upErr) {
-                console.warn(`[Zoho CRM] Direct upload failed for ${field.key} (${item.name}):`, upErr);
-              }
-            }
-          }
-        }
-      }
-
-      setToast({ type: 'success', text: 'Internal Operation record and files saved to Zoho CRM.' });
+      setToast({ type: 'success', text: 'Internal Operation record saved and files attached to Zoho CRM.' });
       if (onSaved) onSaved(updatedRecord);
 
       setTimeout(() => {
@@ -1612,7 +1902,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   const TeamIcon = teamTypeBadge.icon;
 
   return (
-    <OperationsStaffContext.Provider value={{ operationsStaff, operationsTLs, operationsTMs }}>
+    <OperationsStaffContext.Provider value={{ operationsStaff, operationsTLs, operationsTMs, recordId: String(record.zohoId || record.id || '') }}>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl my-auto overflow-hidden border border-gray-100 flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-150">
         

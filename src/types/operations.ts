@@ -432,7 +432,11 @@ export interface UploadedFileMeta {
   dataUrl?: string;
   url?: string;
   fileId?: string;
-  rawFile?: any;
+  attachmentId?: string;
+  recordId?: string;
+  fieldKey?: string;
+  sectionKey?: string;
+  rawFile?: File;
 }
 
 export interface ServiceAllocationPayload {

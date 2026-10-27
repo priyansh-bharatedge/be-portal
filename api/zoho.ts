@@ -3050,16 +3050,16 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         existingZohoRecord?: any
       ) => {
         const fileFieldKeys = [
-          { key: 'Doc_collection_File_Upload', sectionPath: ['compDocCollection', 'docCollection', 'certDocCollection'] },
-          { key: 'Name_Application_File_Upload', sectionPath: ['nameApp', 'accounting'] },
-          { key: 'Board_Resolution_File_Upload', sectionPath: ['boardResolution', 'audit'] },
-          { key: 'Share_Certificate_File_Upload', sectionPath: ['shareCertificate', 'mgt7'] },
-          { key: 'Application_submission_File_Upload', sectionPath: ['appSubmission', 'llpAgreement', 'certFinalApp'] },
-          { key: 'Director_ITR_Company_ITR_File_Upload', sectionPath: ['directorItr', 'companyItr'] },
-          { key: 'DPR_Pitch_deck_creation_File_Upload', sectionPath: ['dprCreation', 'compInc', 'inc'] },
-          { key: 'ADT_1_File_Upload', sectionPath: ['adt1', 'compAdt1'] },
-          { key: 'INC_20_A_File_Upload', sectionPath: ['inc20A', 'dpt3'] },
-          { key: 'Finance_Projected_Financials_File_Upload', sectionPath: ['form3', 'compForm3', 'fundingFinance'] }
+          { key: 'Doc_collection_File_Upload', tag: 'Doc Collection', sectionPath: ['compDocCollection', 'docCollection', 'certDocCollection'] },
+          { key: 'Name_Application_File_Upload', tag: 'Name Application', sectionPath: ['nameApp', 'accounting'] },
+          { key: 'Board_Resolution_File_Upload', tag: 'Board Resolution', sectionPath: ['boardResolution', 'audit'] },
+          { key: 'Share_Certificate_File_Upload', tag: 'Share Certificate', sectionPath: ['shareCertificate', 'mgt7'] },
+          { key: 'Application_submission_File_Upload', tag: 'Application Submission', sectionPath: ['appSubmission', 'llpAgreement', 'certFinalApp'] },
+          { key: 'Director_ITR_Company_ITR_File_Upload', tag: 'Director / Company ITR', sectionPath: ['directorItr', 'companyItr'] },
+          { key: 'DPR_Pitch_deck_creation_File_Upload', tag: 'DPR', sectionPath: ['dprCreation', 'compInc', 'inc'] },
+          { key: 'ADT_1_File_Upload', tag: 'ADT-1', sectionPath: ['adt1', 'compAdt1'] },
+          { key: 'INC_20_A_File_Upload', tag: 'INC-20A', sectionPath: ['inc20A', 'dpt3'] },
+          { key: 'Finance_Projected_Financials_File_Upload', tag: 'Finance', sectionPath: ['form3', 'compForm3', 'fundingFinance'] }
         ];
 
         const recordId = (record.id && /^\d{15,}$/.test(String(record.id)))
@@ -3081,64 +3081,43 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
           if (!Array.isArray(files) || files.length === 0) continue;
 
-          const fileIds: string[] = [];
-
           for (const f of files) {
             if (!f) continue;
             const fName = typeof f === 'string' ? f : (f.name || 'document');
             const dataUrl = typeof f === 'object' ? f.dataUrl : null;
-            let existingFileId = typeof f === 'object' ? (f.fileId || (f.id && !String(f.id).startsWith('file_') ? f.id : null)) : null;
+            const cleanName = fName.replace(/^\[[^\]]+\]\s*/, '');
+            const taggedFileName = fName.startsWith('[') ? fName : `[${item.tag}] ${cleanName}`;
 
-            if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+            if (dataUrl && typeof dataUrl === 'string' && dataUrl.startsWith('data:') && recordId) {
               try {
                 const parts = dataUrl.split(';base64,');
                 if (parts.length === 2) {
                   const mimeType = parts[0].replace('data:', '') || 'application/octet-stream';
                   const buffer = Buffer.from(parts[1], 'base64');
 
-                  const blob = new Blob([buffer], { type: mimeType });
-                  const form = new FormData();
-                  form.append('file', blob, fName);
-
-                  const fRes = await fetch(`${base}/crm/v8/files`, {
+                  const attBlob = new Blob([buffer], { type: mimeType });
+                  const attForm = new FormData();
+                  attForm.append('file', attBlob, taggedFileName);
+                  const attRes = await fetch(`${base}/crm/v8/${modName}/${recordId}/Attachments`, {
                     method: 'POST',
                     headers: { Authorization: `Zoho-oauthtoken ${token}` },
-                    body: form
+                    body: attForm
                   });
-                  const fData: any = await fRes.json().catch(() => ({}));
-                  const uploadedId = fData?.data?.[0]?.details?.id;
-                  if (uploadedId) {
-                    existingFileId = uploadedId;
+                  const attData: any = await attRes.json().catch(() => ({}));
+                  if (attData?.data?.[0]?.details?.id) {
+                    const uploadedAttId = String(attData.data[0].details.id);
                     if (typeof f === 'object') {
-                      f.fileId = uploadedId;
+                      f.fileId = uploadedAttId;
+                      f.attachmentId = uploadedAttId;
+                      f.id = uploadedAttId;
+                      delete f.dataUrl;
                     }
-                  }
-
-                  if (recordId) {
-                    try {
-                      const attBlob = new Blob([buffer], { type: mimeType });
-                      const attForm = new FormData();
-                      attForm.append('file', attBlob, fName);
-                      await fetch(`${base}/crm/v8/${modName}/${recordId}/Attachments`, {
-                        method: 'POST',
-                        headers: { Authorization: `Zoho-oauthtoken ${token}` },
-                        body: attForm
-                      });
-                    } catch (_) {}
                   }
                 }
               } catch (uploadErr) {
-                console.error(`[Zoho File Upload Error for ${fName}]`, uploadErr);
+                console.error(`[Zoho Attachment Upload Error for ${fName}]`, uploadErr);
               }
             }
-
-            if (existingFileId) {
-              fileIds.push(existingFileId);
-            }
-          }
-
-          if (fileIds.length > 0) {
-            record[item.key] = fileIds.map(fid => ({ File_Id__s: fid }));
           }
         }
       };
@@ -3398,16 +3377,6 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           ...(isTmNumeric && /^\d{15,}$/.test(String(dealId || '')) && effectiveTmId === String(dealId) ? {
             Team_Member_TM: { id: effectiveTmId }
           } : {}),
-          ...(Array.isArray(r.Doc_collection_File_Upload) && r.Doc_collection_File_Upload.length > 0 ? { Doc_collection_File_Upload: r.Doc_collection_File_Upload } : {}),
-          ...(Array.isArray(r.Name_Application_File_Upload) && r.Name_Application_File_Upload.length > 0 ? { Name_Application_File_Upload: r.Name_Application_File_Upload } : {}),
-          ...(Array.isArray(r.Board_Resolution_File_Upload) && r.Board_Resolution_File_Upload.length > 0 ? { Board_Resolution_File_Upload: r.Board_Resolution_File_Upload } : {}),
-          ...(Array.isArray(r.Share_Certificate_File_Upload) && r.Share_Certificate_File_Upload.length > 0 ? { Share_Certificate_File_Upload: r.Share_Certificate_File_Upload } : {}),
-          ...(Array.isArray(r.Application_submission_File_Upload) && r.Application_submission_File_Upload.length > 0 ? { Application_submission_File_Upload: r.Application_submission_File_Upload } : {}),
-          ...(Array.isArray(r.Director_ITR_Company_ITR_File_Upload) && r.Director_ITR_Company_ITR_File_Upload.length > 0 ? { Director_ITR_Company_ITR_File_Upload: r.Director_ITR_Company_ITR_File_Upload } : {}),
-          ...(Array.isArray(r.DPR_Pitch_deck_creation_File_Upload) && r.DPR_Pitch_deck_creation_File_Upload.length > 0 ? { DPR_Pitch_deck_creation_File_Upload: r.DPR_Pitch_deck_creation_File_Upload } : {}),
-          ...(Array.isArray(r.ADT_1_File_Upload) && r.ADT_1_File_Upload.length > 0 ? { ADT_1_File_Upload: r.ADT_1_File_Upload } : {}),
-          ...(Array.isArray(r.INC_20_A_File_Upload) && r.INC_20_A_File_Upload.length > 0 ? { INC_20_A_File_Upload: r.INC_20_A_File_Upload } : {}),
-          ...(Array.isArray(r.Finance_Projected_Financials_File_Upload) && r.Finance_Projected_Financials_File_Upload.length > 0 ? { Finance_Projected_Financials_File_Upload: r.Finance_Projected_Financials_File_Upload } : {}),
           ...(r.CA_CS1 || r.CA_CS_1 ? { CA_CS_1: r.CA_CS_1 || r.CA_CS1 } : {}),
           ...(r.CA_CS2 || r.CA_CS_2 ? { CA_CS_2: r.CA_CS_2 || r.CA_CS2 } : {}),
           ...(r.After_Allocation_Workflow ? { After_Allocation_Workflow: r.After_Allocation_Workflow } : (r.After_Allocation ? { After_Allocation_Workflow: r.After_Allocation } : (r.sectionsData?.afterAllocation ? { After_Allocation_Workflow: r.sectionsData.afterAllocation } : {}))),
@@ -6117,24 +6086,11 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         let updateData: any = await updateRes.json().catch(() => null);
 
         if (updateRes.ok && updateData?.data?.[0]?.code === 'SUCCESS') {
-          // Also attach each file to the record's Attachments related list in Zoho CRM
-          for (const file of files) {
-            try {
-              const attForm = new FormData();
-              attForm.append('file', file, file.name);
-              await fetch(`${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments`, {
-                method: 'POST',
-                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-                body: attForm,
-              });
-            } catch (_) {}
-          }
-
           return sendJson(res, 200, {
             success: true,
             fileId: fileIds[0],
             fileIds,
-            message: `File(s) successfully uploaded into ${fieldApiName} and attached to record`,
+            message: `Image successfully uploaded into ${fieldApiName} field on Zoho deal`,
             data: updateData.data[0],
           });
         } else {
