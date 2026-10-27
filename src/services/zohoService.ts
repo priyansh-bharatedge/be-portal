@@ -311,10 +311,26 @@ export async function downloadZohoAttachment(
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
   } catch (err) {
     console.error('[System] Direct download failed:', err);
-    // Fallback direct navigation
+    // Fallback: try field attachment endpoint
+    try {
+      const fallbackUrl = `/api/zoho/download-field-attachment?module=${encodeURIComponent(module)}&recordId=${encodeURIComponent(recordId)}&attachmentId=${encodeURIComponent(attachmentId)}&name=${encodeURIComponent(fileName)}`;
+      const fbRes = await fetch(fallbackUrl);
+      if (fbRes.ok) {
+        const blob = await fbRes.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+        return;
+      }
+    } catch (_) {}
     const url = getZohoAttachmentDownloadUrl(module, recordId, attachmentId, false);
     window.open(url, '_blank');
   }

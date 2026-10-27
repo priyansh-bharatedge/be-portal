@@ -827,7 +827,10 @@ export const downloadQuotationPDF = async (quotation: QuotationPrintData): Promi
 
   try {
     if (document.fonts) {
-      await document.fonts.ready;
+      await Promise.race([
+        document.fonts.ready,
+        new Promise((resolve) => setTimeout(resolve, 1000))
+      ]);
     }
     await new Promise((resolve) => setTimeout(resolve, 350));
 
@@ -878,7 +881,7 @@ export const downloadQuotationHTML = (quotation: QuotationPrintData): void => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 15000);
 };
 
 // Generate Quotation PDF as a Blob (e.g. for Zoho CRM file attachments)

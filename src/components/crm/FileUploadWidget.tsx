@@ -69,41 +69,118 @@ export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
     onChange(files.filter((_, idx) => idx !== indexToRemove));
   };
 
-  const handleDownload = (file: UploadedFileMeta) => {
+  const handleDownload = async (file: UploadedFileMeta) => {
     const cleanName = (file.name || 'document').replace(/^\[[^\]]+\]\s*/, '');
-    if (file.url && file.url.startsWith('blob:')) {
+
+    // 1. If file has in-memory raw File instance (selected in current session)
+    if (file.rawFile instanceof File) {
+      const blobUrl = URL.createObjectURL(file.rawFile);
       const link = document.createElement('a');
-      link.href = file.url;
+      link.href = blobUrl;
       link.download = cleanName;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
       return;
     }
+
+    // 2. If dataUrl (base64) exists
     if (file.dataUrl && file.dataUrl.startsWith('data:')) {
       const link = document.createElement('a');
       link.href = file.dataUrl;
       link.download = cleanName;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       return;
     }
 
+    // 3. If stored on Zoho CRM with recordId and attachmentId
     const recId = file.recordId || recordId;
     const attId = file.attachmentId || (file.id && /^\d{15,}$/.test(file.id) ? file.id : (file.fileId && /^\d{15,}$/.test(file.fileId) ? file.fileId : null));
 
     if (recId && attId) {
-      const downloadUrl = `/api/zoho/download-attachment?module=Operation_Internal_CRM&recordId=${recId}&attachmentId=${attId}`;
-      window.open(downloadUrl, '_blank');
-      return;
+      try {
+        const downloadUrl = `/api/zoho/download-attachment?module=Operation_Internal_CRM&recordId=${encodeURIComponent(recId)}&attachmentId=${encodeURIComponent(attId)}&name=${encodeURIComponent(cleanName)}`;
+        const res = await fetch(downloadUrl);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = cleanName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+        return;
+      } catch (err) {
+        console.warn('[FileUploadWidget] Direct fetch failed, trying field attachment fallback:', err);
+        try {
+          const fallbackUrl = `/api/zoho/download-field-attachment?module=Operation_Internal_CRM&recordId=${encodeURIComponent(recId)}&attachmentId=${encodeURIComponent(attId)}&name=${encodeURIComponent(cleanName)}`;
+          const fbRes = await fetch(fallbackUrl);
+          if (fbRes.ok) {
+            const blob = await fbRes.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = cleanName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+            return;
+          }
+        } catch (_) {}
+      }
     }
-    if (file.url) {
-      window.open(file.url, '_blank');
-      return;
+
+    // 4. If a standard remote URL is available (not a dead blob: URL)
+    if (file.url && !file.url.startsWith('blob:')) {
+      try {
+        const res = await fetch(file.url);
+        if (res.ok) {
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = cleanName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+          return;
+        }
+      } catch (_) {
+        window.open(file.url, '_blank');
+        return;
+      }
     }
+
+    // 5. Try internal operations download proxy if fileId is set
     if (file.fileId || file.id) {
-      const downloadUrl = `/api/zoho/internal-operations/download?file_id=${file.fileId || file.id}&name=${encodeURIComponent(cleanName)}${recId ? `&record_id=${recId}` : ''}`;
-      window.open(downloadUrl, '_blank');
-      return;
+      try {
+        const fallbackUrl = `/api/zoho/internal-operations/download?file_id=${encodeURIComponent(file.fileId || file.id)}&name=${encodeURIComponent(cleanName)}${recId ? `&record_id=${encodeURIComponent(recId)}` : ''}`;
+        const fbRes = await fetch(fallbackUrl);
+        if (fbRes.ok) {
+          const blob = await fbRes.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = cleanName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+          return;
+        }
+      } catch (_) {}
     }
-    alert(`File "${cleanName}" was registered without downloadable content.`);
+
+    alert(`File "${cleanName}" could not be downloaded. Please verify the attachment or contact support.`);
   };
 
   return (

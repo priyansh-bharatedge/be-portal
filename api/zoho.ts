@@ -5750,23 +5750,46 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           });
         }
 
+        // If Attachments endpoint returned 404 or 400, fallback to field attachments or files API
+        if (!crmRes.ok && (crmRes.status === 404 || crmRes.status === 400)) {
+          const fieldEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/actions/download_fields_attachment?fields_attachment_id=${attachmentId}`;
+          const fieldRes = await fetch(fieldEndpoint, {
+            method: 'GET',
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+          });
+          if (fieldRes.ok) {
+            crmRes = fieldRes;
+          } else {
+            const fileEndpoint = `${apiBase}/crm/v8/files?id=${attachmentId}`;
+            const fileRes = await fetch(fileEndpoint, {
+              method: 'GET',
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            });
+            if (fileRes.ok) {
+              crmRes = fileRes;
+            }
+          }
+        }
+
         if (!crmRes.ok) {
           const errText = await crmRes.text();
           return sendJson(res, crmRes.status, { success: false, message: 'Failed to download attachment from Zoho CRM', details: errText });
         }
 
+        const arrayBuf = await crmRes.arrayBuffer();
+        const buffer = Buffer.from(arrayBuf);
         const contentType = crmRes.headers.get('content-type') || 'application/octet-stream';
-        const contentDisp = crmRes.headers.get('content-disposition') || (isPreview ? 'inline' : `attachment; filename="attachment-${attachmentId}"`);
-        const contentLength = crmRes.headers.get('content-length');
+        const customName = urlObj.searchParams.get('name') || '';
+        const safeName = (customName || `attachment-${attachmentId}`).replace(/[^\w\s.-]/gi, '_');
+        const contentDisp = isPreview ? 'inline' : (customName ? `attachment; filename="${safeName}"` : (crmRes.headers.get('content-disposition') || `attachment; filename="${safeName}"`));
 
         res.statusCode = 200;
         res.setHeader('Content-Type', contentType);
-        res.setHeader('Content-Disposition', isPreview ? 'inline' : contentDisp);
-        if (contentLength) res.setHeader('Content-Length', contentLength);
+        res.setHeader('Content-Disposition', contentDisp);
+        res.setHeader('Content-Length', buffer.length.toString());
         res.setHeader('Cache-Control', 'public, max-age=3600');
 
-        const arrayBuf = await crmRes.arrayBuffer();
-        return res.end(Buffer.from(arrayBuf));
+        return res.end(buffer);
       } catch (err: any) {
         return sendJson(res, 500, { success: false, message: err.message });
       }

@@ -431,7 +431,9 @@ export function mergeAttachmentsIntoSections(
       size: attSize,
       type: 'application/octet-stream',
       uploadedAt: createdTime,
-      recordId: currentRecordId
+      recordId: currentRecordId,
+      url: undefined,
+      rawFile: undefined
     };
 
     if (existingIdx >= 0) {
@@ -439,7 +441,9 @@ export function mergeAttachmentsIntoSections(
         ...currentList[existingIdx],
         ...fileMeta,
         attachmentId: attId,
-        id: attId
+        id: attId,
+        url: undefined,
+        rawFile: undefined
       };
     } else {
       currentList.push(fileMeta);
@@ -1165,7 +1169,8 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                       name: cleanName,
                       recordId: String(targetZohoId),
                       rawFile: undefined,
-                      dataUrl: undefined
+                      dataUrl: undefined,
+                      url: undefined
                     });
                     continue;
                   } else {
