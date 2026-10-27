@@ -2825,17 +2825,7 @@ function zohoApiPlugin(): Plugin {
             }
 
             if (fileIds.length > 0) {
-              const existingZohoFiles = existingZohoRecord?.[item.key] || [];
-              const oldZohoFile = Array.isArray(existingZohoFiles) && existingZohoFiles[0]?.id ? existingZohoFiles[0] : null;
-
-              if (oldZohoFile?.id && oldZohoFile.id !== fileIds[0]) {
-                record[item.key] = [
-                  { id: oldZohoFile.id, _delete: null },
-                  fileIds[0]
-                ];
-              } else {
-                record[item.key] = [fileIds[0]];
-              }
+              record[item.key] = fileIds.map(fid => ({ File_Id__s: fid }));
             }
           }
         };
@@ -6866,12 +6856,25 @@ function zohoApiPlugin(): Plugin {
 
             res.setHeader('Content-Type', 'application/json');
             if (updateRes.ok && updateData?.data?.[0]?.code === 'SUCCESS') {
-              console.log(`[Vite Zoho Plugin] Image linked to ${fieldApiName} successfully!`);
+              // Also attach each file to record's Attachments related list
+              for (const file of files) {
+                try {
+                  const attForm = new FormData();
+                  attForm.append('file', file, file.name);
+                  await fetch(`${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                    body: attForm,
+                  });
+                } catch (_) {}
+              }
+
+              console.log(`[Vite Zoho Plugin] File(s) linked to ${fieldApiName} and Attachments successfully!`);
               return res.end(JSON.stringify({
                 success: true,
                 fileId: fileIds[0],
                 fileIds,
-                message: `Image successfully uploaded into ${fieldApiName} field on Zoho deal`,
+                message: `File(s) successfully uploaded into ${fieldApiName} and attached to record`,
                 data: updateData.data[0],
               }));
             } else {

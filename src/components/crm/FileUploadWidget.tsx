@@ -46,7 +46,8 @@ export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
                 size: file.size,
                 type: file.type || 'application/octet-stream',
                 uploadedAt: new Date().toISOString(),
-                dataUrl: reader.result as string
+                dataUrl: reader.result as string,
+                rawFile: file
               });
             };
             reader.onerror = () => {
@@ -55,7 +56,8 @@ export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
                 name: file.name,
                 size: file.size,
                 type: file.type || 'application/octet-stream',
-                uploadedAt: new Date().toISOString()
+                uploadedAt: new Date().toISOString(),
+                rawFile: file
               });
             };
             reader.readAsDataURL(file);
@@ -65,7 +67,8 @@ export const FileUploadWidget: React.FC<FileUploadWidgetProps> = ({
               name: file.name,
               size: file.size,
               type: file.type || 'application/octet-stream',
-              uploadedAt: new Date().toISOString()
+              uploadedAt: new Date().toISOString(),
+              rawFile: file
             });
           }
         });

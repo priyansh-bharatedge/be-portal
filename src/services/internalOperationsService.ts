@@ -1018,6 +1018,73 @@ export async function fetchInternalOperations(options?: { dealId?: string }): Pr
 }
 
 /**
+ * Converts a base64 Data URL to a native File/Blob object
+ */
+export function dataUrlToBlob(dataUrl: string, fallbackName?: string): File | Blob | null {
+  try {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
+    const parts = dataUrl.split(';base64,');
+    if (parts.length !== 2) return null;
+    const contentType = parts[0].replace('data:', '') || 'application/octet-stream';
+    const binary = atob(parts[1]);
+    const array = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      array[i] = binary.charCodeAt(i);
+    }
+    return new File([array], fallbackName || 'document', { type: contentType });
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Strips heavy base64 dataUrl fields from records before JSON transmission,
+ * ensuring payloads remain under 10KB and completely avoiding HTTP 413 (Request Entity Too Large).
+ */
+export function stripDataUrlsFromRecord(record: InternalOperationRecord): InternalOperationRecord {
+  const cleanFiles = (files: any) => {
+    if (!Array.isArray(files)) return files;
+    return files.map((f: any) => {
+      if (!f || typeof f !== 'object') return f;
+      const { dataUrl, rawFile, ...rest } = f;
+      return rest;
+    });
+  };
+
+  const cleanSec = (secObj: any) => {
+    if (!secObj || typeof secObj !== 'object') return secObj;
+    const cloned = { ...secObj };
+    if (Array.isArray(cloned.files)) {
+      cloned.files = cleanFiles(cloned.files);
+    }
+    return cloned;
+  };
+
+  const clonedSections = record.sectionsData ? { ...record.sectionsData } : undefined;
+  if (clonedSections) {
+    for (const key of Object.keys(clonedSections)) {
+      clonedSections[key] = cleanSec(clonedSections[key]);
+    }
+  }
+
+  return {
+    ...record,
+    Doc_collection_File_Upload: cleanFiles(record.Doc_collection_File_Upload),
+    Name_Application_File_Upload: cleanFiles(record.Name_Application_File_Upload),
+    Board_Resolution_File_Upload: cleanFiles(record.Board_Resolution_File_Upload),
+    Share_Certificate_File_Upload: cleanFiles(record.Share_Certificate_File_Upload),
+    MSME_Certificate_File_Upload: cleanFiles(record.MSME_Certificate_File_Upload),
+    ADT_1_File_Upload: cleanFiles(record.ADT_1_File_Upload),
+    INC_20_A_File_Upload: cleanFiles(record.INC_20_A_File_Upload),
+    Finance_Projected_Financials_File_Upload: cleanFiles(record.Finance_Projected_Financials_File_Upload),
+    Application_submission_File_Upload: cleanFiles(record.Application_submission_File_Upload),
+    Director_ITR_Company_ITR_File_Upload: cleanFiles(record.Director_ITR_Company_ITR_File_Upload),
+    DPR_Pitch_deck_creation_File_Upload: cleanFiles(record.DPR_Pitch_deck_creation_File_Upload),
+    sectionsData: clonedSections
+  };
+}
+
+/**
  * Saves or updates a single Internal Operation record
  */
 export async function saveInternalOperation(record: InternalOperationRecord): Promise<ZohoApiResponse> {
@@ -1291,10 +1358,12 @@ export async function saveInternalOperation(record: InternalOperationRecord): Pr
       (updatedRecord.zohoId && /^\d{15,}$/.test(String(updatedRecord.zohoId))) ||
       (updatedRecord.id && /^\d{15,}$/.test(String(updatedRecord.id)))
     );
+    // Sanitize record to strip large dataUrl strings from JSON body (prevents HTTP 413 Request Entity Too Large)
+    const sanitizedPayload = stripDataUrlsFromRecord(updatedRecord);
     const response = await fetch('/api/zoho/internal-operations', {
       method: hasZohoId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedRecord)
+      body: JSON.stringify(sanitizedPayload)
     });
     const data = await response.json();
     const createdZohoId = data?.data?.[0]?.details?.id || data?.zohoId;

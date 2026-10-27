@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from '../components/ui/Logo';
-import { 
-  CheckCircle2, Crown, Shield, ArrowRight, UserCheck, 
+import {
+  CheckCircle2, Crown, Shield, ArrowRight, UserCheck,
   KeyRound, Mail, Lock, Eye, EyeOff, RefreshCw, Sparkles,
   ArrowLeft, Check, AlertCircle, HelpCircle, Clock, X
 } from 'lucide-react';
@@ -16,11 +16,11 @@ type AuthStep = 'EMAIL' | 'PASSWORD' | 'OTP' | 'SETUP_PASSWORD' | 'SUCCESS';
 export const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { 
-    searchEmployeeInZoho, 
-    login, 
-    requestOtp, 
-    verifyOtp, 
+  const {
+    searchEmployeeInZoho,
+    login,
+    requestOtp,
+    verifyOtp,
     setPasswordAndActivate,
     switchUser
   } = useAuth();
@@ -200,9 +200,9 @@ export const Login: React.FC = () => {
         } else if (currentEmployee) {
           const sRole: SystemRole = (
             currentEmployee.role === 'Super Admin' || currentEmployee.systemRole === 'Super Admin' ? 'Super Admin' :
-            currentEmployee.role === 'HR' || currentEmployee.systemRole === 'HR' ? 'HR' :
-            currentEmployee.role === 'HOD' || currentEmployee.systemRole === 'HOD' ? 'HOD' :
-            currentEmployee.role === 'TL' || currentEmployee.systemRole === 'TL' ? 'TL' : 'TM'
+              currentEmployee.role === 'HR' || currentEmployee.systemRole === 'HR' ? 'HR' :
+                currentEmployee.role === 'HOD' || currentEmployee.systemRole === 'HOD' ? 'HOD' :
+                  currentEmployee.role === 'TL' || currentEmployee.systemRole === 'TL' ? 'TL' : 'TM'
           );
           const userObj: AuthUser = {
             id: currentEmployee.id || currentEmployee.empId || `EMP-${Date.now()}`,
@@ -339,35 +339,35 @@ export const Login: React.FC = () => {
       <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-indigo-500/10 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="w-full max-w-6xl flex shadow-[0_20px_50px_-12px_rgba(0,0,0,0.12)] rounded-3xl overflow-hidden bg-white relative z-10 mx-4 lg:mx-8 min-h-[660px] border border-gray-100">
-        
+
         {/* Left Side Enterprise Branding Panel */}
         <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 bg-gray-50/80 border-r border-gray-100 relative overflow-hidden">
           <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px]" />
-          
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ duration: 0.6 }} 
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
             className="relative z-10"
           >
             <Logo className="h-36 w-auto -mb-8 -mt-8 -ml-6 drop-shadow-sm" />
             <h1 className="text-[2.4rem] font-extrabold text-gray-900 mb-5 tracking-tight leading-[1.15]">
-              Enterprise Portal <br/>
+              Welcome to<br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-be-orange to-orange-500">
-                Zoho CRM Authentication
+                CRM
               </span>
             </h1>
             <p className="text-gray-600 text-sm mb-8 max-w-md leading-relaxed font-medium">
               Secure login integrated with company employee directory.
             </p>
-            
+
             <div className="space-y-4">
               {[
                 { title: 'Unified Directory', desc: 'Queries employee record & checks password status live' },
                 { title: 'Conditional Setup Flow', desc: 'Auto-triggers OTP verification for first-time employees' },
                 { title: 'Secure Password Update', desc: 'Securely updates your portal password credentials' }
               ].map((feat, i) => (
-                <motion.div 
+                <motion.div
                   key={feat.title}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -394,7 +394,7 @@ export const Login: React.FC = () => {
 
         {/* Right Side Conditional Auth Form */}
         <div className="w-full lg:w-1/2 flex flex-col justify-center p-8 lg:p-14 bg-white relative">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
@@ -428,7 +428,7 @@ export const Login: React.FC = () => {
               <div className="lg:hidden flex justify-center mb-3">
                 <Logo className="h-24 w-auto drop-shadow-sm" />
               </div>
-              
+
               {step === 'EMAIL' && (
                 <>
                   <h2 className="text-2xl font-extrabold text-gray-900 mb-1 tracking-tight">Portal Login</h2>
@@ -479,19 +479,19 @@ export const Login: React.FC = () => {
             {/* STEP 1: SINGLE EMAIL INPUT FORM */}
             <AnimatePresence mode="wait">
               {step === 'EMAIL' && (
-                <motion.form 
+                <motion.form
                   key="email-form"
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }} 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  onSubmit={handleEmailSubmit} 
+                  onSubmit={handleEmailSubmit}
                   className="space-y-4"
                 >
                   {/* Validation Error Message (Scenario 1: "Email Does Not Exist") */}
                   {emailError && (
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.95 }} 
-                      animate={{ opacity: 1, scale: 1 }} 
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
                       className="p-3.5 rounded-2xl bg-red-50 text-red-700 text-xs font-bold border border-red-200 flex items-center shadow-sm"
                     >
                       <AlertCircle size={16} className="text-red-500 mr-2 shrink-0" />
@@ -500,17 +500,16 @@ export const Login: React.FC = () => {
                   )}
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-700">Email Address or Employee ID *</label>
+                    <label className="text-xs font-bold text-gray-700">Email Address </label>
                     <div className="relative">
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={email}
                         onChange={e => { setEmail(e.target.value); setEmailError(''); }}
-                        className={`w-full pl-9 pr-3.5 py-3 rounded-2xl border bg-gray-50/50 focus:bg-white focus:ring-2 transition-all outline-none font-semibold text-xs text-gray-900 placeholder-gray-400 ${
-                          emailError 
-                            ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20' 
-                            : 'border-gray-200 focus:border-be-orange focus:ring-be-orange/20'
-                        }`}
+                        className={`w-full pl-9 pr-3.5 py-3 rounded-2xl border bg-gray-50/50 focus:bg-white focus:ring-2 transition-all outline-none font-semibold text-xs text-gray-900 placeholder-gray-400 ${emailError
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                          : 'border-gray-200 focus:border-be-orange focus:ring-be-orange/20'
+                          }`}
                         placeholder="Enter your registered email or Employee ID (e.g. sirjan@bharat-edge.com)"
                         required
                         autoFocus
@@ -519,7 +518,7 @@ export const Login: React.FC = () => {
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     type="submit"
                     disabled={loading || !email.trim()}
                     className="w-full bg-gray-900 hover:bg-black text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-gray-900/20 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 text-xs mt-2 flex justify-center items-center group disabled:opacity-50"
@@ -543,19 +542,19 @@ export const Login: React.FC = () => {
 
               {/* STEP 2: RETURNING USER PASSWORD FORM (Scenario 3) */}
               {step === 'PASSWORD' && (
-                <motion.form 
+                <motion.form
                   key="password-form"
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }} 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  onSubmit={handlePasswordSubmit} 
+                  onSubmit={handlePasswordSubmit}
                   className="space-y-4"
                 >
                   {/* Validation Error Message (Scenario 3 Action 3: "Invalid Password") */}
                   {passwordError && (
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.95 }} 
-                      animate={{ opacity: 1, scale: 1 }} 
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
                       className="p-3.5 rounded-2xl bg-red-50 text-red-700 text-xs font-bold border border-red-200 flex items-center shadow-sm"
                     >
                       <AlertCircle size={16} className="text-red-500 mr-2 shrink-0" />
@@ -573,7 +572,7 @@ export const Login: React.FC = () => {
                         <div className="text-[10px] text-gray-500 font-mono">{email}</div>
                       </div>
                     </div>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => { setStep('EMAIL'); setPasswordError(''); }}
                       className="text-[11px] font-bold text-be-orange hover:underline flex items-center gap-1"
@@ -585,21 +584,20 @@ export const Login: React.FC = () => {
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-gray-700">Password *</label>
                     <div className="relative">
-                      <input 
-                        type={showPassword ? 'text' : 'password'} 
+                      <input
+                        type={showPassword ? 'text' : 'password'}
                         value={password}
                         onChange={e => { setPassword(e.target.value); setPasswordError(''); }}
-                        className={`w-full pl-9 pr-10 py-3 rounded-2xl border bg-gray-50/50 focus:bg-white focus:ring-2 transition-all outline-none font-semibold text-xs text-gray-900 placeholder-gray-400 ${
-                          passwordError 
-                            ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20' 
-                            : 'border-gray-200 focus:border-be-orange focus:ring-be-orange/20'
-                        }`}
+                        className={`w-full pl-9 pr-10 py-3 rounded-2xl border bg-gray-50/50 focus:bg-white focus:ring-2 transition-all outline-none font-semibold text-xs text-gray-900 placeholder-gray-400 ${passwordError
+                          ? 'border-red-300 focus:border-red-500 focus:ring-red-200 bg-red-50/20'
+                          : 'border-gray-200 focus:border-be-orange focus:ring-be-orange/20'
+                          }`}
                         placeholder="Enter your password"
                         required
                         autoFocus
                       />
                       <Lock size={16} className="absolute left-3 top-3.5 text-gray-400" />
-                      <button 
+                      <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
@@ -609,7 +607,7 @@ export const Login: React.FC = () => {
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     type="submit"
                     disabled={loading || !password.trim()}
                     className="w-full bg-be-orange hover:bg-orange-600 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-orange-500/20 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 text-xs mt-2 flex justify-center items-center group disabled:opacity-50"
@@ -621,7 +619,7 @@ export const Login: React.FC = () => {
                   </button>
 
                   <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-                    <button 
+                    <button
                       type="button"
                       onClick={() => { setStep('EMAIL'); setPasswordError(''); }}
                       className="text-[11px] font-bold text-gray-500 hover:text-gray-800 flex items-center gap-1"
@@ -656,12 +654,12 @@ export const Login: React.FC = () => {
 
               {/* STEP 3: FIRST-TIME USER OTP VERIFICATION FORM (Scenario 2 Action 2) */}
               {step === 'OTP' && (
-                <motion.form 
+                <motion.form
                   key="otp-form"
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }} 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  onSubmit={handleVerifyOtp} 
+                  onSubmit={handleVerifyOtp}
                   className="space-y-4"
                 >
                   <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-3.5 rounded-2xl border border-orange-200 text-xs space-y-2">
@@ -724,16 +722,15 @@ export const Login: React.FC = () => {
                       type="button"
                       onClick={handleResendOtp}
                       disabled={!canResend || loading}
-                      className={`text-xs font-bold flex items-center gap-1 transition-colors ${
-                        canResend ? 'text-be-orange hover:underline cursor-pointer' : 'text-gray-400 cursor-not-allowed'
-                      }`}
+                      className={`text-xs font-bold flex items-center gap-1 transition-colors ${canResend ? 'text-be-orange hover:underline cursor-pointer' : 'text-gray-400 cursor-not-allowed'
+                        }`}
                     >
                       <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
                       {canResend ? 'Resend OTP' : `Resend in ${otpTimer}s`}
                     </button>
                   </div>
 
-                  <button 
+                  <button
                     type="submit"
                     disabled={loading || otpBoxes.join('').length !== 6}
                     className="w-full bg-be-orange hover:bg-orange-600 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-orange-500/20 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 text-xs mt-2 flex justify-center items-center group disabled:opacity-50"
@@ -763,12 +760,12 @@ export const Login: React.FC = () => {
 
               {/* STEP 4: FIRST-TIME USER SETUP PASSWORD FORM (Scenario 2 Action 3 & 4) */}
               {step === 'SETUP_PASSWORD' && (
-                <motion.form 
+                <motion.form
                   key="setup-form"
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }} 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  onSubmit={handleSetupPasswordSubmit} 
+                  onSubmit={handleSetupPasswordSubmit}
                   className="space-y-4"
                 >
                   <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
@@ -789,8 +786,8 @@ export const Login: React.FC = () => {
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-gray-700">New Password *</label>
                     <div className="relative">
-                      <input 
-                        type={showNewPassword ? 'text' : 'password'} 
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
                         value={newPassword}
                         onChange={e => { setNewPassword(e.target.value); setSetupError(''); }}
                         className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-be-orange focus:ring-2 focus:ring-be-orange/20 transition-all outline-none font-semibold text-xs text-gray-900 placeholder-gray-400"
@@ -799,7 +796,7 @@ export const Login: React.FC = () => {
                         autoFocus
                       />
                       <Lock size={15} className="absolute left-3 top-3 text-gray-400" />
-                      <button 
+                      <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
                         className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
@@ -812,8 +809,8 @@ export const Login: React.FC = () => {
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-gray-700">Confirm Password *</label>
                     <div className="relative">
-                      <input 
-                        type={showConfirmPassword ? 'text' : 'password'} 
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
                         value={confirmPassword}
                         onChange={e => { setConfirmPassword(e.target.value); setSetupError(''); }}
                         className="w-full pl-9 pr-10 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-be-orange focus:ring-2 focus:ring-be-orange/20 transition-all outline-none font-semibold text-xs text-gray-900 placeholder-gray-400"
@@ -821,7 +818,7 @@ export const Login: React.FC = () => {
                         required
                       />
                       <Lock size={15} className="absolute left-3 top-3 text-gray-400" />
-                      <button 
+                      <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
@@ -843,7 +840,7 @@ export const Login: React.FC = () => {
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     type="submit"
                     disabled={loading || newPassword.length < 6 || newPassword !== confirmPassword}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 text-xs mt-2 flex justify-center items-center group disabled:opacity-50"
@@ -858,10 +855,10 @@ export const Login: React.FC = () => {
 
               {/* STEP 5: SUCCESS REDIRECT (Scenario 2 Action 5) */}
               {step === 'SUCCESS' && (
-                <motion.div 
+                <motion.div
                   key="success-step"
-                  initial={{ scale: 0.9, opacity: 0 }} 
-                  animate={{ scale: 1, opacity: 1 }} 
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
                   className="py-8 text-center space-y-4"
                 >
                   <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner ring-8 ring-emerald-50">

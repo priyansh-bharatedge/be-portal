@@ -30,8 +30,10 @@ import {
 import {
   normalizeTeamType,
   saveInternalOperation,
-  syncTeamTypeToLegalSubform
+  syncTeamTypeToLegalSubform,
+  dataUrlToBlob
 } from '../../services/internalOperationsService';
+import { uploadZohoDealImageField } from '../../services/zohoService';
 import { FileUploadWidget } from './FileUploadWidget';
 import type { NormalizedStaff } from './InternalOperationsAllocationTable';
 import {
@@ -1524,11 +1526,59 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         Modified_Time: new Date().toISOString()
       };
 
-      await saveInternalOperation(updatedRecord);
+      const saveRes = await saveInternalOperation(updatedRecord);
       // Synchronize team type back to parent Deal's Legal details subform (Zoho CRM & localStorage)
       await syncTeamTypeToLegalSubform(updatedRecord, teamType);
 
-      setToast({ type: 'success', text: 'Internal Operation record saved and synced with Legal.' });
+      const targetZohoId = (saveRes && (saveRes.zohoId || (saveRes.data as any)?.zohoId)) ||
+        updatedRecord.zohoId ||
+        (/^\d{15,}$/.test(String(updatedRecord.id)) ? updatedRecord.id : null);
+
+      if (targetZohoId) {
+        // Upload any newly attached files directly to Zoho CRM Files & Custom File Field via multipart/form-data
+        const fileFieldsToSync = [
+          { key: 'DPR_Pitch_deck_creation_File_Upload', files: dprFiles },
+          { key: 'Doc_collection_File_Upload', files: docFiles },
+          { key: 'Name_Application_File_Upload', files: nameAppFiles },
+          { key: 'Board_Resolution_File_Upload', files: brFiles },
+          { key: 'Share_Certificate_File_Upload', files: scFiles },
+          { key: 'MSME_Certificate_File_Upload', files: msmeFiles },
+          { key: 'ADT_1_File_Upload', files: adt1Files },
+          { key: 'INC_20_A_File_Upload', files: inc20AFiles },
+          { key: 'Finance_Projected_Financials_File_Upload', files: form3Files },
+          { key: 'Application_submission_File_Upload', files: llpFiles },
+          { key: 'Director_ITR_Company_ITR_File_Upload', files: itrFiles },
+        ];
+
+        for (const field of fileFieldsToSync) {
+          const pending = (field.files || []).filter(
+            (f: UploadedFileMeta) => (f.rawFile || (f.dataUrl && f.dataUrl.startsWith('data:'))) && (!f.fileId || String(f.id).startsWith('file_'))
+          );
+          for (const item of pending) {
+            const fileBlob = item.rawFile || (item.dataUrl ? dataUrlToBlob(item.dataUrl, item.name) : null);
+            if (fileBlob) {
+              try {
+                const upRes = await uploadZohoDealImageField(
+                  String(targetZohoId),
+                  fileBlob,
+                  field.key,
+                  item.name,
+                  'Operation_Internal_CRM'
+                );
+                if (upRes?.success && upRes.fileId) {
+                  item.fileId = upRes.fileId;
+                  delete item.dataUrl;
+                  delete item.rawFile;
+                }
+              } catch (upErr) {
+                console.warn(`[Zoho CRM] Direct upload failed for ${field.key} (${item.name}):`, upErr);
+              }
+            }
+          }
+        }
+      }
+
+      setToast({ type: 'success', text: 'Internal Operation record and files saved to Zoho CRM.' });
       if (onSaved) onSaved(updatedRecord);
 
       setTimeout(() => {

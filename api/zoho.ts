@@ -3138,17 +3138,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           }
 
           if (fileIds.length > 0) {
-            const existingZohoFiles = existingZohoRecord?.[item.key] || [];
-            const oldZohoFile = Array.isArray(existingZohoFiles) && existingZohoFiles[0]?.id ? existingZohoFiles[0] : null;
-
-            if (oldZohoFile?.id && oldZohoFile.id !== fileIds[0]) {
-              record[item.key] = [
-                { id: oldZohoFile.id, _delete: null },
-                fileIds[0]
-              ];
-            } else {
-              record[item.key] = [fileIds[0]];
-            }
+            record[item.key] = fileIds.map(fid => ({ File_Id__s: fid }));
           }
         }
       };
@@ -6127,11 +6117,24 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         let updateData: any = await updateRes.json().catch(() => null);
 
         if (updateRes.ok && updateData?.data?.[0]?.code === 'SUCCESS') {
+          // Also attach each file to the record's Attachments related list in Zoho CRM
+          for (const file of files) {
+            try {
+              const attForm = new FormData();
+              attForm.append('file', file, file.name);
+              await fetch(`${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments`, {
+                method: 'POST',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                body: attForm,
+              });
+            } catch (_) {}
+          }
+
           return sendJson(res, 200, {
             success: true,
             fileId: fileIds[0],
             fileIds,
-            message: `Image successfully uploaded into ${fieldApiName} field on Zoho deal`,
+            message: `File(s) successfully uploaded into ${fieldApiName} and attached to record`,
             data: updateData.data[0],
           });
         } else {
