@@ -58,7 +58,9 @@ import {
   AlertTriangle,
   PlusCircle,
   UserCheck,
-  Trash2
+  Trash2,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { DeleteConfirmModal } from '../ui/DeleteConfirmModal';
 import { isMatchingName } from '../../utils/employeeUtils';
@@ -845,7 +847,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
     const zohoLlpDate = record.Application_submission_Submission_Date || '';
     const zohoLlpStatus = record.Application_submission_status || '';
     const zohoLlpFiles = Array.isArray(record.Application_submission_File_Upload) ? record.Application_submission_File_Upload : [];
-    const zohoAppRegNumber = record.Application_submission || '';
+    const zohoAppRegNumber = record.Application_registration_number || record.Application_submission || '';
     const zohoAppUserId = record.Application_submission_Portal_User_ID || '';
     const zohoAppPassword = record.Application_submission_Portal_Password || '';
 
@@ -875,6 +877,21 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
     if ((!s.certFinalApp.files || s.certFinalApp.files.length === 0) && zohoLlpFiles.length > 0) {
       s.certFinalApp.files = zohoLlpFiles;
     }
+    if (!s.certFinalApp.portalId && !s.certFinalApp.id && zohoAppUserId) {
+      s.certFinalApp.portalId = zohoAppUserId;
+      s.certFinalApp.id = zohoAppUserId;
+    }
+    if (!s.certFinalApp.portalPassword && !s.certFinalApp.password && zohoAppPassword) {
+      s.certFinalApp.portalPassword = zohoAppPassword;
+      s.certFinalApp.password = zohoAppPassword;
+    }
+    if (!s.certFinalApp.registrationNumber && zohoAppRegNumber) {
+      s.certFinalApp.registrationNumber = zohoAppRegNumber;
+    }
+    if (s.certFinalApp.id && !s.certFinalApp.portalId) s.certFinalApp.portalId = s.certFinalApp.id;
+    if (s.certFinalApp.portalId && !s.certFinalApp.id) s.certFinalApp.id = s.certFinalApp.portalId;
+    if (s.certFinalApp.password && !s.certFinalApp.portalPassword) s.certFinalApp.portalPassword = s.certFinalApp.password;
+    if (s.certFinalApp.portalPassword && !s.certFinalApp.password) s.certFinalApp.password = s.certFinalApp.portalPassword;
 
     // Map Zoho CRM Director ITR & Company ITR fields if available on record
     const zohoItrName = record.Director_ITR_Company_ITR_name || '';
@@ -1034,16 +1051,23 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
       const baseCleanName = (currentData.name || '').replace(/\s*\(Resubmission Round \d+\)/gi, '').trim();
       const nextRound = currentHistory.length + 2;
 
+      const resetStatus = (baseSectionKey === 'certFinalApp' || baseSectionKey === 'appSubmission')
+        ? 'Pending'
+        : (baseSectionKey === 'nameApp')
+          ? 'In-process'
+          : 'In process';
+
       setSections(prev => ({
         ...prev,
         [historyKey]: [...currentHistory, archivedAttempt],
         [baseSectionKey]: {
+          ...currentData,
           name: `${baseCleanName ? `${baseCleanName} ` : ''}(Resubmission Round ${nextRound})`,
           approvedName: '',
           finalApprovalName: '',
           date: new Date().toISOString().split('T')[0],
           doiDate: '',
-          status: baseSectionKey === 'nameApp' ? 'In-process' : 'In process',
+          status: resetStatus,
           files: []
         }
       }));
@@ -1199,10 +1223,16 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         }
 
         // Also process repeatable history items if any files were attached
-        for (const historyKey of ['nameAppHistory', 'finalFilingHistory']) {
+        for (const historyKey of ['nameAppHistory', 'finalFilingHistory', 'certDocCollectionHistory', 'certFinalAppHistory', 'appSubmissionHistory']) {
           if (Array.isArray(updatedSections[historyKey]) && updatedSections[historyKey].length > 0) {
             const historyList = [...updatedSections[historyKey]];
-            const tag = historyKey === 'nameAppHistory' ? 'Name Application' : 'Final Filing';
+            const tag = historyKey === 'nameAppHistory'
+              ? 'Name Application'
+              : historyKey === 'finalFilingHistory'
+                ? 'Final Filing'
+                : historyKey === 'certDocCollectionHistory'
+                  ? 'Doc Collection'
+                  : 'Application Submission';
 
             for (let h = 0; h < historyList.length; h++) {
               const histItem = historyList[h];
@@ -1483,15 +1513,23 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         ? activeLlp.files
         : (fallbackLlp?.files || record.Application_submission_File_Upload || []);
 
-      const appPortalId = updatedSections.appSubmission?.portalId !== undefined && updatedSections.appSubmission?.portalId !== ''
-        ? updatedSections.appSubmission.portalId
-        : (record.Application_submission_Portal_User_ID || '');
-      const appPortalPwd = updatedSections.appSubmission?.portalPassword !== undefined && updatedSections.appSubmission?.portalPassword !== ''
-        ? updatedSections.appSubmission.portalPassword
-        : (record.Application_submission_Portal_Password || '');
-      const appSubmissionVal = updatedSections.appSubmission?.registrationNumber !== undefined && updatedSections.appSubmission?.registrationNumber !== ''
-        ? updatedSections.appSubmission.registrationNumber
-        : (updatedSections.appSubmission?.applicationSubmission || record.Application_submission || '');
+      const appPortalId = isCertification
+        ? (updatedSections.certFinalApp?.id || updatedSections.certFinalApp?.portalId || (record.Application_submission_Portal_User_ID || ''))
+        : (updatedSections.appSubmission?.portalId !== undefined && updatedSections.appSubmission?.portalId !== ''
+          ? updatedSections.appSubmission.portalId
+          : (record.Application_submission_Portal_User_ID || ''));
+      const appPortalPwd = isCertification
+        ? (updatedSections.certFinalApp?.password || updatedSections.certFinalApp?.portalPassword || (record.Application_submission_Portal_Password || ''))
+        : (updatedSections.appSubmission?.portalPassword !== undefined && updatedSections.appSubmission?.portalPassword !== ''
+          ? updatedSections.appSubmission.portalPassword
+          : (record.Application_submission_Portal_Password || ''));
+      const appSubmissionVal = isCertification
+        ? (updatedSections.certFinalApp?.registrationNumber !== undefined && updatedSections.certFinalApp?.registrationNumber !== ''
+          ? updatedSections.certFinalApp.registrationNumber
+          : (record.Application_registration_number || record.Application_submission || ''))
+        : (updatedSections.appSubmission?.registrationNumber !== undefined && updatedSections.appSubmission?.registrationNumber !== ''
+          ? updatedSections.appSubmission.registrationNumber
+          : (updatedSections.appSubmission?.applicationSubmission || record.Application_registration_number || record.Application_submission || ''));
 
       // Extract Director ITR & Company ITR fields for Zoho CRM mapping (Module: Operation_Internal_CRM)
       const isCompanyItrService = (record.Service_Scheme || '').toLowerCase().includes('company itr');
@@ -1625,6 +1663,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         Application_submission_status: llpStatus,
         Application_submission_File_Upload: llpFiles,
         Application_submission: appSubmissionVal,
+        Application_registration_number: appSubmissionVal,
         Application_submission_Portal_User_ID: appPortalId,
         Application_submission_Portal_Password: appPortalPwd,
         // Zoho CRM Mapped Fields (Module: Operation_Internal_CRM - Director ITR & Company ITR section)
@@ -1809,7 +1848,12 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
             name: isCertification ? llpName : (updatedSections.certFinalApp?.name || llpName),
             date: isCertification ? llpDate : (updatedSections.certFinalApp?.date || llpDate),
             status: isCertification ? llpStatus : (updatedSections.certFinalApp?.status || llpStatus),
-            files: isCertification ? llpFiles : (updatedSections.certFinalApp?.files || llpFiles)
+            files: isCertification ? llpFiles : (updatedSections.certFinalApp?.files || llpFiles),
+            id: isCertification ? (updatedSections.certFinalApp?.id || updatedSections.certFinalApp?.portalId || appPortalId) : (updatedSections.certFinalApp?.id || appPortalId),
+            portalId: isCertification ? (updatedSections.certFinalApp?.portalId || updatedSections.certFinalApp?.id || appPortalId) : (updatedSections.certFinalApp?.portalId || appPortalId),
+            password: isCertification ? (updatedSections.certFinalApp?.password || updatedSections.certFinalApp?.portalPassword || appPortalPwd) : (updatedSections.certFinalApp?.password || appPortalPwd),
+            portalPassword: isCertification ? (updatedSections.certFinalApp?.portalPassword || updatedSections.certFinalApp?.password || appPortalPwd) : (updatedSections.certFinalApp?.portalPassword || appPortalPwd),
+            registrationNumber: isCertification ? (updatedSections.certFinalApp?.registrationNumber || appSubmissionVal) : (updatedSections.certFinalApp?.registrationNumber || appSubmissionVal)
           },
           dprCreation: {
             ...(updatedSections.dprCreation || {}),
@@ -3267,8 +3311,115 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                   onChange={(k, v) => updateSection('fundingFinance', k, v)}
                 />
 
-                {/* 3. Application submission: [Name, Date, Status, File Upload, ID, Password, Registration number] */}
-                <SectionContainer title="Application submission" badge="Scheme Portal Filing">
+                {/* 3. Application submission (With Resubmission on Rejected): [Name, Date, Status, File Upload, ID, Password, Registration number] */}
+                <SectionContainer
+                  title="Application submission"
+                  badge="Resubmission on Rejection"
+                  badgeColor="bg-amber-100 text-amber-800 border-amber-200"
+                >
+                  {/* Previous Rejected Attempts History */}
+                  {Array.isArray(sections.appSubmissionHistory) && sections.appSubmissionHistory.length > 0 && (
+                    <div className="mb-4 space-y-3 p-3.5 bg-rose-50/50 rounded-2xl border border-rose-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                          <AlertTriangle size={13} className="text-rose-600" />
+                          <span>Previous Rejected Submissions / Resubmissions ({sections.appSubmissionHistory.length})</span>
+                        </span>
+                        <span className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">Editable Attempt History</span>
+                      </div>
+                      {sections.appSubmissionHistory.map((hist: any, hIdx: number) => (
+                        <div key={hIdx} className="p-3 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between border-b border-rose-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-gray-900">
+                                Attempt #{hist.attemptNumber || hIdx + 1}
+                              </span>
+                              <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-black rounded-md border border-rose-200">
+                                {hist.status || 'REJECTED'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeHistoryItem('appSubmissionHistory', hIdx)}
+                              className="text-gray-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
+                              title="Delete this attempt"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                            <StaffNameSelect
+                              label="Applicant / Executive Name"
+                              value={hist.name || ''}
+                              onChange={(val) => updateHistoryItem('appSubmissionHistory', hIdx, 'name', val)}
+                              placeholder="Select Operations staff..."
+                            />
+                            <DateInput
+                              label="Submission Date"
+                              value={hist.date || ''}
+                              onChange={(val) => updateHistoryItem('appSubmissionHistory', hIdx, 'date', val)}
+                            />
+                            <SelectInput
+                              label="Status"
+                              value={(() => {
+                                const s = hist.status;
+                                if (!s || s === 'In-process' || s === 'In process') return 'Pending';
+                                const match = FUNDING_APP_SUBMISSION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                                return match || 'Rejected';
+                              })()}
+                              options={FUNDING_APP_SUBMISSION_STATUSES}
+                              onChange={(val) => updateHistoryItem('appSubmissionHistory', hIdx, 'status', val)}
+                            />
+                            <TextInput
+                              label="Portal User ID"
+                              value={hist.portalId || hist.id || ''}
+                              onChange={(val) => {
+                                updateHistoryItem('appSubmissionHistory', hIdx, 'portalId', val);
+                                updateHistoryItem('appSubmissionHistory', hIdx, 'id', val);
+                              }}
+                              placeholder="e.g. MSME-PORTAL-1029"
+                            />
+                            <TextInput
+                              label="Portal Password"
+                              type="password"
+                              value={hist.portalPassword || hist.password || ''}
+                              onChange={(val) => {
+                                updateHistoryItem('appSubmissionHistory', hIdx, 'portalPassword', val);
+                                updateHistoryItem('appSubmissionHistory', hIdx, 'password', val);
+                              }}
+                              placeholder="••••••••"
+                            />
+                            <TextInput
+                              label="Registration Number / ACK"
+                              value={hist.registrationNumber || ''}
+                              onChange={(val) => updateHistoryItem('appSubmissionHistory', hIdx, 'registrationNumber', val)}
+                              placeholder="e.g. ACK-2026-X992"
+                            />
+                          </div>
+
+                          <div className="mt-2">
+                            <FileUploadWidget
+                              label="File Upload (Attempt Files)"
+                              files={hist.files || []}
+                              onChange={(files) => updateHistoryItem('appSubmissionHistory', hIdx, 'files', files)}
+                              multiple={true}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {Array.isArray(sections.appSubmissionHistory) && sections.appSubmissionHistory.length > 0 && (
+                    <div className="pt-1 pb-1">
+                      <span className="text-[11px] font-black uppercase text-amber-900 tracking-wider flex items-center gap-1.5">
+                        <RefreshCw size={12} className="text-amber-600" />
+                        <span>Active Resubmission Round (Round {sections.appSubmissionHistory.length + 1})</span>
+                      </span>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     <StaffNameSelect
                       label="Applicant / Executive Name"
@@ -3301,7 +3452,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                           label="Status"
                           value={currentAppStatus}
                           options={safeAppOptions}
-                          onChange={(val) => updateSection('appSubmission', 'status', val)}
+                          onChange={(val) => handleRepeatableSectionStatusChange('appSubmission', 'appSubmissionHistory', val)}
                         />
                       );
                     })()}
@@ -3340,21 +3491,291 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
             {/* 4. TEAM TYPE: CERTIFICATION */}
             {teamType === 'Certification' && (
               <div className="space-y-4">
-                {/* 1. Doc collection / DSC */}
-                <StandardSection
+                {/* 1. Doc collection / DSC (With Resubmission on Rejected) */}
+                <SectionContainer
                   title="Doc collection / DSC"
-                  data={sections.certDocCollection || {}}
-                  statusOptions={CERT_DOC_COLLECTION_STATUSES}
-                  onChange={(k, v) => updateSection('certDocCollection', k, v)}
-                />
+                  badge="Resubmission on Rejection"
+                  badgeColor="bg-amber-100 text-amber-800 border-amber-200"
+                >
+                  {/* Previous Rejected Attempts History */}
+                  {Array.isArray(sections.certDocCollectionHistory) && sections.certDocCollectionHistory.length > 0 && (
+                    <div className="mb-4 space-y-3 p-3.5 bg-rose-50/50 rounded-2xl border border-rose-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                          <AlertTriangle size={13} className="text-rose-600" />
+                          <span>Previous Rejected Submissions / Resubmissions ({sections.certDocCollectionHistory.length})</span>
+                        </span>
+                        <span className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">Editable Attempt History</span>
+                      </div>
+                      {sections.certDocCollectionHistory.map((hist: any, hIdx: number) => (
+                        <div key={hIdx} className="p-3 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between border-b border-rose-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-gray-900">
+                                Attempt #{hist.attemptNumber || hIdx + 1}
+                              </span>
+                              <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-black rounded-md border border-rose-200">
+                                {hist.status || 'REJECTED'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeHistoryItem('certDocCollectionHistory', hIdx)}
+                              className="text-gray-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
+                              title="Delete this attempt"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
 
-                {/* 2. Final Application */}
-                <StandardSection
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <StaffNameSelect
+                              label="Name"
+                              value={hist.name || ''}
+                              onChange={(val) => updateHistoryItem('certDocCollectionHistory', hIdx, 'name', val)}
+                              placeholder="Select Operations staff..."
+                            />
+                            <DateInput
+                              label="Date"
+                              value={hist.date || ''}
+                              onChange={(val) => updateHistoryItem('certDocCollectionHistory', hIdx, 'date', val)}
+                            />
+                            <SelectInput
+                              label="Status"
+                              value={(() => {
+                                const s = hist.status;
+                                if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                                const match = CERT_DOC_COLLECTION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                                return match || 'Rejected';
+                              })()}
+                              options={CERT_DOC_COLLECTION_STATUSES}
+                              onChange={(val) => updateHistoryItem('certDocCollectionHistory', hIdx, 'status', val)}
+                            />
+                          </div>
+
+                          <div className="mt-2">
+                            <FileUploadWidget
+                              label="File Upload (Attempt Files)"
+                              files={hist.files || []}
+                              onChange={(files) => updateHistoryItem('certDocCollectionHistory', hIdx, 'files', files)}
+                              multiple={true}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {Array.isArray(sections.certDocCollectionHistory) && sections.certDocCollectionHistory.length > 0 && (
+                    <div className="pt-1 pb-1">
+                      <span className="text-[11px] font-black uppercase text-amber-900 tracking-wider flex items-center gap-1.5">
+                        <RefreshCw size={12} className="text-amber-600" />
+                        <span>Active Resubmission Round (Round {sections.certDocCollectionHistory.length + 1})</span>
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <StaffNameSelect
+                      label="Name"
+                      value={sections.certDocCollection?.name || ''}
+                      onChange={(val) => updateSection('certDocCollection', 'name', val)}
+                      placeholder="Select Operations staff..."
+                    />
+                    <DateInput
+                      label="Date"
+                      value={sections.certDocCollection?.date || ''}
+                      onChange={(val) => updateSection('certDocCollection', 'date', val)}
+                    />
+                    <SelectInput
+                      label="Status"
+                      value={(() => {
+                        const s = sections.certDocCollection?.status;
+                        if (!s || s === 'In-process' || s === 'In process') return 'In process';
+                        const match = CERT_DOC_COLLECTION_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                        return match || 'In process';
+                      })()}
+                      options={CERT_DOC_COLLECTION_STATUSES}
+                      onChange={(val) => handleRepeatableSectionStatusChange('certDocCollection', 'certDocCollectionHistory', val)}
+                    />
+                  </div>
+                  <div className="mt-3">
+                    <FileUploadWidget
+                      label="File Upload"
+                      files={sections.certDocCollection?.files || []}
+                      onChange={(files) => updateSection('certDocCollection', 'files', files)}
+                      multiple={true}
+                    />
+                  </div>
+                </SectionContainer>
+
+                {/* 2. Final Application (With Resubmission on Rejected) */}
+                <SectionContainer
                   title="Final Application"
-                  data={sections.certFinalApp || {}}
-                  statusOptions={CERT_FINAL_APP_STATUSES}
-                  onChange={(k, v) => updateSection('certFinalApp', k, v)}
-                />
+                  badge="Resubmission on Rejection"
+                  badgeColor="bg-amber-100 text-amber-800 border-amber-200"
+                >
+                  {/* Previous Rejected Attempts History */}
+                  {Array.isArray(sections.certFinalAppHistory) && sections.certFinalAppHistory.length > 0 && (
+                    <div className="mb-4 space-y-3 p-3.5 bg-rose-50/50 rounded-2xl border border-rose-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-800 flex items-center gap-1.5">
+                          <AlertTriangle size={13} className="text-rose-600" />
+                          <span>Previous Rejected Submissions / Resubmissions ({sections.certFinalAppHistory.length})</span>
+                        </span>
+                        <span className="text-[10px] text-rose-600 font-bold uppercase tracking-wider">Editable Attempt History</span>
+                      </div>
+                      {sections.certFinalAppHistory.map((hist: any, hIdx: number) => (
+                        <div key={hIdx} className="p-3 bg-white rounded-xl border border-rose-100 shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between border-b border-rose-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-gray-900">
+                                Attempt #{hist.attemptNumber || hIdx + 1}
+                              </span>
+                              <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-black rounded-md border border-rose-200">
+                                {hist.status || 'REJECTED'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeHistoryItem('certFinalAppHistory', hIdx)}
+                              className="text-gray-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
+                              title="Delete this attempt"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <StaffNameSelect
+                              label="Name"
+                              value={hist.name || ''}
+                              onChange={(val) => updateHistoryItem('certFinalAppHistory', hIdx, 'name', val)}
+                              placeholder="Select Operations staff..."
+                            />
+                            <DateInput
+                              label="Date"
+                              value={hist.date || ''}
+                              onChange={(val) => updateHistoryItem('certFinalAppHistory', hIdx, 'date', val)}
+                            />
+                            <SelectInput
+                              label="Status"
+                              value={(() => {
+                                const s = hist.status;
+                                if (!s || s === 'In-process' || s === 'In process') return 'Pending';
+                                const match = CERT_FINAL_APP_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                                return match || 'Rejected';
+                              })()}
+                              options={CERT_FINAL_APP_STATUSES}
+                              onChange={(val) => updateHistoryItem('certFinalAppHistory', hIdx, 'status', val)}
+                            />
+                            <TextInput
+                              label="ID"
+                              value={hist.id || hist.portalId || ''}
+                              onChange={(val) => {
+                                updateHistoryItem('certFinalAppHistory', hIdx, 'id', val);
+                                updateHistoryItem('certFinalAppHistory', hIdx, 'portalId', val);
+                              }}
+                              placeholder="Enter ID"
+                            />
+                            <TextInput
+                              label="Password"
+                              type="password"
+                              value={hist.password || hist.portalPassword || ''}
+                              onChange={(val) => {
+                                updateHistoryItem('certFinalAppHistory', hIdx, 'password', val);
+                                updateHistoryItem('certFinalAppHistory', hIdx, 'portalPassword', val);
+                              }}
+                              placeholder="••••••••"
+                            />
+                            <TextInput
+                              label="Registration Number"
+                              value={hist.registrationNumber || ''}
+                              onChange={(val) => updateHistoryItem('certFinalAppHistory', hIdx, 'registrationNumber', val)}
+                              placeholder="Enter registration number"
+                            />
+                          </div>
+
+                          <div className="mt-2">
+                            <FileUploadWidget
+                              label="File Upload (Attempt Files)"
+                              files={hist.files || []}
+                              onChange={(files) => updateHistoryItem('certFinalAppHistory', hIdx, 'files', files)}
+                              multiple={true}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {Array.isArray(sections.certFinalAppHistory) && sections.certFinalAppHistory.length > 0 && (
+                    <div className="pt-1 pb-1">
+                      <span className="text-[11px] font-black uppercase text-amber-900 tracking-wider flex items-center gap-1.5">
+                        <RefreshCw size={12} className="text-amber-600" />
+                        <span>Active Resubmission Round (Round {sections.certFinalAppHistory.length + 1})</span>
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <StaffNameSelect
+                      label="Name"
+                      value={sections.certFinalApp?.name || ''}
+                      onChange={(val) => updateSection('certFinalApp', 'name', val)}
+                      placeholder="Select Operations staff..."
+                    />
+                    <DateInput
+                      label="Date"
+                      value={sections.certFinalApp?.date || ''}
+                      onChange={(val) => updateSection('certFinalApp', 'date', val)}
+                    />
+                    <SelectInput
+                      label="Status"
+                      value={(() => {
+                        const s = sections.certFinalApp?.status;
+                        if (!s || s === 'In-process' || s === 'In process') return 'Pending';
+                        const match = CERT_FINAL_APP_STATUSES.find(opt => opt.toLowerCase() === s.toLowerCase());
+                        return match || 'Pending';
+                      })()}
+                      options={CERT_FINAL_APP_STATUSES}
+                      onChange={(val) => handleRepeatableSectionStatusChange('certFinalApp', 'certFinalAppHistory', val)}
+                    />
+                    <TextInput
+                      label="ID"
+                      value={sections.certFinalApp?.id || sections.certFinalApp?.portalId || ''}
+                      onChange={(val) => {
+                        updateSection('certFinalApp', 'id', val);
+                        updateSection('certFinalApp', 'portalId', val);
+                      }}
+                      placeholder="Enter ID / Portal User ID"
+                    />
+                    <TextInput
+                      label="Password"
+                      type="password"
+                      value={sections.certFinalApp?.password || sections.certFinalApp?.portalPassword || ''}
+                      onChange={(val) => {
+                        updateSection('certFinalApp', 'password', val);
+                        updateSection('certFinalApp', 'portalPassword', val);
+                      }}
+                      placeholder="••••••••"
+                    />
+                    <TextInput
+                      label="Registration Number"
+                      value={sections.certFinalApp?.registrationNumber || ''}
+                      onChange={(val) => updateSection('certFinalApp', 'registrationNumber', val)}
+                      placeholder="e.g. REG-2026-X992"
+                    />
+                  </div>
+                  <div className="mt-3">
+                    <FileUploadWidget
+                      label="File Upload"
+                      files={sections.certFinalApp?.files || []}
+                      onChange={(files) => updateSection('certFinalApp', 'files', files)}
+                      multiple={true}
+                    />
+                  </div>
+                </SectionContainer>
               </div>
             )}
 
@@ -3483,6 +3904,7 @@ interface StandardSectionProps {
   data: any;
   onChange: (field: string, value: any) => void;
   statusOptions?: string[];
+  children?: React.ReactNode;
 }
 
 const StandardSection: React.FC<StandardSectionProps> = ({
@@ -3491,7 +3913,8 @@ const StandardSection: React.FC<StandardSectionProps> = ({
   badgeColor,
   data,
   onChange,
-  statusOptions = STANDARD_EXECUTION_STATUSES
+  statusOptions = STANDARD_EXECUTION_STATUSES,
+  children
 }) => {
   const currentStatus = (() => {
     if (!data.status || data.status === 'In-process' || data.status === 'In process') {
@@ -3529,6 +3952,7 @@ const StandardSection: React.FC<StandardSectionProps> = ({
           options={safeOptions}
           onChange={(val) => onChange('status', val)}
         />
+        {children}
       </div>
       <div className="mt-3">
         <FileUploadWidget
@@ -3556,18 +3980,37 @@ const TextInput: React.FC<TextInputProps> = ({
   onChange,
   placeholder = '',
   type = 'text'
-}) => (
-  <div>
-    <label className="text-[11px] font-bold text-gray-700 block mb-1">{label}</label>
-    <input
-      type={type}
-      value={value}
-      placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-1.5 bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 hover:border-gray-300 focus:border-orange-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs"
-    />
-  </div>
-);
+}) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === 'password';
+
+  return (
+    <div>
+      <label className="text-[11px] font-bold text-gray-700 block mb-1">{label}</label>
+      <div className="relative">
+        <input
+          type={isPassword ? (showPassword ? 'text' : 'password') : type}
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          className={`w-full px-3 py-1.5 bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 hover:border-gray-300 focus:border-orange-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all shadow-2xs ${
+            isPassword ? 'pr-8' : ''
+          }`}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+            title={showPassword ? 'Hide password' : 'Show password'}
+          >
+            {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 interface DateInputProps {
   label: string;

@@ -130,6 +130,7 @@ export interface InternalOperationRecord {
   Application_submission_status?: string;
   Application_submission_File_Upload?: any;
   Application_submission?: string;
+  Application_registration_number?: string;
   Application_submission_Portal_User_ID?: string;
   Application_submission_Portal_Password?: string;
 
@@ -386,12 +387,15 @@ export const CERT_DOC_COLLECTION_STATUSES = [
   'In process',
   'In Review',
   'Pending',
-  'Approved'
+  'Approved',
+  'Rejected'
 ];
 
 export const CERT_FINAL_APP_STATUSES = [
   'Pending',
-  'Approved'
+  'In process',
+  'Approved',
+  'Rejected'
 ];
 
 export const FUNDING_DPR_STATUSES = [
@@ -410,7 +414,8 @@ export const FUNDING_FINANCE_STATUSES = [
 
 export const FUNDING_APP_SUBMISSION_STATUSES = [
   'Pending',
-  'Submitted'
+  'Submitted',
+  'Rejected'
 ];
 
 export const DIRECTOR_ITR_STATUSES = [

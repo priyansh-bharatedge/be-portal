@@ -353,7 +353,8 @@ export function generateServiceAllocationsForDeal(
         Application_submission_Submission_Date: existingRecord.Application_submission_Submission_Date || '',
         Application_submission_status: existingRecord.Application_submission_status || '',
         Application_submission_File_Upload: existingRecord.Application_submission_File_Upload || [],
-        Application_submission: existingRecord.Application_submission || '',
+        Application_submission: existingRecord.Application_submission || existingRecord.Application_registration_number || '',
+        Application_registration_number: existingRecord.Application_registration_number || existingRecord.Application_submission || '',
         Application_submission_Portal_User_ID: existingRecord.Application_submission_Portal_User_ID || '',
         Application_submission_Portal_Password: existingRecord.Application_submission_Portal_Password || '',
         Director_ITR_Doc_collection: existingRecord.Director_ITR_Doc_collection || '',
@@ -449,6 +450,7 @@ export function generateServiceAllocationsForDeal(
         Application_submission_status: 'In process',
         Application_submission_File_Upload: [],
         Application_submission: '',
+        Application_registration_number: '',
         Application_submission_Portal_User_ID: '',
         Application_submission_Portal_Password: '',
         Director_ITR_Doc_collection: 'Pending',
@@ -802,9 +804,9 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   const llpDate = r.Application_submission_Submission_Date || (isCertificationRec ? certAppObj.date : isFundingRec ? appSubObj.date : llpObj.date) || certAppObj.date || appSubObj.date || llpObj.date || '';
   const llpStatus = r.Application_submission_status || (isCertificationRec ? certAppObj.status : isFundingRec ? appSubObj.status : llpObj.status) || certAppObj.status || appSubObj.status || llpObj.status || '';
   const llpFiles = normalizeFileList(r.Application_submission_File_Upload || (isCertificationRec ? certAppObj.files : isFundingRec ? appSubObj.files : llpObj.files) || certAppObj.files || appSubObj.files || llpObj.files || []);
-  const appSubVal = r.Application_submission || appSubObj.registrationNumber || appSubObj.applicationSubmission || '';
-  const appPortalId = r.Application_submission_Portal_User_ID || appSubObj.portalId || '';
-  const appPortalPwd = r.Application_submission_Portal_Password || appSubObj.portalPassword || '';
+  const appSubVal = r.Application_registration_number || r.Application_submission || (isCertificationRec ? certAppObj.registrationNumber : appSubObj.registrationNumber) || appSubObj.registrationNumber || certAppObj.registrationNumber || appSubObj.applicationSubmission || '';
+  const appPortalId = r.Application_submission_Portal_User_ID || (isCertificationRec ? (certAppObj.portalId || certAppObj.id) : appSubObj.portalId) || appSubObj.portalId || certAppObj.portalId || certAppObj.id || '';
+  const appPortalPwd = r.Application_submission_Portal_Password || (isCertificationRec ? (certAppObj.portalPassword || certAppObj.password) : appSubObj.portalPassword) || appSubObj.portalPassword || certAppObj.portalPassword || certAppObj.password || '';
 
   if (!sectionsData.llpAgreement) sectionsData.llpAgreement = {};
   if (llpName && !sectionsData.llpAgreement.name) sectionsData.llpAgreement.name = llpName;
@@ -831,6 +833,17 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
   if (llpStatus && !sectionsData.certFinalApp.status) sectionsData.certFinalApp.status = llpStatus;
   if (llpFiles && (!sectionsData.certFinalApp.files || sectionsData.certFinalApp.files.length === 0)) {
     sectionsData.certFinalApp.files = llpFiles;
+  }
+  if (appSubVal && !sectionsData.certFinalApp.registrationNumber) {
+    sectionsData.certFinalApp.registrationNumber = appSubVal;
+  }
+  if (appPortalId && !sectionsData.certFinalApp.portalId && !sectionsData.certFinalApp.id) {
+    sectionsData.certFinalApp.portalId = appPortalId;
+    sectionsData.certFinalApp.id = appPortalId;
+  }
+  if (appPortalPwd && !sectionsData.certFinalApp.portalPassword && !sectionsData.certFinalApp.password) {
+    sectionsData.certFinalApp.portalPassword = appPortalPwd;
+    sectionsData.certFinalApp.password = appPortalPwd;
   }
 
   // Map Director ITR & Company ITR fields
@@ -958,6 +971,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
     Application_submission_status: llpStatus,
     Application_submission_File_Upload: llpFiles,
     Application_submission: appSubVal,
+    Application_registration_number: appSubVal,
     Application_submission_Portal_User_ID: appPortalId,
     Application_submission_Portal_Password: appPortalPwd,
     Director_ITR_Doc_collection: itrDocCollection,
@@ -1139,9 +1153,9 @@ export async function saveInternalOperation(record: InternalOperationRecord): Pr
   const llpDate = record.Application_submission_Submission_Date || activeLlpSave?.date || fallbackLlpSave?.date || '';
   const llpStatus = record.Application_submission_status || activeLlpSave?.status || fallbackLlpSave?.status || '';
   const llpFiles = record.Application_submission_File_Upload || activeLlpSave?.files || fallbackLlpSave?.files || [];
-  const appSubVal = record.Application_submission || record.sectionsData?.appSubmission?.registrationNumber || record.sectionsData?.appSubmission?.applicationSubmission || '';
-  const appPortalId = record.Application_submission_Portal_User_ID || record.sectionsData?.appSubmission?.portalId || '';
-  const appPortalPwd = record.Application_submission_Portal_Password || record.sectionsData?.appSubmission?.portalPassword || '';
+  const appSubVal = record.Application_registration_number || record.Application_submission || (isCertification ? record.sectionsData?.certFinalApp?.registrationNumber : record.sectionsData?.appSubmission?.registrationNumber) || record.sectionsData?.appSubmission?.registrationNumber || record.sectionsData?.certFinalApp?.registrationNumber || record.sectionsData?.appSubmission?.applicationSubmission || '';
+  const appPortalId = record.Application_submission_Portal_User_ID || (isCertification ? (record.sectionsData?.certFinalApp?.portalId || record.sectionsData?.certFinalApp?.id) : record.sectionsData?.appSubmission?.portalId) || record.sectionsData?.appSubmission?.portalId || record.sectionsData?.certFinalApp?.portalId || record.sectionsData?.certFinalApp?.id || '';
+  const appPortalPwd = record.Application_submission_Portal_Password || (isCertification ? (record.sectionsData?.certFinalApp?.portalPassword || record.sectionsData?.certFinalApp?.password) : record.sectionsData?.appSubmission?.portalPassword) || record.sectionsData?.appSubmission?.portalPassword || record.sectionsData?.certFinalApp?.portalPassword || record.sectionsData?.certFinalApp?.password || '';
 
   // Extract Director ITR & Company ITR fields for Zoho CRM mapping
   const isCompanyItrServiceSave = (record.Service_Scheme || '').toLowerCase().includes('company itr');
@@ -1258,6 +1272,7 @@ export async function saveInternalOperation(record: InternalOperationRecord): Pr
     Application_submission_status: llpStatus,
     Application_submission_File_Upload: llpFiles,
     Application_submission: appSubVal,
+    Application_registration_number: appSubVal,
     Application_submission_Portal_User_ID: appPortalId,
     Application_submission_Portal_Password: appPortalPwd,
     Director_ITR_Doc_collection: itrDocCollection,

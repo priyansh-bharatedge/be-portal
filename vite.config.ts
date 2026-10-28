@@ -3042,15 +3042,23 @@ function zohoApiPlugin(): Plugin {
               const llpStatus = r.Application_submission_status !== undefined && r.Application_submission_status !== ''
                 ? r.Application_submission_status
                 : (activeLlp?.status || fallbackLlp?.status || '');
-              const appSubVal = r.Application_submission !== undefined && r.Application_submission !== ''
-                ? r.Application_submission
-                : (r.sectionsData?.appSubmission?.registrationNumber || r.sectionsData?.appSubmission?.applicationSubmission || '');
+              const appSubVal = (r.Application_registration_number !== undefined && r.Application_registration_number !== '')
+                ? r.Application_registration_number
+                : (r.Application_submission !== undefined && r.Application_submission !== '')
+                  ? r.Application_submission
+                  : (isCertificationLlp
+                    ? (r.sectionsData?.certFinalApp?.registrationNumber || '')
+                    : (r.sectionsData?.appSubmission?.registrationNumber || r.sectionsData?.appSubmission?.applicationSubmission || ''));
               const appPortalId = r.Application_submission_Portal_User_ID !== undefined && r.Application_submission_Portal_User_ID !== ''
                 ? r.Application_submission_Portal_User_ID
-                : (r.sectionsData?.appSubmission?.portalId || '');
+                : (isCertificationLlp
+                  ? (r.sectionsData?.certFinalApp?.id || r.sectionsData?.certFinalApp?.portalId || '')
+                  : (r.sectionsData?.appSubmission?.portalId || ''));
               const appPortalPwd = r.Application_submission_Portal_Password !== undefined && r.Application_submission_Portal_Password !== ''
                 ? r.Application_submission_Portal_Password
-                : (r.sectionsData?.appSubmission?.portalPassword || '');
+                : (isCertificationLlp
+                  ? (r.sectionsData?.certFinalApp?.password || r.sectionsData?.certFinalApp?.portalPassword || '')
+                  : (r.sectionsData?.appSubmission?.portalPassword || ''));
 
               const isCompanyItrService = (r.Service_Scheme || '').toLowerCase().includes('company itr');
               const primaryItr = isCompanyItrService ? r.sectionsData?.companyItr : r.sectionsData?.directorItr;
@@ -3180,11 +3188,11 @@ function zohoApiPlugin(): Plugin {
                 Finance_Projected_Financials_name: form3Name || '',
                 ...(form3Date ? { Finance_Projected_Financials_Date: form3Date } : {}),
                 ...(form3Status ? { Finance_Projected_Financials_Status: form3Status } : {}),
-                // Mapped LLP Agreement / Application Submission fields for Zoho CRM (API Names: Application_submission_name, Application_submission_Submission_Date, Application_submission_status, Application_submission, Application_submission_Portal_User_ID, Application_submission_Portal_Password)
+                // Mapped LLP Agreement / Application Submission fields for Zoho CRM (API Names: Application_submission_name, Application_submission_Submission_Date, Application_submission_status, Application_registration_number, Application_submission, Application_submission_Portal_User_ID, Application_submission_Portal_Password)
                 Application_submission_name: llpName || '',
                 ...(llpDate ? { Application_submission_Submission_Date: llpDate } : {}),
                 ...(llpStatus ? { Application_submission_status: llpStatus } : {}),
-                ...(appSubVal ? { Application_submission: appSubVal } : {}),
+                ...(appSubVal ? { Application_submission: appSubVal, Application_registration_number: appSubVal } : {}),
                 ...(appPortalId ? { Application_submission_Portal_User_ID: appPortalId } : {}),
                 ...(appPortalPwd ? { Application_submission_Portal_Password: appPortalPwd } : {}),
                 // Mapped Director ITR & Company ITR fields for Zoho CRM (API Names: Director_ITR_Company_ITR_name, Director_ITR_Company_ITR_Date, Director_ITR_Company_ITR_status, Director_ITR_Doc_collection, Director_ITR_File_required)
@@ -3460,9 +3468,9 @@ function zohoApiPlugin(): Plugin {
               const llpDate = r.Application_submission_Submission_Date || (isCertificationRec ? certAppObj.date : isFundingRec ? appSubObj.date : llpObj.date) || certAppObj.date || appSubObj.date || llpObj.date || storedEntry?.Application_submission_Submission_Date || '';
               const llpStatus = r.Application_submission_status || (isCertificationRec ? certAppObj.status : isFundingRec ? appSubObj.status : llpObj.status) || certAppObj.status || appSubObj.status || llpObj.status || storedEntry?.Application_submission_status || '';
               const llpFiles = mergeFiles(r.Application_submission_File_Upload, (isCertificationRec ? certAppObj.files : isFundingRec ? appSubObj.files : llpObj.files) || certAppObj.files || appSubObj.files || llpObj.files, storedEntry?.Application_submission_File_Upload);
-              const appSubVal = r.Application_submission || appSubObj.registrationNumber || appSubObj.applicationSubmission || storedEntry?.Application_submission || '';
-              const appPortalId = r.Application_submission_Portal_User_ID || appSubObj.portalId || storedEntry?.Application_submission_Portal_User_ID || '';
-              const appPortalPwd = r.Application_submission_Portal_Password || appSubObj.portalPassword || storedEntry?.Application_submission_Portal_Password || '';
+              const appSubVal = r.Application_registration_number || r.Application_submission || (isCertificationRec ? certAppObj.registrationNumber : appSubObj.registrationNumber) || appSubObj.registrationNumber || certAppObj.registrationNumber || appSubObj.applicationSubmission || storedEntry?.Application_registration_number || storedEntry?.Application_submission || '';
+              const appPortalId = r.Application_submission_Portal_User_ID || (isCertificationRec ? (certAppObj.portalId || certAppObj.id) : appSubObj.portalId) || appSubObj.portalId || certAppObj.portalId || certAppObj.id || storedEntry?.Application_submission_Portal_User_ID || '';
+              const appPortalPwd = r.Application_submission_Portal_Password || (isCertificationRec ? (certAppObj.portalPassword || certAppObj.password) : appSubObj.portalPassword) || appSubObj.portalPassword || certAppObj.portalPassword || certAppObj.password || storedEntry?.Application_submission_Portal_Password || '';
 
               if (!sectionsData.llpAgreement) sectionsData.llpAgreement = {};
               if (llpName && !sectionsData.llpAgreement.name) sectionsData.llpAgreement.name = llpName;
@@ -3484,6 +3492,15 @@ function zohoApiPlugin(): Plugin {
               if (llpDate && !sectionsData.certFinalApp.date) sectionsData.certFinalApp.date = llpDate;
               if (llpStatus && !sectionsData.certFinalApp.status) sectionsData.certFinalApp.status = llpStatus;
               sectionsData.certFinalApp.files = llpFiles;
+              if (appSubVal && !sectionsData.certFinalApp.registrationNumber) sectionsData.certFinalApp.registrationNumber = appSubVal;
+              if (appPortalId && !sectionsData.certFinalApp.portalId && !sectionsData.certFinalApp.id) {
+                sectionsData.certFinalApp.portalId = appPortalId;
+                sectionsData.certFinalApp.id = appPortalId;
+              }
+              if (appPortalPwd && !sectionsData.certFinalApp.portalPassword && !sectionsData.certFinalApp.password) {
+                sectionsData.certFinalApp.portalPassword = appPortalPwd;
+                sectionsData.certFinalApp.password = appPortalPwd;
+              }
 
               // Map Director ITR & Company ITR fields
               const isCompanyItrService = (r.Service_Scheme || '').toLowerCase().includes('company itr');
@@ -3615,6 +3632,7 @@ function zohoApiPlugin(): Plugin {
                 Application_submission_status: llpStatus,
                 Application_submission_File_Upload: llpFiles,
                 Application_submission: appSubVal,
+                Application_registration_number: appSubVal,
                 Application_submission_Portal_User_ID: appPortalId,
                 Application_submission_Portal_Password: appPortalPwd,
                 Director_ITR_Doc_collection: itrDocCollection,
@@ -3640,6 +3658,7 @@ function zohoApiPlugin(): Plugin {
               'Board_Resolution_name', 'Board_Resolution_Date', 'Board_Resolution_status', 'Board_Resolution_File_Upload',
               'Share_Certificate_name', 'Share_Certificate_Date', 'Share_Certificate_status', 'Share_Certificate_File_Upload',
               'Application_submission_name', 'Application_submission_Submission_Date', 'Application_submission_status', 'Application_submission_File_Upload',
+              'Application_registration_number', 'Application_submission', 'Application_submission_Portal_User_ID', 'Application_submission_Portal_Password',
               'Director_ITR_Company_ITR_name', 'Director_ITR_Company_ITR_status', 'Director_ITR_Company_ITR_File_Upload',
               'DPR_Pitch_deck_creation_name', 'DPR_Pitch_deck_creation_File_Upload',
               'ADT_1_File_Upload', 'INC_20_A_File_Upload',
