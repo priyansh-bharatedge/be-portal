@@ -2405,8 +2405,22 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     if ((action === 'get-quotation' || (action === 'get-quotations' && (urlObj.searchParams.get('id') || urlObj.searchParams.get('quotation_id')))) && method === 'GET') {
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_MODULE_NAME || 'Quotations';
-      const quotationId = urlObj.searchParams.get('id') || urlObj.searchParams.get('quotation_id');
-      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${quotationId}`;
+      const rawQId = urlObj.searchParams.get('id') || urlObj.searchParams.get('quotation_id') || '';
+      let targetId = String(rawQId).trim();
+      const isNumeric = /^\d{15,}$/.test(targetId);
+      if (!isNumeric && targetId) {
+        try {
+          const sRes = await fetch(`${apiBase}/crm/v8/${moduleName}/search?criteria=(Name:contains:${encodeURIComponent(targetId)})`, {
+            method: 'GET',
+            headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+          });
+          const sData: any = await sRes.json();
+          if (sData.data && sData.data.length > 0 && sData.data[0].id) {
+            targetId = String(sData.data[0].id);
+          }
+        } catch (_) {}
+      }
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${targetId}`;
 
       let crmRes = await fetch(crmEndpoint, {
         method: 'GET',

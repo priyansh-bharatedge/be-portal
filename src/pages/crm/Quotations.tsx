@@ -24,37 +24,81 @@ interface DealService {
 }
 
 
-export function extractServicesFromQuotation(quotationOrZoho: any): DealService[] {
-  if (!quotationOrZoho) return [];
+function findServiceArray(obj: any): any[] | null {
+  if (!obj || typeof obj !== 'object') return null;
+  if (Array.isArray(obj)) {
+    if (obj.length > 0 && typeof obj[0] === 'object') return obj;
+    return null;
+  }
 
-  const candidateArrays = [
-    quotationOrZoho.servicesData,
-    quotationOrZoho.services,
-    quotationOrZoho.Services,
-    quotationOrZoho.Services_And_Pricing,
-    quotationOrZoho.services_and_pricing,
-    quotationOrZoho.formData?.servicesData,
-    quotationOrZoho.formData?.services,
-    quotationOrZoho.formData?.Services_And_Pricing,
-    quotationOrZoho.rawZohoDeal?.Services_And_Pricing,
-    quotationOrZoho.rawZohoDeal?.Services_and_Pricing,
-    quotationOrZoho.rawZohoDeal?.Services,
-    quotationOrZoho.rawZohoDeal?.Subform_1,
+  const knownKeys = [
+    'servicesData',
+    'services',
+    'Services',
+    'Services_And_Pricing',
+    'services_and_pricing',
+    'Services_and_Pricing',
+    'Subform_1',
+    'subform_1',
+    'Subform_2',
+    'Subform',
+    'subform',
+    'Quoted_Items',
+    'Product_Details',
+    'Service_Details',
+    'Quotation_Services'
   ];
 
-  let rawList: any[] = [];
-  for (const arr of candidateArrays) {
-    if (Array.isArray(arr) && arr.length > 0) {
-      rawList = arr;
-      break;
+  for (const k of knownKeys) {
+    if (Array.isArray(obj[k]) && obj[k].length > 0) return obj[k];
+  }
+
+  if (obj.formData) {
+    const found = findServiceArray(obj.formData);
+    if (found) return found;
+  }
+  if (obj.rawZohoDeal) {
+    const found = findServiceArray(obj.rawZohoDeal);
+    if (found) return found;
+  }
+  if (Array.isArray(obj.data) && obj.data.length > 0) {
+    for (const d of obj.data) {
+      const found = findServiceArray(d);
+      if (found) return found;
+    }
+  } else if (obj.data && typeof obj.data === 'object') {
+    const found = findServiceArray(obj.data);
+    if (found) return found;
+  }
+
+  // Scan all keys in obj for any array of objects that looks like service items
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object' && val[0] !== null) {
+      const s = val[0];
+      if (
+        s.Service || s.service || s.Service_Name || s.service_name ||
+        s.name || s.Schemas || s.schema || s.Total || s.total ||
+        s.Base || s.base || s.amount || s.Price || s.price
+      ) {
+        return val;
+      }
     }
   }
 
-  if (rawList.length > 0) {
+  return null;
+}
+
+export function extractServicesFromQuotation(quotationOrZoho: any): DealService[] {
+  if (!quotationOrZoho) return [];
+
+  const rawList = findServiceArray(quotationOrZoho);
+
+  if (rawList && rawList.length > 0) {
     return rawList.map((s: any, idx: number) => {
       const name = (
         s.name ||
-        (typeof s.Service === 'object' ? s.Service?.name : s.Service) ||
+        (typeof s.Service === 'object' ? (s.Service?.name || s.Service?.Name) : s.Service) ||
         s.service ||
         s.Service_Name ||
         s.service_name ||
@@ -107,7 +151,13 @@ export function extractServicesFromQuotation(quotationOrZoho: any): DealService[
     quotationOrZoho.service ||
     quotationOrZoho.serviceName ||
     quotationOrZoho.Service_Name ||
+    quotationOrZoho.Service ||
+    quotationOrZoho.rawZohoDeal?.Service_Name ||
+    quotationOrZoho.rawZohoDeal?.Service ||
+    quotationOrZoho.formData?.service ||
+    quotationOrZoho.formData?.serviceName ||
     (typeof quotationOrZoho.Name === 'string' && quotationOrZoho.Name.includes(' - ') ? quotationOrZoho.Name.split(' - ')[0] : '') ||
+    (typeof quotationOrZoho.rawZohoDeal?.Name === 'string' && quotationOrZoho.rawZohoDeal.Name.includes(' - ') ? quotationOrZoho.rawZohoDeal.Name.split(' - ')[0] : '') ||
     ''
   ).trim();
 
@@ -256,7 +306,8 @@ export const Quotations = () => {
       setQuotationServices(initialServices);
 
       // Asynchronously fetch live full record with subforms from Zoho CRM if ID is present
-      const targetZohoId = deal.zohoId || (/^\d{15,}$/.test(String(deal.id)) ? String(deal.id) : null);
+      const storedItem = quotations.find((q: any) => q.id === deal.id || q.zohoId === deal.zohoId);
+      const targetZohoId = deal.zohoId || deal.rawZohoDeal?.id || storedItem?.zohoId || storedItem?.rawZohoDeal?.id || deal.id;
       if (targetZohoId) {
         fetchZohoQuotationById(targetZohoId).then(res => {
           if (res.success && res.data) {
