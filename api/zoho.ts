@@ -2401,7 +2401,37 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
-    // 2.5 Get Quotations
+    // 2.45 Get Single Quotation
+    if ((action === 'get-quotation' || (action === 'get-quotations' && (urlObj.searchParams.get('id') || urlObj.searchParams.get('quotation_id')))) && method === 'GET') {
+      let accessToken = await getAccessToken();
+      const moduleName = process.env.VITE_ZOHO_MODULE_NAME || 'Quotations';
+      const quotationId = urlObj.searchParams.get('id') || urlObj.searchParams.get('quotation_id');
+      const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${quotationId}`;
+
+      let crmRes = await fetch(crmEndpoint, {
+        method: 'GET',
+        headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+      });
+      let crmData: any = await crmRes.json();
+
+      if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
+        cachedToken = null;
+        accessToken = await getAccessToken();
+        crmRes = await fetch(crmEndpoint, {
+          method: 'GET',
+          headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+        });
+        crmData = await crmRes.json();
+      }
+
+      if (crmData.data) {
+        return sendJson(res, 200, { success: true, data: crmData.data });
+      } else {
+        return sendJson(res, 400, { success: false, message: crmData.message || 'Failed to fetch quotation from Zoho CRM', errorDetails: crmData });
+      }
+    }
+
+    // 2.5 Get Quotations (Single or List)
     if (action === 'get-quotations' && method === 'GET') {
       const moduleName = process.env.VITE_ZOHO_MODULE_NAME || 'Quotations';
       const quotationFields = 'id,Name,Email,Mobile_Number,Gender,City,State,Billing_address,Company_address,PAN_Card,Aadhaar_Card,Company_Name,Company_Type,Date_of_Incorporation,GST_Number,Company_PAN_Number,Sector,Industry,Subtotal,Total_GST,Grand_Total,Services_And_Pricing,Employee,Created_Time,Modified_Time,Owner,Created_By';

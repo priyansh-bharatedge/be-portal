@@ -925,6 +925,35 @@ export async function fetchZohoQuotations(options?: ZohoFetchOptions): Promise<Z
 }
 
 /**
+ * Fetches a single live quotation record from Zoho CRM by ID with all subforms.
+ */
+export async function fetchZohoQuotationById(quotationId: string): Promise<ZohoApiResponse> {
+  try {
+    const response = await fetch(`/api/zoho/get-quotation?id=${encodeURIComponent(quotationId)}`);
+    const result = await safeParseResponse(response);
+    if (response.ok && result.success) {
+      const dataObj = Array.isArray(result.data) ? result.data[0] : result.data;
+      return {
+        success: true,
+        data: dataObj,
+        message: 'Quotation record fetched successfully'
+      };
+    }
+    return {
+      success: false,
+      message: result.message || 'Failed to fetch quotation successfully',
+      errorDetails: result
+    };
+  } catch (error: any) {
+    console.error('[System] Client error fetching quotation by ID:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with server'
+    };
+  }
+}
+
+/**
  * Fetches all live employee records successfully Employee module with RBAC scoping.
  */
 export async function fetchZohoEmployees(options?: ZohoFetchOptions): Promise<ZohoFetchResult> {

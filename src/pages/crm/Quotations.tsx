@@ -4,7 +4,7 @@ import { Search, Plus, Filter, X, UploadCloud, ChevronRight, Check, Trash2, Chev
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { saveDocument } from '../../lib/db';
-import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal, fetchZohoQuotations, fetchZohoEmployees } from '../../services/zohoService';
+import { insertZohoQuotation, updateZohoQuotation, saveOrUpdateZohoQuotation, testZohoConnection, uploadZohoAttachment, deleteZohoRecord, saveOrUpdateZohoCompany, saveOrUpdateZohoClient, saveOrUpdateZohoDeal, fetchZohoQuotations, fetchZohoQuotationById, fetchZohoEmployees } from '../../services/zohoService';
 import { buildZohoRbacCriteria, getAllEmployeesList, filterRecordsByRbac, parseAnyDateToMs } from '../../services/zohoRbacService';
 import { isSubordinateOfTL, mapZohoRecordToEmployee, isRecordOwnedByTL, getRecordSubordinateMember, isRecordOwnedBySubordinate } from '../../utils/employeeUtils';
 import { downloadQuotationPDF, downloadQuotationHTML, printQuotation, generateQuotationPDFBlob } from '../../utils/quotationTemplate';
@@ -21,6 +21,130 @@ interface DealService {
   remarks?: string;
   amountAfterDisbursement?: string;
   successFees?: string;
+}
+
+
+export function extractServicesFromQuotation(quotationOrZoho: any): DealService[] {
+  if (!quotationOrZoho) return [];
+
+  const candidateArrays = [
+    quotationOrZoho.servicesData,
+    quotationOrZoho.services,
+    quotationOrZoho.Services,
+    quotationOrZoho.Services_And_Pricing,
+    quotationOrZoho.services_and_pricing,
+    quotationOrZoho.formData?.servicesData,
+    quotationOrZoho.formData?.services,
+    quotationOrZoho.formData?.Services_And_Pricing,
+    quotationOrZoho.rawZohoDeal?.Services_And_Pricing,
+    quotationOrZoho.rawZohoDeal?.Services_and_Pricing,
+    quotationOrZoho.rawZohoDeal?.Services,
+    quotationOrZoho.rawZohoDeal?.Subform_1,
+  ];
+
+  let rawList: any[] = [];
+  for (const arr of candidateArrays) {
+    if (Array.isArray(arr) && arr.length > 0) {
+      rawList = arr;
+      break;
+    }
+  }
+
+  if (rawList.length > 0) {
+    return rawList.map((s: any, idx: number) => {
+      const name = (
+        s.name ||
+        (typeof s.Service === 'object' ? s.Service?.name : s.Service) ||
+        s.service ||
+        s.Service_Name ||
+        s.service_name ||
+        s.Service_Title ||
+        s.service_title ||
+        s.Schemas ||
+        s.schema ||
+        ''
+      ).trim();
+
+      const rawTotal = s.totalAmount !== undefined
+        ? String(s.totalAmount)
+        : (s.Total !== undefined
+          ? String(s.Total).replace(/[^0-9.]/g, '')
+          : (s.total !== undefined
+            ? String(s.total).replace(/[^0-9.]/g, '')
+            : (s.Total_Amount !== undefined
+              ? String(s.Total_Amount).replace(/[^0-9.]/g, '')
+              : (s.amount !== undefined
+                ? String(s.amount).replace(/[^0-9.]/g, '')
+                : ''))));
+
+      const rawBase = s.baseAmount !== undefined
+        ? String(s.baseAmount)
+        : (s.Base !== undefined
+          ? String(s.Base).replace(/[^0-9.]/g, '')
+          : (s.base !== undefined
+            ? String(s.base).replace(/[^0-9.]/g, '')
+            : (s.Base_Amount !== undefined
+              ? String(s.Base_Amount).replace(/[^0-9.]/g, '')
+              : '')));
+
+      const t = rawTotal || (rawBase ? String(Number((Number(rawBase) * 1.18).toFixed(2))) : '');
+      const b = rawBase || (t ? String(Number((Number(t) / 1.18).toFixed(2))) : '');
+      const noteVal = s.notes || s.remarks || s.remark || s.Remark || s.Remarks || s.Notes || s.Description || s.description || '';
+
+      return {
+        id: s.id || String(idx + 1),
+        name: name || 'Service',
+        totalAmount: t,
+        baseAmount: b,
+        notes: noteVal,
+        remarks: noteVal,
+      };
+    });
+  }
+
+  // Fallback to quotation single service string if present
+  const singleServiceStr = (
+    quotationOrZoho.service ||
+    quotationOrZoho.serviceName ||
+    quotationOrZoho.Service_Name ||
+    (typeof quotationOrZoho.Name === 'string' && quotationOrZoho.Name.includes(' - ') ? quotationOrZoho.Name.split(' - ')[0] : '') ||
+    ''
+  ).trim();
+
+  if (
+    singleServiceStr &&
+    singleServiceStr !== 'Custom Services' &&
+    singleServiceStr !== 'Services' &&
+    singleServiceStr !== 'General Services' &&
+    singleServiceStr !== 'N/A' &&
+    !/^\d+\s+Services$/i.test(singleServiceStr) &&
+    !singleServiceStr.startsWith('QT-')
+  ) {
+    const rawAmt = quotationOrZoho.amount
+      ? String(quotationOrZoho.amount).replace(/[^0-9.]/g, '')
+      : (quotationOrZoho.Grand_Total
+        ? String(quotationOrZoho.Grand_Total).replace(/[^0-9.]/g, '')
+        : (quotationOrZoho.totals?.grandTotal
+          ? String(quotationOrZoho.totals.grandTotal)
+          : ''));
+
+    const rawSubtotal = quotationOrZoho.totals?.subtotal
+      ? String(quotationOrZoho.totals.subtotal)
+      : (quotationOrZoho.Subtotal
+        ? String(quotationOrZoho.Subtotal).replace(/[^0-9.]/g, '')
+        : (rawAmt ? String(Number((Number(rawAmt) / 1.18).toFixed(2))) : ''));
+
+    return [{
+      id: '1',
+      name: singleServiceStr,
+      totalAmount: rawAmt,
+      baseAmount: rawSubtotal,
+      notes: '',
+      remarks: '',
+    }];
+  }
+
+  return [];
 }
 
 export const Quotations = () => {
@@ -107,7 +231,7 @@ export const Quotations = () => {
     setFileError('');
     setDocuments([]);
 
-    if (deal && deal.id && deal.id.startsWith('QT-')) {
+    if (deal && (deal.id || deal.zohoId)) {
       setEditingQuotationId(deal.id);
       setFormData(deal.formData ? {
         ...deal.formData,
@@ -127,23 +251,38 @@ export const Quotations = () => {
         Company_address: deal.Company_address || deal.companyAddress || '',
         notes: deal.Q_Notes || deal.q_notes || deal.notes || deal.remark || deal.Remark || deal.Description || ''
       });
-      setQuotationServices((deal.servicesData || []).map((s: any) => {
-        const t = s.totalAmount !== undefined 
-          ? String(s.totalAmount) 
-          : (s.baseAmount ? String(Number((Number(s.baseAmount) * 1.18).toFixed(2))) : '');
-        const b = s.baseAmount !== undefined 
-          ? String(s.baseAmount) 
-          : (t ? String(Number((Number(t) / 1.18).toFixed(2))) : '');
-        const noteVal = s.notes || s.remarks || s.remark || s.Description || '';
-        return {
-          id: s.id || Math.random().toString(),
-          name: s.name || '',
-          totalAmount: t,
-          baseAmount: b,
-          notes: noteVal,
-          remarks: noteVal,
-        };
-      }));
+      // Extract initial services using all available fallbacks
+      const initialServices = extractServicesFromQuotation(deal);
+      setQuotationServices(initialServices);
+
+      // Asynchronously fetch live full record with subforms from Zoho CRM if ID is present
+      const targetZohoId = deal.zohoId || (/^\d{15,}$/.test(String(deal.id)) ? String(deal.id) : null);
+      if (targetZohoId) {
+        fetchZohoQuotationById(targetZohoId).then(res => {
+          if (res.success && res.data) {
+            const freshServices = extractServicesFromQuotation(res.data);
+            if (freshServices.length > 0) {
+              setQuotationServices(freshServices);
+              setQuotations(prevList => {
+                const updatedList = prevList.map((q: any) => {
+                  if (q.id === deal.id || q.zohoId === targetZohoId) {
+                    return {
+                      ...q,
+                      servicesData: freshServices,
+                      rawZohoDeal: res.data,
+                    };
+                  }
+                  return q;
+                });
+                try {
+                  localStorage.setItem('be_quotations', JSON.stringify(updatedList));
+                } catch (_) {}
+                return updatedList;
+              });
+            }
+          }
+        }).catch(err => console.warn('Could not fetch single quotation subform:', err));
+      }
       setAmountReceived(deal.totals?.amountReceived || (deal.received ? deal.received.replace(/[^0-9]/g, '') : ''));
       setPaymentScreenshotName(deal.paymentScreenshotName || '');
       setPaymentScreenshotFile(null);
@@ -636,17 +775,7 @@ export const Quotations = () => {
             employeeName: typeof z.Employee === 'object' ? z.Employee?.name : (z.Employee_Name || ''),
             employeeZohoId: typeof z.Employee === 'object' ? z.Employee?.id : (z.Employee || ''),
           },
-          servicesData: Array.isArray(z.Services_And_Pricing) ? z.Services_And_Pricing.map((s: any, idx: number) => {
-            const noteVal = s.Notes || s.notes || s.Remarks || s.remarks || s.Remark || s.remark || s.Description || s.description || '';
-            return {
-              id: String(idx + 1),
-              name: s.Service || 'Service',
-              totalAmount: s.Total ? String(s.Total).replace(/[^0-9.]/g, '') : '',
-              baseAmount: s.Base ? String(s.Base).replace(/[^0-9.]/g, '') : '',
-              notes: noteVal,
-              remarks: noteVal,
-            };
-          }) : [],
+          servicesData: extractServicesFromQuotation(z),
           totals: {
             subtotal: z.Subtotal ? Number(String(z.Subtotal).replace(/[^0-9.]/g, '')) : 0,
             totalGst: z.Total_GST ? Number(String(z.Total_GST).replace(/[^0-9.]/g, '')) : 0,
@@ -656,15 +785,47 @@ export const Quotations = () => {
 
         setQuotations(prev => {
           const seenZohoIds = new Set<string>();
-          const merged = [...fetchedQuotations];
-          for (const f of fetchedQuotations) {
-            if (f.zohoId) seenZohoIds.add(f.zohoId);
-          }
+          const seenIds = new Set<string>();
+
+          const merged = fetchedQuotations.map((f: any) => {
+            if (f.zohoId) seenZohoIds.add(String(f.zohoId));
+            if (f.id) seenIds.add(String(f.id));
+
+            const existing = prev.find((p: any) => 
+              (p.zohoId && f.zohoId && String(p.zohoId) === String(f.zohoId)) ||
+              (p.id && f.id && String(p.id) === String(f.id))
+            );
+
+            if (existing) {
+              const existingServices = extractServicesFromQuotation(existing);
+              const fetchedServices = f.servicesData || [];
+              const resolvedServices = (Array.isArray(fetchedServices) && fetchedServices.length > 0)
+                ? fetchedServices
+                : (Array.isArray(existingServices) && existingServices.length > 0 ? existingServices : []);
+
+              return {
+                ...existing,
+                ...f,
+                servicesData: resolvedServices,
+                totals: (f.totals?.grandTotal ? f.totals : existing.totals) || existing.totals,
+                formData: {
+                  ...(existing.formData || {}),
+                  ...(f.formData || {})
+                }
+              };
+            }
+            return f;
+          });
+
           for (const p of prev) {
-            if (p.zohoId && seenZohoIds.has(p.zohoId)) continue;
+            if (p.zohoId && seenZohoIds.has(String(p.zohoId))) continue;
+            if (p.id && seenIds.has(String(p.id))) continue;
             merged.push(p);
           }
-          localStorage.setItem('be_quotations', JSON.stringify(merged));
+
+          try {
+            localStorage.setItem('be_quotations', JSON.stringify(merged));
+          } catch (_) {}
           return merged;
         });
 

@@ -2036,6 +2036,53 @@ function zohoApiPlugin(): Plugin {
           return;
         }
 
+        // Fetch / Get Single Quotation endpoint (returns full record with Services_And_Pricing subform)
+        if ((pathname === '/api/zoho/get-quotation' || (pathname === '/api/zoho/get-quotations' && (urlObj.searchParams.get('id') || urlObj.searchParams.get('quotation_id')))) && req.method === 'GET') {
+          try {
+            let accessToken = await getAccessToken(env);
+            const moduleName = env.VITE_ZOHO_MODULE_NAME || 'Quotations';
+            const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
+            const quotationId = urlObj.searchParams.get('id') || urlObj.searchParams.get('quotation_id');
+            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${quotationId}`;
+
+            console.log(`[Vite Zoho Plugin] Fetching single Quotation from Zoho CRM (${moduleName}/${quotationId})`);
+
+            let crmRes = await fetch(crmEndpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${accessToken}`,
+              },
+            });
+
+            let crmData: any = await crmRes.json();
+
+            if (crmRes.status === 401 || crmData?.code === 'INVALID_TOKEN') {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              crmRes = await fetch(crmEndpoint, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                },
+              });
+              crmData = await crmRes.json();
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            if (crmData.data) {
+              return res.end(JSON.stringify({ success: true, data: crmData.data }));
+            } else {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ success: false, message: crmData.message || 'Failed to fetch quotation from Zoho CRM', errorDetails: crmData }));
+            }
+          } catch (e: any) {
+            console.error('[Vite Zoho Plugin] Exception while fetching single quotation:', e);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: e.message }));
+          }
+        }
+
         // Fetch / Get Quotations endpoint (Module API Name: Quotations)
         if (pathname === '/api/zoho/get-quotations' && req.method === 'GET') {
           try {
