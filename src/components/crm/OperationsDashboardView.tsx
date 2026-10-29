@@ -148,6 +148,249 @@ function formatMonthYearDisplay(rawDate?: string | number | null): string {
   return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 }
 
+export interface SectionAppItem {
+  recordId: string;
+  dealId?: string;
+  dealName?: string;
+  sectionKey: string;
+  sectionName: string;
+  submitterName: string;
+  applicationDate: string;
+  applicationDateMs: number | null;
+  tlName: string;
+  tmName: string;
+  teamType: string;
+}
+
+interface SectionDef {
+  key: string;
+  sectionName: string;
+  getName: (r: InternalOperationRecord, sData: any) => string;
+  getDate: (r: InternalOperationRecord, sData: any) => string;
+}
+
+export const SECTION_DEFINITIONS: SectionDef[] = [
+  {
+    key: 'docCollection',
+    sectionName: 'Doc collection',
+    getName: (r, s) => r.Doc_collection_name || s.docCollection?.name || s.compDocCollection?.name || s.certDocCollection?.name || '',
+    getDate: (r, s) => r.Doc_collection_Date || s.docCollection?.date || s.compDocCollection?.date || s.certDocCollection?.date || ''
+  },
+  {
+    key: 'nameApp',
+    sectionName: 'Name Application',
+    getName: (r, s) => r.Name_Application_name || s.nameApp?.name || '',
+    getDate: (r, s) => r.Name_Application_date || s.nameApp?.date || ''
+  },
+  {
+    key: 'accounting',
+    sectionName: 'Accounting',
+    getName: (r, s) => s.accounting?.name || '',
+    getDate: (r, s) => s.accounting?.date || ''
+  },
+  {
+    key: 'dscCreation',
+    sectionName: 'DSC Creation',
+    getName: (r, s) => r.DSC_Creation_name || s.dscCreation?.name || '',
+    getDate: (r, s) => r.DSC_Creation_Date || s.dscCreation?.date || ''
+  },
+  {
+    key: 'finalFiling',
+    sectionName: 'Final Filing',
+    getName: (r, s) => r.Final_Filing_name || s.finalFiling?.name || r.Final_Filing_Final_Approval_Name || s.finalFiling?.finalApprovalName || '',
+    getDate: (r, s) => r.Final_Filing_Date || s.finalFiling?.date || r.Final_Filing_DOI_Date || s.finalFiling?.doiDate || ''
+  },
+  {
+    key: 'boardResolution',
+    sectionName: 'Board Resolution',
+    getName: (r, s) => r.Board_Resolution_name || s.boardResolution?.name || '',
+    getDate: (r, s) => r.Board_Resolution_Date || s.boardResolution?.date || ''
+  },
+  {
+    key: 'audit',
+    sectionName: 'Audit',
+    getName: (r, s) => s.audit?.name || '',
+    getDate: (r, s) => s.audit?.date || ''
+  },
+  {
+    key: 'shareCertificate',
+    sectionName: '2-Share Certificate',
+    getName: (r, s) => r.Share_Certificate_name || s.shareCertificate?.name || '',
+    getDate: (r, s) => r.Share_Certificate_Date || s.shareCertificate?.date || ''
+  },
+  {
+    key: 'mgt7',
+    sectionName: 'MGT-7',
+    getName: (r, s) => s.mgt7?.name || '',
+    getDate: (r, s) => s.mgt7?.date || ''
+  },
+  {
+    key: 'msmeCertificate',
+    sectionName: 'MSME Certificate',
+    getName: (r, s) => s.msmeCertificate?.name || s.msmeCertificateLlp?.name || '',
+    getDate: (r, s) => r.MSME_Certificate_Date || s.msmeCertificate?.date || s.msmeCertificateLlp?.date || ''
+  },
+  {
+    key: 'adt1',
+    sectionName: 'ADT-1',
+    getName: (r, s) => r.ADT_1_name || s.adt1?.name || s.compAdt1?.name || r.ADT_1_Auditor_name || '',
+    getDate: (r, s) => r.ADT_1_date || s.adt1?.date || s.compAdt1?.date || ''
+  },
+  {
+    key: 'inc20A',
+    sectionName: 'INC 20-A',
+    getName: (r, s) => r.INC_20_A_name || s.inc20A?.name || '',
+    getDate: (r, s) => r.INC_20_A_Date || s.inc20A?.date || ''
+  },
+  {
+    key: 'dpt3',
+    sectionName: 'DPT-3',
+    getName: (r, s) => s.dpt3?.name || '',
+    getDate: (r, s) => s.dpt3?.date || ''
+  },
+  {
+    key: 'form3',
+    sectionName: 'Form 3 / Projected Financials',
+    getName: (r, s) => r.Finance_Projected_Financials_name || s.form3?.name || s.compForm3?.name || s.fundingFinance?.name || '',
+    getDate: (r, s) => r.Finance_Projected_Financials_Date || s.form3?.date || s.compForm3?.date || s.fundingFinance?.date || ''
+  },
+  {
+    key: 'appSubmission',
+    sectionName: 'Application Submission',
+    getName: (r, s) => r.Application_submission_name || s.appSubmission?.name || s.certFinalApp?.name || '',
+    getDate: (r, s) => r.Application_submission_Submission_Date || s.appSubmission?.date || s.certFinalApp?.date || ''
+  },
+  {
+    key: 'llpAgreement',
+    sectionName: 'LLP Agreement',
+    getName: (r, s) => s.llpAgreement?.name || '',
+    getDate: (r, s) => s.llpAgreement?.date || ''
+  },
+  {
+    key: 'dprCreation',
+    sectionName: 'DPR / Pitch Deck',
+    getName: (r, s) => r.DPR_Pitch_deck_creation_name || s.dprCreation?.name || '',
+    getDate: (r, s) => r.DPR_Pitch_deck_creation_Date || s.dprCreation?.date || ''
+  },
+  {
+    key: 'directorItr',
+    sectionName: 'Director ITR',
+    getName: (r, s) => r.Director_ITR_Company_ITR_name || s.directorItr?.name || '',
+    getDate: (r, s) => r.Director_ITR_Company_ITR_Date || s.directorItr?.date || ''
+  },
+  {
+    key: 'companyItr',
+    sectionName: 'Company ITR',
+    getName: (r, s) => s.companyItr?.name || '',
+    getDate: (r, s) => s.companyItr?.date || ''
+  },
+  {
+    key: 'aoc4',
+    sectionName: 'AOC-4',
+    getName: (r, s) => r.AOC_4_name || s.aoc4?.name || '',
+    getDate: (r, s) => s.aoc4?.date || ''
+  }
+];
+
+export function extractApplicationsFromRecords(
+  records: InternalOperationRecord[],
+  dealsMap: Record<string, any>
+): SectionAppItem[] {
+  const items: SectionAppItem[] = [];
+
+  records.forEach(r => {
+    const sData = r.sectionsData
+      ? (typeof r.sectionsData === 'string' ? JSON.parse(r.sectionsData) : r.sectionsData)
+      : {};
+
+    const parentDeal = r.Deal_ID ? dealsMap[String(r.Deal_ID).toLowerCase()] : null;
+    const defaultDate =
+      (r as any).Project_assign_Date ||
+      (r as any).Projects_assign_date ||
+      r.Allocated_At ||
+      parentDeal?.Project_assign_Date ||
+      parentDeal?.Projects_assign_date ||
+      parentDeal?.Booking_Date ||
+      r.Created_Time ||
+      '';
+
+    const defaultTm = (r.Team_Member_Name || r.Team_Member?.name || 'Unassigned TM').trim();
+    const tl = (r.Team_Leader_Name || r.Team_Leader?.name || 'Unassigned TL').trim();
+    const teamType = (r.Team_Type || r.Internal_Team_Type || 'Operations').trim();
+
+    let foundSpecificSection = false;
+
+    for (const def of SECTION_DEFINITIONS) {
+      const subName = def.getName(r, sData).trim();
+      const secDate = def.getDate(r, sData).trim();
+
+      if (subName || secDate) {
+        foundSpecificSection = true;
+        const resolvedDate = secDate || defaultDate;
+        const resolvedSubmitter = subName || defaultTm;
+        const ms = resolvedDate ? parseAnyDateToMs(resolvedDate) : null;
+
+        items.push({
+          recordId: r.id,
+          dealId: r.Deal_ID,
+          dealName: r.Deal_Name,
+          sectionKey: def.key,
+          sectionName: def.sectionName,
+          submitterName: resolvedSubmitter,
+          applicationDate: resolvedDate,
+          applicationDateMs: ms,
+          tlName: tl,
+          tmName: resolvedSubmitter || defaultTm,
+          teamType
+        });
+      }
+    }
+
+    if (!foundSpecificSection) {
+      const stageName = r.Operation_Stage || r.Stage || 'Doc collection';
+      const resolvedDate = defaultDate;
+      const ms = resolvedDate ? parseAnyDateToMs(resolvedDate) : null;
+
+      items.push({
+        recordId: r.id,
+        dealId: r.Deal_ID,
+        dealName: r.Deal_Name,
+        sectionKey: 'stage',
+        sectionName: stageName,
+        submitterName: defaultTm,
+        applicationDate: resolvedDate,
+        applicationDateMs: ms,
+        tlName: tl,
+        tmName: defaultTm,
+        teamType
+      });
+    }
+  });
+
+  return items;
+}
+
+function isDateMatching(
+  dateMs: number | null,
+  mode: 'daily' | 'monthly' | 'all',
+  filterVal: string
+): boolean {
+  if (!filterVal || mode === 'all') return true;
+  if (!dateMs) return false;
+  const d = new Date(dateMs);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+
+  if (mode === 'daily') {
+    return `${yyyy}-${mm}-${dd}` === filterVal;
+  }
+  if (mode === 'monthly') {
+    return `${yyyy}-${mm}` === filterVal.slice(0, 7);
+  }
+  return true;
+}
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -165,6 +408,18 @@ export const OperationsDashboardView: React.FC = () => {
   const [comp7DateFilter, setComp7DateFilter] = useState<string>('');
   const [comp8DateFilter, setComp8DateFilter] = useState<string>(''); // YYYY-MM
   const [comp8SearchQuery, setComp8SearchQuery] = useState<string>('');
+
+  // Filter states for Individual Homepage components
+  const [indComp1DateFilter, setIndComp1DateFilter] = useState<string>('');
+  const [indComp1Search, setIndComp1Search] = useState<string>('');
+
+  const [indComp2Mode, setIndComp2Mode] = useState<'daily' | 'monthly'>('monthly');
+  const [indComp2DateFilter, setIndComp2DateFilter] = useState<string>('');
+  const [indComp2Search, setIndComp2Search] = useState<string>('');
+
+  const [indComp3Mode, setIndComp3Mode] = useState<'daily' | 'monthly'>('monthly');
+  const [indComp3DateFilter, setIndComp3DateFilter] = useState<string>('');
+  const [indComp3Search, setIndComp3Search] = useState<string>('');
 
   // Data states
   const [records, setRecords] = useState<InternalOperationRecord[]>(() => getStoredInternalOperations());
@@ -614,73 +869,616 @@ export const OperationsDashboardView: React.FC = () => {
 
   const currentMonthName = comp8MonthDisplayName;
 
+  // ==========================================================================
+  // INDIVIDUAL HOMEPAGE: SECTION APPLICATIONS EXTRACTION & MEMOIZED DATA
+  // ==========================================================================
+
+  // Extract all individual section work items from teamFilteredRecords
+  const sectionApplications = useMemo(() => {
+    return extractApplicationsFromRecords(teamFilteredRecords, dealsMap);
+  }, [teamFilteredRecords, dealsMap]);
+
+  // Comp 1: Daily Applications
+  // Columns: Application Date | Section Name | Submitter Name | Record count
+  const indComp1Data = useMemo(() => {
+    let list = sectionApplications;
+
+    if (indComp1DateFilter) {
+      list = list.filter(item => {
+        if (!item.applicationDateMs) return false;
+        const d = new Date(item.applicationDateMs);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}` === indComp1DateFilter;
+      });
+    }
+
+    if (indComp1Search.trim()) {
+      const q = indComp1Search.trim().toLowerCase();
+      list = list.filter(item =>
+        item.sectionName.toLowerCase().includes(q) ||
+        item.submitterName.toLowerCase().includes(q)
+      );
+    }
+
+    const map = new Map<string, {
+      applicationDateDisplay: string;
+      rawDateMs: number | null;
+      sectionName: string;
+      submitterName: string;
+      count: number;
+    }>();
+
+    list.forEach(item => {
+      const dateDisplay = formatDateDisplay(item.applicationDateMs);
+      const key = `${dateDisplay}___${item.sectionName}___${item.submitterName}`;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          applicationDateDisplay: dateDisplay,
+          rawDateMs: item.applicationDateMs,
+          sectionName: item.sectionName,
+          submitterName: item.submitterName || 'Unassigned',
+          count: 0
+        });
+      }
+      map.get(key)!.count += 1;
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      const msA = a.rawDateMs || 0;
+      const msB = b.rawDateMs || 0;
+      if (msA !== msB) return msB - msA;
+      return b.count - a.count;
+    });
+  }, [sectionApplications, indComp1DateFilter, indComp1Search]);
+
+  // Comp 2: Monthly Applications
+  // Columns: Submitter Name | Record count
+  const indComp2Data = useMemo(() => {
+    let list = sectionApplications;
+
+    if (indComp2DateFilter) {
+      list = list.filter(item => isDateMatching(item.applicationDateMs, indComp2Mode, indComp2DateFilter));
+    }
+
+    if (indComp2Search.trim()) {
+      const q = indComp2Search.trim().toLowerCase();
+      list = list.filter(item => item.submitterName.toLowerCase().includes(q));
+    }
+
+    const map = new Map<string, number>();
+    list.forEach(item => {
+      const sub = (item.submitterName || 'Unassigned').trim();
+      map.set(sub, (map.get(sub) || 0) + 1);
+    });
+
+    return Array.from(map.entries())
+      .map(([submitterName, count]) => ({ submitterName, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [sectionApplications, indComp2Mode, indComp2DateFilter, indComp2Search]);
+
+  // Comp 3: Total Application Team (TL) wise
+  // Columns: Team Leader (TL) | Team Member (TM) | Record count
+  const indComp3Data = useMemo(() => {
+    let list = sectionApplications;
+
+    if (indComp3DateFilter) {
+      list = list.filter(item => isDateMatching(item.applicationDateMs, indComp3Mode, indComp3DateFilter));
+    }
+
+    if (indComp3Search.trim()) {
+      const q = indComp3Search.trim().toLowerCase();
+      list = list.filter(item =>
+        item.tlName.toLowerCase().includes(q) ||
+        item.tmName.toLowerCase().includes(q)
+      );
+    }
+
+    const map = new Map<string, { tl: string; tm: string; count: number }>();
+    list.forEach(item => {
+      const tl = (item.tlName || 'Unassigned TL').trim();
+      const tm = (item.tmName || item.submitterName || 'Unassigned TM').trim();
+      const key = `${tl}___${tm}`;
+
+      if (!map.has(key)) {
+        map.set(key, { tl, tm, count: 0 });
+      }
+      map.get(key)!.count += 1;
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.tl !== b.tl) return a.tl.localeCompare(b.tl);
+      return b.count - a.count;
+    });
+  }, [sectionApplications, indComp3Mode, indComp3DateFilter, indComp3Search]);
+
+  // Distinct KPI counts for Individual Homepage
+  const indTotalApps = sectionApplications.length;
+  const indDistinctSubmitters = useMemo(() => new Set(sectionApplications.map(a => a.submitterName)).size, [sectionApplications]);
+  const indDistinctSections = useMemo(() => new Set(sectionApplications.map(a => a.sectionName)).size, [sectionApplications]);
+  const indDistinctTLs = useMemo(() => new Set(sectionApplications.map(a => a.tlName)).size, [sectionApplications]);
+
   // --------------------------------------------------------------------------
-  // RENDER: INDIVIDUAL HOMEPAGE PLACEHOLDER (when toggled)
+  // RENDER: INDIVIDUAL HOMEPAGE DASHBOARD (Full Implementation)
   // --------------------------------------------------------------------------
   if (viewType === 'Individual Homepage') {
     return (
       <div className="space-y-6">
         {/* Top Controls Bar */}
-        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-be-orange to-amber-500 text-white flex items-center justify-center font-bold shadow-md shadow-orange-500/20">
-              <UserCheck size={24} />
-            </div>
+        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
             <div>
-              <h1 className="text-2xl font-black text-gray-900 tracking-tight">Operations Individual Homepage</h1>
-              <p className="text-xs text-gray-500 font-medium">Personal workload, individual execution tracking & delegated cases</p>
+              <div className="flex items-center space-x-3 mb-1">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-blue-500/25">
+                  <UserCheck size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
+                      Operations Individual Homepage
+                    </h1>
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-blue-100 text-blue-700 border border-blue-200">
+                      Individual Homepage
+                    </span>
+                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      Team: {teamType}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 font-medium mt-1">
+                    Granular section-wise applications, daily submissions, submitter execution metrics, and team-wise workload tracking for <strong>{teamType}</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Top-Level Controls: Dashboard View Dropdown & Team Type Dropdown */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Control 1: Dashboard View Dropdown */}
+              <div className="flex flex-col">
+                <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider mb-1">
+                  Dashboard View
+                </label>
+                <div className="relative">
+                  <select
+                    value={viewType}
+                    onChange={(e) => setViewType(e.target.value as DashboardViewType)}
+                    className="appearance-none pl-3.5 pr-8 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 outline-none transition-all cursor-pointer shadow-2xs"
+                  >
+                    {DASHBOARD_VIEW_OPTIONS.map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Control 2: Team Type Dropdown */}
+              <div className="flex flex-col">
+                <label className="text-[10px] font-black uppercase text-blue-600 tracking-wider mb-1">
+                  Team Type
+                </label>
+                <div className="relative">
+                  <select
+                    value={teamType}
+                    onChange={(e) => setTeamType(e.target.value as DashboardTeamType)}
+                    className="appearance-none pl-3.5 pr-8 py-2 bg-blue-50 hover:bg-blue-100/70 border border-blue-200 rounded-xl text-xs font-black text-blue-700 outline-none transition-all cursor-pointer shadow-2xs"
+                  >
+                    {DASHBOARD_TEAM_OPTIONS.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-blue-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Refresh Button */}
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-transparent select-none mb-1">Action</span>
+                <button
+                  onClick={loadData}
+                  disabled={isLoading}
+                  title="Refresh Live Operations Data"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw size={14} className={isLoading ? 'animate-spin text-blue-600' : 'text-gray-500'} />
+                  <span>Sync</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* View Switcher Dropdown */}
-            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-2">View:</span>
-              <select
-                value={viewType}
-                onChange={(e) => setViewType(e.target.value as DashboardViewType)}
-                className="bg-transparent text-xs font-bold text-gray-900 outline-none cursor-pointer"
-              >
-                {DASHBOARD_VIEW_OPTIONS.map(v => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </select>
+          {/* Quick KPI Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-gray-100 relative z-10">
+            <div className="p-3.5 bg-blue-50/60 rounded-2xl border border-blue-100">
+              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">Total Applications</span>
+              <span className="text-xl font-black text-blue-950 tracking-tight">{indTotalApps}</span>
+              <span className="text-[10px] text-blue-600 block mt-0.5">Section entries ({teamType})</span>
             </div>
-
-            {/* Team Type Dropdown */}
-            <div className="flex items-center bg-orange-50 border border-orange-200 rounded-xl px-3 py-1.5">
-              <span className="text-[11px] font-bold text-orange-600 uppercase tracking-wider mr-2">Team:</span>
-              <select
-                value={teamType}
-                onChange={(e) => setTeamType(e.target.value as DashboardTeamType)}
-                className="bg-transparent text-xs font-bold text-be-orange outline-none cursor-pointer"
-              >
-                {DASHBOARD_TEAM_OPTIONS.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
+            <div className="p-3.5 bg-emerald-50/60 rounded-2xl border border-emerald-100">
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Active Submitters</span>
+              <span className="text-xl font-black text-emerald-950 tracking-tight">{indDistinctSubmitters}</span>
+              <span className="text-[10px] text-emerald-600 block mt-0.5">Personnel working on sections</span>
+            </div>
+            <div className="p-3.5 bg-purple-50/60 rounded-2xl border border-purple-100">
+              <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">Active Sections</span>
+              <span className="text-xl font-black text-purple-950 tracking-tight">{indDistinctSections}</span>
+              <span className="text-[10px] text-purple-600 block mt-0.5">Conditional workflow stages</span>
+            </div>
+            <div className="p-3.5 bg-amber-50/60 rounded-2xl border border-amber-100">
+              <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Team Leaders</span>
+              <span className="text-xl font-black text-amber-950 tracking-tight">{indDistinctTLs}</span>
+              <span className="text-[10px] text-amber-600 block mt-0.5">Supervising teams</span>
             </div>
           </div>
         </div>
 
-        {/* Individual Content Banner */}
-        <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-xs space-y-4">
-          <div className="w-16 h-16 mx-auto rounded-3xl bg-blue-50 text-blue-600 flex items-center justify-center">
-            <User size={32} />
+        {/* =================================================================== */}
+        {/* INDIVIDUAL HOMEPAGE 3 COMPONENTS GRID */}
+        {/* =================================================================== */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* --------------------------------------------------------------- */}
+          {/* COMP 1: Daily Applications (Full Width) */}
+          {/* Columns: Application Date | Section Name | Submitter Name | Record count */}
+          {/* Filter UI: Date Filter + Search */}
+          {/* --------------------------------------------------------------- */}
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between lg:col-span-2">
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                    <Calendar size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-gray-900">Daily Applications</h3>
+                    <p className="text-[11px] text-gray-500 font-medium">
+                      Applications grouped by conditional sections and working submitters
+                    </p>
+                  </div>
+                </div>
+
+                {/* Filter Controls: Date Picker & Search */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Date Filter */}
+                  <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs">
+                    <Calendar size={13} className="text-gray-400 mr-1.5 shrink-0" />
+                    <input
+                      type="date"
+                      value={indComp1DateFilter}
+                      onChange={(e) => setIndComp1DateFilter(e.target.value)}
+                      className="bg-transparent text-xs text-gray-700 font-semibold outline-none cursor-pointer"
+                      title="Filter by Application Date"
+                    />
+                    {indComp1DateFilter && (
+                      <button
+                        onClick={() => setIndComp1DateFilter('')}
+                        className="ml-1 text-gray-400 hover:text-gray-700 cursor-pointer"
+                        title="Clear date filter"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Search Bar */}
+                  <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 w-full sm:w-60">
+                    <Search size={13} className="text-gray-400 mr-1.5 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Search section or submitter..."
+                      value={indComp1Search}
+                      onChange={(e) => setIndComp1Search(e.target.value)}
+                      className="bg-transparent text-xs text-gray-800 placeholder-gray-400 outline-none w-full font-medium"
+                    />
+                    {indComp1Search && (
+                      <button onClick={() => setIndComp1Search('')} className="ml-1 text-gray-400 hover:text-gray-600">
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-50/80 sticky top-0 text-[11px] font-black uppercase text-gray-400 tracking-wider">
+                    <tr>
+                      <th className="px-3.5 py-2.5 rounded-l-xl">Application Date</th>
+                      <th className="px-3.5 py-2.5">Section Name</th>
+                      <th className="px-3.5 py-2.5">Submitter Name</th>
+                      <th className="px-3.5 py-2.5 rounded-r-xl text-right">Record Count</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 text-xs">
+                    {indComp1Data.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="px-3.5 py-2.5 font-semibold text-gray-900">
+                          {row.applicationDateDisplay}
+                        </td>
+                        <td className="px-3.5 py-2.5 font-bold text-blue-700">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-800">
+                            {row.sectionName}
+                          </span>
+                        </td>
+                        <td className="px-3.5 py-2.5 font-medium text-gray-700">
+                          {row.submitterName}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-blue-50 text-blue-700 border border-blue-200">
+                            {row.count}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {indComp1Data.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-xs text-gray-400">
+                          No daily application records found for {teamType}.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500 font-semibold">
+              <span>Total Groups: {indComp1Data.length}</span>
+              <span>Total Applications: {indComp1Data.reduce((sum, r) => sum + r.count, 0)}</span>
+            </div>
           </div>
-          <h2 className="text-xl font-black text-gray-900">Individual Homepage Workspace</h2>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">
-            You are viewing the Individual Homepage view for <strong>{currentUser?.name || 'User'}</strong> ({teamType}).
-            Switch to <strong>Group Homepage</strong> in the top dropdown to view all 8 HOD department widgets.
-          </p>
-          <div>
-            <button
-              onClick={() => setViewType('Group Homepage')}
-              className="px-5 py-2.5 bg-gradient-to-r from-be-orange to-amber-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-500/20 hover:from-orange-600 hover:to-amber-700 transition-all cursor-pointer"
-            >
-              Open Group Homepage
-            </button>
+
+          {/* --------------------------------------------------------------- */}
+          {/* COMP 2: Monthly Applications */}
+          {/* Columns: Submitter Name | Record count */}
+          {/* Filter UI: Daily & Monthly Ranges */}
+          {/* --------------------------------------------------------------- */}
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                    <UserCheck size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-gray-900">Monthly Applications</h3>
+                    <p className="text-[11px] text-gray-500 font-medium">
+                      Applications grouped primarily by Submitter Name
+                    </p>
+                  </div>
+                </div>
+
+                {/* Date Filter (Daily & Monthly) + Search */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Mode Switcher */}
+                  <div className="flex items-center p-0.5 bg-gray-100 rounded-lg text-[10px] font-bold">
+                    <button
+                      onClick={() => { setIndComp2Mode('daily'); setIndComp2DateFilter(''); }}
+                      className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                        indComp2Mode === 'daily' ? 'bg-white text-gray-900 shadow-2xs font-black' : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      Day
+                    </button>
+                    <button
+                      onClick={() => { setIndComp2Mode('monthly'); setIndComp2DateFilter(''); }}
+                      className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                        indComp2Mode === 'monthly' ? 'bg-white text-gray-900 shadow-2xs font-black' : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      Month
+                    </button>
+                  </div>
+
+                  {/* Date Input */}
+                  <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 text-xs">
+                    <Calendar size={12} className="text-gray-400 mr-1.5 shrink-0" />
+                    <input
+                      type={indComp2Mode === 'monthly' ? 'month' : 'date'}
+                      value={indComp2DateFilter}
+                      onChange={(e) => setIndComp2DateFilter(e.target.value)}
+                      className="bg-transparent text-xs text-gray-700 font-semibold outline-none cursor-pointer"
+                      title={indComp2Mode === 'monthly' ? 'Filter by Month' : 'Filter by Day'}
+                    />
+                    {indComp2DateFilter && (
+                      <button
+                        onClick={() => setIndComp2DateFilter('')}
+                        className="ml-1 text-gray-400 hover:text-gray-700 cursor-pointer"
+                        title="Clear filter"
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Submitter Search */}
+                  <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1 text-xs w-36">
+                    <Search size={12} className="text-gray-400 mr-1 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Submitter..."
+                      value={indComp2Search}
+                      onChange={(e) => setIndComp2Search(e.target.value)}
+                      className="bg-transparent text-xs text-gray-800 placeholder-gray-400 outline-none w-full font-medium"
+                    />
+                    {indComp2Search && (
+                      <button onClick={() => setIndComp2Search('')} className="ml-1 text-gray-400 hover:text-gray-600">
+                        <X size={10} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-50/80 sticky top-0 text-[11px] font-black uppercase text-gray-400 tracking-wider">
+                    <tr>
+                      <th className="px-3.5 py-2.5 rounded-l-xl">Submitter Name</th>
+                      <th className="px-3.5 py-2.5 rounded-r-xl text-right">Record Count</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 text-xs">
+                    {indComp2Data.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-emerald-50/30 transition-colors">
+                        <td className="px-3.5 py-2.5 font-bold text-gray-800 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                          <span>{row.submitterName}</span>
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {row.count}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {indComp2Data.length === 0 && (
+                      <tr>
+                        <td colSpan={2} className="px-4 py-8 text-center text-xs text-gray-400">
+                          No submitter application records found for {teamType}.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500 font-semibold">
+              <span>Submitters: {indComp2Data.length}</span>
+              <span>Total Applications: {indComp2Data.reduce((sum, r) => sum + r.count, 0)}</span>
+            </div>
           </div>
+
+          {/* --------------------------------------------------------------- */}
+          {/* COMP 3: Total Application Team (TL) wise */}
+          {/* Columns: Team Leader (TL) | Team Member (TM) | Record count */}
+          {/* Filter UI: Daily & Monthly Ranges */}
+          {/* --------------------------------------------------------------- */}
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                    <Shield size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-gray-900">Total Application Team (TL) Wise</h3>
+                    <p className="text-[11px] text-gray-500 font-medium">
+                      Applications grouped hierarchically by TL and Team Members
+                    </p>
+                  </div>
+                </div>
+
+                {/* Date Filter (Daily & Monthly) + Search */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Mode Switcher */}
+                  <div className="flex items-center p-0.5 bg-gray-100 rounded-lg text-[10px] font-bold">
+                    <button
+                      onClick={() => { setIndComp3Mode('daily'); setIndComp3DateFilter(''); }}
+                      className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                        indComp3Mode === 'daily' ? 'bg-white text-gray-900 shadow-2xs font-black' : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      Day
+                    </button>
+                    <button
+                      onClick={() => { setIndComp3Mode('monthly'); setIndComp3DateFilter(''); }}
+                      className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                        indComp3Mode === 'monthly' ? 'bg-white text-gray-900 shadow-2xs font-black' : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      Month
+                    </button>
+                  </div>
+
+                  {/* Date Input */}
+                  <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 text-xs">
+                    <Calendar size={12} className="text-gray-400 mr-1.5 shrink-0" />
+                    <input
+                      type={indComp3Mode === 'monthly' ? 'month' : 'date'}
+                      value={indComp3DateFilter}
+                      onChange={(e) => setIndComp3DateFilter(e.target.value)}
+                      className="bg-transparent text-xs text-gray-700 font-semibold outline-none cursor-pointer"
+                      title={indComp3Mode === 'monthly' ? 'Filter by Month' : 'Filter by Day'}
+                    />
+                    {indComp3DateFilter && (
+                      <button
+                        onClick={() => setIndComp3DateFilter('')}
+                        className="ml-1 text-gray-400 hover:text-gray-700 cursor-pointer"
+                        title="Clear filter"
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Team Search */}
+                  <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1 text-xs w-36">
+                    <Search size={12} className="text-gray-400 mr-1 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="TL or TM..."
+                      value={indComp3Search}
+                      onChange={(e) => setIndComp3Search(e.target.value)}
+                      className="bg-transparent text-xs text-gray-800 placeholder-gray-400 outline-none w-full font-medium"
+                    />
+                    {indComp3Search && (
+                      <button onClick={() => setIndComp3Search('')} className="ml-1 text-gray-400 hover:text-gray-600">
+                        <X size={10} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-50/80 sticky top-0 text-[11px] font-black uppercase text-gray-400 tracking-wider">
+                    <tr>
+                      <th className="px-3.5 py-2.5 rounded-l-xl">Team Leader (TL)</th>
+                      <th className="px-3.5 py-2.5">Team Member (TM)</th>
+                      <th className="px-3.5 py-2.5 rounded-r-xl text-right">Record Count</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 text-xs">
+                    {indComp3Data.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-indigo-50/30 transition-colors">
+                        <td className="px-3.5 py-2.5 font-bold text-gray-900">
+                          {row.tl}
+                        </td>
+                        <td className="px-3.5 py-2.5 font-medium text-gray-700">
+                          {row.tm}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-right">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            {row.count}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {indComp3Data.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-4 py-8 text-center text-xs text-gray-400">
+                          No team application records found for {teamType}.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500 font-semibold">
+              <span>Team Pairs: {indComp3Data.length}</span>
+              <span>Total Applications: {indComp3Data.reduce((sum, r) => sum + r.count, 0)}</span>
+            </div>
+          </div>
+
         </div>
       </div>
     );
