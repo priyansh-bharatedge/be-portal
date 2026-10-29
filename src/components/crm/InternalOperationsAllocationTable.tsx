@@ -779,13 +779,18 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
       r.Stage === 'Payment pending from client' ||
       r.Stage === 'Document work in progress' || r.Stage === 'Document in review to client' ||
       r.Stage === 'Document approved from client' || r.Stage === 'Payment pending from client end' ||
-      r.Stage === 'Mapping issue'
+      r.Stage === 'Mapping issue' ||
+      r.Stage === 'Director ITR' || r.Stage === 'Accounting' || r.Stage === 'Audit' ||
+      r.Stage === 'Company ITR' || r.Stage === 'ADT1-PVT-LTD/Section8' || r.Stage === 'INC 20A-PVT-LTD/Section8' ||
+      r.Stage === 'Form3-LLP' || r.Stage === 'DPT-3-PVT-LTD/Section8' || r.Stage === 'AOC-4-PVT-LTD/Section8' ||
+      r.Stage === 'MGT7-PVT-LTD/Section8' || r.Stage === 'Form11-LLP' || r.Stage === 'Form8-LLP' ||
+      r.Stage === 'Annual Compliance'
     ).length;
     const myFinalFiling = myAssignedRecords.filter(r => 
       r.Stage === 'Final Filing' || r.Stage === 'Board Resolution' || r.Stage === 'Board resolution preparation' ||
       r.Stage === 'Z-share certificate' || r.Stage === 'MSME' || r.Stage === 'ADT-1 Filing' ||
       r.Stage === 'INC 20-A filing' || r.Stage === 'Process Completed' ||
-      r.Stage === 'Application submitted' || r.Stage === 'Application resubmitted' ||
+      r.Stage === 'Application submitted' || r.Stage === 'Application Submitted' || r.Stage === 'Application resubmitted' ||
       r.Stage === 'Application Resubmission' || r.Stage === 'Selected' || r.Stage === 'Application Selected'
     ).length;
 
@@ -1161,10 +1166,24 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                       <td className="px-4 py-3.5 align-middle">
                         {(() => {
                           const rowStages = getOperationStagesForTeamType(item.Internal_Team_Type);
-                          const currentStage = item.Stage || rowStages[0] || 'Doc collection';
+                          const isFunding = String(item.Internal_Team_Type || item.Team_Type || '').toLowerCase().includes('funding');
+                          const isCompliance = String(item.Internal_Team_Type || item.Team_Type || '').toLowerCase().includes('compliance');
+                          const rawStage = item.Stage;
+                          let currentStage = rawStage || rowStages[0] || 'Doc collection';
+                          if (isFunding && rawStage === 'DSC work in progress') {
+                            currentStage = rowStages[0] || 'Document pending from client';
+                          } else if (isCompliance && rawStage && !rowStages.includes(rawStage as any)) {
+                            if (rawStage === 'Application submitted' || rawStage === 'Application Resubmission' || rawStage === 'Application Selected') {
+                              currentStage = 'Application Submitted';
+                            } else if (rawStage === 'Hold - Annual Compliance' || rawStage === 'Hold - Audit not filled') {
+                              currentStage = 'Hold';
+                            } else {
+                              currentStage = rowStages[0] || 'Document pending from client';
+                            }
+                          }
                           const options = rowStages.includes(currentStage as any)
                             ? rowStages
-                            : [currentStage, ...rowStages];
+                            : (isFunding && currentStage === 'DSC work in progress' ? rowStages : (isCompliance ? rowStages : [currentStage, ...rowStages]));
                           return (
                             <select
                               value={currentStage}

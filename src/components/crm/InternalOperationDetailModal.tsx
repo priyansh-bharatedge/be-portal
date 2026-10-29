@@ -517,9 +517,23 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
 
   // Common Fields State (Phase 2)
   const [stage, setStage] = useState<OperationStage>(() => {
-    if (record.Operation_Stage) return record.Operation_Stage as OperationStage;
-    if (record.Stage) return record.Stage;
+    const rawStage = (record.Operation_Stage || record.Stage) as OperationStage;
     const initialStages = getOperationStagesForTeamType(record.Team_Type || record.Internal_Team_Type);
+    const isFunding = String(record.Team_Type || record.Internal_Team_Type || '').toLowerCase().includes('funding');
+    if (isFunding && rawStage === 'DSC work in progress') {
+      return initialStages[0] || 'Document pending from client';
+    }
+    const isCompliance = String(record.Team_Type || record.Internal_Team_Type || '').toLowerCase().includes('compliance');
+    if (isCompliance && rawStage && !initialStages.includes(rawStage)) {
+      if (rawStage === 'Application submitted' || rawStage === 'Application Resubmission' || rawStage === 'Application Selected') {
+        return 'Application Submitted';
+      }
+      if (rawStage === 'Hold - Annual Compliance' || rawStage === 'Hold - Audit not filled') {
+        return 'Hold';
+      }
+      return initialStages[0] || 'Document pending from client';
+    }
+    if (rawStage) return rawStage;
     return initialStages[0] || 'Doc collection';
   });
   const [caCs1, setCaCs1] = useState<string>(record.CA_CS1 || '');
@@ -2122,7 +2136,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     onChange={(e) => setStage(e.target.value as OperationStage)}
                     className="w-full px-3 py-2 bg-white border border-blue-200 hover:border-blue-300 focus:border-blue-500 rounded-xl text-xs font-bold text-blue-900 outline-none transition-all cursor-pointer shadow-2xs"
                   >
-                    {!availableStages.includes(stage) && (
+                    {!availableStages.includes(stage) && !(String(teamType).toLowerCase().includes('funding') && stage === 'DSC work in progress') && !(String(teamType).toLowerCase().includes('compliance') && !availableStages.includes(stage)) && (
                       <option value={stage}>
                         {stage}
                       </option>

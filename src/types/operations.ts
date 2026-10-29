@@ -199,6 +199,20 @@ export type OperationStage =
   | 'Mapping issue'
   | 'Hold - Annual Compliance'
   | 'Hold - Audit not filled'
+  | 'Director ITR'
+  | 'Accounting'
+  | 'Audit'
+  | 'Company ITR'
+  | 'ADT1-PVT-LTD/Section8'
+  | 'INC 20A-PVT-LTD/Section8'
+  | 'Form3-LLP'
+  | 'DPT-3-PVT-LTD/Section8'
+  | 'AOC-4-PVT-LTD/Section8'
+  | 'MGT7-PVT-LTD/Section8'
+  | 'Form11-LLP'
+  | 'Form8-LLP'
+  | 'Application Submitted'
+  | 'Annual Compliance'
   | string;
 
 export const INCORPORATION_OPERATION_STAGES: OperationStage[] = [
@@ -225,20 +239,25 @@ export const DEFAULT_OPERATION_STAGES: OperationStage[] = INCORPORATION_OPERATIO
 export const COMPLIANCE_OPERATION_STAGES: OperationStage[] = [
   'Document pending from client',
   'Incorporation pending from client',
-  'Document work in progress',
-  'Document in review to client',
-  'Document approved from client',
-  'Payment pending from client end',
-  'Application submitted',
-  'Application Resubmission',
-  'Application Selected',
-  'Mapping issue',
+  'Director ITR',
+  'Accounting',
+  'Audit',
+  'Company ITR',
+  'ADT1-PVT-LTD/Section8',
+  'INC 20A-PVT-LTD/Section8',
+  'Form3-LLP',
+  'DPT-3-PVT-LTD/Section8',
+  'AOC-4-PVT-LTD/Section8',
+  'MGT7-PVT-LTD/Section8',
+  'Form11-LLP',
+  'Form8-LLP',
+  'Application Submitted',
   'Inelligible',
   'Hold',
-  'Hold - Annual Compliance',
-  'Hold - Audit not filled',
+  'Annual Compliance',
   'Transfer',
-  'Refund'
+  'Refund',
+  'Cancel'
 ];
 
 export const CERTIFICATION_OPERATION_STAGES: OperationStage[] = [
@@ -262,7 +281,6 @@ export const CERTIFICATION_OPERATION_STAGES: OperationStage[] = [
 export const FUNDING_OPERATION_STAGES: OperationStage[] = [
   'Document pending from client',
   'Incorporation pending from client',
-  'DSC work in progress',
   'Draft work in progress',
   'Draft in review to client',
   'Draft approved from client',
@@ -294,9 +312,9 @@ export const ALL_OPERATION_STAGES: OperationStage[] = Array.from(
 /**
  * Returns the relevant Operation Stages based on the record's Team Type.
  * - Incorporation: 16 stages
- * - Compliance: 16 stages
+ * - Compliance: 21 stages
  * - Certification: 15 stages (includes Selected)
- * - Funding: 14 stages (without Selected)
+ * - Funding: 13 stages (without DSC work in progress & Selected)
  * - Default: Incorporation stages
  */
 export function getOperationStagesForTeamType(teamType?: string): OperationStage[] {
