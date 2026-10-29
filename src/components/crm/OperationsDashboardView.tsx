@@ -163,6 +163,7 @@ export const OperationsDashboardView: React.FC = () => {
   const [comp1DateFilter, setComp1DateFilter] = useState<string>(''); // YYYY-MM or YYYY-MM-DD
   const [comp2DateFilter, setComp2DateFilter] = useState<string>('');
   const [comp7DateFilter, setComp7DateFilter] = useState<string>('');
+  const [comp8DateFilter, setComp8DateFilter] = useState<string>(''); // YYYY-MM
   const [comp8SearchQuery, setComp8SearchQuery] = useState<string>('');
 
   // Data states
@@ -563,10 +564,18 @@ export const OperationsDashboardView: React.FC = () => {
   // ==========================================================================
   const comp8Data = useMemo(() => {
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    let currentYear = now.getFullYear();
+    let currentMonth = now.getMonth();
 
-    // Filter records booked or assigned in the current calendar month
+    if (comp8DateFilter) {
+      const parts = comp8DateFilter.split('-');
+      if (parts.length >= 2) {
+        currentYear = Number(parts[0]);
+        currentMonth = Number(parts[1]) - 1; // 0-indexed month
+      }
+    }
+
+    // Filter records booked or assigned in the target calendar month
     const monthRecords = teamFilteredRecords.filter(r => {
       const bInfo = getBookingDate(r);
       const aInfo = getProjectAssignDate(r);
@@ -590,9 +599,20 @@ export const OperationsDashboardView: React.FC = () => {
     }
 
     return list.sort((a, b) => b.count - a.count);
-  }, [teamFilteredRecords, comp8SearchQuery, dealsMap]);
+  }, [teamFilteredRecords, comp8SearchQuery, comp8DateFilter, dealsMap]);
 
-  const currentMonthName = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const comp8MonthDisplayName = useMemo(() => {
+    if (comp8DateFilter) {
+      const parts = comp8DateFilter.split('-');
+      if (parts.length >= 2) {
+        const d = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+        return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      }
+    }
+    return new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  }, [comp8DateFilter]);
+
+  const currentMonthName = comp8MonthDisplayName;
 
   // --------------------------------------------------------------------------
   // RENDER: INDIVIDUAL HOMEPAGE PLACEHOLDER (when toggled)
@@ -1302,29 +1322,53 @@ export const OperationsDashboardView: React.FC = () => {
                   <TrendingUp size={18} />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-gray-900">Scheme Booking Current Month ({currentMonthName})</h3>
-                  <p className="text-[11px] text-gray-500 font-medium">Services booked in the current calendar month</p>
+                  <h3 className="text-base font-black text-gray-900">Scheme Booking Current Month ({comp8MonthDisplayName})</h3>
+                  <p className="text-[11px] text-gray-500 font-medium">Services booked in {comp8MonthDisplayName}</p>
                 </div>
               </div>
 
-              {/* Search Bar / Icon */}
-              <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 w-full sm:w-72">
-                <Search size={14} className="text-gray-400 mr-2 shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search scheme name..."
-                  value={comp8SearchQuery}
-                  onChange={(e) => setComp8SearchQuery(e.target.value)}
-                  className="bg-transparent text-xs text-gray-800 placeholder-gray-400 outline-none w-full font-medium"
-                />
-                {comp8SearchQuery && (
-                  <button
-                    onClick={() => setComp8SearchQuery('')}
-                    className="ml-1 text-gray-400 hover:text-gray-600 cursor-pointer"
-                  >
-                    <X size={12} />
-                  </button>
-                )}
+              {/* Monthwise Calendar Filter & Search Bar */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Month-wise Calendar Filter */}
+                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1 text-xs">
+                  <Calendar size={13} className="text-gray-400 mr-1.5 shrink-0" />
+                  <input
+                    type="month"
+                    value={comp8DateFilter}
+                    onChange={(e) => setComp8DateFilter(e.target.value)}
+                    className="bg-transparent text-xs text-gray-700 font-semibold outline-none cursor-pointer"
+                    title="Filter by Booking Month"
+                  />
+                  {comp8DateFilter && (
+                    <button
+                      onClick={() => setComp8DateFilter('')}
+                      className="ml-1 text-gray-400 hover:text-gray-700 cursor-pointer"
+                      title="Reset to current month"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Search Bar / Icon */}
+                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 w-full sm:w-64">
+                  <Search size={14} className="text-gray-400 mr-2 shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Search scheme name..."
+                    value={comp8SearchQuery}
+                    onChange={(e) => setComp8SearchQuery(e.target.value)}
+                    className="bg-transparent text-xs text-gray-800 placeholder-gray-400 outline-none w-full font-medium"
+                  />
+                  {comp8SearchQuery && (
+                    <button
+                      onClick={() => setComp8SearchQuery('')}
+                      className="ml-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
