@@ -31,10 +31,12 @@ import {
   getDealPendingAmount,
   isValidServiceName
 } from '../../utils/dealSplitUtils';
+import { OperationsDashboardView } from '../../components/crm/OperationsDashboardView';
 
 export const CrmDashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, isSuperAdmin, isHOD, isTL, isHR, currentRole, filterRecords } = useAuth();
+  const { currentUser, isSuperAdmin, isHOD, isTL, isHR, isOperationsHOD, currentRole, filterRecords } = useAuth();
+  const [dashboardSection, setDashboardSection] = useState<'crm' | 'operations'>('crm');
 
   // Instant synchronous hydration from localStorage - zero delay, no flash of 0
   const [deals, setDeals] = useState<any[]>(() => {
@@ -1062,6 +1064,12 @@ export const CrmDashboard = () => {
     }
   };
 
+  const canViewOpsDashboard = Boolean(
+    isSuperAdmin ||
+    isOperationsHOD ||
+    (currentUser?.department && currentUser.department.toLowerCase().includes('operation'))
+  );
+
   return (
     <div className="space-y-8 pb-12">
       {/* Top Header & Role Recognition Banner */}
@@ -1073,6 +1081,31 @@ export const CrmDashboard = () => {
             <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center">
               CRM Executive Dashboard
             </h1>
+
+            {canViewOpsDashboard && (
+              <div className="flex items-center p-1 bg-gray-100 rounded-2xl border border-gray-200 text-xs font-bold">
+                <button
+                  onClick={() => setDashboardSection('crm')}
+                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                    dashboardSection === 'crm'
+                      ? 'bg-white text-gray-900 shadow-sm font-extrabold'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  Sales & CRM
+                </button>
+                <button
+                  onClick={() => setDashboardSection('operations')}
+                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                    dashboardSection === 'operations'
+                      ? 'bg-gradient-to-r from-be-orange to-amber-600 text-white shadow-sm font-extrabold'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  Operations HOD
+                </button>
+              </div>
+            )}
           </div>
           <p className="text-sm text-gray-500 mt-2 font-medium">
             Real-time quotation conversion metrics, daily/monthly revenue insights, target achievements, and top-selling services.
@@ -1123,9 +1156,13 @@ export const CrmDashboard = () => {
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* SECTION 1: QUOTATIONS CONVERSION & REVENUE METRICS CARDS */}
-      {/* ========================================================================= */}
+      {dashboardSection === 'operations' ? (
+        <OperationsDashboardView />
+      ) : (
+        <>
+          {/* ========================================================================= */}
+          {/* SECTION 1: QUOTATIONS CONVERSION & REVENUE METRICS CARDS */}
+          {/* ========================================================================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Card 1: Quotations Sent */}
         <div
@@ -1900,6 +1937,8 @@ export const CrmDashboard = () => {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };

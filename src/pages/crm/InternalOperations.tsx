@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { InternalOperationsAllocationTable, checkRecordAssignedToUser } from '../../components/crm/InternalOperationsAllocationTable';
+import { OperationsDashboardView } from '../../components/crm/OperationsDashboardView';
 import { getStoredInternalOperations } from '../../services/internalOperationsService';
 import { useAuth } from '../../context/AuthContext';
-import { Briefcase, Layers, ShieldCheck, UserCheck } from 'lucide-react';
+import { Briefcase, Layers, ShieldCheck, UserCheck, BarChart3 } from 'lucide-react';
 
 export const InternalOperations = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'dashboard' ? 'dashboard' : 'allocations';
+  const [activeTab, setActiveTab] = useState<'allocations' | 'dashboard'>(initialTab);
   const { currentUser, isOperationsHOD, isLegalHOD, isSuperAdmin, isSales, isTL, isTM } = useAuth();
   const [stats, setStats] = useState({ total: 0, pending: 0, allocated: 0, myAssigned: 0 });
 
@@ -129,6 +133,38 @@ export const InternalOperations = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Navigation Tabs */}
+          <div className="flex items-center p-1 bg-gray-100 rounded-2xl border border-gray-200 text-xs font-bold">
+            <button
+              onClick={() => {
+                setActiveTab('allocations');
+                setSearchParams({});
+              }}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'allocations'
+                  ? 'bg-white text-gray-900 shadow-sm font-extrabold'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <Layers size={14} />
+              <span>Delegation Hub</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('dashboard');
+                setSearchParams({ tab: 'dashboard' });
+              }}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'dashboard'
+                  ? 'bg-gradient-to-r from-be-orange to-amber-600 text-white shadow-sm font-extrabold'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <BarChart3 size={14} />
+              <span>HOD Dashboard</span>
+            </button>
+          </div>
+
           <button
             onClick={() => navigate('/crm/deals')}
             className="flex items-center px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs cursor-pointer"
@@ -139,8 +175,12 @@ export const InternalOperations = () => {
         </div>
       </div>
 
-      {/* Global Allocation Table Component (with hideCardHeader to prevent duplicate headers) */}
-      <InternalOperationsAllocationTable mode="global" hideCardHeader={true} />
+      {/* Body View: Tab Switch */}
+      {activeTab === 'dashboard' ? (
+        <OperationsDashboardView />
+      ) : (
+        <InternalOperationsAllocationTable mode="global" hideCardHeader={true} />
+      )}
     </div>
   );
 };

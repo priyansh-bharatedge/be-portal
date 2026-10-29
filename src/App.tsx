@@ -14,6 +14,7 @@ const CrmDashboard        = lazy(() => import('./pages/crm/Dashboard').then(m =>
 const Deals               = lazy(() => import('./pages/crm/Deals').then(m => ({ default: m.Deals })));
 const DealDetails         = lazy(() => import('./pages/crm/DealDetails').then(m => ({ default: m.DealDetails })));
 const InternalOperations  = lazy(() => import('./pages/crm/InternalOperations').then(m => ({ default: m.InternalOperations })));
+const OperationsDashboardView = lazy(() => import('./components/crm/OperationsDashboardView').then(m => ({ default: m.OperationsDashboardView })));
 const Clients             = lazy(() => import('./pages/crm/Clients').then(m => ({ default: m.Clients })));
 const Companies           = lazy(() => import('./pages/crm/Companies').then(m => ({ default: m.Companies })));
 const CrmDocuments        = lazy(() => import('./pages/crm/Documents').then(m => ({ default: m.Documents })));
@@ -78,6 +79,7 @@ function App() {
             <Route path="/crm/deals"                element={<Lazy><Deals /></Lazy>} />
             <Route path="/crm/deals/:id"            element={<Lazy><DealDetails /></Lazy>} />
             <Route path="/crm/internal-operations"  element={<Lazy><InternalOperations /></Lazy>} />
+            <Route path="/crm/operations-dashboard" element={<Lazy><OperationsDashboardView /></Lazy>} />
             <Route path="/crm/clients"              element={<Lazy><Clients /></Lazy>} />
             <Route path="/crm/companies"      element={<Lazy><Companies /></Lazy>} />
             <Route path="/crm/documents"      element={<Lazy><CrmDocuments /></Lazy>} />
