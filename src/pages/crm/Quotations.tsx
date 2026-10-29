@@ -161,7 +161,15 @@ export function extractServicesFromQuotation(quotationOrZoho: any): DealService[
     ''
   ).trim();
 
-  if (
+  const rawAmt = quotationOrZoho.amount
+    ? String(quotationOrZoho.amount).replace(/[^0-9.]/g, '')
+    : (quotationOrZoho.Grand_Total
+      ? String(quotationOrZoho.Grand_Total).replace(/[^0-9.]/g, '')
+      : (quotationOrZoho.totals?.grandTotal
+        ? String(quotationOrZoho.totals.grandTotal)
+        : (quotationOrZoho.Subtotal ? String(quotationOrZoho.Subtotal).replace(/[^0-9.]/g, '') : '')));
+
+  const hasValidSingleService = Boolean(
     singleServiceStr &&
     singleServiceStr !== 'Custom Services' &&
     singleServiceStr !== 'Services' &&
@@ -169,24 +177,20 @@ export function extractServicesFromQuotation(quotationOrZoho: any): DealService[
     singleServiceStr !== 'N/A' &&
     !/^\d+\s+Services$/i.test(singleServiceStr) &&
     !singleServiceStr.startsWith('QT-')
-  ) {
-    const rawAmt = quotationOrZoho.amount
-      ? String(quotationOrZoho.amount).replace(/[^0-9.]/g, '')
-      : (quotationOrZoho.Grand_Total
-        ? String(quotationOrZoho.Grand_Total).replace(/[^0-9.]/g, '')
-        : (quotationOrZoho.totals?.grandTotal
-          ? String(quotationOrZoho.totals.grandTotal)
-          : ''));
+  );
 
+  if (hasValidSingleService || (rawAmt && Number(rawAmt) > 0)) {
     const rawSubtotal = quotationOrZoho.totals?.subtotal
       ? String(quotationOrZoho.totals.subtotal)
       : (quotationOrZoho.Subtotal
         ? String(quotationOrZoho.Subtotal).replace(/[^0-9.]/g, '')
         : (rawAmt ? String(Number((Number(rawAmt) / 1.18).toFixed(2))) : ''));
 
+    const serviceName = hasValidSingleService ? singleServiceStr : (singleServiceStr || 'Professional Services');
+
     return [{
       id: '1',
-      name: singleServiceStr,
+      name: serviceName,
       totalAmount: rawAmt,
       baseAmount: rawSubtotal,
       notes: '',

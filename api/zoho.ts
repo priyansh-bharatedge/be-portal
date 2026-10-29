@@ -2410,13 +2410,24 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       const isNumeric = /^\d{15,}$/.test(targetId);
       if (!isNumeric && targetId) {
         try {
-          const sRes = await fetch(`${apiBase}/crm/v8/${moduleName}/search?criteria=(Name:contains:${encodeURIComponent(targetId)})`, {
+          // 1. Search by word (works across Subject, Name, Quotation Number, etc.)
+          let sRes = await fetch(`${apiBase}/crm/v8/${moduleName}/search?word=${encodeURIComponent(targetId)}`, {
             method: 'GET',
             headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
           });
-          const sData: any = await sRes.json();
+          let sData: any = await sRes.json();
           if (sData.data && sData.data.length > 0 && sData.data[0].id) {
             targetId = String(sData.data[0].id);
+          } else {
+            // 2. Fallback to valid Zoho CRM criteria comparators: starts_with or equals
+            sRes = await fetch(`${apiBase}/crm/v8/${moduleName}/search?criteria=((Name:starts_with:${encodeURIComponent(targetId)}) or (Name:equals:${encodeURIComponent(targetId)}))`, {
+              method: 'GET',
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            });
+            sData = await sRes.json();
+            if (sData.data && sData.data.length > 0 && sData.data[0].id) {
+              targetId = String(sData.data[0].id);
+            }
           }
         } catch (_) {}
       }
