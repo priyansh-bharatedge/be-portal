@@ -3962,11 +3962,11 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         'Board_Resolution_name', 'Board_Resolution_Date', 'Board_Resolution_status', 'Board_Resolution_File_Upload',
         'Share_Certificate_name', 'Share_Certificate_Date', 'Share_Certificate_status', 'Share_Certificate_File_Upload',
         'Application_submission_name', 'Application_submission_Submission_Date', 'Application_submission_status', 'Application_submission_File_Upload',
-        'Application_registration_number', 'Application_submission', 'Application_submission_Portal_User_ID', 'Application_submission_Portal_Password',
+        'Application_registration_number',
         'Director_ITR_Company_ITR_name', 'Director_ITR_Company_ITR_status', 'Director_ITR_Company_ITR_File_Upload',
         'DPR_Pitch_deck_creation_name', 'DPR_Pitch_deck_creation_File_Upload',
         'ADT_1_File_Upload', 'INC_20_A_File_Upload',
-        'After_Allocation_Workflow', 'CA_CS_1', 'CA_CS_2', 'Company_Type', 'Tag'
+        'After_Allocation_Workflow', 'CA_CS_1', 'CA_CS_2', 'Tag'
       ].join(',');
 
       if (method === 'GET') {
@@ -4302,7 +4302,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
     if ((action === 'get-deals' || action === 'deals') && method === 'GET') {
       const moduleName = process.env.VITE_ZOHO_DEALS_MODULE_NAME || 'Deals';
-      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Client_Email_address,Gst_number,Pan_number,Aadhaar_Card,Billing_address,Company_address,City,State,Bank_details,Accounts_remark,Remark,Remarks,Description,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
+      const dealFields = 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Client_Email_address,Gst_number,Pan_number,Aadhaar_Card,Billing_address,Company_address,City,State,Bank_details,Accounts_remark,Remark,Description,Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
       return executeZohoGet(apiBase, moduleName, dealFields, req, res, urlObj, 'deals');
     }
 
