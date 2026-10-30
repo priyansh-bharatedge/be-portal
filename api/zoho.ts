@@ -3980,10 +3980,24 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
             headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
           });
+          if (crmRes.status === 401) {
+            cachedToken = null;
+            accessToken = await getAccessToken();
+            crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
+              headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+            });
+          }
           if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
             crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
               headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
             });
+            if (crmRes.status === 401) {
+              cachedToken = null;
+              accessToken = await getAccessToken();
+              crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
+                headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+              });
+            }
           }
           if (crmRes && crmRes.status === 200) {
             const crmData: any = await crmRes.json();
