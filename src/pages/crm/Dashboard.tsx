@@ -32,11 +32,24 @@ import {
   isValidServiceName
 } from '../../utils/dealSplitUtils';
 import { OperationsDashboardView } from '../../components/crm/OperationsDashboardView';
+import { SuperAdminDashboardView } from '../../components/crm/SuperAdminDashboardView';
 
 export const CrmDashboard = () => {
   const navigate = useNavigate();
   const { currentUser, isSuperAdmin, isHOD, isTL, isHR, isOperationsHOD, currentRole, filterRecords } = useAuth();
-  const [dashboardSection, setDashboardSection] = useState<'crm' | 'operations'>('crm');
+
+  const isSuperAdminUser = Boolean(
+    isSuperAdmin ||
+    currentRole === 'Super Admin' ||
+    (currentUser?.role as string) === 'Super Admin' ||
+    currentUser?.email?.toLowerCase() === 'superadmin@be.com' ||
+    currentUser?.email === 'md@bharat-edge.com'
+  );
+
+  const [dashboardSection, setDashboardSection] = useState<'superadmin' | 'crm' | 'operations'>(() => {
+    if (isSuperAdminUser) return 'superadmin';
+    return 'crm';
+  });
 
   // Instant synchronous hydration from localStorage - zero delay, no flash of 0
   const [deals, setDeals] = useState<any[]>(() => {
@@ -1084,6 +1097,19 @@ export const CrmDashboard = () => {
 
             {canViewOpsDashboard && (
               <div className="flex items-center p-1 bg-gray-100 rounded-2xl border border-gray-200 text-xs font-bold">
+                {isSuperAdminUser && (
+                  <button
+                    onClick={() => setDashboardSection('superadmin')}
+                    className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                      dashboardSection === 'superadmin'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm font-black'
+                        : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                  >
+                    <Crown size={13} className={dashboardSection === 'superadmin' ? 'text-amber-100' : 'text-amber-500'} />
+                    Super Admin
+                  </button>
+                )}
                 <button
                   onClick={() => setDashboardSection('crm')}
                   className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
@@ -1156,7 +1182,9 @@ export const CrmDashboard = () => {
         </div>
       </div>
 
-      {dashboardSection === 'operations' ? (
+      {dashboardSection === 'superadmin' ? (
+        <SuperAdminDashboardView />
+      ) : dashboardSection === 'operations' ? (
         <OperationsDashboardView />
       ) : (
         <>
