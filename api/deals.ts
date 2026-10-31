@@ -121,6 +121,19 @@ function generateMockDeals(page: number, perPage: number) {
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
+interface DealsMemoryCache {
+  criteria: string;
+  data: any[];
+  total: number;
+  timestamp: number;
+}
+let dealsMemoryCache: DealsMemoryCache | null = null;
+const DEALS_CACHE_TTL_MS = 45000; // 45-second cache for instant multi-tab performance
+
+export function invalidateDealsCache() {
+  dealsMemoryCache = null;
+}
+
 export default async function dealsHandler(req: any, res: any) {
   try {
     const url = req.url || '';
@@ -130,6 +143,14 @@ export default async function dealsHandler(req: any, res: any) {
     const pageParam = searchParams.get('page') || req.query?.page || '1';
     const perPageParam = searchParams.get('per_page') || req.query?.per_page || '100';
     const pageToken = searchParams.get('page_token') || req.query?.page_token || null;
+    const isForceRefresh =
+      searchParams.get('refresh') === 'true' ||
+      req.query?.refresh === 'true' ||
+      searchParams.get('clear_cache') === 'true';
+    const isFetchAll =
+      searchParams.get('fetchAll') !== 'false' &&
+      searchParams.get('all') !== 'false' &&
+      !pageToken;
 
     const DEFAULT_DEAL_FIELDS =
       'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,amount_if_you_have_kindly_put_0,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Client_Email_address,Gst_number,Pan_number,Aadhaar_Card,Billing_address,Company_address,City,State,Bank_details,Accounts_remark,Partner_BDM,Has_Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot';
@@ -178,6 +199,34 @@ export default async function dealsHandler(req: any, res: any) {
       });
     }
 
+    const fetchFreshAccessToken = async (): Promise<string> => {
+      const authDomain = datacenterUrl.replace(/\/$/, '');
+      const tokenEndpoint = `${authDomain}/oauth/v2/token`;
+      const tokenParams = new URLSearchParams({
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'refresh_token',
+      });
+      const tokenResponse = await fetch(tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenParams.toString(),
+      });
+      const tokenData: any = await tokenResponse.json();
+      if (!tokenResponse.ok || !tokenData.access_token) {
+        throw new Error(tokenData.error || tokenData.message || 'Failed to obtain access token');
+      }
+      cachedToken = tokenData.access_token;
+      tokenExpiry = Date.now() + (Number(tokenData.expires_in) || 3600) * 1000;
+      try {
+        const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
+        fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+        fs.writeFileSync(tokenPath, JSON.stringify({ token: cachedToken, expiry: tokenExpiry }));
+      } catch (_) {}
+      return (cachedToken || '') as string;
+    };
+
     // 1. Fetch Fresh Access Token using Refresh Token (with memory and file caching)
     const now = Date.now();
     let accessToken = cachedToken;
@@ -197,49 +246,205 @@ export default async function dealsHandler(req: any, res: any) {
     }
 
     if (!accessToken || tokenExpiry <= now + 60000) {
-      const authDomain = datacenterUrl.replace(/\/$/, '');
-      const tokenEndpoint = `${authDomain}/oauth/v2/token`;
-
-      const tokenParams = new URLSearchParams({
-        refresh_token: refreshToken,
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: 'refresh_token',
-      });
-
-      const tokenResponse = await fetch(tokenEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: tokenParams.toString(),
-      });
-
-      const tokenData: any = await tokenResponse.json();
-
-      if (!tokenResponse.ok || !tokenData.access_token) {
-        console.error('Zoho Auth Error:', tokenData);
-        return res.status(tokenResponse.status || 401).json({
+      try {
+        accessToken = await fetchFreshAccessToken();
+      } catch (authErr: any) {
+        console.error('Zoho Auth Error:', authErr);
+        return res.status(401).json({
           error: 'Authentication failed with Zoho OAuth Server',
-          details: tokenData.error || tokenData.message || 'Invalid credentials or refresh token',
+          details: authErr?.message || 'Invalid credentials or refresh token',
         });
       }
-
-      accessToken = tokenData.access_token;
-      cachedToken = accessToken;
-      tokenExpiry = now + (Number(tokenData.expires_in) || 3600) * 1000;
-      try {
-        const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
-        fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
-        fs.writeFileSync(tokenPath, JSON.stringify({ token: accessToken, expiry: tokenExpiry }));
-      } catch (_) {}
     }
 
     const apiBase = getZohoApiBaseUrl(datacenterUrl);
     const rawCriteria = searchParams.get('criteria') || req.query?.criteria || '';
     const criteria = combineWithOctoberFilter(rawCriteria);
 
-    // 2. Build Zoho CRM Deals API URL with Pagination & Fields (Search endpoint with October 2026 filter)
+    // Fast Cache Return: If full deals dataset is cached for this criteria, return immediately
+    if (
+      !isForceRefresh &&
+      isFetchAll &&
+      dealsMemoryCache &&
+      dealsMemoryCache.criteria === criteria &&
+      Date.now() - dealsMemoryCache.timestamp < DEALS_CACHE_TTL_MS
+    ) {
+      return res.status(200).json({
+        success: true,
+        data: dealsMemoryCache.data,
+        info: {
+          per_page: dealsMemoryCache.data.length,
+          page: 1,
+          count: dealsMemoryCache.data.length,
+          total_records: dealsMemoryCache.total,
+          more_records: false,
+          next_page_token: null,
+          previous_page_token: null,
+        },
+        isMockData: false,
+        cached: true,
+      });
+    }
+
+    // 2. Fetch Total Record Count from Zoho CRM API (actions/count) with criteria
+    const countUrl = `${apiBase}/crm/v8/Deals/actions/count?criteria=${encodeURIComponent(criteria)}`;
+    let countResponse = await fetch(countUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    }).catch((err) => {
+      console.warn('Actions count fetch error:', err);
+      return null;
+    });
+
+    if (countResponse && countResponse.status === 401) {
+      cachedToken = null;
+      accessToken = await fetchFreshAccessToken().catch(() => null);
+      if (accessToken) {
+        countResponse = await fetch(countUrl, {
+          method: 'GET',
+          headers: {
+            Authorization: `Zoho-oauthtoken ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }).catch(() => null);
+      }
+    }
+
+    let totalRecords: number | null = null;
+    if (countResponse && countResponse.ok) {
+      try {
+        const countData: any = await countResponse.json();
+        if (countData && countData.count !== undefined) {
+          totalRecords = parseInt(String(countData.count), 10);
+        }
+      } catch (err) {
+        console.warn('Error parsing count response:', err);
+      }
+    }
+
+    // 3. Multi-page parallel fetch: When isFetchAll is active, retrieve all pages to provide complete deals dataset across all tabs
+    if (isFetchAll && totalRecords !== null && totalRecords > 0) {
+      const totalPages = Math.max(1, Math.min(Math.ceil(totalRecords / 200), 10));
+
+      const pagePromises = Array.from({ length: totalPages }, (_, idx) => idx + 1).map(async (p) => {
+        const pageUrl = new URL(`${apiBase}/crm/v8/Deals/search`);
+        pageUrl.searchParams.set('criteria', String(criteria));
+        pageUrl.searchParams.set('page', p.toString());
+        pageUrl.searchParams.set('per_page', '200');
+        pageUrl.searchParams.set('fields', fields);
+
+        let pRes = await fetch(pageUrl.toString(), {
+          headers: {
+            Authorization: `Zoho-oauthtoken ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (pRes.status === 401) {
+          cachedToken = null;
+          accessToken = await fetchFreshAccessToken().catch(() => null);
+          if (accessToken) {
+            pRes = await fetch(pageUrl.toString(), {
+              headers: {
+                Authorization: `Zoho-oauthtoken ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+            });
+          }
+        }
+
+        if (!pRes.ok || pRes.status === 204) return [];
+        const pData: any = await pRes.json().catch(() => null);
+        return Array.isArray(pData?.data) ? pData.data : [];
+      });
+
+      const milestonePromises = !isCustomFields
+        ? Array.from({ length: totalPages }, (_, idx) => idx + 1).map(async (p) => {
+            const pageUrl = new URL(`${apiBase}/crm/v8/Deals/search`);
+            pageUrl.searchParams.set('criteria', String(criteria));
+            pageUrl.searchParams.set('page', p.toString());
+            pageUrl.searchParams.set('per_page', '200');
+            pageUrl.searchParams.set('fields', MILESTONE_DEAL_FIELDS);
+
+            const mRes = await fetch(pageUrl.toString(), {
+              headers: {
+                Authorization: `Zoho-oauthtoken ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+            }).catch(() => null);
+
+            if (!mRes || !mRes.ok || mRes.status === 204) return [];
+            const mData: any = await mRes.json().catch(() => null);
+            return Array.isArray(mData?.data) ? mData.data : [];
+          })
+        : [];
+
+      const [pageResults, milestoneResults] = await Promise.all([
+        Promise.all(pagePromises),
+        Promise.all(milestonePromises),
+      ]);
+
+      let allMerged = pageResults.flat();
+      const milestoneMap = new Map<string, any>();
+      milestoneResults.flat().forEach((m: any) => {
+        if (m && m.id) milestoneMap.set(String(m.id), m);
+      });
+
+      allMerged.forEach((deal: any) => {
+        if (deal && deal.id) {
+          const m = milestoneMap.get(String(deal.id));
+          if (m) {
+            Object.assign(deal, m);
+          }
+        }
+      });
+
+      // Strict October 2026 filter
+      allMerged = allMerged.filter((deal: any) => {
+        if (!deal) return false;
+        const rawDate = (
+          deal.Booking_Date ||
+          deal.Payment_Date ||
+          deal.Closing_Date ||
+          deal.Created_Time ||
+          deal.created_time ||
+          deal.CreatedTime ||
+          deal.date ||
+          (Array.isArray(deal.Subform_1) && deal.Subform_1[0]?.Payment_received_date) ||
+          (Array.isArray(deal.Subform_1) && deal.Subform_1[0]?.Created_Time)
+        );
+        if (!rawDate) return false;
+        const createdMs = new Date(rawDate).getTime();
+        return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : false;
+      });
+
+      dealsMemoryCache = {
+        criteria,
+        data: allMerged,
+        total: totalRecords || allMerged.length,
+        timestamp: Date.now(),
+      };
+
+      return res.status(200).json({
+        success: true,
+        data: allMerged,
+        info: {
+          per_page: allMerged.length,
+          page: 1,
+          count: allMerged.length,
+          total_records: totalRecords || allMerged.length,
+          more_records: false,
+          next_page_token: null,
+          previous_page_token: null,
+        },
+        isMockData: false,
+      });
+    }
+
+    // 4. Single-page fetch (when fetchAll is false or pageToken is passed)
     let zohoApiUrl = new URL(`${apiBase}/crm/v8/Deals/search`);
     zohoApiUrl.searchParams.set('criteria', String(criteria));
 
@@ -252,7 +457,6 @@ export default async function dealsHandler(req: any, res: any) {
     zohoApiUrl.searchParams.set('per_page', perPage.toString());
     zohoApiUrl.searchParams.set('fields', fields);
 
-    // Parallel Milestone URL to fetch R1-R8 payment slots within Zoho's 50-field limit
     let zohoMilestoneUrl: URL | null = null;
     if (!isCustomFields) {
       zohoMilestoneUrl = new URL(`${apiBase}/crm/v8/Deals/search`);
@@ -263,10 +467,7 @@ export default async function dealsHandler(req: any, res: any) {
       zohoMilestoneUrl.searchParams.set('fields', MILESTONE_DEAL_FIELDS);
     }
 
-    // 3. Fetch Total Record Count from Zoho CRM API (actions/count) with criteria
-    const countUrl = `${apiBase}/crm/v8/Deals/actions/count?criteria=${encodeURIComponent(criteria)}`;
-
-    const [crmFetchResult, milestoneFetchResult, countFetchResult] = await Promise.all([
+    const [crmFetchResult, milestoneFetchResult] = await Promise.all([
       fetch(zohoApiUrl.toString(), {
         method: 'GET',
         headers: {
@@ -286,46 +487,17 @@ export default async function dealsHandler(req: any, res: any) {
             return null;
           })
         : Promise.resolve(null),
-      fetch(countUrl, {
-        method: 'GET',
-        headers: {
-          Authorization: `Zoho-oauthtoken ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }).catch((err) => {
-        console.warn('Actions count fetch error:', err);
-        return null;
-      }),
     ]);
 
     let crmResponse = crmFetchResult;
     let milestoneResponse = milestoneFetchResult;
-    let countResponse = countFetchResult;
 
     // Retry once if token expired
-    if (crmResponse.status === 401 || (countResponse && countResponse.status === 401)) {
+    if (crmResponse.status === 401) {
       cachedToken = null;
-      accessToken = null;
-      // Re-fetch token and retry
-      const authDomain = datacenterUrl.replace(/\/$/, '');
-      const tokenEndpoint = `${authDomain}/oauth/v2/token`;
-      const tokenParams = new URLSearchParams({
-        refresh_token: refreshToken,
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: 'refresh_token',
-      });
-      const retryTokenRes = await fetch(tokenEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenParams.toString(),
-      });
-      const retryTokenData: any = await retryTokenRes.json();
-      if (retryTokenRes.ok && retryTokenData.access_token) {
-        accessToken = retryTokenData.access_token;
-        cachedToken = accessToken;
-        tokenExpiry = now + (Number(retryTokenData.expires_in) || 3600) * 1000;
-        const [retryCrm, retryMilestone, retryCount] = await Promise.all([
+      accessToken = await fetchFreshAccessToken().catch(() => null);
+      if (accessToken) {
+        const [retryCrm, retryMilestone] = await Promise.all([
           fetch(zohoApiUrl.toString(), {
             method: 'GET',
             headers: {
@@ -342,17 +514,9 @@ export default async function dealsHandler(req: any, res: any) {
                 },
               }).catch(() => null)
             : Promise.resolve(null),
-          fetch(countUrl, {
-            method: 'GET',
-            headers: {
-              Authorization: `Zoho-oauthtoken ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }).catch(() => null),
         ]);
         crmResponse = retryCrm;
         milestoneResponse = retryMilestone;
-        countResponse = retryCount;
       }
     }
 
@@ -391,8 +555,7 @@ export default async function dealsHandler(req: any, res: any) {
       }
     }
 
-    let totalRecords: number | null = null;
-    if (countResponse && countResponse.ok) {
+    if (totalRecords === null && countResponse && countResponse.ok) {
       try {
         const countData: any = await countResponse.json();
         if (countData && countData.count !== undefined) {

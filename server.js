@@ -83,12 +83,12 @@ const server = http.createServer(async (req, res) => {
 
   try {
     // 1. Zoho API Endpoints (/api/zoho/* or /api/zoho or /api/deals)
-    if (pathname.startsWith('/api/zoho')) {
-      return await zohoHandler(req, res);
+    if (pathname === '/api/deals' || pathname.startsWith('/api/deals') || pathname === '/api/zoho/get-deals' || pathname.startsWith('/api/zoho/get-deals')) {
+      return await dealsHandler(req, res);
     }
 
-    if (pathname === '/api/deals' || pathname.startsWith('/api/deals')) {
-      return await dealsHandler(req, res);
+    if (pathname.startsWith('/api/zoho')) {
+      return await zohoHandler(req, res);
     }
 
     // 2. Send OTP Endpoint

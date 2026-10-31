@@ -1852,6 +1852,10 @@ export const Deals = () => {
         const queryParams = new URLSearchParams();
         queryParams.set('page', pageToFetch.toString());
         queryParams.set('per_page', sizePerPage.toString());
+        queryParams.set('fetchAll', 'true');
+        if (showToast) {
+          queryParams.set('refresh', 'true');
+        }
 
         if (pageTokenToFetch) {
           queryParams.set('page_token', pageTokenToFetch);
@@ -1969,46 +1973,20 @@ export const Deals = () => {
     [itemsPerPage]
   );
 
-  // Navigation handlers based on reference code
+  // Navigation handlers: smooth client-side pagination across full deals dataset
   const handlePageChange = (targetPage: number) => {
-    if (isFetchingZoho || targetPage === currentPage) return;
-
-    if (targetPage === currentPage + 1) {
-      // Next Page
-      const nextToken = paginationInfo?.next_page_token || null;
-      setTokenHistory(prev => {
-        const updated = [...prev];
-        updated[targetPage - 1] = nextToken;
-        return updated;
-      });
-      setCurrentPage(targetPage);
-      setCurrentToken(nextToken);
-      fetchDeals(targetPage, nextToken, itemsPerPage);
-    } else if (targetPage === currentPage - 1) {
-      // Prev Page
-      const prevToken = tokenHistory[targetPage - 1] || null;
-      setCurrentPage(targetPage);
-      setCurrentToken(prevToken);
-      fetchDeals(targetPage, prevToken, itemsPerPage);
-    } else {
-      // Direct jump (e.g. page 1 or specific page)
-      const token = tokenHistory[targetPage - 1] || null;
-      setCurrentPage(targetPage);
-      setCurrentToken(token);
-      fetchDeals(targetPage, token, itemsPerPage);
-    }
+    if (targetPage === currentPage || targetPage < 1) return;
+    setCurrentPage(targetPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleItemsPerPageChange = (newPerPage: number) => {
     setItemsPerPage(newPerPage);
     setCurrentPage(1);
-    setCurrentToken(null);
-    setTokenHistory([null]);
-    fetchDeals(1, null, newPerPage);
   };
 
   const handleRefresh = () => {
-    fetchDeals(currentPage, currentToken, itemsPerPage, true);
+    fetchDeals(1, null, itemsPerPage, true);
   };
 
   // Initial load and perPage change based on reference code
@@ -2056,7 +2034,8 @@ export const Deals = () => {
   useEffect(() => {
     // Filter deals based on activeTab, quickFilter, statusFilter and searchQuery to get active page slice
     const filtered = deals.filter(deal => {
-      if (isUserTL) {
+      const isQueueTab = activeTab === 'Account Queue' || activeTab === 'Account Verified' || activeTab === 'Remaining Payments' || activeTab === 'Legal Queue' || activeTab === 'Received';
+      if (isUserTL && !isQueueTab) {
         if (activeTab === 'My Team Deals') {
           if (!isDealOwnedBySubordinate(deal, currentUser, effectiveEmployees)) return false;
         } else {
@@ -3386,7 +3365,9 @@ export const Deals = () => {
       // If user is TL:
       // - "My Team Deals" tab: shows ONLY subordinate deals
       // - "All Deals" and other personal tabs: shows ONLY TL's own deals (not team members')
-      if (isUserTL) {
+      // - Queue tabs (Account Queue, Account Verified, Remaining Payments, Legal Queue, Received) are department-wide and never filtered by TL ownership
+      const isQueueTab = activeTab === 'Account Queue' || activeTab === 'Account Verified' || activeTab === 'Remaining Payments' || activeTab === 'Legal Queue' || activeTab === 'Received';
+      if (isUserTL && !isQueueTab) {
         if (activeTab === 'My Team Deals') {
           if (!isDealOwnedBySubordinate(deal, currentUser, effectiveEmployees)) return false;
         } else {
@@ -3554,6 +3535,7 @@ export const Deals = () => {
             key={tabItem.id}
             onClick={() => {
               setActiveTab(tabItem.id);
+              setCurrentPage(1);
               // Clear quick filter if manually switching tabs
               if (quickFilter !== 'all') setQuickFilter('all');
             }}
@@ -3629,8 +3611,8 @@ export const Deals = () => {
 
       {/* Deals Table & Accounts Remaining Payments View */}
       {(() => {
-        const totalDealsCount = (isFiltered || isSalesScoped) ? filteredDeals.length : (totalRecordsCount !== null ? totalRecordsCount : (paginationInfo?.total_records || filteredDeals.length));
-        const paginatedDeals = (isFiltered || isSalesScoped) ? filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) : filteredDeals;
+        const totalDealsCount = filteredDeals.length;
+        const paginatedDeals = filteredDeals.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
 
 
@@ -4327,13 +4309,8 @@ export const Deals = () => {
                 onPageChange={handlePageChange}
                 onItemsPerPageChange={handleItemsPerPageChange}
                 itemLabel="deals"
-                hasMoreOnServer={Boolean(!isFiltered && paginationInfo?.more_records)}
-                onLoadMoreServer={() => {
-                  if (paginationInfo?.more_records && paginationInfo?.next_page_token) {
-                    handlePageChange(currentPage + 1);
-                  }
-                }}
-                isLoadingMoreServer={isFetchingZoho}
+                hasMoreOnServer={false}
+                isLoadingMoreServer={false}
               />
             )}
           </div>
