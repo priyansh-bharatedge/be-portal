@@ -1453,8 +1453,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200/70">
               {/* Brand Title on Left */}
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 text-white flex items-center justify-center shadow-md shadow-indigo-500/25">
-                  <Sparkles size={20} />
+                <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200 p-1.5 flex items-center justify-center shadow-sm">
+                  <img src="/logo.png" alt="BharatEdge" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -1705,8 +1705,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   <div className="w-36 h-36 mx-auto rounded-full bg-white/95 border border-indigo-100 shadow-[0_10px_35px_rgba(99,102,241,0.18)] flex flex-col items-center justify-center relative group-hover:border-indigo-300 group-hover:shadow-[0_12px_45px_rgba(99,102,241,0.28)] transition-all">
                     <div className="absolute inset-0 rounded-full border border-dashed border-indigo-200 animate-[spin_25s_linear_infinite]" />
 
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-600 via-purple-500 to-cyan-400 shadow-[0_10px_30px_rgba(99,102,241,0.45),inset_-4px_-4px_10px_rgba(0,0,0,0.25),inset_4px_4px_10px_rgba(255,255,255,0.85)] flex items-center justify-center text-white transform group-hover:scale-110 transition-transform">
-                      <Sparkles size={16} />
+                    <div className="w-16 h-16 rounded-full bg-white shadow-[0_10px_30px_rgba(99,102,241,0.25),0_0_0_2px_rgba(99,102,241,0.2)] p-2.5 flex items-center justify-center transform group-hover:scale-110 transition-transform relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-tr from-indigo-50/60 via-purple-50/30 to-cyan-50/50 rounded-full pointer-events-none" />
+                      <img
+                        src="/logo.png"
+                        alt="BharatEdge Logo"
+                        className="w-11 h-11 object-contain relative z-10 drop-shadow-sm"
+                      />
                     </div>
 
                     <p className="text-[10px] font-black text-slate-900 mt-1.5 tracking-tight group-hover:text-indigo-600 transition-colors">
