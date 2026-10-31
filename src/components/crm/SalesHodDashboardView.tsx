@@ -655,261 +655,112 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   }, [salesTree]);
 
   // ============================================================================
-  // FLOW CANVAS COMPUTATIONS (LIGHT THEME SCREENSHOT MATCH)
+  // PROGRESSIVE HIERARCHY COMPUTATIONS (EXACT USER SPECIFICATION)
+  // Logo -> Sales -> 3 Branches (Ahmedabad, Jaipur, Chennai) -> TLs -> TMs
   // ============================================================================
+  const salesDept = salesTree.children?.[0] || salesTree;
 
-  const flowCategories = useMemo(() => {
-    const branches = salesTree.children?.[0]?.children || [];
-    const ahmedabad = branches.find(b => b.id === 'branch_ahmedabad') || {
-      id: 'branch_ahmedabad',
-      name: 'Ahmedabad Branch',
-      subtitle: 'HQ & West Region Cluster',
-      target: TARGET_BENCHMARKS.branchAhmedabad,
-      achievement: 0,
-      shortfall: TARGET_BENCHMARKS.branchAhmedabad,
-      dealsCount: 0,
-      children: []
-    };
-    const jaipur = branches.find(b => b.id === 'branch_jaipur') || {
-      id: 'branch_jaipur',
-      name: 'Jaipur Branch',
-      subtitle: 'North Region Cluster',
-      target: TARGET_BENCHMARKS.branchJaipur,
-      achievement: 0,
-      shortfall: TARGET_BENCHMARKS.branchJaipur,
-      dealsCount: 0,
-      children: []
-    };
-    const chennai = branches.find(b => b.id === 'branch_chennai') || {
-      id: 'branch_chennai',
-      name: 'Chennai Branch',
-      subtitle: 'South Region Cluster',
-      target: TARGET_BENCHMARKS.branchChennai,
-      achievement: 0,
-      shortfall: TARGET_BENCHMARKS.branchChennai,
-      dealsCount: 0,
-      children: []
-    };
+  // Exactly 3 Branches (Ahmedabad, Jaipur, Chennai) with their TLs and TMs
+  const branches = useMemo(() => {
+    const rawBranches = salesDept.children || [];
+    const targetBranchIds = ['branch_ahmedabad', 'branch_jaipur', 'branch_chennai'];
 
-    const countBdm = (b: any) => {
-      return (b.children || []).reduce((acc: number, tl: any) => acc + (tl.children?.length || 0), 0);
-    };
-
-    return [
-      {
-        id: 'branch_ahmedabad',
-        name: 'Ahmedabad Branch',
-        countLabel: `${countBdm(ahmedabad) || 19} BDMs`,
-        countNum: countBdm(ahmedabad) || 19,
-        subtitle: 'HQ & Western Region Cluster',
-        icon: MapPin,
-        target: ahmedabad.target,
-        achievement: ahmedabad.achievement,
-        shortfall: ahmedabad.shortfall,
-        dealsCount: ahmedabad.dealsCount,
-        data: ahmedabad
-      },
-      {
-        id: 'branch_jaipur',
-        name: 'Jaipur Branch',
-        countLabel: `${countBdm(jaipur) || 7} BDMs`,
-        countNum: countBdm(jaipur) || 7,
-        subtitle: 'North Region Cluster',
-        icon: MapPin,
-        target: jaipur.target,
-        achievement: jaipur.achievement,
-        shortfall: jaipur.shortfall,
-        dealsCount: jaipur.dealsCount,
-        data: jaipur
-      },
-      {
-        id: 'branch_chennai',
-        name: 'Chennai Branch',
-        countLabel: `${countBdm(chennai) || 13} BDMs`,
-        countNum: countBdm(chennai) || 13,
-        subtitle: 'South Region Cluster',
-        icon: MapPin,
-        target: chennai.target,
-        achievement: chennai.achievement,
-        shortfall: chennai.shortfall,
-        dealsCount: chennai.dealsCount,
-        data: chennai
-      },
-      {
-        id: 'dept_sales',
-        name: 'National Sales Head',
-        countLabel: '48 BDMs',
-        countNum: 48,
-        subtitle: 'Mishal Bhatia (National Sales Head)',
-        icon: Trophy,
-        target: overallTarget,
-        achievement: overallAchievement,
-        shortfall: overallShortfall,
-        dealsCount: filteredDeals.length,
-        data: salesTree.children?.[0] || salesTree
-      },
-      {
-        id: 'services_portfolio',
-        name: 'Executive Portfolio',
-        countLabel: '131 Services',
-        countNum: 131,
-        subtitle: 'Active Revenue & Advisory Lines',
-        icon: Layers,
-        target: overallTarget,
-        achievement: overallAchievement,
+    return targetBranchIds.map(id => {
+      const b = rawBranches.find(rb => rb.id === id) || {
+        id,
+        name: id === 'branch_ahmedabad' ? 'Ahmedabad' : id === 'branch_jaipur' ? 'Jaipur' : 'Chennai',
+        target: id === 'branch_ahmedabad' ? 4200000 : id === 'branch_jaipur' ? 2300000 : 2000000,
+        achievement: 0,
         shortfall: 0,
-        dealsCount: filteredDeals.length,
-        data: {
-          id: 'services_portfolio',
-          name: 'Executive Services Portfolio',
-          subtitle: '131 Active Product & Advisory Lines',
-          target: overallTarget,
-          achievement: overallAchievement,
-          shortfall: 0,
-          dealsCount: filteredDeals.length,
-          roleType: 'department',
-          wonCount: filteredDeals.length,
-          bookedAmount: totalBookedValue,
-          deals: filteredDeals,
-          children: []
-        }
-      }
-    ];
-  }, [salesTree, overallTarget, overallAchievement, overallShortfall, filteredDeals, totalBookedValue]);
+        dealsCount: 0,
+        children: []
+      };
 
-  const activeCategoryIndex = useMemo(() => {
-    const idx = flowCategories.findIndex(c => c.id === flowSelectedCategory);
-    return idx >= 0 ? idx : 0;
-  }, [flowCategories, flowSelectedCategory]);
-
-  const activeCategory = flowCategories[activeCategoryIndex] || flowCategories[0];
-
-  const flowLeafItems = useMemo(() => {
-    if (!activeCategory) return [];
-
-    // 1. If Services Portfolio:
-    if (activeCategory.id === 'services_portfolio') {
-      return topServices.slice(0, 18).map((s: any, idx: number) => ({
-        id: `service_${idx}`,
-        name: s.name,
-        role: 'Service Line',
-        metricPill: `${formatCompactRupee(s.received)} (${s.count} deals)`,
-        status: s.received > 100000 ? 'fire' : 'up',
-        target: 500000,
-        achievement: s.received,
-        shortfall: Math.max(0, 500000 - s.received),
-        dealsCount: s.count,
-        data: {
-          id: `service_${idx}`,
-          name: s.name,
-          roleType: 'service',
-          subtitle: `${s.count} Active Zoho Deals Closed`,
-          target: 500000,
-          achievement: s.received,
-          shortfall: Math.max(0, 500000 - s.received),
-          dealsCount: s.count,
-          wonCount: s.count,
-          topService: s.name,
-          bookedAmount: s.booked || s.received,
-          deals: filteredDeals.filter((d: any) => String(d.service || d.Service_Name || '').trim() === s.name)
-        }
-      }));
-    }
-
-    // 2. If National Sales Head:
-    if (activeCategory.id === 'dept_sales') {
-      const tls: any[] = [];
-      (salesTree.children?.[0]?.children || []).forEach(br => {
-        (br.children || []).forEach(tl => {
-          const pct = tl.target > 0 ? Math.round((tl.achievement / tl.target) * 100) : 0;
-          tls.push({
-            id: tl.id,
-            name: `${tl.name} (${br.name.split(' ')[0]})`,
-            role: 'Team Leader',
-            metricPill: `${formatCompactRupee(tl.achievement)} (${pct}%)`,
-            status: tl.shortfall === 0 ? 'fire' : 'up',
-            target: tl.target,
-            achievement: tl.achievement,
-            shortfall: tl.shortfall,
-            dealsCount: tl.dealsCount,
-            data: tl
-          });
-        });
-      });
-      return tls;
-    }
-
-    // 3. For a specific Branch (Ahmedabad, Jaipur, Chennai):
-    const branchData: any = activeCategory.data;
-    const items: any[] = [];
-
-    (branchData.children || []).forEach((tl: any) => {
-      const tlPct = tl.target > 0 ? Math.round((tl.achievement / tl.target) * 100) : 0;
-      items.push({
+      const cleanName = b.name.replace(' Branch', '').trim();
+      const tls = (b.children || []).map(tl => ({
         id: tl.id,
-        name: `TL: ${tl.name}`,
-        role: 'Team Leader',
-        metricPill: `${formatCompactRupee(tl.achievement)} (${tlPct}%)`,
-        status: tl.shortfall === 0 ? 'fire' : 'up',
+        name: tl.name,
         target: tl.target,
         achievement: tl.achievement,
         shortfall: tl.shortfall,
         dealsCount: tl.dealsCount,
-        isTl: true,
-        data: tl
-      });
-
-      (tl.children || []).forEach((tm: any) => {
-        const pct = tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0;
-        items.push({
+        tms: (tl.children || []).map(tm => ({
           id: tm.id,
           name: tm.name,
-          role: 'Sales BDM',
-          metricPill: `${formatCompactRupee(tm.achievement)} (${pct}%)`,
-          status: pct >= 100 ? 'fire' : pct >= 50 ? 'up' : 'down',
           target: tm.target,
           achievement: tm.achievement,
           shortfall: tm.shortfall,
           dealsCount: tm.dealsCount,
-          isTl: false,
+          topService: tm.topService || 'Business Advisory',
           data: tm
-        });
-      });
+        })),
+        data: tl
+      }));
+
+      return {
+        id: b.id,
+        name: cleanName,
+        target: b.target,
+        achievement: b.achievement,
+        shortfall: b.shortfall,
+        dealsCount: b.dealsCount,
+        tls,
+        data: b
+      };
     });
+  }, [salesDept]);
 
-    return items;
-  }, [activeCategory, topServices, salesTree, filteredDeals]);
+  // Progressive Interactive State
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('branch_ahmedabad');
+  const [selectedTlId, setSelectedTlId] = useState<string>('tl_romil_prajapati');
+  const [selectedTmId, setSelectedTmId] = useState<string>('');
+  const [activeInspectLevel, setActiveInspectLevel] = useState<'root' | 'sales' | 'branch' | 'tl' | 'tm'>('tm');
 
-  const filteredFlowLeaves = useMemo(() => {
-    if (!flowSearchQuery.trim()) return flowLeafItems;
-    const q = flowSearchQuery.toLowerCase();
-    return flowLeafItems.filter((item: any) =>
-      item.name.toLowerCase().includes(q) ||
-      item.role.toLowerCase().includes(q) ||
-      item.metricPill.toLowerCase().includes(q)
-    );
-  }, [flowLeafItems, flowSearchQuery]);
+  const activeBranch = useMemo(() => {
+    return branches.find(b => b.id === selectedBranchId) || branches[0];
+  }, [branches, selectedBranchId]);
 
-  const activeLeaf = useMemo(() => {
-    if (flowSelectedLeafId) {
-      const found = filteredFlowLeaves.find((item: any) => item.id === flowSelectedLeafId);
+  const activeBranchIndex = useMemo(() => {
+    const idx = branches.findIndex(b => b.id === selectedBranchId);
+    return idx >= 0 ? idx : 0;
+  }, [branches, selectedBranchId]);
+
+  const activeTl = useMemo(() => {
+    if (!activeBranch) return null;
+    const found = activeBranch.tls.find(t => t.id === selectedTlId);
+    return found || activeBranch.tls[0] || null;
+  }, [activeBranch, selectedTlId]);
+
+  const activeTlIndex = useMemo(() => {
+    if (!activeBranch || !activeTl) return 0;
+    const idx = activeBranch.tls.findIndex(t => t.id === activeTl.id);
+    return idx >= 0 ? idx : 0;
+  }, [activeBranch, activeTl]);
+
+  const activeTm = useMemo(() => {
+    if (!activeTl) return null;
+    if (selectedTmId) {
+      const found = activeTl.tms.find(m => m.id === selectedTmId);
       if (found) return found;
     }
-    return filteredFlowLeaves[0] || null;
-  }, [filteredFlowLeaves, flowSelectedLeafId]);
+    return activeTl.tms[0] || null;
+  }, [activeTl, selectedTmId]);
 
-  const inspectedEntity = useMemo(() => {
-    if (flowSelectedCategory === 'root') return salesTree;
-    if (activeLeaf && activeLeaf.data) return activeLeaf.data;
-    return activeCategory?.data || salesTree;
-  }, [flowSelectedCategory, activeLeaf, activeCategory, salesTree]);
+  const inspectedEntity: any = useMemo(() => {
+    if (activeInspectLevel === 'root') return salesTree;
+    if (activeInspectLevel === 'sales') return salesDept;
+    if (activeInspectLevel === 'branch') return activeBranch?.data || salesDept;
+    if (activeInspectLevel === 'tl') return activeTl?.data || salesDept;
+    if (activeInspectLevel === 'tm') return activeTm?.data || activeTl?.data || salesDept;
+    return activeTm?.data || activeTl?.data || salesDept;
+  }, [activeInspectLevel, salesTree, salesDept, activeBranch, activeTl, activeTm]);
 
   // Waveform equalizer bars for sentiment visualizer
   const waveformBars = useMemo(() => {
     return [24, 38, 48, 32, 60, 75, 90, 65, 42, 80, 95, 100, 92, 82, 68, 52, 42, 62, 78, 52, 38, 28, 42, 32];
   }, []);
 
-  // Filtered BDM Matrix
+    // Filtered BDM Matrix
   const bdmList = useMemo(() => {
     const list: any[] = [];
     (salesTree.children?.[0]?.children || []).forEach(br => {
@@ -1409,34 +1260,51 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. LIGHT THEME RADIAL MINDMAP FLOW (EXACT MATCH FOR SCREENSHOT) */}
-      {/* ========================================================================= */}
+      {/* 3. LIGHT THEME RADIAL MINDMAP FLOW (EXACT USER SPECIFICATION) */}
       {(() => {
-        const itemStep = 34;
-        const M = filteredFlowLeaves.length;
-        const canvasHeight = Math.max(700, M * itemStep + 100);
+        const itemStep = 38;
+        const currentTms = activeTl?.tms || [];
+        const tmCount = currentTms.length || 7;
+        const canvasHeight = Math.max(620, tmCount * itemStep + 70);
 
-        // Orb center & right socket
-        const orbSocketX = 165;
+        // Col 0: Logo Orb
         const orbSocketY = canvasHeight / 2;
+        const x0 = 135; // right socket of orb
 
-        // Col 1 Cards
-        const col1Left = 230;
-        const col1Width = 190;
-        const col1Right = col1Left + col1Width; // 420
-        const cardHeight = 52;
-        const cardGap = 14;
-        const totalCol1Height = 5 * cardHeight + 4 * cardGap; // 316
-        const col1StartY = (canvasHeight - totalCol1Height) / 2;
+        // Col 1: Sales Card
+        const col1Left = 190;
+        const col1Width = 115;
+        const col1Right = 305;
+        const col1Height = 46;
+        const col1Top = orbSocketY - col1Height / 2;
 
-        // Active Col 1 Card center Y
-        const activeCardCenterY = col1StartY + activeCategoryIndex * (cardHeight + cardGap) + cardHeight / 2;
+        // Col 2: 3 Branches (Ahmedabad, Jaipur, Chennai)
+        const col2Left = 370;
+        const col2Width = 140;
+        const col2Right = 510;
+        const branchHeight = 44;
+        const branchGap = 16;
+        const totalBranchHeight = 3 * branchHeight + 2 * branchGap; // 164
+        const col2StartY = (canvasHeight - totalBranchHeight) / 2;
+        const activeBranchCenterY = col2StartY + activeBranchIndex * (branchHeight + branchGap) + branchHeight / 2;
 
-        // Col 2 Leaf items
-        const col2Left = 560;
-        const col2Width = 270;
-        const totalCol2Height = M * itemStep;
-        const col2StartY = Math.max(25, (canvasHeight - totalCol2Height) / 2);
+        // Col 3: TLs of Active Branch
+        const col3Left = 570;
+        const col3Width = 165;
+        const col3Right = 735;
+        const currentTls = activeBranch?.tls || [];
+        const tlCount = currentTls.length || 1;
+        const tlHeight = 42;
+        const tlGap = 14;
+        const totalTlHeight = tlCount * tlHeight + (tlCount - 1) * tlGap;
+        const col3StartY = (canvasHeight - totalTlHeight) / 2;
+        const activeTlCenterY = col3StartY + activeTlIndex * (tlHeight + tlGap) + tlHeight / 2;
+
+        // Col 4: TMs of Active TL
+        const col4Left = 795;
+        const col4Width = 205;
+        const totalTmHeight = tmCount * itemStep;
+        const col4StartY = Math.max(25, (canvasHeight - totalTmHeight) / 2);
 
         // Inspector card metrics
         const sentimentRate = inspectedEntity.target > 0
@@ -1449,160 +1317,86 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             {/* Subtle light geometric grid */}
             <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:24px_24px] opacity-70 pointer-events-none" />
 
-            {/* TOP HEADER CONTROLS (LIGHT THEME SCREENSHOT MATCH) */}
+            {/* TOP HEADER BREADCRUMB NAVIGATION */}
             <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200/70">
-              {/* Brand Title on Left */}
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200 p-1.5 flex items-center justify-center shadow-sm">
-                  <img src="/logo.png" alt="BharatEdge" className="w-full h-full object-contain" />
-                </div>
-                <div>
-                  <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                    BharatEdge Executive Policy Platform
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/80">
-                      Live AI Flow
-                    </span>
-                  </h2>
-                  <p className="text-[11px] text-slate-500 font-medium">
-                    Horizontal Mindmap Hierarchy & Interactive Dynamic Shortfall Network
-                  </p>
-                </div>
-              </div>
-
-              {/* Center Floating Pill Toolbar */}
-              <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white border border-slate-200 shadow-sm text-xs font-bold">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                 <button
-                  onClick={() => setFlowViewMode('network')}
-                  title="Radial Flow View"
-                  className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-                    flowViewMode === 'network'
-                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  onClick={() => setActiveInspectLevel('root')}
+                  className="text-indigo-600 hover:underline font-bold cursor-pointer flex items-center gap-1"
                 >
-                  <GitBranch size={13} />
-                  <span className="hidden sm:inline">Radial Flow</span>
-                </button>
-                <button
-                  onClick={() => setFlowViewMode('tree')}
-                  title="Hierarchy Tree Mode"
-                  className={`px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-                    flowViewMode === 'tree'
-                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Network size={13} />
-                  <span className="hidden sm:inline">Tree Mode</span>
-                </button>
-                <div className="w-[1px] h-4 bg-slate-200 mx-1" />
-                <button
-                  onClick={() => setFlowZoom(z => Math.min(1.3, z + 0.1))}
-                  title="Zoom In"
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-                >
-                  <ZoomIn size={14} />
-                </button>
-                <button
-                  onClick={() => setFlowZoom(z => Math.max(0.7, z - 0.1))}
-                  title="Zoom Out"
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-                >
-                  <ZoomOut size={14} />
-                </button>
-                <button
-                  onClick={() => { setFlowZoom(1.0); setFlowSearchQuery(''); }}
-                  title="Reset Zoom & Filters"
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-                >
-                  <RotateCcw size={14} />
-                </button>
-              </div>
-
-              {/* Right Action Buttons */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onRefresh}
-                  disabled={propsRefreshing || isLoading}
-                  className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
-                >
-                  <RefreshCw size={13} className={propsRefreshing || isLoading ? 'animate-spin text-indigo-600' : 'text-slate-500'} />
-                  <span className="hidden md:inline">Sync Zoho</span>
-                </button>
-                <button
-                  onClick={() => setShowSimulator(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 hover:brightness-110 transition-all cursor-pointer flex items-center gap-1"
-                >
-                  <span>+ New Simulation</span>
-                </button>
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-400 to-orange-500 text-white font-black text-xs flex items-center justify-center shadow-sm">
-                  MB
-                </div>
-              </div>
-            </div>
-
-            {/* SUB-HEADER BREADCRUMB & QUICK SWITCH BAR */}
-            <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 mb-5 px-1">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 overflow-x-auto py-1">
-                <button
-                  onClick={() => {
-                    setFlowSelectedCategory('root');
-                    setFlowSelectedLeafId('');
-                  }}
-                  className="text-indigo-600 hover:underline flex items-center gap-1 cursor-pointer font-bold"
-                >
-                  <span>🌐 BharatEdge Group</span>
+                  <span>🌐 BharatEdge</span>
                 </button>
                 <span className="text-slate-300">/</span>
                 <button
-                  onClick={() => {
-                    setFlowSelectedCategory('dept_sales');
-                    setFlowSelectedLeafId('');
-                  }}
-                  className="hover:text-slate-900 transition-colors cursor-pointer"
+                  onClick={() => setActiveInspectLevel('sales')}
+                  className={`hover:underline cursor-pointer font-bold ${activeInspectLevel === 'sales' ? 'text-indigo-600' : 'text-slate-700'}`}
                 >
-                  Sales & Growth
+                  Sales
                 </button>
                 <span className="text-slate-300">/</span>
-                <span className="text-amber-600 font-bold">{activeCategory.name}</span>
-                {activeLeaf && (
+                <button
+                  onClick={() => setActiveInspectLevel('branch')}
+                  className={`hover:underline cursor-pointer font-bold ${activeInspectLevel === 'branch' ? 'text-amber-600' : 'text-slate-700'}`}
+                >
+                  {activeBranch.name}
+                </button>
+                {activeTl && (
                   <>
                     <span className="text-slate-300">/</span>
-                    <span className="text-slate-900 font-extrabold truncate max-w-[150px]">{activeLeaf.name}</span>
+                    <button
+                      onClick={() => setActiveInspectLevel('tl')}
+                      className={`hover:underline cursor-pointer font-bold ${activeInspectLevel === 'tl' ? 'text-cyan-600' : 'text-slate-700'}`}
+                    >
+                      {activeTl.name}
+                    </button>
+                  </>
+                )}
+                {activeTm && activeInspectLevel === 'tm' && (
+                  <>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-900 font-extrabold">{activeTm.name}</span>
                   </>
                 )}
               </div>
 
-              {/* Quick Filter Search in Leaf items */}
-              <div className="relative flex items-center">
-                <Search size={13} className="absolute left-3 text-slate-400" />
-                <input
-                  type="text"
-                  value={flowSearchQuery}
-                  onChange={(e) => setFlowSearchQuery(e.target.value)}
-                  placeholder="Filter leaf nodes..."
-                  className="pl-8 pr-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 shadow-sm w-48 transition-all font-medium"
-                />
+              {/* Quick Branch Switcher Pills */}
+              <div className="flex items-center gap-2">
+                {branches.map(b => (
+                  <button
+                    key={b.id}
+                    onClick={() => {
+                      setSelectedBranchId(b.id);
+                      setSelectedTlId(b.tls[0]?.id || '');
+                      setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                      setActiveInspectLevel('branch');
+                    }}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      selectedBranchId === b.id
+                        ? 'bg-amber-500 text-white shadow-sm'
+                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    {b.name}
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* ===================================================================== */}
-            {/* MAIN RADIAL CANVAS (HORIZONTAL SVG FLOW + NODES + INSPECTOR PANEL) */}
+            {/* MAIN PROGRESSIVE CANVAS (HORIZONTAL SVG FLOW + NODES + INSPECTOR PANEL) */}
             {/* ===================================================================== */}
             <div className="overflow-x-auto pb-4">
               <div
                 className="relative transition-transform duration-300 origin-top-left"
                 style={{
-                  minWidth: 1240,
-                  height: canvasHeight,
-                  transform: `scale(${flowZoom})`,
-                  transformOrigin: '0 0'
+                  minWidth: 1390,
+                  height: canvasHeight
                 }}
               >
-                {/* SVG LAYER */}
+                {/* SVG CONNECTIONS LAYER */}
                 <svg
                   className="absolute inset-0 w-full h-full pointer-events-none"
-                  style={{ minWidth: 1240, height: canvasHeight }}
+                  style={{ minWidth: 1390, height: canvasHeight }}
                 >
                   <defs>
                     <linearGradient id="activeLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -1617,212 +1411,263 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     </linearGradient>
                   </defs>
 
-                  {/* 1. Curved lines from Orb Right Socket (165, orbSocketY) to Col 1 Cards */}
-                  {flowCategories.map((cat, i) => {
-                    const cardCenterY = col1StartY + i * (cardHeight + cardGap) + cardHeight / 2;
-                    const isCatActive = i === activeCategoryIndex;
-                    const pathD = `M ${orbSocketX} ${orbSocketY} C ${orbSocketX + 35} ${orbSocketY}, ${col1Left - 35} ${cardCenterY}, ${col1Left} ${cardCenterY}`;
-
-                    return (
-                      <g key={cat.id}>
-                        <path
-                          d={pathD}
-                          stroke={isCatActive ? 'url(#activeLightGrad)' : '#cbd5e1'}
-                          strokeWidth={isCatActive ? 2.5 : 1.5}
-                          fill="none"
-                          opacity={isCatActive ? 1 : 0.7}
-                        />
-                        <circle
-                          cx={col1Left}
-                          cy={cardCenterY}
-                          r={isCatActive ? 4 : 2.5}
-                          fill={isCatActive ? '#f59e0b' : '#94a3b8'}
-                        />
-                      </g>
-                    );
-                  })}
-
-                  {/* Socket Bead on the Orb */}
-                  <circle
-                    cx={orbSocketX}
-                    cy={orbSocketY}
-                    r={5}
-                    fill="#6366f1"
+                  {/* 1. Curve: Logo -> Sales */}
+                  <path
+                    d={`M ${x0} ${orbSocketY} C ${x0 + 25} ${orbSocketY}, ${col1Left - 25} ${orbSocketY}, ${col1Left} ${orbSocketY}`}
+                    stroke="url(#activeLightGrad)"
+                    strokeWidth="2.5"
+                    fill="none"
                   />
+                  <circle cx={x0} cy={orbSocketY} r={4.5} fill="#6366f1" />
+                  <circle cx={col1Left} cy={orbSocketY} r={4} fill="#6366f1" />
 
-                  {/* 2. Curved Fan-Out lines from Active Card Right Socket to Col 2 Leafs */}
-                  {filteredFlowLeaves.map((leaf: any, j: number) => {
-                    const leafCenterY = col2StartY + j * itemStep + 14;
-                    const isLeafActive = activeLeaf?.id === leaf.id;
+                  {/* 2. Curves: Sales -> 3 Branches */}
+                  {branches.map((b, i) => {
+                    const branchCenterY = col2StartY + i * (branchHeight + branchGap) + branchHeight / 2;
+                    const isBranchActive = i === activeBranchIndex;
                     const dx = (col2Left - col1Right) * 0.5;
-                    const pathD = `M ${col1Right} ${activeCardCenterY} C ${col1Right + dx} ${activeCardCenterY}, ${col2Left - dx} ${leafCenterY}, ${col2Left} ${leafCenterY}`;
+                    const pathD = `M ${col1Right} ${orbSocketY} C ${col1Right + dx} ${orbSocketY}, ${col2Left - dx} ${branchCenterY}, ${col2Left} ${branchCenterY}`;
 
                     return (
-                      <g key={leaf.id}>
+                      <g key={b.id}>
                         <path
                           d={pathD}
-                          stroke={isLeafActive ? '#0ea5e9' : 'url(#fanLightGrad)'}
-                          strokeWidth={isLeafActive ? 2.5 : 1.2}
+                          stroke={isBranchActive ? 'url(#activeLightGrad)' : '#cbd5e1'}
+                          strokeWidth={isBranchActive ? 2.5 : 1.5}
                           fill="none"
-                          opacity={isLeafActive ? 1 : 0.65}
+                          opacity={isBranchActive ? 1 : 0.65}
                         />
                         <circle
                           cx={col2Left}
-                          cy={leafCenterY}
-                          r={isLeafActive ? 4 : 2}
-                          fill={isLeafActive ? '#0ea5e9' : '#0284c7'}
+                          cy={branchCenterY}
+                          r={isBranchActive ? 4 : 2.5}
+                          fill={isBranchActive ? '#f59e0b' : '#94a3b8'}
                         />
                       </g>
                     );
                   })}
+                  <circle cx={col1Right} cy={orbSocketY} r={4.5} fill="#f59e0b" />
 
-                  {/* Active Card Right Socket Glowing Bead */}
-                  <circle
-                    cx={col1Right}
-                    cy={activeCardCenterY}
-                    r={5}
-                    fill="#f59e0b"
-                  />
+                  {/* 3. Curves: Active Branch -> TLs */}
+                  {currentTls.map((tl, t) => {
+                    const tlCenterY = col3StartY + t * (tlHeight + tlGap) + tlHeight / 2;
+                    const isTlActive = t === activeTlIndex;
+                    const dx = (col3Left - col2Right) * 0.5;
+                    const pathD = `M ${col2Right} ${activeBranchCenterY} C ${col2Right + dx} ${activeBranchCenterY}, ${col3Left - dx} ${tlCenterY}, ${col3Left} ${tlCenterY}`;
+
+                    return (
+                      <g key={tl.id}>
+                        <path
+                          d={pathD}
+                          stroke={isTlActive ? 'url(#fanLightGrad)' : '#cbd5e1'}
+                          strokeWidth={isTlActive ? 2.5 : 1.5}
+                          fill="none"
+                          opacity={isTlActive ? 1 : 0.65}
+                        />
+                        <circle
+                          cx={col3Left}
+                          cy={tlCenterY}
+                          r={isTlActive ? 4 : 2.5}
+                          fill={isTlActive ? '#0ea5e9' : '#94a3b8'}
+                        />
+                      </g>
+                    );
+                  })}
+                  <circle cx={col2Right} cy={activeBranchCenterY} r={4.5} fill="#f59e0b" />
+
+                  {/* 4. Curves: Active TL -> TMs */}
+                  {currentTms.map((tm, k) => {
+                    const tmCenterY = col4StartY + k * itemStep + 15;
+                    const isTmActive = activeTm?.id === tm.id;
+                    const dx = (col4Left - col3Right) * 0.5;
+                    const pathD = `M ${col3Right} ${activeTlCenterY} C ${col3Right + dx} ${activeTlCenterY}, ${col4Left - dx} ${tmCenterY}, ${col4Left} ${tmCenterY}`;
+
+                    return (
+                      <g key={tm.id}>
+                        <path
+                          d={pathD}
+                          stroke={isTmActive ? '#0ea5e9' : '#cbd5e1'}
+                          strokeWidth={isTmActive ? 2.5 : 1.2}
+                          fill="none"
+                          opacity={isTmActive ? 1 : 0.6}
+                        />
+                        <circle
+                          cx={col4Left}
+                          cy={tmCenterY}
+                          r={isTmActive ? 4 : 2}
+                          fill={isTmActive ? '#0ea5e9' : '#94a3b8'}
+                        />
+                      </g>
+                    );
+                  })}
+                  <circle cx={col3Right} cy={activeTlCenterY} r={4.5} fill="#0ea5e9" />
                 </svg>
 
                 {/* ================================================================= */}
-                {/* COLUMN 0: THE 3D HOLOGRAPHIC ORB (LIGHT THEME SCREENSHOT MATCH) */}
+                {/* COLUMN 0: LOGO ORB (NO TEXT, BIG LOGO) */}
                 {/* ================================================================= */}
                 <div
-                  onClick={() => {
-                    setFlowSelectedCategory('root');
-                    setFlowSelectedLeafId('');
-                  }}
+                  onClick={() => setActiveInspectLevel('root')}
                   className="absolute cursor-pointer group"
                   style={{
                     left: 15,
-                    top: orbSocketY - 72,
-                    width: 150,
-                    height: 144
+                    top: orbSocketY - 60,
+                    width: 120,
+                    height: 120
                   }}
-                  title="Click to view Full Enterprise Overview"
+                  title="Click to inspect Enterprise Overview"
                 >
-                  <div className="w-36 h-36 mx-auto rounded-full bg-white/95 border border-indigo-100 shadow-[0_12px_40px_rgba(99,102,241,0.2)] flex items-center justify-center relative group-hover:border-indigo-300 group-hover:shadow-[0_16px_50px_rgba(99,102,241,0.3)] group-hover:scale-105 transition-all p-3">
+                  <div className="w-28 h-28 mx-auto rounded-full bg-white border border-indigo-100 shadow-[0_10px_35px_rgba(99,102,241,0.2)] flex items-center justify-center relative group-hover:border-indigo-300 group-hover:shadow-[0_12px_45px_rgba(99,102,241,0.3)] group-hover:scale-105 transition-all p-3">
                     <div className="absolute inset-0 rounded-full border border-dashed border-indigo-200 animate-[spin_25s_linear_infinite]" />
-
-                    {/* Large BharatEdge Logo in Center (No text) */}
-                    <div className="w-28 h-28 rounded-full bg-white shadow-[0_6px_25px_rgba(99,102,241,0.18),0_0_0_2px_rgba(99,102,241,0.15)] p-3 flex items-center justify-center relative overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-tr from-indigo-50/50 via-purple-50/20 to-cyan-50/40 rounded-full pointer-events-none" />
-                      <img
-                        src="/logo.png"
-                        alt="BharatEdge Logo"
-                        className="w-full h-full object-contain relative z-10 drop-shadow-sm"
-                      />
-                    </div>
+                    <img
+                      src="/logo.png"
+                      alt="BharatEdge"
+                      className="w-full h-full object-contain relative z-10 drop-shadow-sm"
+                    />
                   </div>
                 </div>
 
                 {/* ================================================================= */}
-                {/* COLUMN 1: STACKED ROUNDED CARDS (LIGHT THEME SCREENSHOT MATCH) */}
+                {/* COLUMN 1: SALES NODE (NO EXTRA TEXTS) */}
                 {/* ================================================================= */}
                 <div
-                  className="absolute space-y-3.5"
+                  onClick={() => setActiveInspectLevel('sales')}
+                  className={`absolute rounded-2xl px-4 py-2.5 transition-all duration-300 cursor-pointer flex items-center justify-between gap-2 ${
+                    activeInspectLevel === 'sales'
+                      ? 'bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-600 shadow-md text-indigo-950'
+                      : 'bg-white hover:bg-slate-50 border border-slate-200 shadow-sm text-slate-800'
+                  }`}
                   style={{
                     left: col1Left,
-                    top: col1StartY,
-                    width: col1Width
+                    top: col1Top,
+                    width: col1Width,
+                    height: col1Height
                   }}
+                  title="Click to inspect National Sales"
                 >
-                  {flowCategories.map((cat, i) => {
-                    const isCatActive = i === activeCategoryIndex;
-                    const IconComp = cat.icon;
-
-                    return (
-                      <div
-                        key={cat.id}
-                        onClick={() => {
-                          setFlowSelectedCategory(cat.id);
-                          setFlowSelectedLeafId('');
-                        }}
-                        className={`relative rounded-2xl p-2.5 transition-all duration-300 cursor-pointer flex items-center justify-between gap-2.5 ${
-                          isCatActive
-                            ? 'bg-gradient-to-r from-amber-50 to-orange-50/70 border-2 border-amber-500 shadow-[0_6px_25px_rgba(245,158,11,0.25)] text-slate-900'
-                            : 'bg-white hover:bg-slate-50 border border-slate-200/80 hover:border-indigo-300 text-slate-700 shadow-sm'
-                        }`}
-                        style={{ height: cardHeight }}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span
-                            className={`p-1.5 rounded-xl border flex-shrink-0 ${
-                              isCatActive
-                                ? 'bg-amber-500 text-white border-amber-600 shadow-sm'
-                                : 'bg-slate-50 text-slate-500 border-slate-200'
-                            }`}
-                          >
-                            <IconComp size={15} />
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex items-baseline gap-1.5">
-                              <span className="text-sm font-black text-slate-900">{cat.countNum}</span>
-                              <span className="text-[10px] text-slate-500 truncate font-bold">{cat.name.split(' ')[0]}</span>
-                            </div>
-                            <p className="text-[9px] text-slate-400 truncate font-semibold">{cat.name}</p>
-                          </div>
-                        </div>
-
-                        <div className="text-right flex-shrink-0">
-                          <span className={`text-[10px] font-black ${isCatActive ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {formatCompactRupee(cat.achievement)}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <span className="text-sm font-black tracking-tight">Sales</span>
+                  <span className="text-xs font-black text-emerald-600">
+                    {formatCompactRupee(salesDept.achievement)}
+                  </span>
                 </div>
 
                 {/* ================================================================= */}
-                {/* COLUMN 2: FANNED-OUT LEAF ITEMS (LIGHT THEME SCREENSHOT MATCH) */}
+                {/* COLUMN 2: 3 BRANCHES ONLY (AHMEDABAD, JAIPUR, CHENNAI) */}
                 {/* ================================================================= */}
                 <div
-                  className="absolute space-y-1.5"
+                  className="absolute space-y-4"
                   style={{
-                    left: col2Left + 12,
+                    left: col2Left,
                     top: col2StartY,
                     width: col2Width
                   }}
                 >
-                  {filteredFlowLeaves.map((leaf: any) => {
-                    const isLeafActive = activeLeaf?.id === leaf.id;
+                  {branches.map((b, i) => {
+                    const isBranchActive = i === activeBranchIndex;
 
                     return (
                       <div
-                        key={leaf.id}
-                        onClick={() => setFlowSelectedLeafId(leaf.id)}
-                        className={`group flex items-center justify-between px-3 py-1.5 rounded-xl cursor-pointer transition-all duration-200 ${
-                          isLeafActive
-                            ? 'bg-cyan-50 border border-cyan-500 text-cyan-950 font-bold shadow-[0_0_12px_rgba(6,182,212,0.25)]'
-                            : 'bg-white hover:bg-slate-50 border border-slate-200/70 text-slate-700 shadow-xs'
+                        key={b.id}
+                        onClick={() => {
+                          setSelectedBranchId(b.id);
+                          setSelectedTlId(b.tls[0]?.id || '');
+                          setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                          setActiveInspectLevel('branch');
+                        }}
+                        className={`rounded-2xl px-3.5 py-2.5 transition-all duration-300 cursor-pointer flex items-center justify-between gap-2 ${
+                          isBranchActive
+                            ? 'bg-gradient-to-r from-amber-50 to-orange-50/70 border-2 border-amber-500 shadow-md text-slate-900'
+                            : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-sm'
                         }`}
-                        style={{ height: 28 }}
+                        style={{ height: branchHeight }}
                       >
-                        <div className="flex items-center gap-2 min-w-0 truncate">
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                              isLeafActive
-                                ? 'bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]'
-                                : 'bg-slate-300 group-hover:bg-cyan-500'
-                            }`}
-                          />
-                          <span className="text-xs font-bold truncate" title={leaf.name}>
-                            {leaf.name}
-                          </span>
-                        </div>
+                        <span className="text-xs font-black tracking-tight">{b.name}</span>
+                        <span className={`text-xs font-black ${isBranchActive ? 'text-amber-600' : 'text-emerald-600'}`}>
+                          {formatCompactRupee(b.achievement)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                        <div className="flex items-center gap-1.5 flex-shrink-0 text-[10px]">
-                          <span className={`px-1.5 py-0.2 rounded font-bold ${
-                            isLeafActive
-                              ? 'bg-cyan-100 text-cyan-800'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}>
-                            {leaf.metricPill}
+                {/* ================================================================= */}
+                {/* COLUMN 3: TLS ONLY OF ACTIVE BRANCH */}
+                {/* ================================================================= */}
+                <div
+                  className="absolute space-y-3.5"
+                  style={{
+                    left: col3Left,
+                    top: col3StartY,
+                    width: col3Width
+                  }}
+                >
+                  {currentTls.map((tl, t) => {
+                    const isTlActive = t === activeTlIndex;
+
+                    return (
+                      <div
+                        key={tl.id}
+                        onClick={() => {
+                          setSelectedTlId(tl.id);
+                          setSelectedTmId(tl.tms[0]?.id || '');
+                          setActiveInspectLevel('tl');
+                        }}
+                        className={`rounded-2xl px-3 py-2 transition-all duration-300 cursor-pointer flex items-center justify-between gap-2 ${
+                          isTlActive
+                            ? 'bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-500 shadow-md text-slate-900'
+                            : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-sm'
+                        }`}
+                        style={{ height: tlHeight }}
+                      >
+                        <span className="text-xs font-bold truncate max-w-[95px]" title={tl.name}>
+                          {tl.name}
+                        </span>
+                        <span className={`text-xs font-black ${isTlActive ? 'text-cyan-700' : 'text-emerald-600'}`}>
+                          {formatCompactRupee(tl.achievement)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ================================================================= */}
+                {/* COLUMN 4: TMS ONLY OF ACTIVE TL */}
+                {/* ================================================================= */}
+                <div
+                  className="absolute space-y-2"
+                  style={{
+                    left: col4Left,
+                    top: col4StartY,
+                    width: col4Width
+                  }}
+                >
+                  {currentTms.map((tm) => {
+                    const isTmActive = activeTm?.id === tm.id;
+                    const pct = tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0;
+
+                    return (
+                      <div
+                        key={tm.id}
+                        onClick={() => {
+                          setSelectedTmId(tm.id);
+                          setActiveInspectLevel('tm');
+                        }}
+                        className={`flex items-center justify-between px-3 py-1.5 rounded-xl cursor-pointer transition-all duration-200 ${
+                          isTmActive
+                            ? 'bg-cyan-50 border-2 border-cyan-500 text-cyan-950 font-bold shadow-sm'
+                            : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-xs'
+                        }`}
+                        style={{ height: 30 }}
+                      >
+                        <span className="text-xs font-bold truncate max-w-[110px]" title={tm.name}>
+                          {tm.name}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-black text-slate-700">
+                            {formatCompactRupee(tm.achievement)}
                           </span>
                           <span className="text-xs">
-                            {leaf.status === 'fire' ? '🔥' : leaf.status === 'up' ? '👍' : '⚠️'}
+                            {pct >= 100 ? '🔥' : pct > 0 ? '👍' : '⚠️'}
                           </span>
                         </div>
                       </div>
@@ -1831,14 +1676,14 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 </div>
 
                 {/* ================================================================= */}
-                {/* COLUMN 3: SLEEK GLASSMORPHIC INSPECTOR PANEL (LIGHT THEME) */}
+                {/* COLUMN 5: SLEEK INSPECTOR PANEL (RIGHT SIDE) */}
                 {/* ================================================================= */}
                 <div
                   className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-hidden flex flex-col justify-between"
                   style={{
-                    left: 855,
+                    left: 1045,
                     top: 15,
-                    width: 360,
+                    width: 335,
                     bottom: 15
                   }}
                 >
@@ -1848,17 +1693,15 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       <div className="flex items-center gap-1.5 text-indigo-600 text-[11px] font-bold">
                         <Briefcase size={12} />
                         <span className="uppercase tracking-wider">
-                          {inspectedEntity.roleType === 'root'
-                            ? 'Enterprise Core'
-                            : inspectedEntity.roleType === 'department'
-                            ? 'National Sales Head'
-                            : inspectedEntity.roleType === 'branch'
-                            ? 'Regional Branch'
-                            : inspectedEntity.roleType === 'tl'
-                            ? 'Team Leader'
-                            : inspectedEntity.roleType === 'service'
-                            ? 'Service Line'
-                            : 'Sales BDM'}
+                          {activeInspectLevel === 'root'
+                            ? 'ENTERPRISE CORE'
+                            : activeInspectLevel === 'sales'
+                            ? 'NATIONAL SALES'
+                            : activeInspectLevel === 'branch'
+                            ? 'REGIONAL BRANCH'
+                            : activeInspectLevel === 'tl'
+                            ? 'TEAM LEADER'
+                            : 'SALES BDM'}
                         </span>
                       </div>
                       <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 leading-snug truncate" title={inspectedEntity.name}>
@@ -1886,7 +1729,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     </div>
 
                     {/* Sentiment Rate Card */}
-                    <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200/80 space-y-2">
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200/80 space-y-2">
                       <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
                         <span>Sentiment / Achievement Rate</span>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
@@ -1929,7 +1772,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                     {/* 2x2 Core Metric Tiles */}
                     <div className="grid grid-cols-2 gap-2.5">
-                      <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-100">
+                      <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-100">
                         <div className="flex items-center gap-1 text-[10px] text-blue-700 font-bold">
                           <CheckCircle2 size={11} className="text-blue-600" />
                           <span>Deals Won</span>
@@ -1939,7 +1782,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         </p>
                       </div>
 
-                      <div className="p-3 rounded-2xl bg-purple-50/70 border border-purple-100">
+                      <div className="p-2.5 rounded-2xl bg-purple-50/70 border border-purple-100">
                         <div className="flex items-center gap-1 text-[10px] text-purple-700 font-bold">
                           <FileText size={11} className="text-purple-600" />
                           <span>Quoted Value</span>
@@ -1949,7 +1792,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         </p>
                       </div>
 
-                      <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-100">
+                      <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
                         <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
                           <Sparkles size={11} className="text-emerald-600" />
                           <span>Received</span>
@@ -1959,7 +1802,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         </p>
                       </div>
 
-                      <div className="p-3 rounded-2xl bg-rose-50/70 border border-rose-100">
+                      <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-100">
                         <div className="flex items-center gap-1 text-[10px] text-rose-700 font-bold">
                           <Target size={11} className="text-rose-600" />
                           <span>Shortfall Gap</span>
@@ -1971,7 +1814,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     </div>
 
                     {/* RI Analysis Box */}
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
                       <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700">
                         <Zap size={12} className="text-amber-500" />
                         <span>RI Executive Intelligence</span>
