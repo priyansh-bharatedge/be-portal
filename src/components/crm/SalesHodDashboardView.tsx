@@ -5,7 +5,8 @@ import {
   DollarSign, PieChart as PieChartIcon, BarChart3, ArrowUpRight,
   Shield, CheckCircle2, Clock, AlertTriangle, Building2, MapPin,
   Sparkles, RefreshCw, Briefcase, Zap, Flame, UserCheck, Eye,
-  Maximize2, Minimize2, Compass, Activity, FileText
+  Maximize2, Minimize2, Compass, Activity, FileText,
+  GitBranch, Network, Share2, Send, ZoomIn, ZoomOut, RotateCcw, SlidersHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -134,6 +135,11 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   const [selectedNodeId, setSelectedNodeId] = useState<string>('dept_sales');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'hierarchy' | 'pipeline' | 'bdm_matrix'>('hierarchy');
+  const [flowSelectedCategory, setFlowSelectedCategory] = useState<string>('branch_ahmedabad');
+  const [flowSelectedLeafId, setFlowSelectedLeafId] = useState<string>('');
+  const [flowZoom, setFlowZoom] = useState<number>(1.0);
+  const [flowViewMode, setFlowViewMode] = useState<'network' | 'tree' | 'services'>('network');
+  const [flowSearchQuery, setFlowSearchQuery] = useState<string>('');
 
   // Load live data if props are not provided
   useEffect(() => {
@@ -757,7 +763,268 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     ];
   }, [liveQuotations, filteredDeals]);
 
-  return (
+
+  // ============================================================================
+  // FLOW CANVAS COMPUTATIONS (EXACT MATCH FOR USER SCREENSHOT)
+  // ============================================================================
+  const flowCategories = useMemo(() => {
+    const branches = salesTree.children?.[0]?.children || [];
+    const ahmedabad = branches.find(b => b.id === 'branch_ahmedabad') || {
+      id: 'branch_ahmedabad',
+      name: 'Ahmedabad Branch',
+      subtitle: 'HQ & West Region Cluster',
+      target: TARGET_BENCHMARKS.branchAhmedabad,
+      achievement: 0,
+      shortfall: TARGET_BENCHMARKS.branchAhmedabad,
+      dealsCount: 0,
+      children: []
+    };
+    const jaipur = branches.find(b => b.id === 'branch_jaipur') || {
+      id: 'branch_jaipur',
+      name: 'Jaipur Branch',
+      subtitle: 'North Region Cluster',
+      target: TARGET_BENCHMARKS.branchJaipur,
+      achievement: 0,
+      shortfall: TARGET_BENCHMARKS.branchJaipur,
+      dealsCount: 0,
+      children: []
+    };
+    const chennai = branches.find(b => b.id === 'branch_chennai') || {
+      id: 'branch_chennai',
+      name: 'Chennai Branch',
+      subtitle: 'South Region Cluster',
+      target: TARGET_BENCHMARKS.branchChennai,
+      achievement: 0,
+      shortfall: TARGET_BENCHMARKS.branchChennai,
+      dealsCount: 0,
+      children: []
+    };
+
+    const countBdm = (b: any) => {
+      return (b.children || []).reduce((acc: number, tl: any) => acc + (tl.children?.length || 0), 0);
+    };
+
+    return [
+      {
+        id: 'branch_ahmedabad',
+        name: 'Ahmedabad Branch',
+        countLabel: `${countBdm(ahmedabad) || 19} BDMs`,
+        countNum: countBdm(ahmedabad) || 19,
+        subtitle: 'HQ & Western Region Cluster',
+        icon: MapPin,
+        target: ahmedabad.target,
+        achievement: ahmedabad.achievement,
+        shortfall: ahmedabad.shortfall,
+        dealsCount: ahmedabad.dealsCount,
+        data: ahmedabad
+      },
+      {
+        id: 'branch_jaipur',
+        name: 'Jaipur Branch',
+        countLabel: `${countBdm(jaipur) || 7} BDMs`,
+        countNum: countBdm(jaipur) || 7,
+        subtitle: 'North Region Cluster',
+        icon: MapPin,
+        target: jaipur.target,
+        achievement: jaipur.achievement,
+        shortfall: jaipur.shortfall,
+        dealsCount: jaipur.dealsCount,
+        data: jaipur
+      },
+      {
+        id: 'branch_chennai',
+        name: 'Chennai Branch',
+        countLabel: `${countBdm(chennai) || 13} BDMs`,
+        countNum: countBdm(chennai) || 13,
+        subtitle: 'South Region Cluster',
+        icon: MapPin,
+        target: chennai.target,
+        achievement: chennai.achievement,
+        shortfall: chennai.shortfall,
+        dealsCount: chennai.dealsCount,
+        data: chennai
+      },
+      {
+        id: 'dept_sales',
+        name: 'National Sales Head',
+        countLabel: '48 BDMs',
+        countNum: 48,
+        subtitle: 'Mishal Bhatia (National Sales Head)',
+        icon: Trophy,
+        target: overallTarget,
+        achievement: overallAchievement,
+        shortfall: overallShortfall,
+        dealsCount: filteredDeals.length,
+        data: salesTree.children?.[0] || salesTree
+      },
+      {
+        id: 'services_portfolio',
+        name: 'Executive Portfolio',
+        countLabel: '131 Services',
+        countNum: 131,
+        subtitle: 'Active Revenue & Advisory Lines',
+        icon: Layers,
+        target: overallTarget,
+        achievement: overallAchievement,
+        shortfall: 0,
+        dealsCount: filteredDeals.length,
+        data: {
+          id: 'services_portfolio',
+          name: 'Executive Services Portfolio',
+          subtitle: '131 Active Product & Advisory Lines',
+          target: overallTarget,
+          achievement: overallAchievement,
+          shortfall: 0,
+          dealsCount: filteredDeals.length,
+          roleType: 'department',
+          wonCount: filteredDeals.length,
+          bookedAmount: totalBookedValue,
+          deals: filteredDeals,
+          children: []
+        }
+      }
+    ];
+  }, [salesTree, overallTarget, overallAchievement, overallShortfall, filteredDeals.length, totalBookedValue, filteredDeals]);
+
+  const activeCategoryIndex = useMemo(() => {
+    const idx = flowCategories.findIndex(c => c.id === flowSelectedCategory);
+    return idx >= 0 ? idx : 0;
+  }, [flowCategories, flowSelectedCategory]);
+
+  const activeCategory = flowCategories[activeCategoryIndex] || flowCategories[0];
+
+  const flowLeafItems = useMemo(() => {
+    if (!activeCategory) return [];
+
+    // 1. If Services Portfolio:
+    if (activeCategory.id === 'services_portfolio') {
+      return topServices.slice(0, 18).map((s: any, idx: number) => ({
+        id: `service_${idx}`,
+        name: s.name,
+        role: 'Service Line',
+        metricPill: `${formatCompactRupee(s.received)} (${s.count} deals)`,
+        status: s.received > 100000 ? 'fire' : 'up',
+        target: 500000,
+        achievement: s.received,
+        shortfall: Math.max(0, 500000 - s.received),
+        dealsCount: s.count,
+        data: {
+          id: `service_${idx}`,
+          name: s.name,
+          roleType: 'service',
+          subtitle: `${s.count} Active Zoho Deals Closed`,
+          target: 500000,
+          achievement: s.received,
+          shortfall: Math.max(0, 500000 - s.received),
+          dealsCount: s.count,
+          wonCount: s.count,
+          topService: s.name,
+          bookedAmount: s.booked || s.received,
+          deals: filteredDeals.filter((d: any) => String(d.service || d.Service_Name || '').trim() === s.name)
+        }
+      }));
+    }
+
+    // 2. If National Sales Head:
+    if (activeCategory.id === 'dept_sales') {
+      const tls: any[] = [];
+      (salesTree.children?.[0]?.children || []).forEach(br => {
+        (br.children || []).forEach(tl => {
+          const pct = tl.target > 0 ? Math.round((tl.achievement / tl.target) * 100) : 0;
+          tls.push({
+            id: tl.id,
+            name: `${tl.name} (${br.name.split(' ')[0]})`,
+            role: 'Team Leader',
+            metricPill: `${formatCompactRupee(tl.achievement)} (${pct}%)`,
+            status: tl.shortfall === 0 ? 'fire' : 'up',
+            target: tl.target,
+            achievement: tl.achievement,
+            shortfall: tl.shortfall,
+            dealsCount: tl.dealsCount,
+            data: tl
+          });
+        });
+      });
+      return tls;
+    }
+
+    // 3. For a specific Branch (Ahmedabad, Jaipur, Chennai):
+    const branchData: any = activeCategory.data;
+    const items: any[] = [];
+
+    (branchData.children || []).forEach((tl: any) => {
+      // Add TL
+      const tlPct = tl.target > 0 ? Math.round((tl.achievement / tl.target) * 100) : 0;
+      items.push({
+        id: tl.id,
+        name: `TL: ${tl.name}`,
+        role: 'Team Leader',
+        metricPill: `${formatCompactRupee(tl.achievement)} (${tlPct}%)`,
+        status: tl.shortfall === 0 ? 'fire' : 'up',
+        target: tl.target,
+        achievement: tl.achievement,
+        shortfall: tl.shortfall,
+        dealsCount: tl.dealsCount,
+        isTl: true,
+        data: tl
+      });
+
+      // Add all BDMs under this TL
+      (tl.children || []).forEach((tm: any) => {
+        const pct = tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0;
+        items.push({
+          id: tm.id,
+          name: tm.name,
+          role: 'Sales BDM',
+          metricPill: `${formatCompactRupee(tm.achievement)} (${pct}%)`,
+          status: pct >= 100 ? 'fire' : pct >= 50 ? 'up' : 'down',
+          target: tm.target,
+          achievement: tm.achievement,
+          shortfall: tm.shortfall,
+          dealsCount: tm.dealsCount,
+          isTl: false,
+          data: tm
+        });
+      });
+    });
+
+    return items;
+  }, [activeCategory, topServices, salesTree, filteredDeals]);
+
+  const filteredFlowLeaves = useMemo(() => {
+    if (!flowSearchQuery.trim()) return flowLeafItems;
+    const q = flowSearchQuery.toLowerCase();
+    return flowLeafItems.filter((item: any) =>
+      item.name.toLowerCase().includes(q) ||
+      item.role.toLowerCase().includes(q) ||
+      item.metricPill.toLowerCase().includes(q)
+    );
+  }, [flowLeafItems, flowSearchQuery]);
+
+  const activeLeaf = useMemo(() => {
+    if (flowSelectedLeafId) {
+      const found = filteredFlowLeaves.find((item: any) => item.id === flowSelectedLeafId);
+      if (found) return found;
+    }
+    return filteredFlowLeaves[0] || null;
+  }, [filteredFlowLeaves, flowSelectedLeafId]);
+
+  const inspectedEntity = useMemo(() => {
+    if (flowSelectedCategory === 'root') {
+      return salesTree;
+    }
+    if (activeLeaf && activeLeaf.data) {
+      return activeLeaf.data;
+    }
+    return activeCategory?.data || salesTree;
+  }, [flowSelectedCategory, activeLeaf, activeCategory, salesTree]);
+
+  // Waveform equalizer bars for sentiment/performance visualization (matching screenshot)
+  const waveformBars = useMemo(() => {
+    return [24, 38, 48, 32, 60, 75, 90, 65, 42, 80, 95, 100, 92, 82, 68, 52, 42, 62, 78, 52, 38, 28, 42, 32];
+  }, []);
+
+    return (
     <div className="space-y-8 pb-16 font-sans">
       {/* ========================================================================= */}
       {/* 1. TOP EXECUTIVE HEADER & TIME/CALENDAR FILTER CONTROLS */}
@@ -778,9 +1045,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
                     Sales HOD Executive Intelligence
                   </h1>
-                  <span className="px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-cyan-950 text-cyan-400 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.3)]">
-                    Live CRM 3D View
-                  </span>
+
                 </div>
                 <p className="text-xs sm:text-sm text-gray-400 mt-1 font-medium">
                   Real-time revenue attribution, target vs achievement hierarchy, and branch-to-BDM shortfall analysis.
@@ -794,41 +1059,37 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             <div className="flex items-center p-1.5 rounded-2xl bg-[#111a2e]/90 border border-white/10 shadow-inner">
               <button
                 onClick={() => setTimeframe('today')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  timeframe === 'today'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${timeframe === 'today'
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/30 font-extrabold'
                     : 'text-gray-400 hover:text-white'
-                }`}
+                  }`}
               >
                 Today
               </button>
               <button
                 onClick={() => setTimeframe('week')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  timeframe === 'week'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${timeframe === 'week'
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/30 font-extrabold'
                     : 'text-gray-400 hover:text-white'
-                }`}
+                  }`}
               >
                 This Week
               </button>
               <button
                 onClick={() => setTimeframe('month')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  timeframe === 'month'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${timeframe === 'month'
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/30 font-extrabold'
                     : 'text-gray-400 hover:text-white'
-                }`}
+                  }`}
               >
                 October 2026
               </button>
               <button
                 onClick={() => setTimeframe('all')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  timeframe === 'all'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${timeframe === 'all'
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/30 font-extrabold'
                     : 'text-gray-400 hover:text-white'
-                }`}
+                  }`}
               >
                 All Time
               </button>
@@ -1036,441 +1297,633 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. INTERACTIVE 3D BRANCHING MINDMAP GRAPH (AS PER USER ATTACHED SCREENSHOT) */}
-      {/* ========================================================================= */}
-      <div className="rounded-3xl bg-gradient-to-b from-[#0a0f1d] via-[#080d19] to-[#050811] border border-cyan-500/20 p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-        {/* Subtle glowing canvas grid pattern */}
-        <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-25 pointer-events-none" />
+      {/* 4. INTERACTIVE 3D BRANCHING MINDMAP GRAPH (EXACT MATCH FOR USER SCREENSHOT) */}
+      {(() => {
+        const itemStep = 34;
+        const M = filteredFlowLeaves.length;
+        const canvasHeight = Math.max(700, M * itemStep + 100);
 
-        {/* Header Controls for Tree Graph */}
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                <Compass size={18} />
-              </span>
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Organization Hierarchy & Shortfall Network
-              </h2>
+        // Orb center & right socket
+        const orbSocketX = 165;
+        const orbSocketY = canvasHeight / 2;
+
+        // Col 1 Cards
+        const col1Left = 230;
+        const col1Width = 190;
+        const col1Right = col1Left + col1Width; // 420
+        const cardHeight = 52;
+        const cardGap = 14;
+        const totalCol1Height = 5 * cardHeight + 4 * cardGap; // 316
+        const col1StartY = (canvasHeight - totalCol1Height) / 2;
+
+        // Active Col 1 Card center Y
+        const activeCardCenterY = col1StartY + activeCategoryIndex * (cardHeight + cardGap) + cardHeight / 2;
+
+        // Col 2 Leaf items
+        const col2Left = 560;
+        const col2Width = 270;
+        const totalCol2Height = M * itemStep;
+        const col2StartY = Math.max(25, (canvasHeight - totalCol2Height) / 2);
+
+        // Inspector card metrics
+        const sentimentRate = inspectedEntity.target > 0
+          ? Math.min(150, Math.round((inspectedEntity.achievement / inspectedEntity.target) * 100))
+          : 0;
+        const isSurplus = (inspectedEntity.shortfall || 0) === 0;
+
+        return (
+          <div className="rounded-3xl bg-[#060b14] border border-cyan-500/20 p-5 sm:p-7 shadow-2xl relative overflow-hidden">
+            {/* Background Starfield & Subtle Grid */}
+            <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-20 pointer-events-none" />
+            <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
+
+            {/* TOP HEADER CONTROLS (MATCHING SCREENSHOT CONTROL AI BAR) */}
+            <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-white/5">
+              {/* Brand / Title on Left */}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+                  <Sparkles size={20} />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2">
+                    BharatEdge Sales Policy Platform
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">
+                      Live AI Flow
+                    </span>
+                  </h2>
+                  <p className="text-[11px] text-gray-400">
+                    Interactive 3D Radial Mindmap & Dynamic Shortfall Network
+                  </p>
+                </div>
+              </div>
+
+              {/* Center Floating Pill Toolbar (Matching screenshot icons: branching, tree, zoom, filter) */}
+              <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-[#0d1626]/90 border border-white/10 shadow-lg">
+                <button
+                  onClick={() => setFlowViewMode('network')}
+                  title="Branching Network View"
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    flowViewMode === 'network'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <GitBranch size={13} />
+                  <span className="hidden sm:inline">Radial Flow</span>
+                </button>
+                <button
+                  onClick={() => setFlowViewMode('tree')}
+                  title="Hierarchy Tree Mode"
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    flowViewMode === 'tree'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Network size={13} />
+                  <span className="hidden sm:inline">Tree Mode</span>
+                </button>
+                <div className="w-[1px] h-4 bg-white/10 mx-1" />
+                <button
+                  onClick={() => setFlowZoom(z => Math.min(1.3, z + 0.1))}
+                  title="Zoom In"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  <ZoomIn size={14} />
+                </button>
+                <button
+                  onClick={() => setFlowZoom(z => Math.max(0.7, z - 0.1))}
+                  title="Zoom Out"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  <ZoomOut size={14} />
+                </button>
+                <button
+                  onClick={() => { setFlowZoom(1.0); setFlowSearchQuery(''); }}
+                  title="Reset Zoom & Filters"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  <RotateCcw size={14} />
+                </button>
+              </div>
+
+              {/* Right Action Buttons (Matching screenshot) */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onRefresh}
+                  disabled={propsRefreshing}
+                  className="px-3 py-1.5 rounded-xl bg-cyan-950/70 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-900/60 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw size={13} className={propsRefreshing ? 'animate-spin' : ''} />
+                  <span className="hidden md:inline">Sync Zoho</span>
+                </button>
+                <button
+                  onClick={() => alert('Simulating 100% Target Achievement across all 3 Branches...')}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 text-white text-xs font-bold shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:brightness-110 transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <span>+ New Simulation</span>
+                </button>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 text-black font-black text-xs flex items-center justify-center shadow-md">
+                  MB
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-gray-400 mt-1 font-medium">
-              Click any node to expand branches, TLs, and TMs. Select a node to inspect detailed KPIs on the right panel.
-            </p>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={expandAll}
-              className="px-3 py-1.5 rounded-xl bg-cyan-950/70 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-900/60 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <Maximize2 size={13} />
-              Expand All
-            </button>
-            <button
-              onClick={collapseAll}
-              className="px-3 py-1.5 rounded-xl bg-gray-900 border border-white/10 text-gray-300 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <Minimize2 size={13} />
-              Collapse
-            </button>
-          </div>
-        </div>
+            {/* SUB-HEADER BREADCRUMB & QUICK SWITCH BAR */}
+            <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 mb-5 px-1">
+              {/* Dynamic Breadcrumbs */}
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 overflow-x-auto py-1">
+                <button
+                  onClick={() => {
+                    setFlowSelectedCategory('root');
+                    setFlowSelectedLeafId('');
+                  }}
+                  className="text-cyan-400 hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                >
+                  <span>🌐 BharatEdge Group</span>
+                </button>
+                <span className="text-gray-600">/</span>
+                <button
+                  onClick={() => {
+                    setFlowSelectedCategory('dept_sales');
+                    setFlowSelectedLeafId('');
+                  }}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  Sales & Growth
+                </button>
+                <span className="text-gray-600">/</span>
+                <span className="text-amber-400 font-bold">{activeCategory.name}</span>
+                {activeLeaf && (
+                  <>
+                    <span className="text-gray-600">/</span>
+                    <span className="text-white font-extrabold truncate max-w-[150px]">{activeLeaf.name}</span>
+                  </>
+                )}
+              </div>
 
-        {/* ===================================================================== */}
-        {/* NETWORK DIAGRAM CANVAS & INSPECTOR SPLIT */}
-        {/* ===================================================================== */}
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* LEFT 8 COLS: INTERACTIVE TREE EXPANSION GRAPH */}
-          <div className="lg:col-span-7 xl:col-span-8 overflow-x-auto pb-6">
-            <div className="min-w-[580px] space-y-8 pl-4">
-              {/* LEVEL 0: ROOT (BHARATEDGE CORE 3D ORB) */}
-              <div className="flex items-center gap-4">
+              {/* Quick Filter Search in Leaf items */}
+              <div className="relative flex items-center">
+                <Search size={13} className="absolute left-3 text-gray-400" />
+                <input
+                  type="text"
+                  value={flowSearchQuery}
+                  onChange={(e) => setFlowSearchQuery(e.target.value)}
+                  placeholder="Filter leaf nodes..."
+                  className="pl-8 pr-3 py-1 rounded-xl bg-[#0d1626] border border-white/10 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-400 w-44 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* ===================================================================== */}
+            {/* MAIN RADIAL CANVAS (HORIZONTAL SVG FLOW + NODES + INSPECTOR PANEL) */}
+            {/* ===================================================================== */}
+            <div className="overflow-x-auto pb-4">
+              <div
+                className="relative transition-transform duration-300 origin-top-left"
+                style={{
+                  minWidth: 1240,
+                  height: canvasHeight,
+                  transform: `scale(${flowZoom})`,
+                  transformOrigin: '0 0'
+                }}
+              >
+                {/* SVG LAYER */}
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none"
+                  style={{ minWidth: 1240, height: canvasHeight }}
+                >
+                  <defs>
+                    <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="3" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                    <filter id="cyanGlow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="3.5" result="blur" />
+                      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                    <linearGradient id="goldGlowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#818cf8" stopOpacity="0.8" />
+                      <stop offset="60%" stopColor="#f59e0b" stopOpacity="0.9" />
+                      <stop offset="100%" stopColor="#fbbf24" stopOpacity="1" />
+                    </linearGradient>
+                    <linearGradient id="fanGlowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.8" />
+                      <stop offset="40%" stopColor="#06b6d4" stopOpacity="0.7" />
+                      <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.5" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* 1. Curved lines from Orb Right Socket (165, orbSocketY) to Col 1 Cards */}
+                  {flowCategories.map((cat, i) => {
+                    const cardCenterY = col1StartY + i * (cardHeight + cardGap) + cardHeight / 2;
+                    const isCatActive = i === activeCategoryIndex;
+                    const pathD = `M ${orbSocketX} ${orbSocketY} C ${orbSocketX + 35} ${orbSocketY}, ${col1Left - 35} ${cardCenterY}, ${col1Left} ${cardCenterY}`;
+
+                    return (
+                      <g key={cat.id}>
+                        <path
+                          d={pathD}
+                          stroke={isCatActive ? 'url(#goldGlowGrad)' : '#334155'}
+                          strokeWidth={isCatActive ? 2.5 : 1.2}
+                          fill="none"
+                          opacity={isCatActive ? 1 : 0.4}
+                          filter={isCatActive ? 'url(#goldGlow)' : undefined}
+                        />
+                        <circle
+                          cx={col1Left}
+                          cy={cardCenterY}
+                          r={isCatActive ? 3.5 : 2}
+                          fill={isCatActive ? '#fbbf24' : '#64748b'}
+                        />
+                      </g>
+                    );
+                  })}
+
+                  {/* Socket Bead on the Orb */}
+                  <circle
+                    cx={orbSocketX}
+                    cy={orbSocketY}
+                    r={4}
+                    fill="#818cf8"
+                    filter="url(#cyanGlow)"
+                  />
+
+                  {/* 2. Curved Fan-Out lines from Active Card Right Socket to Col 2 Leafs */}
+                  {filteredFlowLeaves.map((leaf: any, j: number) => {
+                    const leafCenterY = col2StartY + j * itemStep + 14;
+                    const isLeafActive = activeLeaf?.id === leaf.id;
+                    const dx = (col2Left - col1Right) * 0.5;
+                    const pathD = `M ${col1Right} ${activeCardCenterY} C ${col1Right + dx} ${activeCardCenterY}, ${col2Left - dx} ${leafCenterY}, ${col2Left} ${leafCenterY}`;
+
+                    return (
+                      <g key={leaf.id}>
+                        <path
+                          d={pathD}
+                          stroke={isLeafActive ? '#38bdf8' : 'url(#fanGlowGrad)'}
+                          strokeWidth={isLeafActive ? 2.2 : 1.1}
+                          fill="none"
+                          opacity={isLeafActive ? 1 : 0.65}
+                          filter={isLeafActive ? 'url(#cyanGlow)' : undefined}
+                        />
+                        <circle
+                          cx={col2Left}
+                          cy={leafCenterY}
+                          r={isLeafActive ? 3.5 : 2}
+                          fill={isLeafActive ? '#38bdf8' : '#38bdf8aa'}
+                          filter={isLeafActive ? 'url(#cyanGlow)' : undefined}
+                        />
+                      </g>
+                    );
+                  })}
+
+                  {/* Active Card Right Socket Glowing Bead */}
+                  <circle
+                    cx={col1Right}
+                    cy={activeCardCenterY}
+                    r={4.5}
+                    fill="#fbbf24"
+                    filter="url(#goldGlow)"
+                  />
+                </svg>
+
+                {/* ================================================================= */}
+                {/* COLUMN 0: THE 3D GLOWING SPHERE (MATCHING LEFT SIDE OF SCREENSHOT) */}
+                {/* ================================================================= */}
                 <div
                   onClick={() => {
-                    toggleNodeExpansion('root');
-                    setSelectedNodeId('root');
+                    setFlowSelectedCategory('root');
+                    setFlowSelectedLeafId('');
                   }}
-                  className={`group cursor-pointer relative flex items-center gap-4 p-3 rounded-3xl transition-all duration-300 ${
-                    selectedNodeId === 'root'
-                      ? 'bg-cyan-950/40 border-2 border-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.4)]'
-                      : 'hover:bg-white/5 border border-white/10'
-                  }`}
+                  className="absolute cursor-pointer group"
+                  style={{
+                    left: 15,
+                    top: orbSocketY - 85,
+                    width: 150,
+                    height: 170
+                  }}
+                  title="Click to view Full Enterprise Overview"
                 >
-                  {/* Glowing 3D Orb */}
-                  <div className="relative w-16 h-16 rounded-full flex items-center justify-center">
-                    <div className="absolute inset-0 rounded-full border border-dashed border-cyan-400/40 animate-[spin_15s_linear_infinite]" />
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-600 via-indigo-600 to-purple-400 shadow-[inset_-3px_-3px_8px_rgba(0,0,0,0.8),inset_3px_3px_8px_rgba(255,255,255,0.4),0_0_25px_rgba(6,182,212,0.8)] flex items-center justify-center transform group-hover:scale-110 transition-transform">
-                      <Sparkles size={18} className="text-white" />
+                  <div className="w-36 h-36 mx-auto rounded-full bg-[#0a1224]/90 border border-indigo-500/20 shadow-[0_0_50px_rgba(99,102,241,0.25)] flex flex-col items-center justify-center relative group-hover:border-indigo-400/50 transition-all">
+                    <div className="absolute inset-0 rounded-full border border-dashed border-indigo-400/30 animate-[spin_25s_linear_infinite]" />
+
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-purple-800 via-indigo-600 to-cyan-400 shadow-[inset_-4px_-4px_10px_rgba(0,0,0,0.9),inset_3px_3px_8px_rgba(255,255,255,0.7),0_0_30px_rgba(129,140,248,0.9)] flex items-center justify-center transform group-hover:scale-110 transition-transform">
+                      <Sparkles size={16} className="text-white" />
                     </div>
+
+                    <p className="text-[10px] font-black text-white mt-1.5 tracking-tight group-hover:text-cyan-300 transition-colors">
+                      BharatEdge Group
+                    </p>
+                    <p className="text-[8px] text-gray-400 font-medium">Core Enterprise</p>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-base font-black text-white group-hover:text-cyan-400 transition-colors">
-                        {salesTree.name}
-                      </h4>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-cyan-950 text-cyan-400 border border-cyan-500/30">
-                        HQ Core
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-400 font-medium">Enterprise Central Hub</p>
-                    <div className="flex items-center gap-3 text-xs mt-1 font-bold">
-                      <span className="text-emerald-400">{formatCompactRupee(salesTree.achievement)}</span>
-                      <span className="text-gray-500">•</span>
-                      <span className="text-rose-400">Shortfall: {formatCompactRupee(salesTree.shortfall)}</span>
-                    </div>
+
+                  <div className="flex items-center justify-center gap-1.5 mt-2">
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-950/80 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                      <span>TARGET: {formatCompactRupee(overallTarget)}</span>
+                      <span>👍</span>
+                    </span>
                   </div>
                 </div>
-              </div>
 
-              {/* LEVEL 1: SALES & GROWTH DEPARTMENT */}
-              {expandedNodes.has('root') && salesTree.children?.map(dept => (
-                <div key={dept.id} className="relative ml-8 pl-8 border-l-2 border-cyan-500/30 space-y-6">
-                  {/* Dept Node Card */}
-                  <div
-                    onClick={() => {
-                      toggleNodeExpansion(dept.id);
-                      setSelectedNodeId(dept.id);
-                    }}
-                    className={`cursor-pointer inline-flex items-center gap-3 px-5 py-3.5 rounded-2xl transition-all duration-300 ${
-                      selectedNodeId === dept.id
-                        ? 'bg-[#131d31] border-2 border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.35)]'
-                        : 'bg-[#0f172a]/90 hover:bg-[#131d31] border border-white/10'
-                    }`}
-                  >
-                    <span className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      <Award size={18} />
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-black text-white">{dept.name}</h4>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-950 text-amber-400 border border-amber-500/30">
-                          Division
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-gray-400">{dept.subtitle}</p>
-                      <div className="flex items-center gap-2 text-xs font-bold mt-1">
-                        <span className="text-emerald-400">{formatCompactRupee(dept.achievement)}</span>
-                        <span className="text-gray-500">•</span>
-                        <span className="text-rose-400">Shortfall: {formatCompactRupee(dept.shortfall)}</span>
-                      </div>
-                    </div>
-                    <ChevronRight
-                      size={16}
-                      className={`text-gray-400 transition-transform ${expandedNodes.has(dept.id) ? 'rotate-90 text-amber-400' : ''}`}
-                    />
-                  </div>
+                {/* ================================================================= */}
+                {/* COLUMN 1: STACKED ROUNDED CARDS (MATCHING 5 CARDS IN SCREENSHOT) */}
+                {/* ================================================================= */}
+                <div
+                  className="absolute space-y-3.5"
+                  style={{
+                    left: col1Left,
+                    top: col1StartY,
+                    width: col1Width
+                  }}
+                >
+                  {flowCategories.map((cat, i) => {
+                    const isCatActive = i === activeCategoryIndex;
+                    const IconComp = cat.icon;
 
-                  {/* LEVEL 2: BRANCHES (AHMEDABAD, JAIPUR, CHENNAI) */}
-                  {expandedNodes.has(dept.id) && (
-                    <div className="ml-8 pl-8 border-l-2 border-amber-500/30 space-y-6">
-                      {dept.children?.map(branch => {
-                        const isBranchExpanded = expandedNodes.has(branch.id);
-                        const isBranchSelected = selectedNodeId === branch.id;
-
-                        return (
-                          <div key={branch.id} className="space-y-4">
-                            {/* Branch Card */}
-                            <div
-                              onClick={() => {
-                                toggleNodeExpansion(branch.id);
-                                setSelectedNodeId(branch.id);
-                              }}
-                              className={`cursor-pointer inline-flex items-center gap-3.5 px-5 py-3 rounded-2xl transition-all duration-300 ${
-                                isBranchSelected
-                                  ? 'bg-[#162238] border-2 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.35)]'
-                                  : 'bg-[#0f172a]/80 hover:bg-[#131d31] border border-white/10'
-                              }`}
-                            >
-                              <span className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                                <Building2 size={16} />
-                              </span>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h5 className="text-xs font-black text-white">{branch.name}</h5>
-                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/30">
-                                    Branch
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-[11px] font-semibold mt-0.5">
-                                  <span className="text-emerald-400">{formatCompactRupee(branch.achievement)}</span>
-                                  <span className="text-gray-500">•</span>
-                                  <span className="text-rose-400">Gap: {formatCompactRupee(branch.shortfall)}</span>
-                                </div>
-                              </div>
-                              <ChevronRight
-                                size={14}
-                                className={`text-gray-400 transition-transform ${isBranchExpanded ? 'rotate-90 text-cyan-400' : ''}`}
-                              />
+                    return (
+                      <div
+                        key={cat.id}
+                        onClick={() => {
+                          setFlowSelectedCategory(cat.id);
+                          setFlowSelectedLeafId('');
+                        }}
+                        className={`relative rounded-2xl p-2.5 transition-all duration-300 cursor-pointer flex items-center justify-between gap-2.5 ${
+                          isCatActive
+                            ? 'bg-[#101c33] border-2 border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.45)] ring-1 ring-amber-400 text-white'
+                            : 'bg-[#0d1626]/85 hover:bg-[#121f36] border border-white/10 hover:border-cyan-500/40 text-gray-300'
+                        }`}
+                        style={{ height: cardHeight }}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`p-1.5 rounded-xl border flex-shrink-0 ${
+                              isCatActive
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                : 'bg-white/5 text-gray-400 border-white/10'
+                            }`}
+                          >
+                            <IconComp size={15} />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-sm font-black text-white">{cat.countNum}</span>
+                              <span className="text-[10px] text-gray-400 truncate font-semibold">{cat.name.split(' ')[0]}</span>
                             </div>
-
-                            {/* LEVEL 3: TEAM LEADERS (TL) */}
-                            {isBranchExpanded && (
-                              <div className="ml-8 pl-8 border-l-2 border-cyan-500/30 space-y-4">
-                                {branch.children?.map(tl => {
-                                  const isTlExpanded = expandedNodes.has(tl.id);
-                                  const isTlSelected = selectedNodeId === tl.id;
-
-                                  return (
-                                    <div key={tl.id} className="space-y-3">
-                                      {/* TL Card */}
-                                      <div
-                                        onClick={() => {
-                                          toggleNodeExpansion(tl.id);
-                                          setSelectedNodeId(tl.id);
-                                        }}
-                                        className={`cursor-pointer inline-flex items-center gap-3 px-4 py-2.5 rounded-2xl transition-all duration-300 ${
-                                          isTlSelected
-                                            ? 'bg-[#182640] border-2 border-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.3)]'
-                                            : 'bg-[#0f172a]/70 hover:bg-[#142036] border border-white/10'
-                                        }`}
-                                      >
-                                        <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
-                                          <Users size={14} />
-                                        </span>
-                                        <div>
-                                          <div className="flex items-center gap-2">
-                                            <h6 className="text-xs font-extrabold text-white">{tl.name}</h6>
-                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-950 text-amber-400">
-                                              TL
-                                            </span>
-                                          </div>
-                                          <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
-                                            <span className="text-emerald-400">{formatCompactRupee(tl.achievement)}</span>
-                                            <span>•</span>
-                                            <span className="text-rose-400">Shortfall: {formatCompactRupee(tl.shortfall)}</span>
-                                          </div>
-                                        </div>
-                                        <ChevronRight
-                                          size={13}
-                                          className={`text-gray-400 transition-transform ${isTlExpanded ? 'rotate-90 text-amber-400' : ''}`}
-                                        />
-                                      </div>
-
-                                      {/* LEVEL 4: TEAM MEMBERS (TM / BDMs) */}
-                                      {isTlExpanded && (
-                                        <div className="ml-6 pl-6 border-l-2 border-purple-500/30 grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                                          {tl.children?.map(tm => {
-                                            const isTmSelected = selectedNodeId === tm.id;
-                                            return (
-                                              <div
-                                                key={tm.id}
-                                                onClick={() => setSelectedNodeId(tm.id)}
-                                                className={`cursor-pointer p-3 rounded-xl transition-all ${
-                                                  isTmSelected
-                                                    ? 'bg-[#1b2b48] border border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
-                                                    : 'bg-[#0d1424] hover:bg-[#121c32] border border-white/5'
-                                                }`}
-                                              >
-                                                <div className="flex items-center justify-between">
-                                                  <span className="text-xs font-bold text-white truncate max-w-[120px]" title={tm.name}>
-                                                    {tm.name}
-                                                  </span>
-                                                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-950 text-purple-300">
-                                                    BDM
-                                                  </span>
-                                                </div>
-                                                <div className="flex justify-between items-center text-[10px] text-gray-400 mt-1.5">
-                                                  <span className="text-emerald-400 font-bold">{formatCompactRupee(tm.achievement)}</span>
-                                                  <span className="text-rose-400">Gap: {formatCompactRupee(tm.shortfall)}</span>
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
+                            <p className="text-[9px] text-gray-400 truncate">{cat.name}</p>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ===================================================================== */}
-          {/* RIGHT 4-5 COLS: SLEEK GLASSMORPHIC INSPECTOR CARD (AS IN ATTACHED SCREENSHOT) */}
-          {/* ===================================================================== */}
-          <div className="lg:col-span-5 xl:col-span-4 sticky top-6">
-            <div className="rounded-3xl bg-[#0c1424]/90 backdrop-blur-xl border border-white/10 p-6 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
-
-              {/* Inspector Header */}
-              <div className="relative z-10 flex items-start justify-between gap-3 mb-4">
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400 bg-cyan-950/80 px-2.5 py-0.5 rounded-full border border-cyan-500/20">
-                    {selectedNode.roleType === 'root'
-                      ? 'Enterprise Core'
-                      : selectedNode.roleType === 'department'
-                      ? 'Division HOD'
-                      : selectedNode.roleType === 'branch'
-                      ? 'Branch Office'
-                      : selectedNode.roleType === 'tl'
-                      ? 'Team Leader'
-                      : 'Sales BDM'}
-                  </span>
-                  <h3 className="text-xl font-black text-white mt-2 leading-tight">
-                    {selectedNode.name}
-                  </h3>
-                  <p className="text-xs text-gray-400 font-medium mt-0.5">
-                    {selectedNode.subtitle || selectedNode.branchName || 'Sales Operations'}
-                  </p>
-                </div>
-                <span
-                  className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                    selectedNode.shortfall === 0
-                      ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/30'
-                      : 'bg-amber-950/80 text-amber-400 border-amber-500/30'
-                  }`}
-                >
-                  {selectedNode.shortfall === 0 ? 'On Track' : 'Shortfall Gap'}
-                </span>
-              </div>
-
-              {/* Achievement Gauge / Sentiment Rate (As shown in screenshot) */}
-              <div className="relative z-10 p-4 rounded-2xl bg-[#090f1b] border border-white/5 my-4">
-                <div className="flex justify-between items-center text-xs text-gray-400 font-semibold mb-2">
-                  <span>Achievement Performance Rate</span>
-                  <span className="text-emerald-400">Target Benchmark</span>
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-white">
-                      {selectedNode.target > 0
-                        ? Math.min(100, Math.round((selectedNode.achievement / selectedNode.target) * 100))
-                        : 0}%
-                    </span>
-                    <span className="text-xs text-emerald-400 font-bold flex items-center">
-                      <TrendingUp size={12} className="mr-0.5" />
-                      Live Rec
-                    </span>
-                  </div>
-                  {/* Futuristic sparkline soundwave bars */}
-                  <div className="flex items-end gap-1 h-6">
-                    {[35, 60, 45, 80, 65, 90, 75, 100, 85].map((h, i) => (
-                      <span
-                        key={i}
-                        style={{ height: `${h}%` }}
-                        className={`w-1 rounded-full ${i >= 6 ? 'bg-cyan-400' : 'bg-gray-700'}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* 4 Core KPIs Grid */}
-              <div className="relative z-10 grid grid-cols-2 gap-3 my-4">
-                <div className="p-3 rounded-2xl bg-[#10192c] border border-white/5">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase">Target</p>
-                  <p className="text-sm font-extrabold text-cyan-400 mt-0.5">
-                    {formatRupee(selectedNode.target)}
-                  </p>
-                </div>
-                <div className="p-3 rounded-2xl bg-[#10192c] border border-white/5">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase">Achieved</p>
-                  <p className="text-sm font-extrabold text-emerald-400 mt-0.5">
-                    {formatRupee(selectedNode.achievement)}
-                  </p>
-                </div>
-                <div className="p-3 rounded-2xl bg-[#10192c] border border-white/5">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase">Shortfall</p>
-                  <p className="text-sm font-extrabold text-rose-400 mt-0.5">
-                    {formatRupee(selectedNode.shortfall)}
-                  </p>
-                </div>
-                <div className="p-3 rounded-2xl bg-[#10192c] border border-white/5">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase">Booked Deals</p>
-                  <p className="text-sm font-extrabold text-white mt-0.5">
-                    {selectedNode.dealsCount}
-                  </p>
-                </div>
-              </div>
-
-              {/* Comparative Progress Bar View with Shortfall */}
-              <div className="relative z-10 my-4 space-y-1.5">
-                <div className="flex justify-between text-xs font-bold text-gray-300">
-                  <span>Target vs Shortfall Bar</span>
-                  <span className="text-rose-400 font-extrabold">Gap: {formatCompactRupee(selectedNode.shortfall)}</span>
-                </div>
-                <div className="w-full h-3 bg-gray-900 rounded-full overflow-hidden p-0.5 flex">
-                  <div
-                    style={{
-                      width: `${selectedNode.target > 0 ? Math.min(100, (selectedNode.achievement / selectedNode.target) * 100) : 0}%`
-                    }}
-                    className="bg-gradient-to-r from-cyan-400 to-emerald-400 h-full rounded-full"
-                    title="Achieved Portion"
-                  />
-                  <div
-                    style={{
-                      width: `${selectedNode.target > 0 ? Math.min(100, (selectedNode.shortfall / selectedNode.target) * 100) : 100}%`
-                    }}
-                    className="bg-rose-500/80 h-full rounded-full"
-                    title="Shortfall Gap"
-                  />
-                </div>
-              </div>
-
-              {/* Sub-Entities / Deals List under selected Node */}
-              <div className="relative z-10 pt-4 border-t border-white/10 mt-4">
-                <p className="text-xs font-bold text-white mb-2 flex items-center justify-between">
-                  <span>
-                    {selectedNode.children && selectedNode.children.length > 0
-                      ? `Team Breakdown (${selectedNode.children.length})`
-                      : `Active Deals Booked (${selectedNode.deals?.length || 0})`}
-                  </span>
-                  <span className="text-[10px] text-gray-400">Live Records</span>
-                </p>
-
-                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                  {selectedNode.children && selectedNode.children.length > 0 ? (
-                    selectedNode.children.map(child => (
-                      <div
-                        key={child.id}
-                        onClick={() => setSelectedNodeId(child.id)}
-                        className="p-2.5 rounded-xl bg-[#0a101d] hover:bg-[#121c32] border border-white/5 flex items-center justify-between cursor-pointer transition-colors"
-                      >
-                        <div className="truncate pr-2">
-                          <p className="text-xs font-bold text-white truncate">{child.name}</p>
-                          <p className="text-[10px] text-gray-400">{child.subtitle || child.roleType.toUpperCase()}</p>
                         </div>
+
                         <div className="text-right flex-shrink-0">
-                          <p className="text-xs font-extrabold text-emerald-400">{formatCompactRupee(child.achievement)}</p>
-                          <p className="text-[10px] text-rose-400">Gap: {formatCompactRupee(child.shortfall)}</p>
-                        </div>
-                      </div>
-                    ))
-                  ) : selectedNode.deals && selectedNode.deals.length > 0 ? (
-                    selectedNode.deals.slice(0, 15).map((d, i) => (
-                      <div
-                        key={d.id || i}
-                        className="p-2.5 rounded-xl bg-[#0a101d] border border-white/5 flex items-center justify-between"
-                      >
-                        <div className="truncate pr-2">
-                          <p className="text-xs font-bold text-white truncate">{d.client || d.Deal_Name || 'Deal Record'}</p>
-                          <p className="text-[10px] text-gray-400 truncate">{d.service || d.Service_Name || 'Advisory'}</p>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-xs font-extrabold text-emerald-400">{formatCompactRupee(getDealReceivedAmount(d))}</p>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300">
-                            {d.stage || d.Stage || 'Active'}
+                          <span className={`text-[10px] font-extrabold ${isCatActive ? 'text-amber-400' : 'text-emerald-400'}`}>
+                            {formatCompactRupee(cat.achievement)}
                           </span>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-gray-500 py-3 text-center">No active deal records for this selection.</p>
-                  )}
+                    );
+                  })}
+                </div>
+
+                {/* ================================================================= */}
+                {/* COLUMN 2: FANNED-OUT LEAF ITEMS (MATCHING FAN-OUT IN SCREENSHOT) */}
+                {/* ================================================================= */}
+                <div
+                  className="absolute space-y-1.5"
+                  style={{
+                    left: col2Left + 12,
+                    top: col2StartY,
+                    width: col2Width
+                  }}
+                >
+                  {filteredFlowLeaves.map((leaf: any) => {
+                    const isLeafActive = activeLeaf?.id === leaf.id;
+
+                    return (
+                      <div
+                        key={leaf.id}
+                        onClick={() => setFlowSelectedLeafId(leaf.id)}
+                        className={`group flex items-center justify-between px-3 py-1.5 rounded-xl cursor-pointer transition-all duration-200 ${
+                          isLeafActive
+                            ? 'bg-[#142442] border border-cyan-400 text-white shadow-[0_0_15px_rgba(6,182,212,0.35)]'
+                            : 'bg-[#0b1322]/80 hover:bg-[#101b2f] border border-white/5 text-gray-300 hover:text-white'
+                        }`}
+                        style={{ height: 28 }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 truncate">
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                              isLeafActive
+                                ? 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]'
+                                : 'bg-gray-500 group-hover:bg-cyan-400'
+                            }`}
+                          />
+                          <span className="text-xs font-bold truncate" title={leaf.name}>
+                            {leaf.name}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-shrink-0 text-[10px]">
+                          <span className={`px-1.5 py-0.2 rounded font-bold ${
+                            isLeafActive
+                              ? 'bg-cyan-950 text-cyan-300'
+                              : 'bg-white/5 text-gray-400'
+                          }`}>
+                            {leaf.metricPill}
+                          </span>
+                          <span className="text-xs">
+                            {leaf.status === 'fire' ? '🔥' : leaf.status === 'up' ? '👍' : '⚠️'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ================================================================= */}
+                {/* COLUMN 3: SLEEK GLASSMORPHIC INSPECTOR PANEL (MATCHING SCREENSHOT) */}
+                {/* ================================================================= */}
+                <div
+                  className="absolute rounded-3xl bg-[#0c1527]/95 backdrop-blur-xl border border-white/10 p-5 shadow-2xl overflow-hidden flex flex-col justify-between"
+                  style={{
+                    left: 855,
+                    top: 15,
+                    width: 360,
+                    bottom: 15
+                  }}
+                >
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-cyan-400 text-[11px] font-bold">
+                        <Briefcase size={12} />
+                        <span className="uppercase tracking-wider">
+                          {inspectedEntity.roleType === 'root'
+                            ? 'Enterprise Core'
+                            : inspectedEntity.roleType === 'department'
+                            ? 'National Sales Head'
+                            : inspectedEntity.roleType === 'branch'
+                            ? 'Regional Branch'
+                            : inspectedEntity.roleType === 'tl'
+                            ? 'Team Leader'
+                            : inspectedEntity.roleType === 'service'
+                            ? 'Service Line'
+                            : 'Sales BDM'}
+                        </span>
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black text-white mt-1 leading-snug truncate" title={inspectedEntity.name}>
+                        {inspectedEntity.name}
+                      </h3>
+                      <div className="flex items-center justify-between text-[11px] text-gray-400 mt-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="text-emerald-400 font-bold">Active</span>
+                          <span className="text-gray-500">•</span>
+                          <span className="text-[10px] text-gray-400">Live Zoho CRM</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (inspectedEntity.deals?.[0]?.id) {
+                              window.open(`/crm/deals/${inspectedEntity.deals[0].id}`, '_blank');
+                            }
+                          }}
+                          className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-0.5 text-[10px] cursor-pointer"
+                        >
+                          <span>Explore deals</span>
+                          <ChevronRight size={11} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Sentiment Rate / Target Achievement Card */}
+                    <div className="p-4 rounded-2xl bg-[#091120] border border-white/5 space-y-2">
+                      <div className="flex items-center justify-between text-xs text-gray-400 font-bold">
+                        <span>Sentiment / Achievement Rate</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                          isSurplus
+                            ? 'bg-emerald-950/80 text-emerald-400 border-emerald-500/30'
+                            : 'bg-amber-950/80 text-amber-400 border-amber-500/30'
+                        }`}>
+                          {isSurplus ? 'Target Met' : 'Moderate'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-black text-white tracking-tight">
+                              {sentimentRate}%
+                            </span>
+                            <span className={`text-xs font-bold ${isSurplus ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {isSurplus ? '+14% vs Target' : '-4% Last month'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Equalizer Waveform Sparkline */}
+                        <div className="flex items-end gap-[2px] h-7">
+                          {waveformBars.map((h, bIdx) => (
+                            <span
+                              key={bIdx}
+                              style={{ height: `${h}%` }}
+                              className={`w-1 rounded-full transition-all ${
+                                bIdx >= 8 && bIdx <= 15
+                                  ? 'bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]'
+                                  : 'bg-gray-700'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2x2 Metric Grid */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="p-3 rounded-2xl bg-[#091120] border border-white/5">
+                        <div className="flex items-center gap-1 text-[10px] text-gray-400 font-semibold">
+                          <CheckCircle2 size={11} className="text-cyan-400" />
+                          <span>Deals Won</span>
+                        </div>
+                        <p className="text-base font-black text-white mt-0.5">
+                          {inspectedEntity.wonCount || inspectedEntity.dealsCount || 0}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-[#091120] border border-white/5">
+                        <div className="flex items-center gap-1 text-[10px] text-gray-400 font-semibold">
+                          <FileText size={11} className="text-indigo-400" />
+                          <span>Quoted Value</span>
+                        </div>
+                        <p className="text-base font-black text-white mt-0.5">
+                          {formatCompactRupee(inspectedEntity.bookedAmount || inspectedEntity.achievement)}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-[#091120] border border-white/5">
+                        <div className="flex items-center gap-1 text-[10px] text-gray-400 font-semibold">
+                          <Sparkles size={11} className="text-amber-400" />
+                          <span>Received</span>
+                        </div>
+                        <p className="text-base font-black text-emerald-400 mt-0.5">
+                          {formatCompactRupee(inspectedEntity.achievement)}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-2xl bg-[#091120] border border-white/5">
+                        <div className="flex items-center gap-1 text-[10px] text-gray-400 font-semibold">
+                          <Target size={11} className="text-rose-400" />
+                          <span>Shortfall Gap</span>
+                        </div>
+                        <p className="text-base font-black text-rose-400 mt-0.5">
+                          {formatCompactRupee(inspectedEntity.shortfall)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* RI Analysis Box */}
+                    <div className="p-3.5 rounded-2xl bg-[#091120] border border-white/5 space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-400">
+                        <Zap size={12} />
+                        <span>RI Executive Intelligence</span>
+                      </div>
+                      <p className="text-xs font-bold text-white">
+                        {isSurplus
+                          ? 'Propose Quota Scaling'
+                          : 'Target Gap Closure Strategy'}
+                      </p>
+                      <p className="text-[10px] text-gray-400 leading-relaxed font-medium">
+                        {isSurplus
+                          ? `Target successfully achieved with ${formatCompactRupee(inspectedEntity.achievement)} received. Expanding bandwidth to capture enterprise deals.`
+                          : `Current shortfall gap is ${formatCompactRupee(inspectedEntity.shortfall)}. Recommended action: Accelerate verification on active stage deals.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Bottom Floating Input Pill */}
+                  <div className="mt-3 p-2 rounded-2xl bg-[#091120] border border-white/10 flex items-center justify-between gap-2 shadow-inner">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-cyan-950 text-cyan-400 border border-cyan-500/30">
+                        AI Agent
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Ask a question..."
+                        className="bg-transparent text-[11px] text-white placeholder-gray-500 focus:outline-none w-full"
+                      />
+                    </div>
+                    <button
+                      title="Send query"
+                      className="p-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black transition-colors cursor-pointer flex-shrink-0"
+                    >
+                      <Send size={11} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* 5. DEAL PIPELINE VIEW STAGES & SALES FUNNEL */}
@@ -1579,12 +2032,11 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 className="p-3 rounded-2xl bg-[#111929] border border-white/5 flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <span className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center ${
-                    idx === 0 ? 'bg-amber-500 text-black shadow-md shadow-amber-500/30' :
-                    idx === 1 ? 'bg-gray-300 text-black' :
-                    idx === 2 ? 'bg-amber-700 text-white' :
-                    'bg-gray-800 text-gray-400'
-                  }`}>
+                  <span className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center ${idx === 0 ? 'bg-amber-500 text-black shadow-md shadow-amber-500/30' :
+                      idx === 1 ? 'bg-gray-300 text-black' :
+                        idx === 2 ? 'bg-amber-700 text-white' :
+                          'bg-gray-800 text-gray-400'
+                    }`}>
                     #{idx + 1}
                   </span>
                   <div>
@@ -1676,3 +2128,4 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   );
 };
 export default SalesHodDashboardView;
+
