@@ -1696,35 +1696,24 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   className="absolute cursor-pointer group"
                   style={{
                     left: 15,
-                    top: orbSocketY - 85,
+                    top: orbSocketY - 72,
                     width: 150,
-                    height: 170
+                    height: 144
                   }}
                   title="Click to view Full Enterprise Overview"
                 >
-                  <div className="w-36 h-36 mx-auto rounded-full bg-white/95 border border-indigo-100 shadow-[0_10px_35px_rgba(99,102,241,0.18)] flex flex-col items-center justify-center relative group-hover:border-indigo-300 group-hover:shadow-[0_12px_45px_rgba(99,102,241,0.28)] transition-all">
+                  <div className="w-36 h-36 mx-auto rounded-full bg-white/95 border border-indigo-100 shadow-[0_12px_40px_rgba(99,102,241,0.2)] flex items-center justify-center relative group-hover:border-indigo-300 group-hover:shadow-[0_16px_50px_rgba(99,102,241,0.3)] group-hover:scale-105 transition-all p-3">
                     <div className="absolute inset-0 rounded-full border border-dashed border-indigo-200 animate-[spin_25s_linear_infinite]" />
 
-                    <div className="w-16 h-16 rounded-full bg-white shadow-[0_10px_30px_rgba(99,102,241,0.25),0_0_0_2px_rgba(99,102,241,0.2)] p-2.5 flex items-center justify-center transform group-hover:scale-110 transition-transform relative overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-tr from-indigo-50/60 via-purple-50/30 to-cyan-50/50 rounded-full pointer-events-none" />
+                    {/* Large BharatEdge Logo in Center (No text) */}
+                    <div className="w-28 h-28 rounded-full bg-white shadow-[0_6px_25px_rgba(99,102,241,0.18),0_0_0_2px_rgba(99,102,241,0.15)] p-3 flex items-center justify-center relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-tr from-indigo-50/50 via-purple-50/20 to-cyan-50/40 rounded-full pointer-events-none" />
                       <img
                         src="/logo.png"
                         alt="BharatEdge Logo"
-                        className="w-11 h-11 object-contain relative z-10 drop-shadow-sm"
+                        className="w-full h-full object-contain relative z-10 drop-shadow-sm"
                       />
                     </div>
-
-                    <p className="text-[10px] font-black text-slate-900 mt-1.5 tracking-tight group-hover:text-indigo-600 transition-colors">
-                      BharatEdge Group
-                    </p>
-                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Enterprise HQ</p>
-                  </div>
-
-                  <div className="flex items-center justify-center gap-1.5 mt-2">
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200/80 flex items-center gap-1">
-                      <span>TARGET: {formatCompactRupee(overallTarget)}</span>
-                      <span>👍</span>
-                    </span>
                   </div>
                 </div>
 
