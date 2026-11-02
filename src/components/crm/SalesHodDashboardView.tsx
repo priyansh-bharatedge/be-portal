@@ -164,11 +164,11 @@ const isDealCloned = (d: any): boolean => {
   const raw = d.rawZohoDeal || {};
   const val =
     d.Cloned_Deal !== undefined ? d.Cloned_Deal :
-    raw.Cloned_Deal !== undefined ? raw.Cloned_Deal :
-    d.cloned_deal !== undefined ? d.cloned_deal :
-    raw.cloned_deal !== undefined ? raw.cloned_deal :
-    d.Is_Cloned !== undefined ? d.Is_Cloned :
-    raw.Is_Cloned;
+      raw.Cloned_Deal !== undefined ? raw.Cloned_Deal :
+        d.cloned_deal !== undefined ? d.cloned_deal :
+          raw.cloned_deal !== undefined ? raw.cloned_deal :
+            d.Is_Cloned !== undefined ? d.Is_Cloned :
+              raw.Is_Cloned;
   return val === true || val === 'true' || val === 1 || val === '1';
 };
 
@@ -277,7 +277,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           ]);
           if (dealsRes && Array.isArray(dealsRes.data)) {
             setLiveDeals(dealsRes.data);
-            try { localStorage.setItem('be_deals', JSON.stringify(dealsRes.data)); } catch (e) {}
+            try { localStorage.setItem('be_deals', JSON.stringify(dealsRes.data)); } catch (e) { }
           }
           if (empRes && Array.isArray(empRes.data)) setLiveEmployees(empRes.data);
         } catch (err) {
@@ -472,7 +472,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
       const isDirectMatch = cleanKey === cleanOfficial;
       const isSubMatch = (cleanKey.length > 5 && cleanOfficial.includes(cleanKey)) ||
-                         (cleanOfficial.length > 5 && cleanKey.includes(cleanOfficial));
+        (cleanOfficial.length > 5 && cleanKey.includes(cleanOfficial));
       const isFirstNameMatch = firstWord.length >= 4 && (cleanKey === firstWord || cleanKey.startsWith(firstWord));
 
       if (isDirectMatch || isSubMatch || isFirstNameMatch) {
@@ -758,19 +758,25 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   const overallShortfall = salesTree.shortfall;
   const overallAchievementPct = overallTarget > 0 ? Math.min(100, Math.round((overallAchievement / overallTarget) * 100)) : 0;
 
-  // High Performers
-  const topHighPerformer = useMemo<{ name: string; received: number } | null>(() => {
-    let best: { name: string; received: number } | null = null;
-    bdmPerformance.forEach(val => {
-      // Exclude Admin, HOD, and Unassigned accounts so Top High Performer strictly highlights frontline sales BDMs
-      const isManagement = ['sirjan', 'admin', 'managing', 'unassigned'].some(skip => val.cleanName.includes(skip));
-      if (isManagement) return;
-      if (!best || val.received > best.received) {
-        best = { name: val.name, received: val.received };
-      }
+  // High Performers (Extract directly from salesTree frontline BDMs so corporate/house accounts are excluded)
+  const topHighPerformer = useMemo<{ name: string; received: number; branch: string; dealsCount: number } | null>(() => {
+    let best: { name: string; received: number; branch: string; dealsCount: number } | null = null;
+    (salesTree.children?.[0]?.children || []).forEach(br => {
+      (br.children || []).forEach(tl => {
+        (tl.children || []).forEach(tm => {
+          if (!best || tm.achievement > best.received) {
+            best = {
+              name: tm.name,
+              received: tm.achievement,
+              branch: br.name.replace(' Branch', '').trim(),
+              dealsCount: tm.dealsCount
+            };
+          }
+        });
+      });
     });
     return best;
-  }, [bdmPerformance]);
+  }, [salesTree]);
 
   const topHighBranch = useMemo(() => {
     const branches = salesTree.children?.[0]?.children || [];
@@ -960,2176 +966,2147 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     return activeTl.tms[0] || null;
   }, [activeTl, selectedTmId]);
 
-    const inspectedEntity: any = useMemo(() => {
-      if (activeInspectLevel === 'root') return salesTree;
-      if (activeInspectLevel === 'sales') return salesDept;
-      if (activeInspectLevel === 'branch') return activeBranch?.data || salesDept;
-      if (activeInspectLevel === 'tl') return activeTl?.data || salesDept;
-      if (activeInspectLevel === 'tm') return activeTm?.data || activeTl?.data || salesDept;
-      return activeTm?.data || activeTl?.data || salesDept;
-    }, [activeInspectLevel, salesTree, salesDept, activeBranch, activeTl, activeTm]);
+  const inspectedEntity: any = useMemo(() => {
+    if (activeInspectLevel === 'root') return salesTree;
+    if (activeInspectLevel === 'sales') return salesDept;
+    if (activeInspectLevel === 'branch') return activeBranch?.data || salesDept;
+    if (activeInspectLevel === 'tl') return activeTl?.data || salesDept;
+    if (activeInspectLevel === 'tm') return activeTm?.data || activeTl?.data || salesDept;
+    return activeTm?.data || activeTl?.data || salesDept;
+  }, [activeInspectLevel, salesTree, salesDept, activeBranch, activeTl, activeTm]);
 
-    // Waveform equalizer bars for sentiment visualizer
-    const waveformBars = useMemo(() => {
-      return [24, 38, 48, 32, 60, 75, 90, 65, 42, 80, 95, 100, 92, 82, 68, 52, 42, 62, 78, 52, 38, 28, 42, 32];
-    }, []);
+  // Waveform equalizer bars for sentiment visualizer
+  const waveformBars = useMemo(() => {
+    return [24, 38, 48, 32, 60, 75, 90, 65, 42, 80, 95, 100, 92, 82, 68, 52, 42, 62, 78, 52, 38, 28, 42, 32];
+  }, []);
 
-    // Filtered BDM Matrix
-    const rawBdmList = useMemo(() => {
-      const list: any[] = [];
-      (salesTree.children?.[0]?.children || []).forEach(br => {
-        (br.children || []).forEach(tl => {
-          (tl.children || []).forEach(tm => {
-            const rawSrv = tm.topService || 'Business Advisory';
-            const cleanSrv = rawSrv.toUpperCase().trim() === 'CGSS'
-              ? 'CGSS Scheme'
-              : rawSrv.toUpperCase().trim() === 'GEM REGISTRATION'
+  // Filtered BDM Matrix
+  const rawBdmList = useMemo(() => {
+    const list: any[] = [];
+    (salesTree.children?.[0]?.children || []).forEach(br => {
+      (br.children || []).forEach(tl => {
+        (tl.children || []).forEach(tm => {
+          const rawSrv = tm.topService || 'Business Advisory';
+          const cleanSrv = rawSrv.toUpperCase().trim() === 'CGSS'
+            ? 'CGSS Scheme'
+            : rawSrv.toUpperCase().trim() === 'GEM REGISTRATION'
               ? 'GeM Portal Registration'
               : rawSrv.toUpperCase().trim() === 'ISO CERTIFICATE'
-              ? 'ISO Certification'
-              : rawSrv.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                ? 'ISO Certification'
+                : rawSrv.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
-            list.push({
-              id: tm.id,
-              name: tm.name,
-              branch: br.name.replace(' Branch', '').trim(),
-              tl: tl.name,
-              target: tm.target,
-              achievement: tm.achievement,
-              shortfall: tm.shortfall,
-              dealsCount: tm.dealsCount,
-              topService: cleanSrv,
-              pct: tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0
-            });
+          list.push({
+            id: tm.id,
+            name: tm.name,
+            branch: br.name.replace(' Branch', '').trim(),
+            tl: tl.name,
+            target: tm.target,
+            achievement: tm.achievement,
+            shortfall: tm.shortfall,
+            dealsCount: tm.dealsCount,
+            topService: cleanSrv,
+            pct: tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0
           });
         });
       });
-      return list;
-    }, [salesTree]);
+    });
+    return list;
+  }, [salesTree]);
 
-    const bdmList = useMemo(() => {
-      let list = [...rawBdmList];
+  const bdmList = useMemo(() => {
+    let list = [...rawBdmList];
 
-      if (matrixFilter === 'met') {
-        list = list.filter(b => b.shortfall === 0);
-      } else if (matrixFilter === 'progress') {
-        list = list.filter(b => b.pct >= 50 && b.shortfall > 0);
-      } else if (matrixFilter === 'gap') {
-        list = list.filter(b => b.pct < 50);
-      } else if (matrixFilter === 'ahmedabad') {
-        list = list.filter(b => b.branch.toLowerCase().includes('ahmedabad'));
-      } else if (matrixFilter === 'jaipur') {
-        list = list.filter(b => b.branch.toLowerCase().includes('jaipur'));
-      } else if (matrixFilter === 'chennai') {
-        list = list.filter(b => b.branch.toLowerCase().includes('chennai'));
-      }
+    if (matrixFilter === 'met') {
+      list = list.filter(b => b.shortfall === 0);
+    } else if (matrixFilter === 'progress') {
+      list = list.filter(b => b.pct >= 50 && b.shortfall > 0);
+    } else if (matrixFilter === 'gap') {
+      list = list.filter(b => b.pct < 50);
+    } else if (matrixFilter === 'ahmedabad') {
+      list = list.filter(b => b.branch.toLowerCase().includes('ahmedabad'));
+    } else if (matrixFilter === 'jaipur') {
+      list = list.filter(b => b.branch.toLowerCase().includes('jaipur'));
+    } else if (matrixFilter === 'chennai') {
+      list = list.filter(b => b.branch.toLowerCase().includes('chennai'));
+    }
 
-      if (!matrixSearch.trim()) return list;
-      const q = matrixSearch.toLowerCase();
-      return list.filter(b =>
-        b.name.toLowerCase().includes(q) ||
-        b.branch.toLowerCase().includes(q) ||
-        b.tl.toLowerCase().includes(q) ||
-        b.topService.toLowerCase().includes(q)
-      );
-    }, [rawBdmList, matrixSearch, matrixFilter]);
+    if (!matrixSearch.trim()) return list;
+    const q = matrixSearch.toLowerCase();
+    return list.filter(b =>
+      b.name.toLowerCase().includes(q) ||
+      b.branch.toLowerCase().includes(q) ||
+      b.tl.toLowerCase().includes(q) ||
+      b.topService.toLowerCase().includes(q)
+    );
+  }, [rawBdmList, matrixSearch, matrixFilter]);
 
-    // Executive CSV Export Tool
-    const handleExportCsv = () => {
-      const headers = ['BDM Name', 'Branch', 'Team Leader', 'Target (INR)', 'Achievement (INR)', 'Shortfall (INR)', 'Deals Count', 'Top Service'];
-      const rows = bdmList.map(b => [
-        `"${b.name}"`,
-        `"${b.branch}"`,
-        `"${b.tl}"`,
-        b.target,
-        b.achievement,
-        b.shortfall,
-        b.dealsCount,
-        `"${b.topService}"`
-      ]);
-      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `Sales_HOD_Hierarchy_Report_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    };
+  // Executive CSV Export Tool
+  const handleExportCsv = () => {
+    const headers = ['BDM Name', 'Branch', 'Team Leader', 'Target (INR)', 'Achievement (INR)', 'Shortfall (INR)', 'Deals Count', 'Top Service'];
+    const rows = bdmList.map(b => [
+      `"${b.name}"`,
+      `"${b.branch}"`,
+      `"${b.tl}"`,
+      b.target,
+      b.achievement,
+      b.shortfall,
+      b.dealsCount,
+      `"${b.topService}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Sales_HOD_Hierarchy_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
-    // ============================================================================
-    // RENDER (LIGHT THEME)
-    // ============================================================================
+  // ============================================================================
+  // RENDER (LIGHT THEME)
+  // ============================================================================
 
-    return (
-      <div className="space-y-8 bg-[#f8fafc] text-slate-800 p-4 sm:p-7 min-h-screen">
-        {/* ========================================================================= */}
-        {/* TOP EXECUTIVE COMMAND BAR */}
-        {/* ========================================================================= */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 text-white shadow-md shadow-indigo-500/20">
-                <Compass size={20} />
-              </span>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                  Sales Executive Intelligence Hub
-                </h1>
-              </div>
+  return (
+    <div className="space-y-8 bg-[#f8fafc] text-slate-800 p-4 sm:p-7 min-h-screen">
+      {/* ========================================================================= */}
+      {/* TOP EXECUTIVE COMMAND BAR */}
+      {/* ========================================================================= */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 text-white shadow-md shadow-indigo-500/20">
+              <Compass size={20} />
+            </span>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                Sales Executive Intelligence Hub
+              </h1>
             </div>
-          </div>
-
-          {/* Action Controls & Filters */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Timeframe Filter Tabs */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
-              {(['today', 'week', 'month', 'quarter', 'all'] as TimeframeOption[]).map(tf => (
-                <button
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer capitalize ${timeframe === tf
-                      ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  {tf === 'month' ? 'October 2026' : tf === 'all' ? 'All Time' : tf}
-                </button>
-              ))}
-            </div>
-
-            {/* Month / Year Picker (when in month mode) */}
-            {timeframe === 'month' && (
-              <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-2xl border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
-                <Calendar size={13} className="text-indigo-600" />
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                  className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer"
-                >
-                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
-                    <option key={m} value={idx}>{m}</option>
-                  ))}
-                </select>
-                <span>2026</span>
-              </div>
-            )}
-
-            {/* Target Simulator Tool Toggle */}
-            <button
-              onClick={() => setShowSimulator(s => !s)}
-              className={`px-3.5 py-2 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${showSimulator
-                  ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/20'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm'
-                }`}
-            >
-              <Sliders size={14} className={showSimulator ? 'text-white' : 'text-amber-500'} />
-              <span>Target Simulator</span>
-            </button>
-
-            {/* Export Report Tool */}
-            <button
-              onClick={handleExportCsv}
-              title="Download CSV Hierarchy Summary"
-              className="p-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm transition-all cursor-pointer flex items-center justify-center"
-            >
-              <Download size={15} />
-            </button>
-
-            {/* Refresh Live Zoho Button */}
-            <button
-              onClick={onRefresh}
-              disabled={propsRefreshing || isLoading}
-              className="px-4 py-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 hover:brightness-110 transition-all cursor-pointer flex items-center gap-2"
-            >
-              <RefreshCw size={13} className={propsRefreshing || isLoading ? 'animate-spin' : ''} />
-              <span>Sync Zoho</span>
-            </button>
           </div>
         </div>
 
-        {/* ========================================================================= */}
-        {/* TARGET SIMULATOR DRAWER TOOL (EXPANDABLE) */}
-        {/* ========================================================================= */}
-        <AnimatePresence>
-          {showSimulator && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="rounded-3xl bg-gradient-to-r from-amber-50 via-orange-50 to-indigo-50 border border-amber-200/80 p-6 shadow-md overflow-hidden"
-            >
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
-                    <SlidersHorizontal size={16} />
-                    <span>Interactive What-If Sales Quota Simulator</span>
-                  </div>
-                  <p className="text-xs text-slate-600 font-medium">
-                    Model executive revenue growth and shortfall reduction by simulating a team-wide conversion lift.
-                  </p>
-                  <div className="flex items-center gap-4 pt-2">
-                    <span className="text-xs font-bold text-slate-700">Conversion Lift:</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="50"
-                      step="5"
-                      value={simulationBoost}
-                      onChange={(e) => setSimulationBoost(Number(e.target.value))}
-                      className="w-48 accent-amber-500 cursor-pointer"
-                    />
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-xs shadow-sm">
-                      +{simulationBoost}%
-                    </span>
-                  </div>
-                </div>
+        {/* Action Controls & Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Timeframe Filter Tabs */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
+            {(['today', 'week', 'month', 'quarter', 'all'] as TimeframeOption[]).map(tf => (
+              <button
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer capitalize ${timeframe === tf
+                  ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
+              >
+                {tf === 'month' ? 'October 2026' : tf === 'all' ? 'All Time' : tf}
+              </button>
+            ))}
+          </div>
 
-                {/* Dynamic Recalculated Output Tiles */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Simulated Revenue</p>
-                    <p className="text-base font-black text-emerald-600 mt-0.5">
-                      {formatCompactRupee(overallAchievement * (1 + simulationBoost / 100))}
-                    </p>
-                    <p className="text-[10px] text-emerald-600 font-bold mt-0.5">
-                      +{formatCompactRupee(overallAchievement * (simulationBoost / 100))} lift
-                    </p>
-                  </div>
-                  <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Remaining Shortfall</p>
-                    <p className="text-base font-black text-rose-600 mt-0.5">
-                      {formatCompactRupee(Math.max(0, overallTarget - overallAchievement * (1 + simulationBoost / 100)))}
-                    </p>
-                    <p className="text-[10px] text-rose-600 font-bold mt-0.5">
-                      -{formatCompactRupee(Math.min(overallShortfall, overallAchievement * (simulationBoost / 100)))} gap closed
-                    </p>
-                  </div>
-                  <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm col-span-2 sm:col-span-1">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Projected Quota</p>
-                    <p className="text-base font-black text-indigo-700 mt-0.5">
-                      {Math.min(100, Math.round(((overallAchievement * (1 + simulationBoost / 100)) / overallTarget) * 100))}%
-                    </p>
-                    <p className="text-[10px] text-indigo-600 font-bold mt-0.5">Target: {formatCompactRupee(overallTarget)}</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+          {/* Month / Year Picker (when in month mode) */}
+          {timeframe === 'month' && (
+            <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-2xl border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
+              <Calendar size={13} className="text-indigo-600" />
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer"
+              >
+                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
+                  <option key={m} value={idx}>{m}</option>
+                ))}
+              </select>
+              <span>2026</span>
+            </div>
           )}
-        </AnimatePresence>
 
-        {/* ========================================================================= */}
-        {/* 1. TOP EXECUTIVE REVENUE & GST STRIP (CRISP WHITE LIGHT THEME) */}
-        {/* ========================================================================= */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
-          {/* Card 1: Today's Revenue */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-indigo-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div>
-              <div className="flex justify-between items-start mb-3 relative z-10">
-                <span className="p-3 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
-                  <DollarSign size={18} />
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                  Today Live
-                </span>
-              </div>
-              <div className="relative z-10">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Today's Revenue</p>
-                <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
-                  {formatRupee(todayRevenue)}
-                </h3>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-              <span>Booked: <strong className="text-slate-800">{formatCompactRupee(todayBooked)}</strong></span>
-              <span>Deals: <strong className="text-indigo-600">{todayDeals.length}</strong></span>
-            </div>
-          </div>
+          {/* Target Simulator Tool Toggle */}
+          <button
+            onClick={() => setShowSimulator(s => !s)}
+            className={`px-3.5 py-2 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${showSimulator
+              ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/20'
+              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm'
+              }`}
+          >
+            <Sliders size={14} className={showSimulator ? 'text-white' : 'text-amber-500'} />
+            <span>Target Simulator</span>
+          </button>
 
-          {/* Card 2: Monthly Revenue */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-emerald-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div>
-              <div className="flex justify-between items-start mb-3 relative z-10">
-                <span className="p-3 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
-                  <TrendingUp size={18} />
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                  October 2026
-                </span>
-              </div>
-              <div className="relative z-10">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue</p>
-                <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight mt-1" title={formatRupee(monthlyRevenue)}>
-                  {formatRupee(monthlyRevenue)}
-                </h3>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-              <span>Booked: <strong className="text-slate-800">{formatCompactRupee(monthlyBooked)}</strong></span>
-              <span>Deals: <strong className="text-emerald-700">{currentMonthDeals.length}</strong></span>
-            </div>
-          </div>
+          {/* Export Report Tool */}
+          <button
+            onClick={handleExportCsv}
+            title="Download CSV Hierarchy Summary"
+            className="p-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm transition-all cursor-pointer flex items-center justify-center"
+          >
+            <Download size={15} />
+          </button>
 
-          {/* Card 3: With GST Amount */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-cyan-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div>
-              <div className="flex justify-between items-start mb-3 relative z-10">
-                <span className="p-3 rounded-2xl bg-cyan-50 text-cyan-600 border border-cyan-100 shadow-sm">
-                  <Receipt size={18} />
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
-                  Incl. 18% GST
-                </span>
-              </div>
-              <div className="relative z-10">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">With GST Amount</p>
-                <h3 className="text-xl sm:text-2xl font-black text-cyan-600 tracking-tight mt-1 truncate" title={formatRupee(activeWithGst)}>
-                  {formatRupee(activeWithGst)}
-                </h3>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-              <span>GST Tax: <strong className="text-slate-800">{formatCompactRupee(activeGstTax)}</strong></span>
-              <span>Gross: <strong className="text-cyan-700">{formatCompactRupee(activeWithGst)}</strong></span>
-            </div>
-          </div>
-
-          {/* Card 4: Without GST Amount */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-blue-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div>
-              <div className="flex justify-between items-start mb-3 relative z-10">
-                <span className="p-3 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 shadow-sm">
-                  <Calculator size={18} />
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                  Excl. GST (Base)
-                </span>
-              </div>
-              <div className="relative z-10">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Without GST Amount</p>
-                <h3 className="text-xl sm:text-2xl font-black text-blue-600 tracking-tight mt-1 truncate" title={formatRupee(activeWithoutGst)}>
-                  {formatRupee(activeWithoutGst)}
-                </h3>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-              <span>Net Base: <strong className="text-slate-800">{formatCompactRupee(activeWithoutGst)}</strong></span>
-              <span>Deals: <strong className="text-blue-700">{currentMonthDeals.length}</strong></span>
-            </div>
-          </div>
-
-          {/* Card 5: Revenue Breakdown */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-amber-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div>
-              <div className="flex justify-between items-start mb-3 relative z-10">
-                <span className="p-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
-                  <PieChartIcon size={18} />
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
-                  Rec vs Pend
-                </span>
-              </div>
-              <div className="relative z-10">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Breakdown</p>
-                <div className="flex items-baseline gap-1.5 mt-1">
-                  <h3 className="text-lg sm:text-xl font-black text-emerald-600 tracking-tight">
-                    {formatCompactRupee(totalReceivedAmount)}
-                  </h3>
-                  <span className="text-[11px] text-slate-400">/</span>
-                  <span className="text-sm font-bold text-rose-500">
-                    {formatCompactRupee(totalPendingAmount)}
-                  </span>
-                </div>
-                {/* Visual Progress Bar */}
-                <div className="w-full h-2 bg-slate-100 rounded-full mt-2.5 overflow-hidden flex">
-                  <div
-                    style={{ width: `${totalBookedValue > 0 ? (totalReceivedAmount / totalBookedValue) * 100 : 50}%` }}
-                    className="bg-emerald-500 h-full"
-                    title="Received Ratio"
-                  />
-                  <div
-                    style={{ width: `${totalBookedValue > 0 ? (totalPendingAmount / totalBookedValue) * 100 : 50}%` }}
-                    className="bg-rose-400 h-full"
-                    title="Pending Ratio"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-              <span>Ratio: <strong className="text-slate-800">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
-              <span>Total: <strong className="text-slate-800">{formatCompactRupee(totalBookedValue)}</strong></span>
-            </div>
-          </div>
-
-          {/* Card 6: Top High Performer & Branch */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-purple-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div>
-              <div className="flex justify-between items-start mb-3 relative z-10">
-                <span className="p-3 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 shadow-sm">
-                  <Trophy size={18} />
-                </span>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
-                  National Leader
-                </span>
-              </div>
-              <div className="relative z-10">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top High Performer</p>
-                <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 truncate" title={topHighPerformer?.name}>
-                  {topHighPerformer ? topHighPerformer.name : 'Calculating...'}
-                </h3>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-              <span>Branch: <strong className="text-indigo-600">{topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
-              <span>Rev: <strong className="text-emerald-600">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
-            </div>
-          </div>
+          {/* Refresh Live Zoho Button */}
+          <button
+            onClick={onRefresh}
+            disabled={propsRefreshing || isLoading}
+            className="px-4 py-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 hover:brightness-110 transition-all cursor-pointer flex items-center gap-2"
+          >
+            <RefreshCw size={13} className={propsRefreshing || isLoading ? 'animate-spin' : ''} />
+            <span>Sync Zoho</span>
+          </button>
         </div>
+      </div>
 
-        {/* GST Audit & Revenue Reconciliation Section */}
-        <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 shadow-xl relative overflow-hidden border border-slate-800">
-          <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <span className="p-3.5 rounded-2xl bg-white/10 text-cyan-400 border border-white/10 backdrop-blur-md shrink-0">
-                <Receipt size={24} />
-              </span>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-base sm:text-lg font-black tracking-tight text-white">GST Tax & Revenue Audit</h3>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                    Live Zoho Reconciliation
-                  </span>
+      {/* ========================================================================= */}
+      {/* TARGET SIMULATOR DRAWER TOOL (EXPANDABLE) */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showSimulator && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="rounded-3xl bg-gradient-to-r from-amber-50 via-orange-50 to-indigo-50 border border-amber-200/80 p-6 shadow-md overflow-hidden"
+          >
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
+                  <SlidersHorizontal size={16} />
+                  <span>Interactive What-If Sales Quota Simulator</span>
                 </div>
-                <p className="text-xs text-slate-300 mt-1 font-medium max-w-2xl">
-                  Reconciliation of Gross Deal Amount (<code className="text-cyan-300 text-[11px] font-mono">Total_deal_amount_inclusive_of_gst</code>) vs Net Base (<code className="text-blue-300 text-[11px] font-mono">Amount_Without_GST</code>) and 18% Statutory GST (<code className="text-amber-300 text-[11px] font-mono">GST_Amount</code>).
+                <p className="text-xs text-slate-600 font-medium">
+                  Model executive revenue growth and shortfall reduction by simulating a team-wide conversion lift.
                 </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 shrink-0">
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">With GST (Gross)</span>
-                <span className="text-base sm:text-lg font-black text-cyan-400">{formatRupee(activeWithGst)}</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">100% Total Quoted</span>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Without GST (Net Base)</span>
-                <span className="text-base sm:text-lg font-black text-emerald-400">{formatRupee(activeWithoutGst)}</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">~84.7% Base Value</span>
-              </div>
-              <div className="col-span-2 sm:col-span-1 bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">GST Component (18%)</span>
-                <span className="text-base sm:text-lg font-black text-amber-400">{formatRupee(activeGstTax)}</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">Tax Offset Collected</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ========================================================================= */}
-        {/* 2. NEW INTERACTIVE VISUAL GRAPHS (PIE CHARTS & TARGET COMPARATIVE BARS) */}
-        {/* ========================================================================= */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Graph 1: Branch Revenue Share Donut Chart */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <PieChartIcon size={16} className="text-indigo-600" />
-                  Branch Revenue Share
-                </h3>
-                <span className="text-xs font-bold text-slate-500">Regional Mix</span>
-              </div>
-              <p className="text-xs text-slate-400 mb-4">
-                Real-time received revenue contribution across Ahmedabad, Jaipur & Chennai.
-              </p>
-            </div>
-
-            <div className="h-48 relative flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={branchPieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={75}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {branchPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip
-                    formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
-                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                <div className="flex items-center gap-4 pt-2">
+                  <span className="text-xs font-bold text-slate-700">Conversion Lift:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    step="5"
+                    value={simulationBoost}
+                    onChange={(e) => setSimulationBoost(Number(e.target.value))}
+                    className="w-48 accent-amber-500 cursor-pointer"
                   />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Total Rec.</span>
-                <span className="text-base font-black text-slate-900">{formatCompactRupee(totalReceivedAmount)}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 text-center">
-              {branchPieData.map(b => (
-                <div key={b.name} className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-                  <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-700">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
-                    <span>{b.name}</span>
-                  </div>
-                  <p className="text-xs font-black text-slate-900 mt-1">{formatCompactRupee(b.value)}</p>
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-xs shadow-sm">
+                    +{simulationBoost}%
+                  </span>
                 </div>
-              ))}
+              </div>
+
+              {/* Dynamic Recalculated Output Tiles */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase">Simulated Revenue</p>
+                  <p className="text-base font-black text-emerald-600 mt-0.5">
+                    {formatCompactRupee(overallAchievement * (1 + simulationBoost / 100))}
+                  </p>
+                  <p className="text-[10px] text-emerald-600 font-bold mt-0.5">
+                    +{formatCompactRupee(overallAchievement * (simulationBoost / 100))} lift
+                  </p>
+                </div>
+                <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase">Remaining Shortfall</p>
+                  <p className="text-base font-black text-rose-600 mt-0.5">
+                    {formatCompactRupee(Math.max(0, overallTarget - overallAchievement * (1 + simulationBoost / 100)))}
+                  </p>
+                  <p className="text-[10px] text-rose-600 font-bold mt-0.5">
+                    -{formatCompactRupee(Math.min(overallShortfall, overallAchievement * (simulationBoost / 100)))} gap closed
+                  </p>
+                </div>
+                <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm col-span-2 sm:col-span-1">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase">Projected Quota</p>
+                  <p className="text-base font-black text-indigo-700 mt-0.5">
+                    {Math.min(100, Math.round(((overallAchievement * (1 + simulationBoost / 100)) / overallTarget) * 100))}%
+                  </p>
+                  <p className="text-[10px] text-indigo-600 font-bold mt-0.5">Target: {formatCompactRupee(overallTarget)}</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* 1. TOP EXECUTIVE REVENUE & GST STRIP (CRISP WHITE LIGHT THEME) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
+        {/* Card 1: Today's Revenue */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-indigo-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+          <div>
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
+                <DollarSign size={18} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                Today Live
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Today's Revenue</p>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
+                {formatRupee(todayRevenue)}
+              </h3>
             </div>
           </div>
-
-          {/* Graph 2: Deal Stage Pipeline Composition Donut */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <Layers size={16} className="text-cyan-600" />
-                  Pipeline Stage Distribution
-                </h3>
-                <span className="text-xs font-bold text-slate-500">{filteredDeals.length} Deals</span>
-              </div>
-              <p className="text-xs text-slate-400 mb-4">
-                Volume of deals progressing through Sales, Account, Legal, Operations & Won.
-              </p>
-            </div>
-
-            <div className="h-48 relative flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stagePieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={75}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {stagePieData.map((entry, index) => (
-                      <Cell key={`stage-cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip
-                    formatter={(val: any) => [`${val} Deals`, 'Volume']}
-                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Live Pipeline</span>
-                <span className="text-base font-black text-slate-900">{filteredDeals.length}</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-slate-100 text-xs">
-              {stagePieData.map(st => (
-                <span key={st.name} className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: st.color }} />
-                  <span>{st.name}: <strong>{st.value}</strong></span>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Graph 3: Branch Target vs Achievement Comparative Bar Chart */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <BarChart3 size={16} className="text-amber-500" />
-                  Target vs Shortfall (in Lakhs)
-                </h3>
-                <span className="text-xs font-bold text-slate-500">Branch Quota</span>
-              </div>
-              <p className="text-xs text-slate-400 mb-4">
-                Comparison of Target benchmark vs. Achieved revenue and Shortfall gap.
-              </p>
-            </div>
-
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={branchBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
-                  <RechartsTooltip
-                    formatter={(val: any, name: any) => [`₹${val} Lakhs`, name]}
-                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
-                  />
-                  <Bar dataKey="Target" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Achieved" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Shortfall" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="flex items-center justify-around mt-4 pt-4 border-t border-slate-100 text-xs font-bold">
-              <span className="flex items-center gap-1.5 text-slate-500">
-                <span className="w-2.5 h-2.5 rounded-sm bg-slate-400" /> Target
-              </span>
-              <span className="flex items-center gap-1.5 text-emerald-600">
-                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Achieved
-              </span>
-              <span className="flex items-center gap-1.5 text-rose-500">
-                <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> Shortfall
-              </span>
-            </div>
+          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+            <span>Booked: <strong className="text-slate-800">{formatCompactRupee(todayBooked)}</strong></span>
+            <span>Deals: <strong className="text-indigo-600">{todayDeals.length}</strong></span>
           </div>
         </div>
 
-        {/* ========================================================================= */}
-        {/* 3. LIGHT THEME PROGRESSIVE CENTER-TO-LEFT MINDMAP FLOW */}
-        {(() => {
-          const itemStep = 36;
-          const currentTms = activeTl?.tms || [];
-          const tmCount = currentTms.length || 7;
-          const canvasHeight = Math.max(620, tmCount * itemStep + 70);
+        {/* Card 2: Monthly Revenue */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-emerald-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+          <div>
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
+                <TrendingUp size={18} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                October 2026
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue</p>
+              <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight mt-1" title={formatRupee(monthlyRevenue)}>
+                {formatRupee(monthlyRevenue)}
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+            <span>Booked: <strong className="text-slate-800">{formatCompactRupee(monthlyBooked)}</strong></span>
+            <span>Deals: <strong className="text-emerald-700">{currentMonthDeals.length}</strong></span>
+          </div>
+        </div>
 
-          // Dynamic horizontal coordinates according to drillLevel
-          // Center of the tree flow area (tree width ~800px, Inspector anchored on the right)
-          // drillLevel: 0 = Heroic Center Constellation, 1 = Sales, 2 = 3 Branches, 3 = TLs, 4 = TMs
-          const col0Left = drillLevel === 0 ? 320 : drillLevel === 1 ? 180 : drillLevel === 2 ? 75 : drillLevel === 3 ? 20 : 10;
-          const orbSocketY = canvasHeight / 2;
-          const x0 = drillLevel === 0 ? col0Left + 144 : drillLevel >= 3 ? col0Left + 85 : col0Left + 105;
+        {/* Card 3: With GST Amount */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-cyan-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+          <div>
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3 rounded-2xl bg-cyan-50 text-cyan-600 border border-cyan-100 shadow-sm">
+                <Receipt size={18} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
+                Incl. 18% GST
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">With GST Amount</p>
+              <h3 className="text-xl sm:text-2xl font-black text-cyan-600 tracking-tight mt-1 truncate" title={formatRupee(activeWithGst)}>
+                {formatRupee(activeWithGst)}
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+            <span>GST Tax: <strong className="text-slate-800">{formatCompactRupee(activeGstTax)}</strong></span>
+            <span>Gross: <strong className="text-cyan-700">{formatCompactRupee(activeWithGst)}</strong></span>
+          </div>
+        </div>
 
-          // Col 1: Sales Node
-          const col1Width = 105;
-          const col1Height = 44;
-          const col1Left = drillLevel === 1 ? 380 : drillLevel === 2 ? 230 : drillLevel === 3 ? 145 : 120;
-          const col1Right = col1Left + col1Width;
-          const col1Top = orbSocketY - col1Height / 2;
+        {/* Card 4: Without GST Amount */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-blue-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+          <div>
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 shadow-sm">
+                <Calculator size={18} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                Excl. GST (Base)
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Without GST Amount</p>
+              <h3 className="text-xl sm:text-2xl font-black text-blue-600 tracking-tight mt-1 truncate" title={formatRupee(activeWithoutGst)}>
+                {formatRupee(activeWithoutGst)}
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+            <span>Net Base: <strong className="text-slate-800">{formatCompactRupee(activeWithoutGst)}</strong></span>
+            <span>Deals: <strong className="text-blue-700">{currentMonthDeals.length}</strong></span>
+          </div>
+        </div>
 
-          // Col 2: 3 Branches (Ahmedabad, Jaipur, Chennai)
-          const col2Width = 135;
-          const branchHeight = 44;
-          const branchGap = 16;
-          const totalBranchHeight = 3 * branchHeight + 2 * branchGap; // 164
-          const col2StartY = (canvasHeight - totalBranchHeight) / 2;
-          const col2Left = drillLevel === 2 ? 380 : drillLevel === 3 ? 275 : 245;
-          const col2Right = col2Left + col2Width;
-          const activeBranchCenterY = col2StartY + activeBranchIndex * (branchHeight + branchGap) + branchHeight / 2;
+        {/* Card 5: Revenue Breakdown */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-amber-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+          <div>
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
+                <PieChartIcon size={18} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                Rec vs Pend
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Breakdown</p>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <h3 className="text-lg sm:text-xl font-black text-emerald-600 tracking-tight">
+                  {formatCompactRupee(totalReceivedAmount)}
+                </h3>
+                <span className="text-[11px] text-slate-400">/</span>
+                <span className="text-sm font-bold text-rose-500">
+                  {formatCompactRupee(totalPendingAmount)}
+                </span>
+              </div>
+              {/* Visual Progress Bar */}
+              <div className="w-full h-2 bg-slate-100 rounded-full mt-2.5 overflow-hidden flex">
+                <div
+                  style={{ width: `${totalBookedValue > 0 ? (totalReceivedAmount / totalBookedValue) * 100 : 50}%` }}
+                  className="bg-emerald-500 h-full"
+                  title="Received Ratio"
+                />
+                <div
+                  style={{ width: `${totalBookedValue > 0 ? (totalPendingAmount / totalBookedValue) * 100 : 50}%` }}
+                  className="bg-rose-400 h-full"
+                  title="Pending Ratio"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+            <span>Ratio: <strong className="text-slate-800">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
+            <span>Total: <strong className="text-slate-800">{formatCompactRupee(totalBookedValue)}</strong></span>
+          </div>
+        </div>
 
-          // Col 3: TLs of Active Branch
-          const currentTls = activeBranch?.tls || [];
-          const tlCount = currentTls.length || 1;
-          const tlHeight = 40;
-          const tlGap = 12;
-          const totalTlHeight = tlCount * tlHeight + (tlCount - 1) * tlGap;
-          const col3StartY = (canvasHeight - totalTlHeight) / 2;
-          const col3Width = 155;
-          const col3Left = drillLevel === 3 ? 440 : 400;
-          const col3Right = col3Left + col3Width;
-          const activeTlCenterY = col3StartY + activeTlIndex * (tlHeight + tlGap) + tlHeight / 2;
+        {/* Card 6: Top High Performer & Branch */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-purple-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+          <div>
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 shadow-sm">
+                <Trophy size={18} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
+                National Leader
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top High Performer</p>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 truncate" title={topHighPerformer?.name}>
+                {topHighPerformer ? topHighPerformer.name : 'Calculating...'}
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+            <span>Branch: <strong className="text-indigo-600">{topHighPerformer?.branch || topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
+            <span>Rev: <strong className="text-emerald-600">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
+          </div>
+        </div>
+      </div>
 
-          // Col 4: TMs of Active TL
-          const col4Width = 185;
-          const totalTmHeight = tmCount * itemStep;
-          const col4StartY = Math.max(25, (canvasHeight - totalTmHeight) / 2);
-          const col4Left = 575;
+      {/* GST Audit & Revenue Reconciliation Section */}
+      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 shadow-xl relative overflow-hidden border border-slate-800">
+        <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <span className="p-3.5 rounded-2xl bg-white/10 text-cyan-400 border border-white/10 backdrop-blur-md shrink-0">
+              <Receipt size={24} />
+            </span>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-black tracking-tight text-white">GST Tax & Revenue Audit</h3>
 
-          // Inspector card metrics
-          const isTl = activeInspectLevel === 'tl' || Boolean(inspectedEntity.personal && inspectedEntity.team);
-          const personal = inspectedEntity.personal;
-          const team = inspectedEntity.team;
+              </div>
 
-          const currentDisplayTarget = (isTl && tlViewMode === 'personal') ? 400000 : (inspectedEntity.target || 0);
-          const currentDisplayAchievement = (isTl && tlViewMode === 'personal' && personal)
-            ? personal.received
-            : (isTl && tlViewMode === 'team' && team)
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 shrink-0">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">With GST (Gross)</span>
+              <span className="text-base sm:text-lg font-black text-cyan-400">{formatRupee(activeWithGst)}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">100% Total Quoted</span>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Without GST (Net Base)</span>
+              <span className="text-base sm:text-lg font-black text-emerald-400">{formatRupee(activeWithoutGst)}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">~84.7% Base Value</span>
+            </div>
+            <div className="col-span-2 sm:col-span-1 bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">GST Component (18%)</span>
+              <span className="text-base sm:text-lg font-black text-amber-400">{formatRupee(activeGstTax)}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">Tax Offset Collected</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 2. NEW INTERACTIVE VISUAL GRAPHS (PIE CHARTS & TARGET COMPARATIVE BARS) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Graph 1: Branch Revenue Share Donut Chart */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <PieChartIcon size={16} className="text-indigo-600" />
+                Branch Revenue Share
+              </h3>
+              <span className="text-xs font-bold text-slate-500">Regional Mix</span>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+              Real-time received revenue contribution across Ahmedabad, Jaipur & Chennai.
+            </p>
+          </div>
+
+          <div className="h-48 relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={branchPieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={75}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {branchPieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Total Rec.</span>
+              <span className="text-base font-black text-slate-900">{formatCompactRupee(totalReceivedAmount)}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 text-center">
+            {branchPieData.map(b => (
+              <div key={b.name} className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-700">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
+                  <span>{b.name}</span>
+                </div>
+                <p className="text-xs font-black text-slate-900 mt-1">{formatCompactRupee(b.value)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Graph 2: Deal Stage Pipeline Composition Donut */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <Layers size={16} className="text-cyan-600" />
+                Pipeline Stage Distribution
+              </h3>
+              <span className="text-xs font-bold text-slate-500">{filteredDeals.length} Deals</span>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+              Volume of deals progressing through Sales, Account, Legal, Operations & Won.
+            </p>
+          </div>
+
+          <div className="h-48 relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={stagePieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={75}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {stagePieData.map((entry, index) => (
+                    <Cell key={`stage-cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  formatter={(val: any) => [`${val} Deals`, 'Volume']}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Live Pipeline</span>
+              <span className="text-base font-black text-slate-900">{filteredDeals.length}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-slate-100 text-xs">
+            {stagePieData.map(st => (
+              <span key={st.name} className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: st.color }} />
+                <span>{st.name}: <strong>{st.value}</strong></span>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Graph 3: Branch Target vs Achievement Comparative Bar Chart */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <BarChart3 size={16} className="text-amber-500" />
+                Target vs Shortfall (in Lakhs)
+              </h3>
+              <span className="text-xs font-bold text-slate-500">Branch Quota</span>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+              Comparison of Target benchmark vs. Achieved revenue and Shortfall gap.
+            </p>
+          </div>
+
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={branchBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <RechartsTooltip
+                  formatter={(val: any, name: any) => [`₹${val} Lakhs`, name]}
+                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                />
+                <Bar dataKey="Target" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Achieved" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Shortfall" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="flex items-center justify-around mt-4 pt-4 border-t border-slate-100 text-xs font-bold">
+            <span className="flex items-center gap-1.5 text-slate-500">
+              <span className="w-2.5 h-2.5 rounded-sm bg-slate-400" /> Target
+            </span>
+            <span className="flex items-center gap-1.5 text-emerald-600">
+              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Achieved
+            </span>
+            <span className="flex items-center gap-1.5 text-rose-500">
+              <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> Shortfall
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 3. LIGHT THEME PROGRESSIVE CENTER-TO-LEFT MINDMAP FLOW */}
+      {(() => {
+        const itemStep = 36;
+        const currentTms = activeTl?.tms || [];
+        const tmCount = currentTms.length || 7;
+        const canvasHeight = Math.max(620, tmCount * itemStep + 70);
+
+        // Dynamic horizontal coordinates according to drillLevel
+        // Center of the tree flow area (tree width ~800px, Inspector anchored on the right)
+        // drillLevel: 0 = Heroic Center Constellation, 1 = Sales, 2 = 3 Branches, 3 = TLs, 4 = TMs
+        const col0Left = drillLevel === 0 ? 320 : drillLevel === 1 ? 180 : drillLevel === 2 ? 75 : drillLevel === 3 ? 20 : 10;
+        const orbSocketY = canvasHeight / 2;
+        const x0 = drillLevel === 0 ? col0Left + 144 : drillLevel >= 3 ? col0Left + 85 : col0Left + 105;
+
+        // Col 1: Sales Node
+        const col1Width = 105;
+        const col1Height = 44;
+        const col1Left = drillLevel === 1 ? 380 : drillLevel === 2 ? 230 : drillLevel === 3 ? 145 : 120;
+        const col1Right = col1Left + col1Width;
+        const col1Top = orbSocketY - col1Height / 2;
+
+        // Col 2: 3 Branches (Ahmedabad, Jaipur, Chennai)
+        const col2Width = 135;
+        const branchHeight = 44;
+        const branchGap = 16;
+        const totalBranchHeight = 3 * branchHeight + 2 * branchGap; // 164
+        const col2StartY = (canvasHeight - totalBranchHeight) / 2;
+        const col2Left = drillLevel === 2 ? 380 : drillLevel === 3 ? 275 : 245;
+        const col2Right = col2Left + col2Width;
+        const activeBranchCenterY = col2StartY + activeBranchIndex * (branchHeight + branchGap) + branchHeight / 2;
+
+        // Col 3: TLs of Active Branch
+        const currentTls = activeBranch?.tls || [];
+        const tlCount = currentTls.length || 1;
+        const tlHeight = 40;
+        const tlGap = 12;
+        const totalTlHeight = tlCount * tlHeight + (tlCount - 1) * tlGap;
+        const col3StartY = (canvasHeight - totalTlHeight) / 2;
+        const col3Width = 155;
+        const col3Left = drillLevel === 3 ? 440 : 400;
+        const col3Right = col3Left + col3Width;
+        const activeTlCenterY = col3StartY + activeTlIndex * (tlHeight + tlGap) + tlHeight / 2;
+
+        // Col 4: TMs of Active TL
+        const col4Width = 185;
+        const totalTmHeight = tmCount * itemStep;
+        const col4StartY = Math.max(25, (canvasHeight - totalTmHeight) / 2);
+        const col4Left = 575;
+
+        // Inspector card metrics
+        const isTl = activeInspectLevel === 'tl' || Boolean(inspectedEntity.personal && inspectedEntity.team);
+        const personal = inspectedEntity.personal;
+        const team = inspectedEntity.team;
+
+        const currentDisplayTarget = (isTl && tlViewMode === 'personal') ? 400000 : (inspectedEntity.target || 0);
+        const currentDisplayAchievement = (isTl && tlViewMode === 'personal' && personal)
+          ? personal.received
+          : (isTl && tlViewMode === 'team' && team)
             ? team.received
             : (inspectedEntity.achievement || 0);
-          const currentDisplayBooked = (isTl && tlViewMode === 'personal' && personal)
-            ? personal.bookedAmount
-            : (isTl && tlViewMode === 'team' && team)
+        const currentDisplayBooked = (isTl && tlViewMode === 'personal' && personal)
+          ? personal.bookedAmount
+          : (isTl && tlViewMode === 'team' && team)
             ? team.bookedAmount
             : (inspectedEntity.bookedAmount || inspectedEntity.achievement || 0);
-          const currentDisplayWon = (isTl && tlViewMode === 'personal' && personal)
-            ? (personal.wonCount || personal.dealsCount || 0)
-            : (isTl && tlViewMode === 'team' && team)
+        const currentDisplayWon = (isTl && tlViewMode === 'personal' && personal)
+          ? (personal.wonCount || personal.dealsCount || 0)
+          : (isTl && tlViewMode === 'team' && team)
             ? (team.wonCount || team.dealsCount || 0)
             : (inspectedEntity.wonCount || inspectedEntity.dealsCount || 0);
-          const currentDisplayShortfall = Math.max(0, currentDisplayTarget - currentDisplayAchievement);
+        const currentDisplayShortfall = Math.max(0, currentDisplayTarget - currentDisplayAchievement);
 
-          const sentimentRate = currentDisplayTarget > 0
-            ? Math.min(150, Math.round((currentDisplayAchievement / currentDisplayTarget) * 100))
-            : 0;
-          const isSurplus = currentDisplayShortfall === 0;
+        const sentimentRate = currentDisplayTarget > 0
+          ? Math.min(150, Math.round((currentDisplayAchievement / currentDisplayTarget) * 100))
+          : 0;
+        const isSurplus = currentDisplayShortfall === 0;
 
-          return (
-            <div className="rounded-3xl bg-gradient-to-br from-white via-slate-50 to-indigo-50/20 border border-slate-200/90 p-5 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
-              {/* Subtle light geometric grid */}
-              <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:24px_24px] opacity-70 pointer-events-none" />
+        return (
+          <div className="rounded-3xl bg-gradient-to-br from-white via-slate-50 to-indigo-50/20 border border-slate-200/90 p-5 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
+            {/* Subtle light geometric grid */}
+            <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:24px_24px] opacity-70 pointer-events-none" />
 
-              {/* TOP HEADER BREADCRUMB NAVIGATION & RESET CONTROLS */}
-              <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200/70">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            {/* TOP HEADER BREADCRUMB NAVIGATION & RESET CONTROLS */}
+            <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200/70">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <button
+                  onClick={() => {
+                    setDrillLevel(0);
+                    setActiveInspectLevel('root');
+                  }}
+                  className={`hover:underline font-bold cursor-pointer flex items-center gap-1 ${drillLevel === 0 ? 'text-indigo-600 font-black' : 'text-slate-700'
+                    }`}
+                  title="Click to reset BharatEdge to center"
+                >
+                  <span>🌐 BharatEdge</span>
+                </button>
+
+                {drillLevel >= 1 && (
+                  <>
+                    <span className="text-slate-300">/</span>
+                    <button
+                      onClick={() => {
+                        setDrillLevel(1);
+                        setActiveInspectLevel('sales');
+                      }}
+                      className={`hover:underline cursor-pointer font-bold ${drillLevel === 1 ? 'text-indigo-600 font-black' : 'text-slate-700'
+                        }`}
+                    >
+                      Sales
+                    </button>
+                  </>
+                )}
+
+                {drillLevel >= 2 && activeBranch && (
+                  <>
+                    <span className="text-slate-300">/</span>
+                    <button
+                      onClick={() => {
+                        setDrillLevel(2);
+                        setActiveInspectLevel('branch');
+                      }}
+                      className={`hover:underline cursor-pointer font-bold ${drillLevel === 2 ? 'text-amber-600 font-black' : 'text-slate-700'
+                        }`}
+                    >
+                      {activeBranch.name}
+                    </button>
+                  </>
+                )}
+
+                {drillLevel >= 3 && activeTl && (
+                  <>
+                    <span className="text-slate-300">/</span>
+                    <button
+                      onClick={() => {
+                        setDrillLevel(3);
+                        setActiveInspectLevel('tl');
+                      }}
+                      className={`hover:underline cursor-pointer font-bold ${drillLevel === 3 ? 'text-cyan-600 font-black' : 'text-slate-700'
+                        }`}
+                    >
+                      {activeTl.name}
+                    </button>
+                  </>
+                )}
+
+                {drillLevel >= 4 && activeTm && (
+                  <>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-900 font-black">{activeTm.name}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Quick Navigation & View Actions */}
+              <div className="flex items-center gap-2">
+                {drillLevel > 0 && (
                   <button
                     onClick={() => {
                       setDrillLevel(0);
                       setActiveInspectLevel('root');
                     }}
-                    className={`hover:underline font-bold cursor-pointer flex items-center gap-1 ${
-                      drillLevel === 0 ? 'text-indigo-600 font-black' : 'text-slate-700'
-                    }`}
-                    title="Click to reset BharatEdge to center"
+                    className="px-3 py-1 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                    title="Center BharatEdge orb"
                   >
-                    <span>🌐 BharatEdge</span>
+                    <RotateCcw size={11} className="text-slate-500" />
+                    <span>Center BharatEdge</span>
                   </button>
+                )}
 
-                  {drillLevel >= 1 && (
-                    <>
-                      <span className="text-slate-300">/</span>
-                      <button
-                        onClick={() => {
-                          setDrillLevel(1);
-                          setActiveInspectLevel('sales');
-                        }}
-                        className={`hover:underline cursor-pointer font-bold ${
-                          drillLevel === 1 ? 'text-indigo-600 font-black' : 'text-slate-700'
-                        }`}
-                      >
-                        Sales
-                      </button>
-                    </>
-                  )}
+                {drillLevel < 4 && (
+                  <button
+                    onClick={() => {
+                      setDrillLevel(4);
+                      setActiveInspectLevel('tm');
+                    }}
+                    className="px-3 py-1 rounded-xl text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                    title="Expand all hierarchy levels"
+                  >
+                    <span>Expand All</span>
+                    <ChevronRight size={11} />
+                  </button>
+                )}
 
-                  {drillLevel >= 2 && activeBranch && (
-                    <>
-                      <span className="text-slate-300">/</span>
+                {drillLevel >= 2 && (
+                  <div className="flex items-center gap-1.5 ml-2 border-l border-slate-200 pl-2">
+                    {branches.map(b => (
                       <button
+                        key={b.id}
                         onClick={() => {
-                          setDrillLevel(2);
+                          setSelectedBranchId(b.id);
+                          setSelectedTlId(b.tls[0]?.id || '');
+                          setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                          setDrillLevel(3);
                           setActiveInspectLevel('branch');
                         }}
-                        className={`hover:underline cursor-pointer font-bold ${
-                          drillLevel === 2 ? 'text-amber-600 font-black' : 'text-slate-700'
-                        }`}
+                        className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${selectedBranchId === b.id
+                          ? 'bg-amber-500 text-white shadow-sm'
+                          : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                          }`}
                       >
-                        {activeBranch.name}
+                        {b.name}
                       </button>
-                    </>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ===================================================================== */}
+            {/* MAIN PROGRESSIVE CANVAS (HORIZONTAL SVG FLOW + NODES + INSPECTOR PANEL) */}
+            {/* ===================================================================== */}
+            <div className="overflow-x-auto pb-4">
+              <div
+                className="relative transition-all duration-700 ease-out origin-top-left"
+                style={{
+                  minWidth: 1160,
+                  height: canvasHeight
+                }}
+              >
+                {/* Atmospheric Glow Highlights in Canvas Background */}
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+                <div className="absolute bottom-1/4 left-1/2 w-80 h-80 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none" />
+
+                {/* SVG CONNECTIONS LAYER */}
+                <svg
+                  className="absolute inset-0 w-full h-full pointer-events-none"
+                  style={{ minWidth: 1160, height: canvasHeight }}
+                >
+                  <defs>
+                    <linearGradient id="activeLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#6366f1" />
+                      <stop offset="50%" stopColor="#0ea5e9" />
+                      <stop offset="100%" stopColor="#f59e0b" />
+                    </linearGradient>
+                    <linearGradient id="fanLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#f59e0b" />
+                      <stop offset="50%" stopColor="#06b6d4" />
+                      <stop offset="100%" stopColor="#6366f1" />
+                    </linearGradient>
+                    <marker id="arrowhead-indigo" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <polygon points="0 0, 6 3, 0 6" fill="#6366f1" />
+                    </marker>
+                    <marker id="arrowhead-amber" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <polygon points="0 0, 6 3, 0 6" fill="#f59e0b" />
+                    </marker>
+                    <marker id="arrowhead-cyan" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                      <polygon points="0 0, 6 3, 0 6" fill="#0ea5e9" />
+                    </marker>
+                  </defs>
+
+                  {/* Level 0 Branch Preview Dotted Curves */}
+                  {drillLevel === 0 && branches.map((b, i) => {
+                    const satY = orbSocketY + (i === 0 ? -75 : i === 1 ? 0 : 75);
+                    const satX = 540;
+                    const pathD = `M ${x0} ${orbSocketY} C ${x0 + 40} ${orbSocketY}, ${satX - 40} ${satY}, ${satX} ${satY}`;
+                    return (
+                      <g key={`sat_line_${b.id}`} className="transition-opacity duration-500">
+                        <path
+                          d={pathD}
+                          stroke="#6366f1"
+                          strokeWidth="2"
+                          strokeDasharray="4 4"
+                          fill="none"
+                          opacity={0.65}
+                        />
+                        <circle cx={satX} cy={satY} r={3.5} fill="#6366f1" />
+                      </g>
+                    );
+                  })}
+
+                  {/* 1. Curve: Logo -> Sales */}
+                  {drillLevel >= 1 && (
+                    <g className="transition-opacity duration-500">
+                      <path
+                        d={`M ${x0} ${orbSocketY} C ${x0 + (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left - (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left} ${orbSocketY}`}
+                        stroke="#6366f1"
+                        strokeWidth="2.5"
+                        fill="none"
+                        markerEnd="url(#arrowhead-indigo)"
+                      />
+                      <circle cx={x0} cy={orbSocketY} r={4.5} fill="#6366f1" />
+                      <circle cx={col1Left} cy={orbSocketY} r={4} fill="#6366f1" />
+                    </g>
                   )}
 
-                  {drillLevel >= 3 && activeTl && (
-                    <>
-                      <span className="text-slate-300">/</span>
-                      <button
+                  {/* 2. Curves: Sales -> 3 Branches */}
+                  {drillLevel >= 2 && branches.map((b, i) => {
+                    const branchCenterY = col2StartY + i * (branchHeight + branchGap) + branchHeight / 2;
+                    const isBranchActive = i === activeBranchIndex;
+                    const dx = (col2Left - col1Right) * 0.5;
+                    const pathD = `M ${col1Right} ${orbSocketY} C ${col1Right + dx} ${orbSocketY}, ${col2Left - dx} ${branchCenterY}, ${col2Left} ${branchCenterY}`;
+
+                    return (
+                      <g key={b.id} className="transition-opacity duration-500">
+                        <path
+                          d={pathD}
+                          stroke={isBranchActive ? 'url(#activeLightGrad)' : '#cbd5e1'}
+                          strokeWidth={isBranchActive ? 2.5 : 1.5}
+                          fill="none"
+                          opacity={isBranchActive ? 1 : 0.65}
+                          markerEnd={isBranchActive ? "url(#arrowhead-amber)" : undefined}
+                        />
+                        <circle
+                          cx={col2Left}
+                          cy={branchCenterY}
+                          r={isBranchActive ? 4 : 2.5}
+                          fill={isBranchActive ? '#f59e0b' : '#94a3b8'}
+                        />
+                      </g>
+                    );
+                  })}
+                  {drillLevel >= 2 && <circle cx={col1Right} cy={orbSocketY} r={4.5} fill="#f59e0b" />}
+
+                  {/* 3. Curves: Active Branch -> TLs */}
+                  {drillLevel >= 3 && currentTls.map((tl, t) => {
+                    const tlCenterY = col3StartY + t * (tlHeight + tlGap) + tlHeight / 2;
+                    const isTlActive = t === activeTlIndex;
+                    const dx = (col3Left - col2Right) * 0.5;
+                    const pathD = `M ${col2Right} ${activeBranchCenterY} C ${col2Right + dx} ${activeBranchCenterY}, ${col3Left - dx} ${tlCenterY}, ${col3Left} ${tlCenterY}`;
+
+                    return (
+                      <g key={tl.id} className="transition-opacity duration-500">
+                        <path
+                          d={pathD}
+                          stroke={isTlActive ? 'url(#fanLightGrad)' : '#cbd5e1'}
+                          strokeWidth={isTlActive ? 2.5 : 1.5}
+                          fill="none"
+                          opacity={isTlActive ? 1 : 0.65}
+                          markerEnd={isTlActive ? "url(#arrowhead-cyan)" : undefined}
+                        />
+                        <circle
+                          cx={col3Left}
+                          cy={tlCenterY}
+                          r={isTlActive ? 4 : 2.5}
+                          fill={isTlActive ? '#0ea5e9' : '#94a3b8'}
+                        />
+                      </g>
+                    );
+                  })}
+                  {drillLevel >= 3 && <circle cx={col2Right} cy={activeBranchCenterY} r={4.5} fill="#f59e0b" />}
+
+                  {/* 4. Curves: Active TL -> TMs */}
+                  {drillLevel >= 4 && currentTms.map((tm, k) => {
+                    const tmCenterY = col4StartY + k * itemStep + 15;
+                    const isTmActive = activeTm?.id === tm.id;
+                    const dx = (col4Left - col3Right) * 0.5;
+                    const pathD = `M ${col3Right} ${activeTlCenterY} C ${col3Right + dx} ${activeTlCenterY}, ${col4Left - dx} ${tmCenterY}, ${col4Left} ${tmCenterY}`;
+
+                    return (
+                      <g key={tm.id} className="transition-opacity duration-500">
+                        <path
+                          d={pathD}
+                          stroke={isTmActive ? '#0ea5e9' : '#cbd5e1'}
+                          strokeWidth={isTmActive ? 2.2 : 1.2}
+                          fill="none"
+                          opacity={isTmActive ? 1 : 0.6}
+                        />
+                        <circle
+                          cx={col4Left}
+                          cy={tmCenterY}
+                          r={isTmActive ? 4 : 2}
+                          fill={isTmActive ? '#0ea5e9' : '#94a3b8'}
+                        />
+                      </g>
+                    );
+                  })}
+                  {drillLevel >= 4 && <circle cx={col3Right} cy={activeTlCenterY} r={4.5} fill="#0ea5e9" />}
+                </svg>
+
+                {/* ================================================================= */}
+                {/* LEVEL 0 BRANCH PREVIEW SATELLITES (NEVER AN EMPTY VOID) */}
+                {/* ================================================================= */}
+                {drillLevel === 0 && (
+                  <div className="absolute space-y-3 z-10" style={{ left: 540, top: orbSocketY - 95 }}>
+                    {branches.map(b => (
+                      <div
+                        key={`sat_node_${b.id}`}
                         onClick={() => {
+                          setSelectedBranchId(b.id);
+                          setSelectedTlId(b.tls[0]?.id || '');
+                          setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
                           setDrillLevel(3);
-                          setActiveInspectLevel('tl');
+                          setActiveInspectLevel('branch');
                         }}
-                        className={`hover:underline cursor-pointer font-bold ${
-                          drillLevel === 3 ? 'text-cyan-600 font-black' : 'text-slate-700'
-                        }`}
+                        className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-white/95 hover:bg-slate-50 border border-indigo-100 hover:border-indigo-400 shadow-sm hover:shadow-md transition-all cursor-pointer group w-52"
                       >
-                        {activeTl.name}
-                      </button>
+                        <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
+                          {b.name} Branch
+                        </span>
+                        <span className="text-xs font-black text-emerald-600">
+                          {formatCompactRupee(b.achievement)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ================================================================= */}
+                {/* COLUMN 0: BHARATEDGE LOGO ORB (HEROIC CENTER -> GLIDES LEFT) */}
+                {/* ================================================================= */}
+                <div
+                  onClick={() => {
+                    if (drillLevel === 0) {
+                      setDrillLevel(1);
+                      setActiveInspectLevel('sales');
+                    } else {
+                      setActiveInspectLevel('root');
+                    }
+                  }}
+                  className="absolute cursor-pointer group flex flex-col items-center justify-center z-10"
+                  style={{
+                    left: col0Left,
+                    top: drillLevel === 0 ? orbSocketY - 95 : orbSocketY - 45,
+                    width: drillLevel === 0 ? 144 : 90,
+                    transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)'
+                  }}
+                  title={drillLevel === 0 ? "Click to open Sales division" : "Click to inspect BharatEdge Enterprise Overview"}
+                >
+                  {/* Glowing Ambient Atmospheric Halo */}
+                  <div
+                    className={`absolute rounded-full bg-gradient-to-tr from-indigo-500/25 via-purple-500/20 to-cyan-400/25 blur-2xl pointer-events-none transition-all duration-700 ${drillLevel === 0 ? 'w-48 h-48 -top-3 animate-pulse' : 'w-24 h-24 top-0 opacity-40'
+                      }`}
+                  />
+
+                  {/* Outer Concentric Planetary Rings (active at Level 0) */}
+                  {drillLevel === 0 && (
+                    <>
+                      <div className="absolute w-44 h-44 rounded-full border border-dashed border-indigo-300/70 animate-[spin_35s_linear_infinite] pointer-events-none" />
+                      <div className="absolute w-36 h-36 rounded-full border border-cyan-400/60 animate-[spin_18s_linear_infinite_reverse] pointer-events-none">
+                        <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-cyan-500 rounded-full shadow-[0_0_8px_#06b6d4]" />
+                      </div>
                     </>
                   )}
 
-                  {drillLevel >= 4 && activeTm && (
-                    <>
-                      <span className="text-slate-300">/</span>
-                      <span className="text-slate-900 font-black">{activeTm.name}</span>
-                    </>
+                  {/* Core Glass Sphere */}
+                  <div
+                    className={`relative rounded-full bg-white/95 backdrop-blur-xl border-2 border-indigo-200/90 shadow-[0_15px_45px_rgba(99,102,241,0.22)] flex items-center justify-center group-hover:scale-105 group-hover:border-indigo-400 group-hover:shadow-[0_20px_55px_rgba(99,102,241,0.35)] transition-all duration-300 ${drillLevel === 0 ? 'w-28 h-28 p-3' : 'w-20 h-20 p-2'
+                      }`}
+                  >
+                    <img
+                      src="/logo.png"
+                      alt="BharatEdge"
+                      className="w-full h-full object-contain relative z-10 drop-shadow-sm select-none"
+                    />
+                  </div>
+
+                  {/* Rich Floating Badges & Action Buttons (Hero Level 0) */}
+                  {drillLevel === 0 ? (
+                    <div className="flex flex-col items-center mt-3 space-y-2 pointer-events-auto">
+                      <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/95 border border-indigo-200 text-indigo-900 shadow-sm flex items-center gap-1.5 whitespace-nowrap">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                        <span>Enterprise HQ • ₹1.33 Cr</span>
+                      </span>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDrillLevel(2);
+                          setActiveInspectLevel('sales');
+                        }}
+                        className="px-4 py-1.5 rounded-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-cyan-600 text-white font-extrabold text-[11px] shadow-md shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      >
+                        <Sparkles size={12} className="text-amber-300" />
+                        <span>Explore Sales Network</span>
+                        <ChevronRight size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] font-black text-slate-500 mt-1 whitespace-nowrap tracking-wider uppercase">
+                      HQ
+                    </span>
                   )}
                 </div>
 
-                {/* Quick Navigation & View Actions */}
-                <div className="flex items-center gap-2">
-                  {drillLevel > 0 && (
-                    <button
-                      onClick={() => {
-                        setDrillLevel(0);
-                        setActiveInspectLevel('root');
-                      }}
-                      className="px-3 py-1 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
-                      title="Center BharatEdge orb"
-                    >
-                      <RotateCcw size={11} className="text-slate-500" />
-                      <span>Center BharatEdge</span>
-                    </button>
-                  )}
+                {/* ================================================================= */}
+                {/* COLUMN 1: SALES NODE (APPEARS AT LEVEL >= 1, CLICKS TO OPEN BRANCHES) */}
+                {/* ================================================================= */}
+                <div
+                  onClick={() => {
+                    if (drillLevel === 1) {
+                      setDrillLevel(2);
+                      setActiveInspectLevel('branch');
+                    } else {
+                      setActiveInspectLevel('sales');
+                    }
+                  }}
+                  className={`absolute rounded-2xl px-3.5 py-2 cursor-pointer flex items-center justify-between gap-2 shadow-sm ${activeInspectLevel === 'sales'
+                    ? 'bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-600 shadow-md text-indigo-950'
+                    : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800'
+                    }`}
+                  style={{
+                    left: col1Left,
+                    top: col1Top,
+                    width: col1Width,
+                    height: col1Height,
+                    transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
+                    opacity: drillLevel >= 1 ? 1 : 0,
+                    pointerEvents: drillLevel >= 1 ? 'auto' : 'none',
+                    transform: drillLevel >= 1 ? 'scale(1)' : 'scale(0.85)'
+                  }}
+                  title={drillLevel === 1 ? "Click to open Branches" : "Click to inspect National Sales"}
+                >
+                  <span className="text-sm font-black tracking-tight">Sales</span>
+                  <span className="text-xs font-black text-emerald-600">
+                    {formatCompactRupee(salesDept.achievement)}
+                  </span>
 
-                  {drillLevel < 4 && (
-                    <button
-                      onClick={() => {
-                        setDrillLevel(4);
-                        setActiveInspectLevel('tm');
-                      }}
-                      className="px-3 py-1 rounded-xl text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
-                      title="Expand all hierarchy levels"
-                    >
-                      <span>Expand All</span>
-                      <ChevronRight size={11} />
-                    </button>
+                  {/* Indicator when at level 1 to invite opening branches */}
+                  {drillLevel === 1 && (
+                    <span className="absolute -right-2 -top-2 flex h-4 w-4">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 text-[9px] font-black text-white items-center justify-center">3</span>
+                    </span>
                   )}
+                </div>
 
-                  {drillLevel >= 2 && (
-                    <div className="flex items-center gap-1.5 ml-2 border-l border-slate-200 pl-2">
-                      {branches.map(b => (
-                        <button
-                          key={b.id}
-                          onClick={() => {
-                            setSelectedBranchId(b.id);
-                            setSelectedTlId(b.tls[0]?.id || '');
-                            setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
-                            setDrillLevel(3);
-                            setActiveInspectLevel('branch');
-                          }}
-                          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
-                            selectedBranchId === b.id
-                              ? 'bg-amber-500 text-white shadow-sm'
-                              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                {/* ================================================================= */}
+                {/* COLUMN 2: 3 BRANCHES ONLY (APPEARS AT LEVEL >= 2, CLICKS TO OPEN TLS) */}
+                {/* ================================================================= */}
+                <div
+                  className="absolute space-y-4"
+                  style={{
+                    left: col2Left,
+                    top: col2StartY,
+                    width: col2Width,
+                    transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
+                    opacity: drillLevel >= 2 ? 1 : 0,
+                    pointerEvents: drillLevel >= 2 ? 'auto' : 'none',
+                    transform: drillLevel >= 2 ? 'scale(1)' : 'scale(0.85)'
+                  }}
+                >
+                  {branches.map((b, i) => {
+                    const isBranchActive = i === activeBranchIndex;
+
+                    return (
+                      <div
+                        key={b.id}
+                        onClick={() => {
+                          setSelectedBranchId(b.id);
+                          setSelectedTlId(b.tls[0]?.id || '');
+                          setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                          setDrillLevel(3);
+                          setActiveInspectLevel('branch');
+                        }}
+                        className={`rounded-2xl px-3.5 py-2.5 cursor-pointer flex items-center justify-between gap-2 shadow-sm transition-all duration-300 ${isBranchActive
+                          ? 'bg-gradient-to-r from-amber-50 to-orange-50/70 border-2 border-amber-500 shadow-md text-slate-900'
+                          : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
                           }`}
-                        >
-                          {b.name}
-                        </button>
-                      ))}
+                        style={{ height: branchHeight }}
+                        title={`Click to view ${b.name} Team Leaders`}
+                      >
+                        <span className="text-xs font-black tracking-tight">{b.name}</span>
+                        <span className={`text-xs font-black ${isBranchActive ? 'text-amber-600' : 'text-emerald-600'}`}>
+                          {formatCompactRupee(b.achievement)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ================================================================= */}
+                {/* COLUMN 3: TLS ONLY OF ACTIVE BRANCH (APPEARS AT LEVEL >= 3, CLICKS TO OPEN TMS) */}
+                {/* ================================================================= */}
+                <div
+                  className="absolute space-y-3.5"
+                  style={{
+                    left: col3Left,
+                    top: col3StartY,
+                    width: col3Width,
+                    transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
+                    opacity: drillLevel >= 3 ? 1 : 0,
+                    pointerEvents: drillLevel >= 3 ? 'auto' : 'none',
+                    transform: drillLevel >= 3 ? 'scale(1)' : 'scale(0.85)'
+                  }}
+                >
+                  {currentTls.map((tl, t) => {
+                    const isTlActive = t === activeTlIndex;
+
+                    return (
+                      <div
+                        key={tl.id}
+                        onClick={() => {
+                          setSelectedTlId(tl.id);
+                          setSelectedTmId(tl.tms[0]?.id || '');
+                          setDrillLevel(4);
+                          setActiveInspectLevel('tl');
+                        }}
+                        className={`rounded-2xl px-3 py-2 cursor-pointer flex items-center justify-between gap-2 shadow-sm transition-all duration-300 ${isTlActive
+                          ? 'bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-500 shadow-md text-slate-900'
+                          : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
+                          }`}
+                        style={{ height: tlHeight }}
+                        title={`Click to view ${tl.name} Team Members`}
+                      >
+                        <span className="text-xs font-bold truncate max-w-[95px]" title={tl.name}>
+                          {tl.name}
+                        </span>
+                        <span className={`text-xs font-black ${isTlActive ? 'text-cyan-700' : 'text-emerald-600'}`}>
+                          {formatCompactRupee(tl.achievement)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ================================================================= */}
+                {/* COLUMN 4: TMS ONLY OF ACTIVE TL (APPEARS AT LEVEL >= 4) */}
+                {/* ================================================================= */}
+                <div
+                  className="absolute space-y-2"
+                  style={{
+                    left: col4Left,
+                    top: col4StartY,
+                    width: col4Width,
+                    transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
+                    opacity: drillLevel >= 4 ? 1 : 0,
+                    pointerEvents: drillLevel >= 4 ? 'auto' : 'none',
+                    transform: drillLevel >= 4 ? 'scale(1)' : 'scale(0.85)'
+                  }}
+                >
+                  {currentTms.map((tm) => {
+                    const isTmActive = activeTm?.id === tm.id;
+
+                    return (
+                      <div
+                        key={tm.id}
+                        onClick={() => {
+                          setSelectedTmId(tm.id);
+                          setActiveInspectLevel('tm');
+                        }}
+                        className={`flex items-center justify-between px-3 py-1.5 rounded-xl cursor-pointer transition-all duration-200 ${isTmActive
+                          ? 'bg-cyan-50 border-2 border-cyan-500 text-cyan-950 font-bold shadow-sm'
+                          : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-xs'
+                          }`}
+                        style={{ height: 30 }}
+                      >
+                        <span className="text-xs font-bold truncate max-w-[110px]" title={tm.name}>
+                          {tm.name}
+                        </span>
+                        <span className="text-[11px] font-black text-slate-700">
+                          {formatCompactRupee(tm.achievement)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ================================================================= */}
+                {/* COLUMN 5: SLEEK INSPECTOR PANEL (ALWAYS ON RIGHT SIDE) */}
+                {/* ================================================================= */}
+                <div
+                  className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5 z-20"
+                  style={{
+                    right: 15,
+                    top: 15,
+                    width: 330,
+                    bottom: 15
+                  }}
+                >
+                  {/* Header */}
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug truncate" title={inspectedEntity.name}>
+                      {inspectedEntity.name}
+                    </h3>
+                  </div>
+
+                  {/* TL View Mode Toggle Pills (Personal vs Team) */}
+                  {isTl && (
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
+                      <button
+                        onClick={() => setTlViewMode('personal')}
+                        className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${tlViewMode === 'personal'
+                          ? 'bg-white text-blue-900 shadow-xs ring-1 ring-blue-200'
+                          : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                      >
+                        <User size={12} className={tlViewMode === 'personal' ? 'text-blue-600' : 'text-slate-400'} />
+                        <span>Personal</span>
+                      </button>
+                      <button
+                        onClick={() => setTlViewMode('team')}
+                        className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${tlViewMode === 'team'
+                          ? 'bg-white text-cyan-900 shadow-xs ring-1 ring-cyan-200'
+                          : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                      >
+                        <Users size={12} className={tlViewMode === 'team' ? 'text-cyan-600' : 'text-slate-400'} />
+                        <span>Team</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Sentiment Rate Card */}
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
+                      <span>Sentiment / Achievement Rate</span>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${sentimentRate >= 100
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : sentimentRate >= 50
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                        }`}>
+                        {sentimentRate >= 100 ? 'High' : sentimentRate >= 50 ? 'Moderate' : 'Needs Focus'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline justify-between pt-1">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-2xl sm:text-3xl font-black text-slate-900">
+                          {sentimentRate}%
+                        </span>
+                        <span className={`text-[11px] font-bold flex items-center gap-0.5 ${isSurplus ? 'text-emerald-600' : 'text-rose-500'
+                          }`}>
+                          {isSurplus ? '+12% Target met' : '-4% Last month'}
+                        </span>
+                      </div>
+
+                      {/* Equalizer Waveform Bars */}
+                      <div className="flex items-end gap-[2px] h-8 pb-1">
+                        {waveformBars.slice(0, 18).map((h, bIdx) => (
+                          <span
+                            key={bIdx}
+                            style={{ height: `${h}%` }}
+                            className={`w-1 rounded-full transition-all ${bIdx >= 8 && bIdx <= 15
+                              ? 'bg-amber-500 shadow-sm'
+                              : 'bg-slate-300'
+                              }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2x2 Core Metric Tiles */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-100">
+                      <div className="flex items-center gap-1 text-[10px] text-blue-700 font-bold">
+                        <CheckCircle2 size={11} className="text-blue-600" />
+                        <span>Deals Won</span>
+                      </div>
+                      <p className="text-base font-black text-blue-950 mt-0.5">
+                        {currentDisplayWon}
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 rounded-2xl bg-purple-50/70 border border-purple-100">
+                      <div className="flex items-center gap-1 text-[10px] text-purple-700 font-bold">
+                        <FileText size={11} className="text-purple-600" />
+                        <span>Quoted Value</span>
+                      </div>
+                      <p className="text-base font-black text-purple-950 mt-0.5">
+                        {formatCompactRupee(currentDisplayBooked)}
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
+                      <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
+                        <Sparkles size={11} className="text-emerald-600" />
+                        <span>Received</span>
+                      </div>
+                      <p className="text-base font-black text-emerald-800 mt-0.5">
+                        {formatCompactRupee(currentDisplayAchievement)}
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-100">
+                      <div className="flex items-center gap-1 text-[10px] text-rose-700 font-bold">
+                        <Target size={11} className="text-rose-600" />
+                        <span>Shortfall Gap</span>
+                      </div>
+                      <p className="text-base font-black text-rose-800 mt-0.5">
+                        {formatCompactRupee(currentDisplayShortfall)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Regional Branch Hubs (Shown when viewing Organization or Sales overview) */}
+                  {(activeInspectLevel === 'root' || activeInspectLevel === 'sales') && (
+                    <div className="space-y-2 pt-1 border-t border-slate-100">
+                      <div className="text-xs font-black text-slate-700 flex items-center justify-between">
+                        <span>Regional Branch Hubs</span>
+                        <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full">3 Branches</span>
+                      </div>
+                      <div className="space-y-2">
+                        {branches.map(b => (
+                          <div
+                            key={b.id}
+                            onClick={() => {
+                              setSelectedBranchId(b.id);
+                              setSelectedTlId(b.tls[0]?.id || '');
+                              setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                              setDrillLevel(3);
+                              setActiveInspectLevel('branch');
+                            }}
+                            className="p-3 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/80 shadow-xs hover:border-indigo-300 transition-all cursor-pointer flex items-center justify-between group"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500/10 to-cyan-500/10 text-indigo-600 flex items-center justify-center font-black text-xs border border-indigo-100">
+                                {b.name[0]}
+                              </span>
+                              <div>
+                                <h5 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                  {b.name} Branch
+                                </h5>
+                                <p className="text-[10px] text-slate-500 font-medium">
+                                  {b.tls.length} TLs • {b.tls.reduce((acc, t) => acc + t.tms.length, 0)} TMs
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-black text-emerald-700 block">
+                                {formatCompactRupee(b.achievement)}
+                              </span>
+                              <span className="text-[9px] font-bold text-indigo-600 flex items-center justify-end gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                                <span>Explore</span>
+                                <ChevronRight size={10} />
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TL DUAL BREAKDOWN: PERSONAL VS TEAM */}
+                  {isTl && personal && team && (
+                    <div className="space-y-2 pt-1 border-t border-slate-100">
+                      {/* 1. Personal Records Card */}
+                      <div
+                        onClick={() => setTlViewMode('personal')}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer ${tlViewMode === 'personal'
+                          ? 'bg-blue-50/95 border-blue-400 ring-2 ring-blue-200 shadow-sm'
+                          : 'bg-gradient-to-r from-blue-50/60 to-indigo-50/30 border-blue-200/70 hover:bg-blue-50/80'
+                          }`}
+                      >
+                        <div className="flex items-center justify-between text-xs font-black text-blue-950 mb-1.5">
+                          <span className="flex items-center gap-1.5">
+                            <User size={13} className="text-blue-600" />
+                            <span>Personal Records (Self)</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                            {personal.wonCount || personal.dealsCount || 0} Won
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="bg-white/90 p-2 rounded-xl border border-blue-100 shadow-xs">
+                            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Received</span>
+                            <span className="text-sm font-black text-emerald-700">
+                              {formatCompactRupee(personal.received)}
+                            </span>
+                          </div>
+                          <div className="bg-white/90 p-2 rounded-xl border border-blue-100 shadow-xs">
+                            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Quoted</span>
+                            <span className="text-sm font-black text-slate-800">
+                              {formatCompactRupee(personal.bookedAmount)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2. Team Records Card */}
+                      <div
+                        onClick={() => setTlViewMode('team')}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer ${tlViewMode === 'team'
+                          ? 'bg-cyan-50/95 border-cyan-400 ring-2 ring-cyan-200 shadow-sm'
+                          : 'bg-gradient-to-r from-cyan-50/60 to-teal-50/30 border-cyan-200/70 hover:bg-cyan-50/80'
+                          }`}
+                      >
+                        <div className="flex items-center justify-between text-xs font-black text-cyan-950 mb-1.5">
+                          <span className="flex items-center gap-1.5">
+                            <Users size={13} className="text-cyan-700" />
+                            <span>Team Records ({team.membersCount || currentTms.length} Members)</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-cyan-800 bg-cyan-100 px-2 py-0.5 rounded-full">
+                            {team.wonCount || team.dealsCount || 0} Won
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="bg-white/90 p-2 rounded-xl border border-cyan-100 shadow-xs">
+                            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Received</span>
+                            <span className="text-sm font-black text-emerald-700">
+                              {formatCompactRupee(team.received)}
+                            </span>
+                          </div>
+                          <div className="bg-white/90 p-2 rounded-xl border border-cyan-100 shadow-xs">
+                            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Quoted</span>
+                            <span className="text-sm font-black text-slate-800">
+                              {formatCompactRupee(team.bookedAmount)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        );
+      })()}
 
-              {/* ===================================================================== */}
-              {/* MAIN PROGRESSIVE CANVAS (HORIZONTAL SVG FLOW + NODES + INSPECTOR PANEL) */}
-              {/* ===================================================================== */}
-              <div className="overflow-x-auto pb-4">
-                <div
-                  className="relative transition-all duration-700 ease-out origin-top-left"
-                  style={{
-                    minWidth: 1160,
-                    height: canvasHeight
-                  }}
-                >
-                  {/* Atmospheric Glow Highlights in Canvas Background */}
-                  <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
-                  <div className="absolute bottom-1/4 left-1/2 w-80 h-80 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none" />
+      {/* ========================================================================= */}
+      {/* 4. MASTER TARGET & ACHIEVEMENT BAR VIEW (LIGHT THEME) */}
+      {/* ========================================================================= */}
+      <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <Target size={18} className="text-indigo-600" />
+              Target vs Achievement Overview (Entire Sales Team)
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
+              National sales target benchmark vs. actual revenue received with shortfall gap.
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-bold">
+            <span className="flex items-center gap-1.5 text-slate-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Target: {formatCompactRupee(overallTarget)}
+            </span>
+            <span className="flex items-center gap-1.5 text-emerald-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
+            </span>
+            <span className="flex items-center gap-1.5 text-rose-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
+            </span>
+          </div>
+        </div>
 
-                  {/* SVG CONNECTIONS LAYER */}
-                  <svg
-                    className="absolute inset-0 w-full h-full pointer-events-none"
-                    style={{ minWidth: 1160, height: canvasHeight }}
-                  >
-                    <defs>
-                      <linearGradient id="activeLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#6366f1" />
-                        <stop offset="50%" stopColor="#0ea5e9" />
-                        <stop offset="100%" stopColor="#f59e0b" />
-                      </linearGradient>
-                      <linearGradient id="fanLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#f59e0b" />
-                        <stop offset="50%" stopColor="#06b6d4" />
-                        <stop offset="100%" stopColor="#6366f1" />
-                      </linearGradient>
-                      <marker id="arrowhead-indigo" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                        <polygon points="0 0, 6 3, 0 6" fill="#6366f1" />
-                      </marker>
-                      <marker id="arrowhead-amber" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                        <polygon points="0 0, 6 3, 0 6" fill="#f59e0b" />
-                      </marker>
-                      <marker id="arrowhead-cyan" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                        <polygon points="0 0, 6 3, 0 6" fill="#0ea5e9" />
-                      </marker>
-                    </defs>
+        {/* Master Comparison Bar */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center text-xs font-bold">
+            <span className="text-slate-800">Full Sales Organization Progress</span>
+            <span className="text-indigo-700 font-extrabold">{overallAchievementPct}% Achieved</span>
+          </div>
+          <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200 flex">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${overallAchievementPct}%` }}
+              transition={{ duration: 1, ease: 'easeOut' }}
+              className="h-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-400 rounded-full shadow-sm"
+            />
+          </div>
+        </div>
 
-                    {/* Level 0 Branch Preview Dotted Curves */}
-                    {drillLevel === 0 && branches.map((b, i) => {
-                      const satY = orbSocketY + (i === 0 ? -75 : i === 1 ? 0 : 75);
-                      const satX = 540;
-                      const pathD = `M ${x0} ${orbSocketY} C ${x0 + 40} ${orbSocketY}, ${satX - 40} ${satY}, ${satX} ${satY}`;
-                      return (
-                        <g key={`sat_line_${b.id}`} className="transition-opacity duration-500">
-                          <path
-                            d={pathD}
-                            stroke="#6366f1"
-                            strokeWidth="2"
-                            strokeDasharray="4 4"
-                            fill="none"
-                            opacity={0.65}
-                          />
-                          <circle cx={satX} cy={satY} r={3.5} fill="#6366f1" />
-                        </g>
-                      );
-                    })}
+        {/* Branch-by-Branch Breakdown Bars */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
+          {(salesTree.children?.[0]?.children || []).map((br: SalesTreeNode) => {
+            const pct = br.target > 0 ? Math.min(100, Math.round((br.achievement / br.target) * 100)) : 0;
+            return (
+              <div key={br.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <div className="flex justify-between items-center text-xs mb-2">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <MapPin size={13} className="text-indigo-600" />
+                    {br.name}
+                  </span>
+                  <span className="text-emerald-700 font-black">{pct}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex mb-2">
+                  <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full" />
+                </div>
+                <div className="flex justify-between items-center text-[11px] text-slate-500">
+                  <span>Ach: <strong className="text-slate-800">{formatCompactRupee(br.achievement)}</strong></span>
+                  <span>Shortfall: <strong className="text-rose-600">{formatCompactRupee(br.shortfall)}</strong></span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-                    {/* 1. Curve: Logo -> Sales */}
-                    {drillLevel >= 1 && (
-                      <g className="transition-opacity duration-500">
-                        <path
-                          d={`M ${x0} ${orbSocketY} C ${x0 + (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left - (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left} ${orbSocketY}`}
-                          stroke="#6366f1"
-                          strokeWidth="2.5"
-                          fill="none"
-                          markerEnd="url(#arrowhead-indigo)"
-                        />
-                        <circle cx={x0} cy={orbSocketY} r={4.5} fill="#6366f1" />
-                        <circle cx={col1Left} cy={orbSocketY} r={4} fill="#6366f1" />
-                      </g>
-                    )}
+      {/* ========================================================================= */}
+      {/* 5. DEAL PIPELINE VIEW STAGES & SALES FUNNEL (LIGHT THEME) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Deal Pipeline View Stages */}
+        <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Layers size={18} className="text-indigo-600" />
+                Deal Pipeline View Stages
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                Live deals distributed across operational workflow stages.
+              </p>
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+              {filteredDeals.length} Deals
+            </span>
+          </div>
 
-                    {/* 2. Curves: Sales -> 3 Branches */}
-                    {drillLevel >= 2 && branches.map((b, i) => {
-                      const branchCenterY = col2StartY + i * (branchHeight + branchGap) + branchHeight / 2;
-                      const isBranchActive = i === activeBranchIndex;
-                      const dx = (col2Left - col1Right) * 0.5;
-                      const pathD = `M ${col1Right} ${orbSocketY} C ${col1Right + dx} ${orbSocketY}, ${col2Left - dx} ${branchCenterY}, ${col2Left} ${branchCenterY}`;
-
-                      return (
-                        <g key={b.id} className="transition-opacity duration-500">
-                          <path
-                            d={pathD}
-                            stroke={isBranchActive ? 'url(#activeLightGrad)' : '#cbd5e1'}
-                            strokeWidth={isBranchActive ? 2.5 : 1.5}
-                            fill="none"
-                            opacity={isBranchActive ? 1 : 0.65}
-                            markerEnd={isBranchActive ? "url(#arrowhead-amber)" : undefined}
-                          />
-                          <circle
-                            cx={col2Left}
-                            cy={branchCenterY}
-                            r={isBranchActive ? 4 : 2.5}
-                            fill={isBranchActive ? '#f59e0b' : '#94a3b8'}
-                          />
-                        </g>
-                      );
-                    })}
-                    {drillLevel >= 2 && <circle cx={col1Right} cy={orbSocketY} r={4.5} fill="#f59e0b" />}
-
-                    {/* 3. Curves: Active Branch -> TLs */}
-                    {drillLevel >= 3 && currentTls.map((tl, t) => {
-                      const tlCenterY = col3StartY + t * (tlHeight + tlGap) + tlHeight / 2;
-                      const isTlActive = t === activeTlIndex;
-                      const dx = (col3Left - col2Right) * 0.5;
-                      const pathD = `M ${col2Right} ${activeBranchCenterY} C ${col2Right + dx} ${activeBranchCenterY}, ${col3Left - dx} ${tlCenterY}, ${col3Left} ${tlCenterY}`;
-
-                      return (
-                        <g key={tl.id} className="transition-opacity duration-500">
-                          <path
-                            d={pathD}
-                            stroke={isTlActive ? 'url(#fanLightGrad)' : '#cbd5e1'}
-                            strokeWidth={isTlActive ? 2.5 : 1.5}
-                            fill="none"
-                            opacity={isTlActive ? 1 : 0.65}
-                            markerEnd={isTlActive ? "url(#arrowhead-cyan)" : undefined}
-                          />
-                          <circle
-                            cx={col3Left}
-                            cy={tlCenterY}
-                            r={isTlActive ? 4 : 2.5}
-                            fill={isTlActive ? '#0ea5e9' : '#94a3b8'}
-                          />
-                        </g>
-                      );
-                    })}
-                    {drillLevel >= 3 && <circle cx={col2Right} cy={activeBranchCenterY} r={4.5} fill="#f59e0b" />}
-
-                    {/* 4. Curves: Active TL -> TMs */}
-                    {drillLevel >= 4 && currentTms.map((tm, k) => {
-                      const tmCenterY = col4StartY + k * itemStep + 15;
-                      const isTmActive = activeTm?.id === tm.id;
-                      const dx = (col4Left - col3Right) * 0.5;
-                      const pathD = `M ${col3Right} ${activeTlCenterY} C ${col3Right + dx} ${activeTlCenterY}, ${col4Left - dx} ${tmCenterY}, ${col4Left} ${tmCenterY}`;
-
-                      return (
-                        <g key={tm.id} className="transition-opacity duration-500">
-                          <path
-                            d={pathD}
-                            stroke={isTmActive ? '#0ea5e9' : '#cbd5e1'}
-                            strokeWidth={isTmActive ? 2.2 : 1.2}
-                            fill="none"
-                            opacity={isTmActive ? 1 : 0.6}
-                          />
-                          <circle
-                            cx={col4Left}
-                            cy={tmCenterY}
-                            r={isTmActive ? 4 : 2}
-                            fill={isTmActive ? '#0ea5e9' : '#94a3b8'}
-                          />
-                        </g>
-                      );
-                    })}
-                    {drillLevel >= 4 && <circle cx={col3Right} cy={activeTlCenterY} r={4.5} fill="#0ea5e9" />}
-                  </svg>
-
-                  {/* ================================================================= */}
-                  {/* LEVEL 0 BRANCH PREVIEW SATELLITES (NEVER AN EMPTY VOID) */}
-                  {/* ================================================================= */}
-                  {drillLevel === 0 && (
-                    <div className="absolute space-y-3 z-10" style={{ left: 540, top: orbSocketY - 95 }}>
-                      {branches.map(b => (
-                        <div
-                          key={`sat_node_${b.id}`}
-                          onClick={() => {
-                            setSelectedBranchId(b.id);
-                            setSelectedTlId(b.tls[0]?.id || '');
-                            setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
-                            setDrillLevel(3);
-                            setActiveInspectLevel('branch');
-                          }}
-                          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-white/95 hover:bg-slate-50 border border-indigo-100 hover:border-indigo-400 shadow-sm hover:shadow-md transition-all cursor-pointer group w-52"
-                        >
-                          <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                            {b.name} Branch
-                          </span>
-                          <span className="text-xs font-black text-emerald-600">
-                            {formatCompactRupee(b.achievement)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* ================================================================= */}
-                  {/* COLUMN 0: BHARATEDGE LOGO ORB (HEROIC CENTER -> GLIDES LEFT) */}
-                  {/* ================================================================= */}
-                  <div
-                    onClick={() => {
-                      if (drillLevel === 0) {
-                        setDrillLevel(1);
-                        setActiveInspectLevel('sales');
-                      } else {
-                        setActiveInspectLevel('root');
-                      }
-                    }}
-                    className="absolute cursor-pointer group flex flex-col items-center justify-center z-10"
-                    style={{
-                      left: col0Left,
-                      top: drillLevel === 0 ? orbSocketY - 95 : orbSocketY - 45,
-                      width: drillLevel === 0 ? 144 : 90,
-                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)'
-                    }}
-                    title={drillLevel === 0 ? "Click to open Sales division" : "Click to inspect BharatEdge Enterprise Overview"}
-                  >
-                    {/* Glowing Ambient Atmospheric Halo */}
-                    <div
-                      className={`absolute rounded-full bg-gradient-to-tr from-indigo-500/25 via-purple-500/20 to-cyan-400/25 blur-2xl pointer-events-none transition-all duration-700 ${
-                        drillLevel === 0 ? 'w-48 h-48 -top-3 animate-pulse' : 'w-24 h-24 top-0 opacity-40'
-                      }`}
-                    />
-
-                    {/* Outer Concentric Planetary Rings (active at Level 0) */}
-                    {drillLevel === 0 && (
-                      <>
-                        <div className="absolute w-44 h-44 rounded-full border border-dashed border-indigo-300/70 animate-[spin_35s_linear_infinite] pointer-events-none" />
-                        <div className="absolute w-36 h-36 rounded-full border border-cyan-400/60 animate-[spin_18s_linear_infinite_reverse] pointer-events-none">
-                          <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-cyan-500 rounded-full shadow-[0_0_8px_#06b6d4]" />
-                        </div>
-                      </>
-                    )}
-
-                    {/* Core Glass Sphere */}
-                    <div
-                      className={`relative rounded-full bg-white/95 backdrop-blur-xl border-2 border-indigo-200/90 shadow-[0_15px_45px_rgba(99,102,241,0.22)] flex items-center justify-center group-hover:scale-105 group-hover:border-indigo-400 group-hover:shadow-[0_20px_55px_rgba(99,102,241,0.35)] transition-all duration-300 ${
-                        drillLevel === 0 ? 'w-28 h-28 p-3' : 'w-20 h-20 p-2'
-                      }`}
-                    >
-                      <img
-                        src="/logo.png"
-                        alt="BharatEdge"
-                        className="w-full h-full object-contain relative z-10 drop-shadow-sm select-none"
-                      />
-                    </div>
-
-                    {/* Rich Floating Badges & Action Buttons (Hero Level 0) */}
-                    {drillLevel === 0 ? (
-                      <div className="flex flex-col items-center mt-3 space-y-2 pointer-events-auto">
-                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/95 border border-indigo-200 text-indigo-900 shadow-sm flex items-center gap-1.5 whitespace-nowrap">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                          <span>Enterprise HQ • ₹1.33 Cr</span>
-                        </span>
-
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDrillLevel(2);
-                            setActiveInspectLevel('sales');
-                          }}
-                          className="px-4 py-1.5 rounded-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-cyan-600 text-white font-extrabold text-[11px] shadow-md shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                        >
-                          <Sparkles size={12} className="text-amber-300" />
-                          <span>Explore Sales Network</span>
-                          <ChevronRight size={12} />
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] font-black text-slate-500 mt-1 whitespace-nowrap tracking-wider uppercase">
-                        HQ
-                      </span>
-                    )}
-                  </div>
-
-                  {/* ================================================================= */}
-                  {/* COLUMN 1: SALES NODE (APPEARS AT LEVEL >= 1, CLICKS TO OPEN BRANCHES) */}
-                  {/* ================================================================= */}
-                  <div
-                    onClick={() => {
-                      if (drillLevel === 1) {
-                        setDrillLevel(2);
-                        setActiveInspectLevel('branch');
-                      } else {
-                        setActiveInspectLevel('sales');
-                      }
-                    }}
-                    className={`absolute rounded-2xl px-3.5 py-2 cursor-pointer flex items-center justify-between gap-2 shadow-sm ${
-                      activeInspectLevel === 'sales'
-                        ? 'bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-600 shadow-md text-indigo-950'
-                        : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800'
-                    }`}
-                    style={{
-                      left: col1Left,
-                      top: col1Top,
-                      width: col1Width,
-                      height: col1Height,
-                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
-                      opacity: drillLevel >= 1 ? 1 : 0,
-                      pointerEvents: drillLevel >= 1 ? 'auto' : 'none',
-                      transform: drillLevel >= 1 ? 'scale(1)' : 'scale(0.85)'
-                    }}
-                    title={drillLevel === 1 ? "Click to open Branches" : "Click to inspect National Sales"}
-                  >
-                    <span className="text-sm font-black tracking-tight">Sales</span>
-                    <span className="text-xs font-black text-emerald-600">
-                      {formatCompactRupee(salesDept.achievement)}
-                    </span>
-
-                    {/* Indicator when at level 1 to invite opening branches */}
-                    {drillLevel === 1 && (
-                      <span className="absolute -right-2 -top-2 flex h-4 w-4">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 text-[9px] font-black text-white items-center justify-center">3</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* ================================================================= */}
-                  {/* COLUMN 2: 3 BRANCHES ONLY (APPEARS AT LEVEL >= 2, CLICKS TO OPEN TLS) */}
-                  {/* ================================================================= */}
-                  <div
-                    className="absolute space-y-4"
-                    style={{
-                      left: col2Left,
-                      top: col2StartY,
-                      width: col2Width,
-                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
-                      opacity: drillLevel >= 2 ? 1 : 0,
-                      pointerEvents: drillLevel >= 2 ? 'auto' : 'none',
-                      transform: drillLevel >= 2 ? 'scale(1)' : 'scale(0.85)'
-                    }}
-                  >
-                    {branches.map((b, i) => {
-                      const isBranchActive = i === activeBranchIndex;
-
-                      return (
-                        <div
-                          key={b.id}
-                          onClick={() => {
-                            setSelectedBranchId(b.id);
-                            setSelectedTlId(b.tls[0]?.id || '');
-                            setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
-                            setDrillLevel(3);
-                            setActiveInspectLevel('branch');
-                          }}
-                          className={`rounded-2xl px-3.5 py-2.5 cursor-pointer flex items-center justify-between gap-2 shadow-sm transition-all duration-300 ${
-                            isBranchActive
-                              ? 'bg-gradient-to-r from-amber-50 to-orange-50/70 border-2 border-amber-500 shadow-md text-slate-900'
-                              : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
-                          }`}
-                          style={{ height: branchHeight }}
-                          title={`Click to view ${b.name} Team Leaders`}
-                        >
-                          <span className="text-xs font-black tracking-tight">{b.name}</span>
-                          <span className={`text-xs font-black ${isBranchActive ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {formatCompactRupee(b.achievement)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* ================================================================= */}
-                  {/* COLUMN 3: TLS ONLY OF ACTIVE BRANCH (APPEARS AT LEVEL >= 3, CLICKS TO OPEN TMS) */}
-                  {/* ================================================================= */}
-                  <div
-                    className="absolute space-y-3.5"
-                    style={{
-                      left: col3Left,
-                      top: col3StartY,
-                      width: col3Width,
-                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
-                      opacity: drillLevel >= 3 ? 1 : 0,
-                      pointerEvents: drillLevel >= 3 ? 'auto' : 'none',
-                      transform: drillLevel >= 3 ? 'scale(1)' : 'scale(0.85)'
-                    }}
-                  >
-                    {currentTls.map((tl, t) => {
-                      const isTlActive = t === activeTlIndex;
-
-                      return (
-                        <div
-                          key={tl.id}
-                          onClick={() => {
-                            setSelectedTlId(tl.id);
-                            setSelectedTmId(tl.tms[0]?.id || '');
-                            setDrillLevel(4);
-                            setActiveInspectLevel('tl');
-                          }}
-                          className={`rounded-2xl px-3 py-2 cursor-pointer flex items-center justify-between gap-2 shadow-sm transition-all duration-300 ${
-                            isTlActive
-                              ? 'bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-500 shadow-md text-slate-900'
-                              : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
-                          }`}
-                          style={{ height: tlHeight }}
-                          title={`Click to view ${tl.name} Team Members`}
-                        >
-                          <span className="text-xs font-bold truncate max-w-[95px]" title={tl.name}>
-                            {tl.name}
-                          </span>
-                          <span className={`text-xs font-black ${isTlActive ? 'text-cyan-700' : 'text-emerald-600'}`}>
-                            {formatCompactRupee(tl.achievement)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* ================================================================= */}
-                  {/* COLUMN 4: TMS ONLY OF ACTIVE TL (APPEARS AT LEVEL >= 4) */}
-                  {/* ================================================================= */}
-                  <div
-                    className="absolute space-y-2"
-                    style={{
-                      left: col4Left,
-                      top: col4StartY,
-                      width: col4Width,
-                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
-                      opacity: drillLevel >= 4 ? 1 : 0,
-                      pointerEvents: drillLevel >= 4 ? 'auto' : 'none',
-                      transform: drillLevel >= 4 ? 'scale(1)' : 'scale(0.85)'
-                    }}
-                  >
-                    {currentTms.map((tm) => {
-                      const isTmActive = activeTm?.id === tm.id;
-
-                      return (
-                        <div
-                          key={tm.id}
-                          onClick={() => {
-                            setSelectedTmId(tm.id);
-                            setActiveInspectLevel('tm');
-                          }}
-                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl cursor-pointer transition-all duration-200 ${
-                            isTmActive
-                              ? 'bg-cyan-50 border-2 border-cyan-500 text-cyan-950 font-bold shadow-sm'
-                              : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-xs'
-                          }`}
-                          style={{ height: 30 }}
-                        >
-                          <span className="text-xs font-bold truncate max-w-[110px]" title={tm.name}>
-                            {tm.name}
-                          </span>
-                          <span className="text-[11px] font-black text-slate-700">
-                            {formatCompactRupee(tm.achievement)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* ================================================================= */}
-                  {/* COLUMN 5: SLEEK INSPECTOR PANEL (ALWAYS ON RIGHT SIDE) */}
-                  {/* ================================================================= */}
-                  <div
-                    className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5 z-20"
-                    style={{
-                      right: 15,
-                      top: 15,
-                      width: 330,
-                      bottom: 15
-                    }}
-                  >
-                    {/* Header */}
-                    <div>
-                      <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug truncate" title={inspectedEntity.name}>
-                        {inspectedEntity.name}
-                      </h3>
-                    </div>
-
-                    {/* TL View Mode Toggle Pills (Personal vs Team) */}
-                    {isTl && (
-                      <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
-                        <button
-                          onClick={() => setTlViewMode('personal')}
-                          className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            tlViewMode === 'personal'
-                              ? 'bg-white text-blue-900 shadow-xs ring-1 ring-blue-200'
-                              : 'text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          <User size={12} className={tlViewMode === 'personal' ? 'text-blue-600' : 'text-slate-400'} />
-                          <span>Personal</span>
-                        </button>
-                        <button
-                          onClick={() => setTlViewMode('team')}
-                          className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            tlViewMode === 'team'
-                              ? 'bg-white text-cyan-900 shadow-xs ring-1 ring-cyan-200'
-                              : 'text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          <Users size={12} className={tlViewMode === 'team' ? 'text-cyan-600' : 'text-slate-400'} />
-                          <span>Team</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Sentiment Rate Card */}
-                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200/80 space-y-2">
-                      <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
-                        <span>Sentiment / Achievement Rate</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                          sentimentRate >= 100
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : sentimentRate >= 50
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200'
-                        }`}>
-                          {sentimentRate >= 100 ? 'High' : sentimentRate >= 50 ? 'Moderate' : 'Needs Focus'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-baseline justify-between pt-1">
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-2xl sm:text-3xl font-black text-slate-900">
-                            {sentimentRate}%
-                          </span>
-                          <span className={`text-[11px] font-bold flex items-center gap-0.5 ${
-                            isSurplus ? 'text-emerald-600' : 'text-rose-500'
-                          }`}>
-                            {isSurplus ? '+12% Target met' : '-4% Last month'}
-                          </span>
-                        </div>
-
-                        {/* Equalizer Waveform Bars */}
-                        <div className="flex items-end gap-[2px] h-8 pb-1">
-                          {waveformBars.slice(0, 18).map((h, bIdx) => (
-                            <span
-                              key={bIdx}
-                              style={{ height: `${h}%` }}
-                              className={`w-1 rounded-full transition-all ${
-                                bIdx >= 8 && bIdx <= 15
-                                  ? 'bg-amber-500 shadow-sm'
-                                  : 'bg-slate-300'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 2x2 Core Metric Tiles */}
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-100">
-                        <div className="flex items-center gap-1 text-[10px] text-blue-700 font-bold">
-                          <CheckCircle2 size={11} className="text-blue-600" />
-                          <span>Deals Won</span>
-                        </div>
-                        <p className="text-base font-black text-blue-950 mt-0.5">
-                          {currentDisplayWon}
-                        </p>
-                      </div>
-
-                      <div className="p-2.5 rounded-2xl bg-purple-50/70 border border-purple-100">
-                        <div className="flex items-center gap-1 text-[10px] text-purple-700 font-bold">
-                          <FileText size={11} className="text-purple-600" />
-                          <span>Quoted Value</span>
-                        </div>
-                        <p className="text-base font-black text-purple-950 mt-0.5">
-                          {formatCompactRupee(currentDisplayBooked)}
-                        </p>
-                      </div>
-
-                      <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
-                        <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
-                          <Sparkles size={11} className="text-emerald-600" />
-                          <span>Received</span>
-                        </div>
-                        <p className="text-base font-black text-emerald-800 mt-0.5">
-                          {formatCompactRupee(currentDisplayAchievement)}
-                        </p>
-                      </div>
-
-                      <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-100">
-                        <div className="flex items-center gap-1 text-[10px] text-rose-700 font-bold">
-                          <Target size={11} className="text-rose-600" />
-                          <span>Shortfall Gap</span>
-                        </div>
-                        <p className="text-base font-black text-rose-800 mt-0.5">
-                          {formatCompactRupee(currentDisplayShortfall)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Regional Branch Hubs (Shown when viewing Organization or Sales overview) */}
-                    {(activeInspectLevel === 'root' || activeInspectLevel === 'sales') && (
-                      <div className="space-y-2 pt-1 border-t border-slate-100">
-                        <div className="text-xs font-black text-slate-700 flex items-center justify-between">
-                          <span>Regional Branch Hubs</span>
-                          <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full">3 Branches</span>
-                        </div>
-                        <div className="space-y-2">
-                          {branches.map(b => (
-                            <div
-                              key={b.id}
-                              onClick={() => {
-                                setSelectedBranchId(b.id);
-                                setSelectedTlId(b.tls[0]?.id || '');
-                                setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
-                                setDrillLevel(3);
-                                setActiveInspectLevel('branch');
-                              }}
-                              className="p-3 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/80 shadow-xs hover:border-indigo-300 transition-all cursor-pointer flex items-center justify-between group"
-                            >
-                              <div className="flex items-center gap-2.5">
-                                <span className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500/10 to-cyan-500/10 text-indigo-600 flex items-center justify-center font-black text-xs border border-indigo-100">
-                                  {b.name[0]}
-                                </span>
-                                <div>
-                                  <h5 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                                    {b.name} Branch
-                                  </h5>
-                                  <p className="text-[10px] text-slate-500 font-medium">
-                                    {b.tls.length} TLs • {b.tls.reduce((acc, t) => acc + t.tms.length, 0)} TMs
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-xs font-black text-emerald-700 block">
-                                  {formatCompactRupee(b.achievement)}
-                                </span>
-                                <span className="text-[9px] font-bold text-indigo-600 flex items-center justify-end gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                                  <span>Explore</span>
-                                  <ChevronRight size={10} />
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* TL DUAL BREAKDOWN: PERSONAL VS TEAM */}
-                    {isTl && personal && team && (
-                      <div className="space-y-2 pt-1 border-t border-slate-100">
-                        {/* 1. Personal Records Card */}
-                        <div
-                          onClick={() => setTlViewMode('personal')}
-                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                            tlViewMode === 'personal'
-                              ? 'bg-blue-50/95 border-blue-400 ring-2 ring-blue-200 shadow-sm'
-                              : 'bg-gradient-to-r from-blue-50/60 to-indigo-50/30 border-blue-200/70 hover:bg-blue-50/80'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between text-xs font-black text-blue-950 mb-1.5">
-                            <span className="flex items-center gap-1.5">
-                              <User size={13} className="text-blue-600" />
-                              <span>Personal Records (Self)</span>
-                            </span>
-                            <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
-                              {personal.wonCount || personal.dealsCount || 0} Won
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="bg-white/90 p-2 rounded-xl border border-blue-100 shadow-xs">
-                              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Received</span>
-                              <span className="text-sm font-black text-emerald-700">
-                                {formatCompactRupee(personal.received)}
-                              </span>
-                            </div>
-                            <div className="bg-white/90 p-2 rounded-xl border border-blue-100 shadow-xs">
-                              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Quoted</span>
-                              <span className="text-sm font-black text-slate-800">
-                                {formatCompactRupee(personal.bookedAmount)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 2. Team Records Card */}
-                        <div
-                          onClick={() => setTlViewMode('team')}
-                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                            tlViewMode === 'team'
-                              ? 'bg-cyan-50/95 border-cyan-400 ring-2 ring-cyan-200 shadow-sm'
-                              : 'bg-gradient-to-r from-cyan-50/60 to-teal-50/30 border-cyan-200/70 hover:bg-cyan-50/80'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between text-xs font-black text-cyan-950 mb-1.5">
-                            <span className="flex items-center gap-1.5">
-                              <Users size={13} className="text-cyan-700" />
-                              <span>Team Records ({team.membersCount || currentTms.length} Members)</span>
-                            </span>
-                            <span className="text-[10px] font-bold text-cyan-800 bg-cyan-100 px-2 py-0.5 rounded-full">
-                              {team.wonCount || team.dealsCount || 0} Won
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="bg-white/90 p-2 rounded-xl border border-cyan-100 shadow-xs">
-                              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Received</span>
-                              <span className="text-sm font-black text-emerald-700">
-                                {formatCompactRupee(team.received)}
-                              </span>
-                            </div>
-                            <div className="bg-white/90 p-2 rounded-xl border border-cyan-100 shadow-xs">
-                              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Quoted</span>
-                              <span className="text-sm font-black text-slate-800">
-                                {formatCompactRupee(team.bookedAmount)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+          <div className="space-y-3">
+            {stageStats.map(st => (
+              <div
+                key={st.name}
+                className="p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 flex items-center justify-between transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`w-3 h-3 rounded-full ${st.color}`} />
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900">{st.name}</h5>
+                    <p className="text-[11px] text-slate-500">
+                      Total Quoted: {formatCompactRupee(st.amount)}
+                    </p>
                   </div>
                 </div>
+                <div className="text-right">
+                  <span className="text-sm font-black text-slate-900">{st.count} Deals</span>
+                  <p className="text-[11px] font-bold text-emerald-600">
+                    Rec: {formatCompactRupee(st.received)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sales Funnel */}
+        <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <BarChart3 size={18} className="text-cyan-600" />
+                Executive Sales Funnel
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                Conversion drop-off from initial quote to closed won delivery.
+              </p>
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
+              Conversion
+            </span>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            {[
+              { stage: '1. Quotations Generated', count: Math.max(liveQuotations.length, filteredDeals.length * 2), color: 'bg-blue-500', pct: 100 },
+              { stage: '2. Deal Contracts Booked', count: filteredDeals.length, color: 'bg-indigo-500', pct: Math.round((filteredDeals.length / Math.max(1, liveQuotations.length)) * 100) },
+              { stage: '3. Accounts Verified', count: filteredDeals.filter(d => isDealPaymentVerified(d)).length, color: 'bg-purple-500', pct: Math.round((filteredDeals.filter(d => isDealPaymentVerified(d)).length / Math.max(1, filteredDeals.length)) * 100) },
+              { stage: '4. Legal / Operations', count: filteredDeals.filter(d => !String(d.stage || '').toLowerCase().includes('sales')).length, color: 'bg-cyan-500', pct: 75 },
+              { stage: '5. Closed Won Delivery', count: filteredDeals.filter(d => String(d.stage || '').toLowerCase().includes('won')).length, color: 'bg-emerald-500', pct: 45 }
+            ].map(fn => (
+              <div key={fn.stage} className="space-y-1">
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-slate-700">{fn.stage}</span>
+                  <span className="text-slate-900">{fn.count} Records ({fn.pct}%)</span>
+                </div>
+                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, Math.max(5, fn.pct))}%` }}
+                    transition={{ duration: 0.8 }}
+                    className={`h-full ${fn.color} rounded-full`}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 6. TOP SELLING SERVICES & BDM MATRIX TABLE (LIGHT THEME) */}
+      {/* ========================================================================= */}
+      <div className="space-y-6">
+        {/* Top Selling Services Strip (Sleek Apple/Linear Executive Cards) */}
+        {(() => {
+          const maxRevenue = topServices[0]?.received || 1;
+          const totalRevenue = topServices.reduce((sum, s) => sum + s.received, 0);
+          const totalDeals = topServices.reduce((sum, s) => sum + s.count, 0);
+
+          const formatServiceName = (name: string) => {
+            if (!name) return 'Business Advisory';
+            const upper = name.toUpperCase().trim();
+            if (upper === 'CGSS') return 'CGSS Scheme';
+            if (upper === 'GEM REGISTRATION') return 'GeM Portal Registration';
+            if (upper === 'ISO CERTIFICATE') return 'ISO Certification';
+            if (upper === 'SEED SUPPORT SCHEME') return 'Seed Support Scheme';
+            if (upper === 'GUJARAT SAMRIDDHI YOJANA') return 'Gujarat Samriddhi Yojana';
+            if (upper === 'STARTUP INDIA CERTIFICATE') return 'Startup India Certificate';
+            return name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          };
+
+          const getServiceMeta = (name: string, idx: number) => {
+            const upper = (name || '').toUpperCase();
+            if (upper.includes('GENERAL')) {
+              return {
+                icon: Briefcase,
+                iconGrad: 'from-blue-600 to-indigo-600',
+                badgeBg: 'bg-blue-50 text-blue-700 border-blue-200',
+                tag: 'Core Consulting'
+              };
+            }
+            if (upper.includes('ADVISORY') || upper.includes('BUSINESS')) {
+              return {
+                icon: Compass,
+                iconGrad: 'from-indigo-600 to-purple-600',
+                badgeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                tag: 'Business Strategy'
+              };
+            }
+            if (upper.includes('STARTUP') || upper.includes('CERTIFICATE') || upper.includes('ISO')) {
+              return {
+                icon: Award,
+                iconGrad: 'from-amber-500 to-orange-600',
+                badgeBg: 'bg-amber-50 text-amber-800 border-amber-200',
+                tag: 'Certification'
+              };
+            }
+            if (upper.includes('GEM') || upper.includes('REGISTRATION')) {
+              return {
+                icon: Building2,
+                iconGrad: 'from-cyan-600 to-teal-600',
+                badgeBg: 'bg-cyan-50 text-cyan-800 border-cyan-200',
+                tag: 'Govt E-Market'
+              };
+            }
+            if (upper.includes('SCHEME') || upper.includes('YOJANA') || upper.includes('CGSS') || upper.includes('SEED')) {
+              return {
+                icon: Zap,
+                iconGrad: 'from-emerald-600 to-teal-600',
+                badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+                tag: 'Subsidy & Grants'
+              };
+            }
+            return {
+              icon: Sparkles,
+              iconGrad: 'from-purple-600 to-indigo-600',
+              badgeBg: 'bg-purple-50 text-purple-700 border-purple-200',
+              tag: 'Enterprise'
+            };
+          };
+
+          return (
+            <div className="rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 shadow-xs">
+                      <Sparkles size={18} />
+                    </span>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                      Top Selling Services & Schemes
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 font-medium">
+                    Real-time revenue contribution and deal volume across BharatEdge core business verticals.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="px-3.5 py-1.5 rounded-2xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs">
+                    Total: <strong className="font-black text-emerald-700">{formatCompactRupee(totalRevenue)}</strong>
+                  </span>
+                  <span className="px-3 py-1.5 rounded-2xl text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-xs">
+                    {totalDeals} Deals
+                  </span>
+                </div>
+              </div>
+
+              {/* Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {topServices.map((srv, idx) => {
+                  const meta = getServiceMeta(srv.name, idx);
+                  const SrvIcon = meta.icon;
+                  const pctOfTop = Math.min(100, Math.round((srv.received / maxRevenue) * 100));
+                  const avgTicket = srv.count > 0 ? Math.round(srv.received / srv.count) : 0;
+                  const isTop1 = idx === 0;
+
+                  return (
+                    <motion.div
+                      key={srv.name}
+                      whileHover={{ y: -3 }}
+                      transition={{ duration: 0.2 }}
+                      className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between group ${isTop1
+                        ? 'bg-gradient-to-br from-amber-50/50 via-white to-orange-50/20 border-amber-300 shadow-md shadow-amber-500/5 ring-1 ring-amber-200/60'
+                        : 'bg-white hover:bg-slate-50/50 border-slate-200/80 hover:border-indigo-300 shadow-xs hover:shadow-md'
+                        }`}
+                    >
+                      <div>
+                        {/* Card Top Row: Rank Badge & Category */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${idx === 0
+                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
+                                : idx === 1
+                                  ? 'bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-xs'
+                                  : idx === 2
+                                    ? 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-700 font-bold'
+                                }`}
+                            >
+                              #{idx + 1}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold border ${meta.badgeBg}`}>
+                              {meta.tag}
+                            </span>
+                          </div>
+
+                          <span className="text-[11px] font-black text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded-md">
+                            {srv.count} deals
+                          </span>
+                        </div>
+
+                        {/* Service Title */}
+                        <div className="flex items-start gap-2.5 mb-3">
+                          <span
+                            className={`p-2 rounded-xl bg-gradient-to-tr ${meta.iconGrad} text-white shadow-xs shrink-0 mt-0.5`}
+                          >
+                            <SrvIcon size={14} />
+                          </span>
+                          <h4
+                            className="text-xs sm:text-sm font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-tight"
+                            title={srv.name}
+                          >
+                            {formatServiceName(srv.name)}
+                          </h4>
+                        </div>
+                      </div>
+
+                      {/* Revenue & Avg Ticket */}
+                      <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                        <div className="flex items-baseline justify-between">
+                          <div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                              Received
+                            </span>
+                            <span className="text-base sm:text-lg font-black text-emerald-700 tracking-tight">
+                              {formatCompactRupee(srv.received)}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                              Avg Ticket
+                            </span>
+                            <span className="text-xs font-black text-slate-700">
+                              {formatCompactRupee(avgTicket)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Relative Share Progress Bar */}
+                        <div className="space-y-1">
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                            <div
+                              style={{ width: `${pctOfTop}%` }}
+                              className={`h-full rounded-full bg-gradient-to-r ${meta.iconGrad}`}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center text-[9px] font-bold text-slate-400">
+                            <span>Share of #1</span>
+                            <span className="text-slate-600">{pctOfTop}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
           );
         })()}
 
-        {/* ========================================================================= */}
-        {/* 4. MASTER TARGET & ACHIEVEMENT BAR VIEW (LIGHT THEME) */}
-        {/* ========================================================================= */}
-        <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <Target size={18} className="text-indigo-600" />
-                Target vs Achievement Overview (Entire Sales Team)
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                National sales target benchmark vs. actual revenue received with shortfall gap.
-              </p>
-            </div>
-            <div className="flex items-center gap-4 text-xs font-bold">
-              <span className="flex items-center gap-1.5 text-slate-600">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Target: {formatCompactRupee(overallTarget)}
+        {/* BDM Matrix Table (Aesthetic Modern Executive Table) */}
+        <div className="rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
+          {/* Header with Title and Global Search */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-5 pb-5 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20">
+                <Users size={18} />
               </span>
-              <span className="flex items-center gap-1.5 text-emerald-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
-              </span>
-              <span className="flex items-center gap-1.5 text-rose-600">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
-              </span>
-            </div>
-          </div>
-
-          {/* Master Comparison Bar */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center text-xs font-bold">
-              <span className="text-slate-800">Full Sales Organization Progress</span>
-              <span className="text-indigo-700 font-extrabold">{overallAchievementPct}% Achieved</span>
-            </div>
-            <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200 flex">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${overallAchievementPct}%` }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-                className="h-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-400 rounded-full shadow-sm"
-              />
-            </div>
-          </div>
-
-          {/* Branch-by-Branch Breakdown Bars */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
-            {(salesTree.children?.[0]?.children || []).map((br: SalesTreeNode) => {
-              const pct = br.target > 0 ? Math.min(100, Math.round((br.achievement / br.target) * 100)) : 0;
-              return (
-                <div key={br.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                  <div className="flex justify-between items-center text-xs mb-2">
-                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                      <MapPin size={13} className="text-indigo-600" />
-                      {br.name}
-                    </span>
-                    <span className="text-emerald-700 font-black">{pct}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex mb-2">
-                    <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full" />
-                  </div>
-                  <div className="flex justify-between items-center text-[11px] text-slate-500">
-                    <span>Ach: <strong className="text-slate-800">{formatCompactRupee(br.achievement)}</strong></span>
-                    <span>Shortfall: <strong className="text-rose-600">{formatCompactRupee(br.shortfall)}</strong></span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ========================================================================= */}
-        {/* 5. DEAL PIPELINE VIEW STAGES & SALES FUNNEL (LIGHT THEME) */}
-        {/* ========================================================================= */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Deal Pipeline View Stages */}
-          <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-            <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Layers size={18} className="text-indigo-600" />
-                  Deal Pipeline View Stages
+                <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  <span>BDM Performance Matrix</span>
+                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                    Live Roster
+                  </span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                  Live deals distributed across operational workflow stages.
+                  Individual Business Development Manager targets, revenue achievement, and shortfall gaps.
                 </p>
               </div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                {filteredDeals.length} Deals
-              </span>
             </div>
 
-            <div className="space-y-3">
-              {stageStats.map(st => (
-                <div
-                  key={st.name}
-                  className="p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 flex items-center justify-between transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`w-3 h-3 rounded-full ${st.color}`} />
-                    <div>
-                      <h5 className="text-xs font-bold text-slate-900">{st.name}</h5>
-                      <p className="text-[11px] text-slate-500">
-                        Total Quoted: {formatCompactRupee(st.amount)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-black text-slate-900">{st.count} Deals</span>
-                    <p className="text-[11px] font-bold text-emerald-600">
-                      Rec: {formatCompactRupee(st.received)}
-                    </p>
-                  </div>
-                </div>
-              ))}
+            {/* Action Controls & Search */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={matrixSearch}
+                  onChange={(e) => setMatrixSearch(e.target.value)}
+                  placeholder="Search BDM, TL, Branch, Service..."
+                  className="pl-9 pr-8 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all w-64 font-medium shadow-xs"
+                />
+                {matrixSearch && (
+                  <button
+                    onClick={() => setMatrixSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={handleExportCsv}
+                className="px-4 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs hover:shadow-sm"
+              >
+                <Download size={13} className="text-indigo-600" />
+                <span>Export CSV</span>
+              </button>
             </div>
           </div>
 
-          {/* Sales Funnel */}
-          <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <BarChart3 size={18} className="text-cyan-600" />
-                  Executive Sales Funnel
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                  Conversion drop-off from initial quote to closed won delivery.
-                </p>
-              </div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
-                Conversion
-              </span>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              {[
-                { stage: '1. Quotations Generated', count: Math.max(liveQuotations.length, filteredDeals.length * 2), color: 'bg-blue-500', pct: 100 },
-                { stage: '2. Deal Contracts Booked', count: filteredDeals.length, color: 'bg-indigo-500', pct: Math.round((filteredDeals.length / Math.max(1, liveQuotations.length)) * 100) },
-                { stage: '3. Accounts Verified', count: filteredDeals.filter(d => isDealPaymentVerified(d)).length, color: 'bg-purple-500', pct: Math.round((filteredDeals.filter(d => isDealPaymentVerified(d)).length / Math.max(1, filteredDeals.length)) * 100) },
-                { stage: '4. Legal / Operations', count: filteredDeals.filter(d => !String(d.stage || '').toLowerCase().includes('sales')).length, color: 'bg-cyan-500', pct: 75 },
-                { stage: '5. Closed Won Delivery', count: filteredDeals.filter(d => String(d.stage || '').toLowerCase().includes('won')).length, color: 'bg-emerald-500', pct: 45 }
-              ].map(fn => (
-                <div key={fn.stage} className="space-y-1">
-                  <div className="flex justify-between text-xs font-bold">
-                    <span className="text-slate-700">{fn.stage}</span>
-                    <span className="text-slate-900">{fn.count} Records ({fn.pct}%)</span>
-                  </div>
-                  <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(100, Math.max(5, fn.pct))}%` }}
-                      transition={{ duration: 0.8 }}
-                      className={`h-full ${fn.color} rounded-full`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ========================================================================= */}
-        {/* 6. TOP SELLING SERVICES & BDM MATRIX TABLE (LIGHT THEME) */}
-        {/* ========================================================================= */}
-        <div className="space-y-6">
-          {/* Top Selling Services Strip (Sleek Apple/Linear Executive Cards) */}
+          {/* Quick Filter Tabs Strip */}
           {(() => {
-            const maxRevenue = topServices[0]?.received || 1;
-            const totalRevenue = topServices.reduce((sum, s) => sum + s.received, 0);
-            const totalDeals = topServices.reduce((sum, s) => sum + s.count, 0);
-
-            const formatServiceName = (name: string) => {
-              if (!name) return 'Business Advisory';
-              const upper = name.toUpperCase().trim();
-              if (upper === 'CGSS') return 'CGSS Scheme';
-              if (upper === 'GEM REGISTRATION') return 'GeM Portal Registration';
-              if (upper === 'ISO CERTIFICATE') return 'ISO Certification';
-              if (upper === 'SEED SUPPORT SCHEME') return 'Seed Support Scheme';
-              if (upper === 'GUJARAT SAMRIDDHI YOJANA') return 'Gujarat Samriddhi Yojana';
-              if (upper === 'STARTUP INDIA CERTIFICATE') return 'Startup India Certificate';
-              return name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-            };
-
-            const getServiceMeta = (name: string, idx: number) => {
-              const upper = (name || '').toUpperCase();
-              if (upper.includes('GENERAL')) {
-                return {
-                  icon: Briefcase,
-                  iconGrad: 'from-blue-600 to-indigo-600',
-                  badgeBg: 'bg-blue-50 text-blue-700 border-blue-200',
-                  tag: 'Core Consulting'
-                };
-              }
-              if (upper.includes('ADVISORY') || upper.includes('BUSINESS')) {
-                return {
-                  icon: Compass,
-                  iconGrad: 'from-indigo-600 to-purple-600',
-                  badgeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-                  tag: 'Business Strategy'
-                };
-              }
-              if (upper.includes('STARTUP') || upper.includes('CERTIFICATE') || upper.includes('ISO')) {
-                return {
-                  icon: Award,
-                  iconGrad: 'from-amber-500 to-orange-600',
-                  badgeBg: 'bg-amber-50 text-amber-800 border-amber-200',
-                  tag: 'Certification'
-                };
-              }
-              if (upper.includes('GEM') || upper.includes('REGISTRATION')) {
-                return {
-                  icon: Building2,
-                  iconGrad: 'from-cyan-600 to-teal-600',
-                  badgeBg: 'bg-cyan-50 text-cyan-800 border-cyan-200',
-                  tag: 'Govt E-Market'
-                };
-              }
-              if (upper.includes('SCHEME') || upper.includes('YOJANA') || upper.includes('CGSS') || upper.includes('SEED')) {
-                return {
-                  icon: Zap,
-                  iconGrad: 'from-emerald-600 to-teal-600',
-                  badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-                  tag: 'Subsidy & Grants'
-                };
-              }
-              return {
-                icon: Sparkles,
-                iconGrad: 'from-purple-600 to-indigo-600',
-                badgeBg: 'bg-purple-50 text-purple-700 border-purple-200',
-                tag: 'Enterprise'
-              };
-            };
+            const rawTotal = rawBdmList.length;
+            const metCount = rawBdmList.filter(b => b.shortfall === 0).length;
+            const progressCount = rawBdmList.filter(b => b.pct >= 50 && b.shortfall > 0).length;
+            const gapCount = rawBdmList.filter(b => b.pct < 50).length;
 
             return (
-              <div className="rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 shadow-xs">
-                        <Sparkles size={18} />
-                      </span>
-                      <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                        Top Selling Services & Schemes
-                      </h3>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1 font-medium">
-                      Real-time revenue contribution and deal volume across BharatEdge core business verticals.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <span className="px-3.5 py-1.5 rounded-2xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs">
-                      Total: <strong className="font-black text-emerald-700">{formatCompactRupee(totalRevenue)}</strong>
-                    </span>
-                    <span className="px-3 py-1.5 rounded-2xl text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-xs">
-                      {totalDeals} Deals
-                    </span>
-                  </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/80 rounded-2xl">
+                  {[
+                    { key: 'all', label: `All BDMs (${rawTotal})` },
+                    { key: 'met', label: `Quota Met (${metCount})` },
+                    { key: 'progress', label: `In Progress (${progressCount})` },
+                    { key: 'gap', label: `Under Target (${gapCount})` },
+                    { key: 'ahmedabad', label: 'Ahmedabad' },
+                    { key: 'jaipur', label: 'Jaipur' },
+                    { key: 'chennai', label: 'Chennai' },
+                  ].map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setMatrixFilter(tab.key as any)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${matrixFilter === tab.key
+                        ? 'bg-white text-indigo-950 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
 
-                {/* Cards Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {topServices.map((srv, idx) => {
-                    const meta = getServiceMeta(srv.name, idx);
-                    const SrvIcon = meta.icon;
-                    const pctOfTop = Math.min(100, Math.round((srv.received / maxRevenue) * 100));
-                    const avgTicket = srv.count > 0 ? Math.round(srv.received / srv.count) : 0;
-                    const isTop1 = idx === 0;
-
-                    return (
-                      <motion.div
-                        key={srv.name}
-                        whileHover={{ y: -3 }}
-                        transition={{ duration: 0.2 }}
-                        className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between group ${
-                          isTop1
-                            ? 'bg-gradient-to-br from-amber-50/50 via-white to-orange-50/20 border-amber-300 shadow-md shadow-amber-500/5 ring-1 ring-amber-200/60'
-                            : 'bg-white hover:bg-slate-50/50 border-slate-200/80 hover:border-indigo-300 shadow-xs hover:shadow-md'
-                        }`}
-                      >
-                        <div>
-                          {/* Card Top Row: Rank Badge & Category */}
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                                  idx === 0
-                                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
-                                    : idx === 1
-                                    ? 'bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-xs'
-                                    : idx === 2
-                                    ? 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-xs'
-                                    : 'bg-slate-100 text-slate-700 font-bold'
-                                }`}
-                              >
-                                #{idx + 1}
-                              </span>
-                              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold border ${meta.badgeBg}`}>
-                                {meta.tag}
-                              </span>
-                            </div>
-
-                            <span className="text-[11px] font-black text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded-md">
-                              {srv.count} deals
-                            </span>
-                          </div>
-
-                          {/* Service Title */}
-                          <div className="flex items-start gap-2.5 mb-3">
-                            <span
-                              className={`p-2 rounded-xl bg-gradient-to-tr ${meta.iconGrad} text-white shadow-xs shrink-0 mt-0.5`}
-                            >
-                              <SrvIcon size={14} />
-                            </span>
-                            <h4
-                              className="text-xs sm:text-sm font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-tight"
-                              title={srv.name}
-                            >
-                              {formatServiceName(srv.name)}
-                            </h4>
-                          </div>
-                        </div>
-
-                        {/* Revenue & Avg Ticket */}
-                        <div className="space-y-2.5 pt-3 border-t border-slate-100">
-                          <div className="flex items-baseline justify-between">
-                            <div>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                                Received
-                              </span>
-                              <span className="text-base sm:text-lg font-black text-emerald-700 tracking-tight">
-                                {formatCompactRupee(srv.received)}
-                              </span>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                                Avg Ticket
-                              </span>
-                              <span className="text-xs font-black text-slate-700">
-                                {formatCompactRupee(avgTicket)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Relative Share Progress Bar */}
-                          <div className="space-y-1">
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
-                              <div
-                                style={{ width: `${pctOfTop}%` }}
-                                className={`h-full rounded-full bg-gradient-to-r ${meta.iconGrad}`}
-                              />
-                            </div>
-                            <div className="flex justify-between items-center text-[9px] font-bold text-slate-400">
-                              <span>Share of #1</span>
-                              <span className="text-slate-600">{pctOfTop}%</span>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
+                <div className="text-xs font-bold text-slate-500">
+                  Showing <strong className="text-slate-900">{bdmList.length}</strong> of {rawTotal} BDMs
                 </div>
               </div>
             );
           })()}
 
-          {/* BDM Matrix Table (Aesthetic Modern Executive Table) */}
-          <div className="rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
-            {/* Header with Title and Global Search */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-5 pb-5 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20">
-                  <Users size={18} />
-                </span>
-                <div>
-                  <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                    <span>BDM Performance Matrix</span>
-                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                      Live Roster
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                    Individual Business Development Manager targets, revenue achievement, and shortfall gaps.
-                  </p>
-                </div>
-              </div>
+          {/* Aesthetic Table */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-200/90 shadow-2xs">
+            <table className="w-full text-left text-xs whitespace-nowrap">
+              <thead className="bg-slate-50/90 text-slate-500 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                <tr>
+                  <th className="px-5 py-3.5">BDM Profile</th>
+                  <th className="px-5 py-3.5">Branch</th>
+                  <th className="px-5 py-3.5">Team Leader</th>
+                  <th className="px-5 py-3.5 text-right">Target</th>
+                  <th className="px-5 py-3.5 text-right">Revenue Achieved</th>
+                  <th className="px-5 py-3.5 text-right">Shortfall</th>
+                  <th className="px-5 py-3.5 text-center min-w-[125px]">Target Progress</th>
+                  <th className="px-5 py-3.5">Top Selling Service</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium bg-white">
+                {bdmList.slice(0, 35).map(bdm => {
+                  const initials = bdm.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('');
+                  const isMet = bdm.shortfall === 0;
 
-              {/* Action Controls & Search */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative">
-                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={matrixSearch}
-                    onChange={(e) => setMatrixSearch(e.target.value)}
-                    placeholder="Search BDM, TL, Branch, Service..."
-                    className="pl-9 pr-8 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all w-64 font-medium shadow-xs"
-                  />
-                  {matrixSearch && (
-                    <button
-                      onClick={() => setMatrixSearch('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleExportCsv}
-                  className="px-4 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs hover:shadow-sm"
-                >
-                  <Download size={13} className="text-indigo-600" />
-                  <span>Export CSV</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Filter Tabs Strip */}
-            {(() => {
-              const rawTotal = rawBdmList.length;
-              const metCount = rawBdmList.filter(b => b.shortfall === 0).length;
-              const progressCount = rawBdmList.filter(b => b.pct >= 50 && b.shortfall > 0).length;
-              const gapCount = rawBdmList.filter(b => b.pct < 50).length;
-
-              return (
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-                  <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/80 rounded-2xl">
-                    {[
-                      { key: 'all', label: `All BDMs (${rawTotal})` },
-                      { key: 'met', label: `Quota Met (${metCount})` },
-                      { key: 'progress', label: `In Progress (${progressCount})` },
-                      { key: 'gap', label: `Under Target (${gapCount})` },
-                      { key: 'ahmedabad', label: 'Ahmedabad' },
-                      { key: 'jaipur', label: 'Jaipur' },
-                      { key: 'chennai', label: 'Chennai' },
-                    ].map(tab => (
-                      <button
-                        key={tab.key}
-                        onClick={() => setMatrixFilter(tab.key as any)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          matrixFilter === tab.key
-                            ? 'bg-white text-indigo-950 shadow-xs'
-                            : 'text-slate-500 hover:text-slate-800'
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="text-xs font-bold text-slate-500">
-                    Showing <strong className="text-slate-900">{bdmList.length}</strong> of {rawTotal} BDMs
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Aesthetic Table */}
-            <div className="overflow-x-auto rounded-2xl border border-slate-200/90 shadow-2xs">
-              <table className="w-full text-left text-xs whitespace-nowrap">
-                <thead className="bg-slate-50/90 text-slate-500 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
-                  <tr>
-                    <th className="px-5 py-3.5">BDM Profile</th>
-                    <th className="px-5 py-3.5">Branch</th>
-                    <th className="px-5 py-3.5">Team Leader</th>
-                    <th className="px-5 py-3.5 text-right">Target</th>
-                    <th className="px-5 py-3.5 text-right">Revenue Achieved</th>
-                    <th className="px-5 py-3.5 text-right">Shortfall</th>
-                    <th className="px-5 py-3.5 text-center min-w-[125px]">Target Progress</th>
-                    <th className="px-5 py-3.5">Top Selling Service</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700 font-medium bg-white">
-                  {bdmList.slice(0, 35).map(bdm => {
-                    const initials = bdm.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('');
-                    const isMet = bdm.shortfall === 0;
-
-                    return (
-                      <tr key={bdm.id} className="hover:bg-indigo-50/30 transition-colors group">
-                        {/* 1. BDM Profile */}
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <span
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black shadow-2xs ${
-                                  isMet
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                    : bdm.pct >= 50
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                  return (
+                    <tr key={bdm.id} className="hover:bg-indigo-50/30 transition-colors group">
+                      {/* 1. BDM Profile */}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <span
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black shadow-2xs ${isMet
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : bdm.pct >= 50
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
                                 }`}
-                              >
-                                {initials}
-                              </span>
-                              <span
-                                className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
-                                  isMet ? 'bg-emerald-500' : bdm.pct >= 50 ? 'bg-amber-500' : 'bg-slate-300'
+                            >
+                              {initials}
+                            </span>
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${isMet ? 'bg-emerald-500' : bdm.pct >= 50 ? 'bg-amber-500' : 'bg-slate-300'
                                 }`}
-                              />
-                            </div>
-                            <div>
-                              <h5 className="font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors text-xs">
-                                {bdm.name}
-                              </h5>
-                              <span className="text-[10px] text-slate-400 font-medium">
-                                {bdm.dealsCount} deals closed
-                              </span>
-                            </div>
+                            />
                           </div>
-                        </td>
+                          <div>
+                            <h5 className="font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors text-xs">
+                              {bdm.name}
+                            </h5>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              {bdm.dealsCount} deals closed
+                            </span>
+                          </div>
+                        </div>
+                      </td>
 
-                        {/* 2. Branch */}
-                        <td className="px-5 py-3.5">
-                          <span
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${
-                              bdm.branch.toLowerCase().includes('ahmedabad')
-                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                : bdm.branch.toLowerCase().includes('jaipur')
-                                ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                                : 'bg-cyan-50 text-cyan-800 border-cyan-200'
+                      {/* 2. Branch */}
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${bdm.branch.toLowerCase().includes('ahmedabad')
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : bdm.branch.toLowerCase().includes('jaipur')
+                              ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                              : 'bg-cyan-50 text-cyan-800 border-cyan-200'
                             }`}
-                          >
-                            {bdm.branch}
+                        >
+                          {bdm.branch}
+                        </span>
+                      </td>
+
+                      {/* 3. Team Leader */}
+                      <td className="px-5 py-3.5">
+                        <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                          <User size={12} className="text-slate-400" />
+                          <span>{bdm.tl}</span>
+                        </span>
+                      </td>
+
+                      {/* 4. Target */}
+                      <td className="px-5 py-3.5 text-right font-bold text-slate-500">
+                        {formatCompactRupee(bdm.target)}
+                      </td>
+
+                      {/* 5. Achieved */}
+                      <td className="px-5 py-3.5 text-right">
+                        <span className="font-black text-emerald-700 text-sm">
+                          {formatCompactRupee(bdm.achievement)}
+                        </span>
+                      </td>
+
+                      {/* 6. Shortfall */}
+                      <td className="px-5 py-3.5 text-right">
+                        {isMet ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                            <CheckCircle2 size={11} className="text-emerald-600" />
+                            <span>Target Met</span>
                           </span>
-                        </td>
-
-                        {/* 3. Team Leader */}
-                        <td className="px-5 py-3.5">
-                          <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                            <User size={12} className="text-slate-400" />
-                            <span>{bdm.tl}</span>
+                        ) : (
+                          <span className="text-xs font-bold text-rose-600">
+                            {formatCompactRupee(bdm.shortfall)}
                           </span>
-                        </td>
+                        )}
+                      </td>
 
-                        {/* 4. Target */}
-                        <td className="px-5 py-3.5 text-right font-bold text-slate-500">
-                          {formatCompactRupee(bdm.target)}
-                        </td>
-
-                        {/* 5. Achieved */}
-                        <td className="px-5 py-3.5 text-right">
-                          <span className="font-black text-emerald-700 text-sm">
-                            {formatCompactRupee(bdm.achievement)}
-                          </span>
-                        </td>
-
-                        {/* 6. Shortfall */}
-                        <td className="px-5 py-3.5 text-right">
-                          {isMet ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
-                              <CheckCircle2 size={11} className="text-emerald-600" />
-                              <span>Target Met</span>
-                            </span>
-                          ) : (
-                            <span className="text-xs font-bold text-rose-600">
-                              {formatCompactRupee(bdm.shortfall)}
-                            </span>
-                          )}
-                        </td>
-
-                        {/* 7. Progress & Mini Bar */}
-                        <td className="px-5 py-3.5 text-center">
-                          <div className="flex flex-col items-center gap-1 min-w-[95px]">
-                            <div className="flex items-center justify-between w-full text-[10px] font-black">
-                              <span
-                                className={
-                                  isMet
-                                    ? 'text-emerald-700'
-                                    : bdm.pct >= 50
+                      {/* 7. Progress & Mini Bar */}
+                      <td className="px-5 py-3.5 text-center">
+                        <div className="flex flex-col items-center gap-1 min-w-[95px]">
+                          <div className="flex items-center justify-between w-full text-[10px] font-black">
+                            <span
+                              className={
+                                isMet
+                                  ? 'text-emerald-700'
+                                  : bdm.pct >= 50
                                     ? 'text-amber-700'
                                     : 'text-rose-600'
-                                }
-                              >
-                                {bdm.pct}%
-                              </span>
-                              {isMet && (
-                                <span className="text-[9px] font-bold text-emerald-600">Surplus</span>
-                              )}
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
-                              <div
-                                style={{ width: `${Math.min(100, Math.max(4, bdm.pct))}%` }}
-                                className={`h-full rounded-full ${
-                                  isMet
-                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-                                    : bdm.pct >= 50
-                                    ? 'bg-gradient-to-r from-amber-500 to-orange-400'
-                                    : 'bg-gradient-to-r from-rose-400 to-rose-500'
-                                }`}
-                              />
-                            </div>
+                              }
+                            >
+                              {bdm.pct}%
+                            </span>
+                            {isMet && (
+                              <span className="text-[9px] font-bold text-emerald-600">Surplus</span>
+                            )}
                           </div>
-                        </td>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                            <div
+                              style={{ width: `${Math.min(100, Math.max(4, bdm.pct))}%` }}
+                              className={`h-full rounded-full ${isMet
+                                ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                                : bdm.pct >= 50
+                                  ? 'bg-gradient-to-r from-amber-500 to-orange-400'
+                                  : 'bg-gradient-to-r from-rose-400 to-rose-500'
+                                }`}
+                            />
+                          </div>
+                        </div>
+                      </td>
 
-                        {/* 8. Top Selling Service */}
-                        <td className="px-5 py-3.5">
-                          <span
-                            className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-50 border border-slate-200/80 text-slate-700 truncate max-w-[190px] block shadow-2xs"
-                            title={bdm.topService}
-                          >
-                            {bdm.topService}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {bdmList.length > 35 && (
-              <p className="text-xs text-slate-400 text-center mt-3 font-medium">
-                Showing top 35 of {bdmList.length} Sales BDMs. Use filter pills, search, or Export CSV for complete records.
-              </p>
-            )}
+                      {/* 8. Top Selling Service */}
+                      <td className="px-5 py-3.5">
+                        <span
+                          className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-50 border border-slate-200/80 text-slate-700 truncate max-w-[190px] block shadow-2xs"
+                          title={bdm.topService}
+                        >
+                          {bdm.topService}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
+
+          {bdmList.length > 35 && (
+            <p className="text-xs text-slate-400 text-center mt-3 font-medium">
+              Showing top 35 of {bdmList.length} Sales BDMs. Use filter pills, search, or Export CSV for complete records.
+            </p>
+          )}
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
