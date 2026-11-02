@@ -59,6 +59,9 @@ export const CrmDashboard = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          // If cached deals lack Cloned_Deal field, discard stale cache so live Zoho data re-syncs
+          const isStale = parsed.some((d: any) => d.Cloned_Deal === undefined && d.rawZohoDeal?.Cloned_Deal === undefined);
+          if (isStale) return [];
           const octStart = new Date('2026-10-01T00:00:00+05:30').getTime();
           return parsed.filter((d: any) => {
             const raw = d.rawZohoDeal || {};
@@ -412,22 +415,27 @@ export const CrmDashboard = () => {
       if (savedDeals) {
         const parsed = JSON.parse(savedDeals);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const hydrated = parsed.map((d: any) => {
-            const a = getDealAmount(d);
-            const r = getDealReceived(d);
-            const p = getDealPending(d);
-            return {
-              ...d,
-              amount: a > 0 ? `₹${a.toLocaleString('en-IN')}` : (d.amount || '₹0'),
-              received: r > 0 ? `₹${r.toLocaleString('en-IN')}` : (d.received || '₹0'),
-              pending: p > 0 ? `₹${p.toLocaleString('en-IN')}` : (d.pending || '₹0'),
-              rawAmount: a,
-              rawReceived: r,
-              rawPending: p,
-            };
-          });
-          currentDealsList = hydrated;
-          setDeals(hydrated);
+          const isStale = parsed.some((d: any) => d.Cloned_Deal === undefined && d.rawZohoDeal?.Cloned_Deal === undefined);
+          if (isStale) {
+            localStorage.removeItem('be_deals');
+          } else {
+            const hydrated = parsed.map((d: any) => {
+              const a = getDealAmount(d);
+              const r = getDealReceived(d);
+              const p = getDealPending(d);
+              return {
+                ...d,
+                amount: a > 0 ? `₹${a.toLocaleString('en-IN')}` : (d.amount || '₹0'),
+                received: r > 0 ? `₹${r.toLocaleString('en-IN')}` : (d.received || '₹0'),
+                pending: p > 0 ? `₹${p.toLocaleString('en-IN')}` : (d.pending || '₹0'),
+                rawAmount: a,
+                rawReceived: r,
+                rawPending: p,
+              };
+            });
+            currentDealsList = hydrated;
+            setDeals(hydrated);
+          }
         }
       }
 
@@ -447,31 +455,21 @@ export const CrmDashboard = () => {
     // 2. Fetch live updates from Zoho CRM
     try {
       const [dealsRes, clientsRes, queriesRes, quotationsRes, empsRes] = await Promise.allSettled([
-        fetchZohoDeals({ per_page: 200 }),
+        fetch('/api/deals?fetchAll=true').then(r => r.json()).catch(() => fetchZohoDeals({ per_page: 200 })),
         fetchZohoClients({ per_page: 200 }),
         fetchZohoQueries(),
         fetchZohoQuotations(),
         fetchZohoEmployees(),
       ]);
 
-      if (dealsRes.status === 'fulfilled' && dealsRes.value.success && Array.isArray(dealsRes.value.data) && dealsRes.value.data.length > 0) {
-        const mappedDeals = mapZohoDeals(dealsRes.value.data);
+      const fetchedDealsData = dealsRes.status === 'fulfilled'
+        ? (Array.isArray(dealsRes.value?.data) ? dealsRes.value.data : (dealsRes.value?.success && Array.isArray(dealsRes.value?.data) ? dealsRes.value.data : []))
+        : [];
 
-        const dealMap = new Map<string, any>();
-        currentDealsList.forEach(d => {
-          if (d.zohoId) dealMap.set(String(d.zohoId), d);
-          else if (d.id) dealMap.set(String(d.id), d);
-        });
-
-        mappedDeals.forEach(d => {
-          const key = String(d.zohoId || d.id);
-          const existing = dealMap.get(key);
-          dealMap.set(key, { ...existing, ...d });
-        });
-
-        const mergedList = Array.from(dealMap.values());
-        setDeals(mergedList);
-        try { localStorage.setItem('be_deals', JSON.stringify(mergedList)); } catch (e) { }
+      if (fetchedDealsData.length > 0) {
+        const mappedDeals = mapZohoDeals(fetchedDealsData);
+        setDeals(mappedDeals);
+        try { localStorage.setItem('be_deals', JSON.stringify(mappedDeals)); } catch (e) { }
       }
 
       if (quotationsRes.status === 'fulfilled' && quotationsRes.value.success && Array.isArray(quotationsRes.value.data)) {

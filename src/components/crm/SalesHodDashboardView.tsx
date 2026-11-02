@@ -252,13 +252,19 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
   // Load live data if props change
   useEffect(() => {
-    if (propsDeals && propsDeals.length > 0) setLiveDeals(propsDeals);
+    if (propsDeals && propsDeals.length > 0) {
+      const isStale = propsDeals.some((d: any) => d.Cloned_Deal === undefined && d.rawZohoDeal?.Cloned_Deal === undefined);
+      if (!isStale) {
+        setLiveDeals(propsDeals);
+      }
+    }
     if (propsEmployees && propsEmployees.length > 0) setLiveEmployees(propsEmployees);
     if (propsQuotations && propsQuotations.length > 0) setLiveQuotations(propsQuotations);
   }, [propsDeals, propsEmployees, propsQuotations]);
 
   useEffect(() => {
-    if (!propsDeals || propsDeals.length === 0) {
+    const isStale = !propsDeals || propsDeals.length === 0 || propsDeals.some((d: any) => d.Cloned_Deal === undefined && d.rawZohoDeal?.Cloned_Deal === undefined);
+    if (isStale) {
       const fetchAllLiveData = async () => {
         setIsLoading(true);
         try {
@@ -266,7 +272,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             fetch('/api/deals?fetchAll=true').then(r => r.json()).catch(() => null),
             fetch('/api/zoho/get-employees').then(r => r.json()).catch(() => null)
           ]);
-          if (dealsRes && Array.isArray(dealsRes.data)) setLiveDeals(dealsRes.data);
+          if (dealsRes && Array.isArray(dealsRes.data)) {
+            setLiveDeals(dealsRes.data);
+            try { localStorage.setItem('be_deals', JSON.stringify(dealsRes.data)); } catch (e) {}
+          }
           if (empRes && Array.isArray(empRes.data)) setLiveEmployees(empRes.data);
         } catch (err) {
           console.warn('[SalesHodDashboard] Auto-fetch error:', err);
