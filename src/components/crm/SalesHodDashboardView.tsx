@@ -772,8 +772,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   const [activeInspectLevel, setActiveInspectLevel] = useState<'root' | 'sales' | 'branch' | 'tl' | 'tm'>('root');
   // Drilldown level: 0 = Centered BharatEdge Logo, 1 = +Sales, 2 = +3 Branches, 3 = +TLs, 4 = +TMs
   const [drillLevel, setDrillLevel] = useState<0 | 1 | 2 | 3 | 4>(0);
-  // TL View Mode: all = Combined, personal = Personal (Self), team = Team
-  const [tlViewMode, setTlViewMode] = useState<'all' | 'personal' | 'team'>('all');
+  // TL View Mode: personal = Personal (Self), team = Team
+  const [tlViewMode, setTlViewMode] = useState<'personal' | 'team'>('personal');
 
   const activeBranch = useMemo(() => {
     return branches.find(b => b.id === selectedBranchId) || branches[0];
@@ -1894,39 +1894,29 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       </h3>
                     </div>
 
-                    {/* TL View Mode Toggle Pills */}
+                    {/* TL View Mode Toggle Pills (Personal vs Team) */}
                     {isTl && (
-                      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl">
-                        <button
-                          onClick={() => setTlViewMode('all')}
-                          className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
-                            tlViewMode === 'all'
-                              ? 'bg-white text-indigo-950 shadow-xs'
-                              : 'text-slate-500 hover:text-slate-800'
-                          }`}
-                        >
-                          Combined
-                        </button>
+                      <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
                         <button
                           onClick={() => setTlViewMode('personal')}
-                          className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                          className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                             tlViewMode === 'personal'
-                              ? 'bg-white text-blue-900 shadow-xs'
+                              ? 'bg-white text-blue-900 shadow-xs ring-1 ring-blue-200'
                               : 'text-slate-500 hover:text-slate-800'
                           }`}
                         >
-                          <User size={11} />
+                          <User size={12} className={tlViewMode === 'personal' ? 'text-blue-600' : 'text-slate-400'} />
                           <span>Personal</span>
                         </button>
                         <button
                           onClick={() => setTlViewMode('team')}
-                          className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                          className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                             tlViewMode === 'team'
-                              ? 'bg-white text-cyan-900 shadow-xs'
+                              ? 'bg-white text-cyan-900 shadow-xs ring-1 ring-cyan-200'
                               : 'text-slate-500 hover:text-slate-800'
                           }`}
                         >
-                          <Users size={11} />
+                          <Users size={12} className={tlViewMode === 'team' ? 'text-cyan-600' : 'text-slate-400'} />
                           <span>Team</span>
                         </button>
                       </div>
