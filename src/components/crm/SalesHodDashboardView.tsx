@@ -1798,6 +1798,82 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           : 0;
         const isSurplus = currentDisplayShortfall === 0;
 
+        // Extract deals for the currently inspected person / node
+        const targetDealsForEntity: any[] = (() => {
+          if (isTl && tlViewMode === 'personal' && personal?.deals) {
+            return personal.deals;
+          }
+          if (isTl && tlViewMode === 'team' && team?.deals) {
+            return team.deals;
+          }
+          if (Array.isArray(inspectedEntity.deals) && inspectedEntity.deals.length > 0) {
+            return inspectedEntity.deals;
+          }
+          if (Array.isArray(inspectedEntity.data?.deals) && inspectedEntity.data.deals.length > 0) {
+            return inspectedEntity.data.deals;
+          }
+          return [];
+        })();
+
+        // Calculate Best Selling Services for this specific person / node
+        const personBestServices = (() => {
+          const sMap = new Map<string, { name: string; count: number; received: number; booked: number }>();
+
+          targetDealsForEntity.forEach(d => {
+            let sn = '';
+            if (d.service && d.service !== 'General Services' && d.service !== 'Services' && d.service !== 'N/A' && d.service !== 'Choose Wisely') {
+              sn = d.service;
+            } else if (d.Service_Name && d.Service_Name !== 'Services' && d.Service_Name !== 'Choose Wisely') {
+              sn = d.Service_Name;
+            } else if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+              const sub = d.rawZohoDeal.Subform_1[0];
+              sn = sub.Schemas || sub.Schema || sub.Service_Name || sub.Service || sub.Business_plan_selected || '';
+            }
+            if (!sn && (d.Deal_Name || d.client || d.rawZohoDeal?.Deal_Name)) {
+              const parts = (d.Deal_Name || d.rawZohoDeal?.Deal_Name || d.client || '').split(' - ');
+              if (parts.length > 1) {
+                sn = parts.slice(1).join(' - ').replace(/\(DL-\d+\)/i, '').trim();
+              }
+            }
+            if (!sn || sn === 'General Services' || sn === 'Services' || sn === 'New Case Booking' || sn === 'N/A' || sn === 'Choose Wisely') {
+              sn = 'Business Advisory';
+            }
+
+            const upper = sn.toUpperCase().trim();
+            let cleanSrv = sn.trim();
+            if (upper === 'CGSS') cleanSrv = 'CGSS Scheme';
+            else if (upper === 'GEM REGISTRATION') cleanSrv = 'GeM Portal Registration';
+            else if (upper === 'ISO CERTIFICATE') cleanSrv = 'ISO Certification';
+            else if (upper === 'SEED SUPPORT SCHEME') cleanSrv = 'Seed Support Scheme';
+            else if (upper === 'GUJARAT SAMRIDDHI YOJANA') cleanSrv = 'Gujarat Samriddhi Yojana';
+            else if (upper === 'STARTUP INDIA CERTIFICATE') cleanSrv = 'Startup India Certificate';
+            else cleanSrv = sn.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+            const rec = getDealReceivedAmount(d);
+            const bkd = getDealTotalAmount(d);
+            const cur = sMap.get(cleanSrv) || { name: cleanSrv, count: 0, received: 0, booked: 0 };
+            cur.count += 1;
+            cur.received += rec;
+            cur.booked += bkd;
+            sMap.set(cleanSrv, cur);
+          });
+
+          const sorted = Array.from(sMap.values()).sort((a, b) => b.count - a.count || b.received - a.received);
+
+          if (sorted.length === 0 && inspectedEntity.topService) {
+            sorted.push({
+              name: inspectedEntity.topService,
+              count: currentDisplayWon || (currentDisplayAchievement > 0 ? 1 : 0),
+              received: currentDisplayAchievement,
+              booked: currentDisplayBooked
+            });
+          }
+
+          return sorted;
+        })();
+
+        const topPersonService = personBestServices[0] || null;
+
         return (
           <div className="rounded-3xl bg-gradient-to-br from-white via-slate-50 to-indigo-50/20 border border-slate-200/90 p-5 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
             {/* Subtle light geometric grid */}
@@ -2495,6 +2571,98 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         {formatCompactRupee(currentDisplayShortfall)}
                       </p>
                     </div>
+                  </div>
+
+                  {/* BEST SELLING SERVICE SECTION */}
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-50/80 via-orange-50/40 to-indigo-50/30 border border-amber-200/80 shadow-2xs space-y-2.5">
+                    <div className="flex items-center justify-between text-xs font-black text-slate-800">
+                      <span className="flex items-center gap-1.5 text-amber-950">
+                        <Award size={14} className="text-amber-600 fill-amber-500/20" />
+                        <span>Best Selling Service</span>
+                      </span>
+                      {topPersonService && topPersonService.count > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                          Top Driver
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                          Awaiting Sales
+                        </span>
+                      )}
+                    </div>
+
+                    {topPersonService && topPersonService.count > 0 ? (
+                      <div className="bg-white/95 backdrop-blur-xs rounded-xl p-3 border border-amber-200/90 shadow-2xs space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h4 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight leading-snug">
+                              {topPersonService.name}
+                            </h4>
+                            <span className="text-[10px] font-bold text-amber-700 flex items-center gap-1 mt-0.5">
+                              <Sparkles size={10} className="text-amber-500" />
+                              <span>{topPersonService.count} {topPersonService.count === 1 ? 'deal closed' : 'deals closed'}</span>
+                            </span>
+                          </div>
+                          <span className="p-1.5 rounded-xl bg-gradient-to-tr from-amber-500/10 to-orange-500/10 text-amber-700 border border-amber-200 shrink-0">
+                            <Briefcase size={13} />
+                          </span>
+                        </div>
+
+                        {/* Revenue & Share Breakdown */}
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+                          <div className="bg-slate-50/80 p-2 rounded-lg border border-slate-100">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Rec. Revenue</span>
+                            <span className="text-xs font-black text-emerald-700 block mt-0.5">
+                              {formatCompactRupee(topPersonService.received)}
+                            </span>
+                          </div>
+                          <div className="bg-slate-50/80 p-2 rounded-lg border border-slate-100">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Quoted Value</span>
+                            <span className="text-xs font-black text-slate-800 block mt-0.5">
+                              {formatCompactRupee(topPersonService.booked)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Share of Person's Total Deals */}
+                        {currentDisplayWon > 0 && (
+                          <div className="space-y-1 pt-0.5">
+                            <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                              <span>Share of Sales</span>
+                              <span className="text-amber-800 font-black">
+                                {Math.min(100, Math.round((topPersonService.count / currentDisplayWon) * 100))}%
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                              <div
+                                style={{ width: `${Math.min(100, Math.round((topPersonService.count / currentDisplayWon) * 100))}%` }}
+                                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Runner-up services if any */}
+                        {personBestServices.length > 1 && (
+                          <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Other Services Sold</span>
+                            <div className="space-y-1">
+                              {personBestServices.slice(1, 3).map(s => (
+                                <div key={s.name} className="flex items-center justify-between text-[11px] font-medium text-slate-600 bg-slate-50/50 px-2 py-1 rounded-lg border border-slate-100">
+                                  <span className="truncate max-w-[150px]" title={s.name}>{s.name}</span>
+                                  <span className="font-bold text-slate-800 shrink-0">{s.count} ({formatCompactRupee(s.received)})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-white/80 rounded-xl p-3 border border-slate-200 text-center">
+                        <p className="text-xs font-bold text-slate-500">No services booked yet</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Deals will automatically register here once created.</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Regional Branch Hubs (Shown when viewing Organization or Sales overview) */}
