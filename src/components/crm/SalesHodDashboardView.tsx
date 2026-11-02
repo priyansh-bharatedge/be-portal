@@ -414,29 +414,66 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       deals: any[];
     }>();
 
+    const isValidBdmCandidate = (val: any): boolean => {
+      if (!val) return false;
+      const s = String(typeof val === 'object' ? (val.name || '') : val).trim().toLowerCase();
+      if (!s || s === 'n/a' || s === 'null' || s === 'undefined' || s === '-' || s === 'choose wisely' || s === 'services' || s === 'general services') return false;
+      if (/^\d+$/.test(s)) return false;
+      if (['sirjan singh', 'crm', 'admin', 'managing director', 'system', 'super admin', 'direct house accounts'].includes(s)) return false;
+      return true;
+    };
+
     filteredDeals.forEach(d => {
       const rawDeal = d.rawZohoDeal || d;
       let empName = '';
-      if (d.Employee) {
+
+      // 1. Employee field
+      if (isValidBdmCandidate(d.Employee)) {
         empName = typeof d.Employee === 'object' ? (d.Employee.name || '') : String(d.Employee);
-      } else if (rawDeal.Employee) {
+      } else if (isValidBdmCandidate(rawDeal.Employee)) {
         empName = typeof rawDeal.Employee === 'object' ? (rawDeal.Employee.name || '') : String(rawDeal.Employee);
-      } else if (d.salesEmployee && d.salesEmployee !== 'N/A') {
-        empName = d.salesEmployee;
-      } else if (d.employeeName && d.employeeName !== 'N/A') {
-        empName = d.employeeName;
       }
 
-      empName = empName.trim();
-      // If no employee assigned, check Owner (excluding organization admin/direct accounts like Sirjan Singh)
-      if (!empName) {
-        const ownerCandidate = (rawDeal.Owner?.name || d.owner || '').trim();
-        if (ownerCandidate && !['sirjan singh', 'crm', 'admin', 'managing director'].includes(ownerCandidate.toLowerCase())) {
-          empName = ownerCandidate;
-        } else {
-          empName = 'Direct House Accounts';
+      // 2. Owner field (Deal Owner in Zoho)
+      if (!empName || !isValidBdmCandidate(empName)) {
+        if (isValidBdmCandidate(rawDeal.Owner)) {
+          empName = typeof rawDeal.Owner === 'object' ? (rawDeal.Owner.name || '') : String(rawDeal.Owner);
+        } else if (isValidBdmCandidate(d.owner)) {
+          empName = String(d.owner);
         }
       }
+
+      // 3. Created_By field (Deal Creator in Zoho)
+      if (!empName || !isValidBdmCandidate(empName)) {
+        if (isValidBdmCandidate(rawDeal.Created_By)) {
+          empName = typeof rawDeal.Created_By === 'object' ? (rawDeal.Created_By.name || '') : String(rawDeal.Created_By);
+        } else if (isValidBdmCandidate(d.Created_By)) {
+          empName = typeof d.Created_By === 'object' ? (d.Created_By.name || '') : String(d.Created_By);
+        }
+      }
+
+      // 4. Fallback deal candidates
+      if (!empName || !isValidBdmCandidate(empName)) {
+        for (const candidate of [d.salesEmployee, d.employeeName, d.bdm, rawDeal.Deal_Owner, rawDeal.Owner_Name]) {
+          if (isValidBdmCandidate(candidate)) {
+            empName = String(candidate);
+            break;
+          }
+        }
+      }
+
+      // 5. Fallback ID match in liveEmployees
+      if ((!empName || !isValidBdmCandidate(empName)) && Array.isArray(liveEmployees)) {
+        const rawId = String(d.Employee || rawDeal.Employee || '').trim();
+        if (rawId) {
+          const matchedEmp = liveEmployees.find(e => String(e.id) === rawId || String(e.employeeId) === rawId || String(e.zohoId) === rawId);
+          if (matchedEmp && isValidBdmCandidate(matchedEmp.name)) {
+            empName = matchedEmp.name;
+          }
+        }
+      }
+
+      empName = empName ? empName.trim() : 'Direct House Accounts';
 
       const clean = empName.toLowerCase().replace(/[^a-z0-9]/g, '');
       const existing = map.get(clean) || {
@@ -455,27 +492,65 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     });
 
     return map;
-  }, [filteredDeals]);
+  }, [filteredDeals, liveEmployees]);
 
-  // Helper to match BDM deals without false positive surname matches
-  const matchBdmDeals = (officialName: string, claimedSet: Set<string>) => {
+  // Helper to match BDM deals with strict token validation and no false surname matches
+  const matchBdmDeals = (officialName: string, claimedSet: Set<string>, branchName?: string) => {
     const cleanOfficial = officialName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const firstWord = officialName.toLowerCase().split(/\s+/)[0];
+    const offTokens = officialName.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const firstWord = offTokens[0] || '';
+    const lastWord = offTokens[offTokens.length - 1] || '';
+
     let totalRec = 0;
     let totalBkd = 0;
     let totalCnt = 0;
     let dealList: any[] = [];
 
+    // Distinct unique first names across the entire 39 BDM roster
+    const uniqueFirstNames = new Set([
+      'meet', 'daivik', 'rutvik', 'vijay', 'umang', 'nilesh', 'jitendra', 'naman',
+      'priyanshi', 'rituraj', 'sayyam', 'hetul', 'aakash', 'arpit', 'harshita',
+      'punit', 'akshat', 'konpal', 'palak', 'pratima', 'janvi', 'kalash', 'astha',
+      'drashti', 'muliyashiya', 'trivedi', 'chirag', 'amarnath', 'vaishnavi', 'justin', 'gokul',
+      'romil', 'uday', 'sourav'
+    ]);
+
     bdmPerformance.forEach((val, cleanKey) => {
       if (claimedSet.has(cleanKey)) return;
       if (cleanKey === 'directhouseaccounts' || cleanKey.includes('sirjansingh')) return;
 
-      const isDirectMatch = cleanKey === cleanOfficial;
-      const isSubMatch = (cleanKey.length > 5 && cleanOfficial.includes(cleanKey)) ||
-        (cleanOfficial.length > 5 && cleanKey.includes(cleanOfficial));
-      const isFirstNameMatch = firstWord.length >= 4 && (cleanKey === firstWord || cleanKey.startsWith(firstWord));
+      const dealTokens = val.name.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      const dealFirst = dealTokens[0] || '';
+      const dealLast = dealTokens[dealTokens.length - 1] || '';
 
-      if (isDirectMatch || isSubMatch || isFirstNameMatch) {
+      // 1. Direct clean match
+      const isDirectMatch = cleanKey === cleanOfficial;
+
+      // 2. Both First and Last name match (e.g. "Abhishek Singh" matches "Abhishek Harendra Singh", NOT "Abhishek Prajapati")
+      const isFirstAndLastMatch = dealTokens.length >= 2 && offTokens.length >= 2 &&
+        dealFirst === firstWord && dealLast === lastWord;
+
+      // 3. Substring match when surname is identical
+      const isSubMatchWithSameSurname = cleanKey.length > 5 && cleanOfficial.length > 5 &&
+        (cleanKey.includes(cleanOfficial) || cleanOfficial.includes(cleanKey)) &&
+        dealLast === lastWord;
+
+      // 4. Unique single first name match (e.g. deal owner says only "Meet" or "Daivik" or "Rutvik")
+      const isUniqueFirstNameMatch = dealTokens.length === 1 &&
+        uniqueFirstNames.has(dealFirst) &&
+        dealFirst === firstWord;
+
+      // 5. Shared first name resolution by branch (e.g. "Monika" without surname)
+      const isBranchQualifiedMatch = dealTokens.length === 1 &&
+        dealFirst === firstWord &&
+        Boolean(branchName) &&
+        val.deals.some((d: any) => {
+          const raw = d.rawZohoDeal || d;
+          const loc = String(raw.City || raw.State || raw.Branch || '').toLowerCase();
+          return branchName && loc.includes(branchName.toLowerCase().replace(' branch', ''));
+        });
+
+      if (isDirectMatch || isFirstAndLastMatch || isSubMatchWithSameSurname || isUniqueFirstNameMatch || isBranchQualifiedMatch) {
         totalRec += val.received;
         totalBkd += val.booked;
         totalCnt += val.count;
@@ -574,7 +649,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         let teamAllDeals: any[] = [];
 
         const tmNodes: SalesTreeNode[] = tl.tms.map(tmName => {
-          const matched = matchBdmDeals(tmName, sharedClaimedSet);
+          const matched = matchBdmDeals(tmName, sharedClaimedSet, bc.name);
           const tmTarget = TARGET_BENCHMARKS.tm;
           const tmShortfall = Math.max(0, tmTarget - matched.received);
 
@@ -621,7 +696,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         });
 
         // Direct / Personal deals closed by the TL themselves
-        const tlDirect = matchBdmDeals(tl.name, sharedClaimedSet);
+        const tlDirect = matchBdmDeals(tl.name, sharedClaimedSet, bc.name);
         const personalReceived = tlDirect.received;
         const personalBooked = tlDirect.booked;
         const personalDealsCount = tlDirect.count;
@@ -1042,15 +1117,16 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
   // Executive CSV Export Tool
   const handleExportCsv = () => {
-    const headers = ['BDM Name', 'Branch', 'Team Leader', 'Target (INR)', 'Achievement (INR)', 'Shortfall (INR)', 'Deals Count', 'Top Service'];
+    const headers = ['BDM Name', 'Branch', 'Team Leader', 'Deals Created', 'Target (INR)', 'Achievement (INR)', 'Shortfall (INR)', 'Target Progress (%)', 'Top Service'];
     const rows = bdmList.map(b => [
       `"${b.name}"`,
       `"${b.branch}"`,
       `"${b.tl}"`,
+      b.dealsCount,
       b.target,
       b.achievement,
       b.shortfall,
-      b.dealsCount,
+      `"${b.pct}%"`,
       `"${b.topService}"`
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -2914,6 +2990,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   <th className="px-5 py-3.5">BDM Profile</th>
                   <th className="px-5 py-3.5">Branch</th>
                   <th className="px-5 py-3.5">Team Leader</th>
+                  <th className="px-5 py-3.5 text-center">Deals Created</th>
                   <th className="px-5 py-3.5 text-right">Target</th>
                   <th className="px-5 py-3.5 text-right">Revenue Achieved</th>
                   <th className="px-5 py-3.5 text-right">Shortfall</th>
@@ -2922,7 +2999,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 font-medium bg-white">
-                {bdmList.slice(0, 35).map(bdm => {
+                {bdmList.map(bdm => {
                   const initials = bdm.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('');
                   const isMet = bdm.shortfall === 0;
 
@@ -2952,7 +3029,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                               {bdm.name}
                             </h5>
                             <span className="text-[10px] text-slate-400 font-medium">
-                              {bdm.dealsCount} deals closed
+                              Business Development Manager
                             </span>
                           </div>
                         </div>
@@ -2977,6 +3054,19 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                           <User size={12} className="text-slate-400" />
                           <span>{bdm.tl}</span>
+                        </span>
+                      </td>
+
+                      {/* 4. Deals Created */}
+                      <td className="px-5 py-3.5 text-center">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black shadow-2xs border ${bdm.dealsCount > 0
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
+                            : 'bg-slate-50 text-slate-400 border-slate-200/80'
+                            }`}
+                        >
+                          <FileText size={12} className={bdm.dealsCount > 0 ? 'text-indigo-600' : 'text-slate-400'} />
+                          <span>{bdm.dealsCount} {bdm.dealsCount === 1 ? 'Deal' : 'Deals'}</span>
                         </span>
                       </td>
 
