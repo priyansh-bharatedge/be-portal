@@ -919,15 +919,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 <Compass size={20} />
               </span>
               <div>
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                   Sales Executive Intelligence Hub
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/80">
-                    National HOD
-                  </span>
                 </h1>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Real-time Zoho CRM Revenue Tracking, Hierarchy Shortfall Network & Quota Simulator
-                </p>
               </div>
             </div>
           </div>
