@@ -354,8 +354,25 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   const topServices = useMemo(() => {
     const map = new Map<string, { name: string; count: number; received: number; booked: number }>();
     filteredDeals.forEach(d => {
-      let s = d.service || d.Service_Name || d.Choose_Wisely || (d.servicesData?.[0]?.name) || 'Consulting Services';
-      if (!s || s === 'N/A' || s === 'Choose Wisely' || s === 'Services') s = 'Business Advisory';
+      let s = '';
+      if (d.service && d.service !== 'General Services' && d.service !== 'Services' && d.service !== 'N/A' && d.service !== 'Choose Wisely') {
+        s = d.service;
+      } else if (d.Service_Name && d.Service_Name !== 'Services' && d.Service_Name !== 'Choose Wisely') {
+        s = d.Service_Name;
+      } else if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+        const sub = d.rawZohoDeal.Subform_1[0];
+        s = sub.Schemas || sub.Schema || sub.Service_Name || sub.Service || sub.Business_plan_selected || '';
+      }
+      if (!s && (d.Deal_Name || d.client || d.rawZohoDeal?.Deal_Name)) {
+        const dName = d.Deal_Name || d.rawZohoDeal?.Deal_Name || d.client || '';
+        const parts = dName.split(' - ');
+        if (parts.length > 1) {
+          s = parts.slice(1).join(' - ').replace(/\(DL-\d+\)/i, '').trim();
+        }
+      }
+      if (!s || s === 'N/A' || s === 'Choose Wisely' || s === 'Services' || s === 'General Services' || s === 'New Case Booking') {
+        s = 'Business Advisory';
+      }
       s = s.trim().toUpperCase();
 
       const existing = map.get(s) || { name: s, count: 0, received: 0, booked: 0 };
@@ -382,19 +399,26 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     }>();
 
     filteredDeals.forEach(d => {
-      const candidates = [
-        d.salesEmployee,
-        d.employeeName,
-        d.Employee?.name,
-        d.Owner?.name,
-        d.rawZohoDeal?.Deal_Owner?.name,
-        d.rawZohoDeal?.Created_By?.name
-      ];
-      let empName = 'Unassigned Sales';
-      for (const c of candidates) {
-        if (c && typeof c === 'string' && c.trim() && c !== 'N/A') {
-          empName = c.trim();
-          break;
+      const rawDeal = d.rawZohoDeal || d;
+      let empName = '';
+      if (d.Employee) {
+        empName = typeof d.Employee === 'object' ? (d.Employee.name || '') : String(d.Employee);
+      } else if (rawDeal.Employee) {
+        empName = typeof rawDeal.Employee === 'object' ? (rawDeal.Employee.name || '') : String(rawDeal.Employee);
+      } else if (d.salesEmployee && d.salesEmployee !== 'N/A') {
+        empName = d.salesEmployee;
+      } else if (d.employeeName && d.employeeName !== 'N/A') {
+        empName = d.employeeName;
+      }
+
+      empName = empName.trim();
+      // If no employee assigned, check Owner (excluding organization admin/direct accounts like Sirjan Singh)
+      if (!empName) {
+        const ownerCandidate = (rawDeal.Owner?.name || d.owner || '').trim();
+        if (ownerCandidate && !['sirjan singh', 'crm', 'admin', 'managing director'].includes(ownerCandidate.toLowerCase())) {
+          empName = ownerCandidate;
+        } else {
+          empName = 'Direct House Accounts';
         }
       }
 
@@ -417,9 +441,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     return map;
   }, [filteredDeals]);
 
-  // Helper to match BDM deals
+  // Helper to match BDM deals without false positive surname matches
   const matchBdmDeals = (officialName: string, claimedSet: Set<string>) => {
     const cleanOfficial = officialName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const firstWord = officialName.toLowerCase().split(/\s+/)[0];
     let totalRec = 0;
     let totalBkd = 0;
     let totalCnt = 0;
@@ -427,12 +452,14 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
     bdmPerformance.forEach((val, cleanKey) => {
       if (claimedSet.has(cleanKey)) return;
-      const isDirectMatch = cleanKey === cleanOfficial;
-      const isSubMatch = cleanKey.includes(cleanOfficial) || cleanOfficial.includes(cleanKey);
-      const wordsOff = officialName.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-      const isWordMatch = wordsOff.length > 0 && wordsOff.some(w => cleanKey.includes(w));
+      if (cleanKey === 'directhouseaccounts' || cleanKey.includes('sirjansingh')) return;
 
-      if (isDirectMatch || isSubMatch || isWordMatch) {
+      const isDirectMatch = cleanKey === cleanOfficial;
+      const isSubMatch = (cleanKey.length > 5 && cleanOfficial.includes(cleanKey)) ||
+                         (cleanOfficial.length > 5 && cleanKey.includes(cleanOfficial));
+      const isFirstNameMatch = firstWord.length >= 4 && (cleanKey === firstWord || cleanKey.startsWith(firstWord));
+
+      if (isDirectMatch || isSubMatch || isFirstNameMatch) {
         totalRec += val.received;
         totalBkd += val.booked;
         totalCnt += val.count;
@@ -516,6 +543,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       }
     ];
 
+    const sharedClaimedSet = new Set<string>();
+
     const branchNodes: SalesTreeNode[] = branchConfigs.map(bc => {
       let branchReceived = 0;
       let branchBooked = 0;
@@ -529,7 +558,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         let teamAllDeals: any[] = [];
 
         const tmNodes: SalesTreeNode[] = tl.tms.map(tmName => {
-          const matched = matchBdmDeals(tmName, new Set<string>());
+          const matched = matchBdmDeals(tmName, sharedClaimedSet);
           const tmTarget = TARGET_BENCHMARKS.tm;
           const tmShortfall = Math.max(0, tmTarget - matched.received);
 
@@ -541,10 +570,17 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           // Determine TM's top service
           const sMap = new Map<string, number>();
           matched.deals.forEach(d => {
-            const sn = String(d.service || d.Service_Name || 'Advisory').trim();
+            let sn = '';
+            if (d.service && d.service !== 'General Services' && d.service !== 'Services' && d.service !== 'N/A' && d.service !== 'Choose Wisely') sn = d.service;
+            else if (d.Service_Name && d.Service_Name !== 'Services' && d.Service_Name !== 'Choose Wisely') sn = d.Service_Name;
+            else if (d.rawZohoDeal?.Deal_Name || d.Deal_Name) {
+              const parts = (d.rawZohoDeal?.Deal_Name || d.Deal_Name || '').split(' - ');
+              if (parts.length > 1) sn = parts.slice(1).join(' - ').replace(/\(DL-\d+\)/i, '').trim();
+            }
+            if (!sn || sn === 'General Services' || sn === 'Services' || sn === 'New Case Booking' || sn === 'N/A') sn = 'Business Advisory';
             sMap.set(sn, (sMap.get(sn) || 0) + 1);
           });
-          let bestS = 'Advisory Services';
+          let bestS = 'Business Advisory';
           let mCnt = 0;
           sMap.forEach((c, s) => {
             if (c > mCnt) { mCnt = c; bestS = s; }
@@ -569,7 +605,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         });
 
         // Direct / Personal deals closed by the TL themselves
-        const tlDirect = matchBdmDeals(tl.name, new Set<string>());
+        const tlDirect = matchBdmDeals(tl.name, sharedClaimedSet);
         const personalReceived = tlDirect.received;
         const personalBooked = tlDirect.booked;
         const personalDealsCount = tlDirect.count;
@@ -617,6 +653,29 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           }
         };
       });
+
+      // Attribute unassigned direct house / corporate inbound deals to Headquarters (Ahmedabad)
+      if (bc.id === 'branch_ahmedabad') {
+        const unassignedKeys = Array.from(bdmPerformance.keys()).filter(k => !sharedClaimedSet.has(k));
+        let unassignedRec = 0;
+        let unassignedBkd = 0;
+        let unassignedCnt = 0;
+        let unassignedDeals: any[] = [];
+        unassignedKeys.forEach(k => {
+          const val = bdmPerformance.get(k);
+          if (val) {
+            unassignedRec += val.received;
+            unassignedBkd += val.booked;
+            unassignedCnt += val.count;
+            unassignedDeals = [...unassignedDeals, ...val.deals];
+            sharedClaimedSet.add(k);
+          }
+        });
+        branchReceived += unassignedRec;
+        branchBooked += unassignedBkd;
+        branchDealsCount += unassignedCnt;
+        branchAllDeals = [...branchAllDeals, ...unassignedDeals];
+      }
 
       const branchShortfall = Math.max(0, bc.target - branchReceived);
 

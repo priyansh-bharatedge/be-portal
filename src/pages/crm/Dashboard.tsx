@@ -34,6 +34,7 @@ import {
 import { OperationsDashboardView } from '../../components/crm/OperationsDashboardView';
 import { SuperAdminDashboardView } from '../../components/crm/SuperAdminDashboardView';
 import { SalesHodDashboardView } from '../../components/crm/SalesHodDashboardView';
+import { BdmSalesDashboardView } from '../../components/crm/BdmSalesDashboardView';
 
 export const CrmDashboard = () => {
   const navigate = useNavigate();
@@ -45,6 +46,15 @@ export const CrmDashboard = () => {
     (currentUser?.role as string) === 'Super Admin' ||
     currentUser?.email?.toLowerCase() === 'superadmin@be.com' ||
     currentUser?.email === 'md@bharat-edge.com'
+  );
+
+  // Sales HOD dashboard view is restricted to Sales HOD Mishal Bhatia (and Super Admin)
+  const isSalesHodUser = Boolean(
+    isSuperAdminUser ||
+    currentUser?.email?.toLowerCase().includes('mishal') ||
+    currentUser?.name?.toLowerCase().includes('mishal') ||
+    ((isHOD || currentRole === 'HOD' || (currentUser?.role as string) === 'HOD' || (currentUser?.role as string) === 'Sales HOD') &&
+      (!currentUser?.department || currentUser.department.toLowerCase().includes('sale') || currentUser.department.toLowerCase().includes('crm')))
   );
 
   const [dashboardSection, setDashboardSection] = useState<'superadmin' | 'crm' | 'operations'>(() => {
@@ -207,18 +217,35 @@ export const CrmDashboard = () => {
       let serviceName = '';
       if (isValidServiceName(zDeal.Service_Name, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
         serviceName = zDeal.Service_Name.trim();
-      } else if (
+      } else if (Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0) {
+        const sub = zDeal.Subform_1[0];
+        const subName = sub.Schemas || sub.Schema || sub.Service_Name || sub.Service || sub.Business_plan_selected;
+        if (isValidServiceName(subName, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
+          serviceName = subName.trim();
+        }
+      }
+      if (!serviceName && zDeal.Deal_Name) {
+        const parts = zDeal.Deal_Name.split(' - ');
+        if (parts.length > 1) {
+          const candidate = parts.slice(1).join(' - ').replace(/\(DL-\d+\)/i, '').trim();
+          if (isValidServiceName(candidate, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
+            serviceName = candidate;
+          }
+        }
+      }
+      if (
+        !serviceName &&
         zDeal.Choose_Wisely &&
         zDeal.Choose_Wisely !== 'New Case Booking' &&
         isValidServiceName(zDeal.Choose_Wisely, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)
       ) {
         serviceName = zDeal.Choose_Wisely.trim();
-      } else if (isValidServiceName(zDeal.Business_plan_selected, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
+      } else if (!serviceName && isValidServiceName(zDeal.Business_plan_selected, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
         serviceName = zDeal.Business_plan_selected.trim();
-      } else if (isValidServiceName(zDeal.Item_Name, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
+      } else if (!serviceName && isValidServiceName(zDeal.Item_Name, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
         serviceName = zDeal.Item_Name.trim();
       }
-      if (!serviceName) serviceName = 'General Services';
+      if (!serviceName) serviceName = 'Business Advisory';
 
       const formatRupee = (val: number): string => {
         if (!val || isNaN(val) || val <= 0) return '₹0';
@@ -398,6 +425,7 @@ export const CrmDashboard = () => {
         paymentVerified: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes',
         Booking_Date: zDeal.Booking_Date,
         Cloned_Deal: zDeal.Cloned_Deal,
+        Employee: zDeal.Employee,
         Total_deal_amount_inclusive_of_gst: zDeal.Total_deal_amount_inclusive_of_gst,
         Total_Received_Amount: zDeal.Total_Received_Amount,
         rawZohoDeal: zDeal
@@ -1227,7 +1255,7 @@ export const CrmDashboard = () => {
         <SuperAdminDashboardView />
       ) : dashboardSection === 'operations' ? (
         <OperationsDashboardView />
-      ) : (
+      ) : isSalesHodUser ? (
         <SalesHodDashboardView
           deals={deals}
           employees={employees}
@@ -1236,7 +1264,16 @@ export const CrmDashboard = () => {
           isRefreshing={isRefreshing}
           onRefresh={loadData}
         />
-      
+      ) : (
+        <BdmSalesDashboardView
+          deals={deals}
+          employees={employees}
+          quotations={quotations}
+          clients={clients}
+          queries={queries}
+          isRefreshing={isRefreshing}
+          onRefresh={loadData}
+        />
       )}
     </div>
   );

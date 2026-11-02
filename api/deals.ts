@@ -23,8 +23,9 @@ function getZohoApiBaseUrl(datacenterUrl: string): string {
 // October 2026 Filter Constants for Zoho Deals CRM REST API
 // Note: Zoho CRM standard Deals module does NOT support search criteria on system audit fields (Created_Time).
 // In Zoho CRM Deals, Booking_Date is the search-supported module date field for deal creation/booking.
-const OCTOBER_2026_CRITERIA = '(Booking_Date:greater_equal:2026-10-01)';
+const OCTOBER_2026_CRITERIA = '(((Booking_Date:greater_equal:2026-10-01)and(Booking_Date:less_equal:2026-10-31))and(Cloned_Deal:equals:false))';
 const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
+const OCTOBER_2026_END_MS = new Date('2026-10-31T23:59:59+05:30').getTime();
 
 function combineWithOctoberFilter(existingCriteria?: string | null): string {
   if (!existingCriteria || !existingCriteria.trim()) {
@@ -402,9 +403,12 @@ export default async function dealsHandler(req: any, res: any) {
         }
       });
 
-      // Strict October 2026 filter
+      // Strict October 2026 filter and unchecked Cloned_Deal filter
       allMerged = allMerged.filter((deal: any) => {
         if (!deal) return false;
+        const isCloned = deal.Cloned_Deal === true || deal.Cloned_Deal === 'true' || deal.Cloned_Deal === 1 || deal.Cloned_Deal === '1';
+        if (isCloned) return false;
+
         const rawDate = (
           deal.Booking_Date ||
           deal.Payment_Date ||
@@ -417,8 +421,10 @@ export default async function dealsHandler(req: any, res: any) {
           (Array.isArray(deal.Subform_1) && deal.Subform_1[0]?.Created_Time)
         );
         if (!rawDate) return false;
+        const s = String(rawDate).trim();
+        if (/^2026-10-\d\d/.test(s)) return true;
         const createdMs = new Date(rawDate).getTime();
-        return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : false;
+        return !isNaN(createdMs) ? (createdMs >= OCTOBER_2026_START_MS && createdMs <= OCTOBER_2026_END_MS) : false;
       });
 
       dealsMemoryCache = {

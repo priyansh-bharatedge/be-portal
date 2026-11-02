@@ -2026,8 +2026,9 @@ function buildZohoPaginationQuery(req: ApiRequest, urlObj: URL): string {
 // Note: Zoho CRM standard Deals module does NOT support criteria search on Created_Time.
 // Deals uses Booking_Date. Other custom CRM modules (Quotations, Companies, Clients, Operation_Internal_CRM) use Created_Time.
 const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
-const OCTOBER_2026_DEALS_CRITERIA = '(Booking_Date:greater_equal:2026-10-01)';
+const OCTOBER_2026_DEALS_CRITERIA = '(((Booking_Date:greater_equal:2026-10-01)and(Booking_Date:less_equal:2026-10-31))and(Cloned_Deal:equals:false))';
 const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
+const OCTOBER_2026_END_MS = new Date('2026-10-31T23:59:59+05:30').getTime();
 
 function combineWithOctoberFilter(moduleName: string, existingCriteria?: string | null): string {
   const isDeals = String(moduleName || '').toLowerCase() === 'deals';
@@ -2235,17 +2236,23 @@ async function executeZohoGet(
       }
     }
 
-    // Dual-layer defense: strictly filter CRM records by October 2026 date
+    // Dual-layer defense: strictly filter CRM records by October 2026 date and uncloned deals
     if (isCrmModule && Array.isArray(crmData?.data)) {
       crmData.data = crmData.data.filter((item: any) => {
         if (!item) return false;
         const isDeals = String(moduleName || '').toLowerCase() === 'deals' || String(entityName || '').toLowerCase() === 'deals';
+        if (isDeals) {
+          const isCloned = item.Cloned_Deal === true || item.Cloned_Deal === 'true' || item.Cloned_Deal === 1 || item.Cloned_Deal === '1';
+          if (isCloned) return false;
+        }
         const rawDate = isDeals
           ? (item.Booking_Date || item.Payment_Date || item.Closing_Date || item.Created_Time || item.date)
           : (item.Created_Time || item.created_time || item.CreatedTime || item.Booking_Date);
         if (!rawDate) return false;
+        const s = String(rawDate).trim();
+        if (/^2026-10-\d\d/.test(s)) return true;
         const createdMs = new Date(rawDate).getTime();
-        return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : false;
+        return !isNaN(createdMs) ? (createdMs >= OCTOBER_2026_START_MS && createdMs <= OCTOBER_2026_END_MS) : false;
       });
     }
 
