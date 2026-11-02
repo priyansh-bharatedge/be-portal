@@ -7,7 +7,7 @@ import {
   Sparkles, RefreshCw, Briefcase, Zap, Flame, UserCheck, Eye,
   Maximize2, Minimize2, Compass, Activity, FileText,
   GitBranch, Network, Share2, Send, ZoomIn, ZoomOut, RotateCcw,
-  SlidersHorizontal, Sliders, Download, Check, X, Info, Receipt, Calculator, ExternalLink
+  SlidersHorizontal, Sliders, Download, Check, X, Info, ReceiptIndianRupee, Calculator, ExternalLink
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -1375,7 +1375,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           <div>
             <div className="flex justify-between items-start mb-3 relative z-10">
               <span className="p-3 rounded-2xl bg-cyan-50 text-cyan-600 border border-cyan-100 shadow-sm">
-                <Receipt size={18} />
+                <ReceiptIndianRupee size={18} />
               </span>
               <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
                 Incl. 18% GST
@@ -1495,7 +1495,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <span className="p-3.5 rounded-2xl bg-white/10 text-cyan-400 border border-white/10 backdrop-blur-md shrink-0">
-              <Receipt size={24} />
+              <ReceiptIndianRupee size={24} />
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2">

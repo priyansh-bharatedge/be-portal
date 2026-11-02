@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, ArrowRight, Edit, Download, MoreHorizontal, FileText, 
   CheckCircle2, Clock, MapPin, Building2, Phone, Mail, 
-  IndianRupee, CreditCard, Receipt, Cloud, ShieldCheck, 
+  IndianRupee, CreditCard, ReceiptIndianRupee, Cloud, ShieldCheck, 
   Briefcase, Calendar, Layers, Tag, ExternalLink, User, RefreshCw, Loader2,
   AlertTriangle, Bell, Eye, Upload, Paperclip, X, FileSpreadsheet, Image as ImageIcon,
   Check, Maximize2, Minimize2, FileCode, HardDrive, CheckCircle, Users, Percent, Calculator, Info,
@@ -3543,7 +3543,7 @@ export const DealDetails = () => {
                 <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                   <div className="flex items-center space-x-3">
                     <div className="p-2 bg-orange-50 rounded-xl text-be-orange">
-                      <Receipt size={18} />
+                      <ReceiptIndianRupee size={18} />
                     </div>
                     <div>
                       <h2 className="text-base font-bold text-gray-900">Installment Rounds & Payment Cycles</h2>
