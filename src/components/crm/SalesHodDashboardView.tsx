@@ -223,9 +223,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       const ms = getDealDateMs(d);
       if (!ms) return false;
       const dt = new Date(ms);
-      return dt.getMonth() === 9 && dt.getFullYear() === 2026;
+      return dt.getMonth() === selectedMonth && dt.getFullYear() === selectedYear;
     });
-  }, [liveDeals]);
+  }, [liveDeals, selectedMonth, selectedYear]);
 
   // 1. TODAY'S REVENUE
   const todayRevenue = useMemo(() => todayDeals.reduce((sum, d) => sum + getDealReceivedAmount(d), 0), [todayDeals]);
@@ -557,6 +557,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   const topHighPerformer = useMemo<{ name: string; received: number } | null>(() => {
     let best: { name: string; received: number } | null = null;
     bdmPerformance.forEach(val => {
+      // Exclude Admin, HOD, and Unassigned accounts so Top High Performer strictly highlights frontline sales BDMs
+      const isManagement = ['sirjan', 'admin', 'managing', 'unassigned'].some(skip => val.cleanName.includes(skip));
+      if (isManagement) return;
       if (!best || val.received > best.received) {
         best = { name: val.name, received: val.received };
       }
@@ -714,7 +717,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   const [selectedBranchId, setSelectedBranchId] = useState<string>('branch_ahmedabad');
   const [selectedTlId, setSelectedTlId] = useState<string>('tl_romil_prajapati');
   const [selectedTmId, setSelectedTmId] = useState<string>('');
-  const [activeInspectLevel, setActiveInspectLevel] = useState<'root' | 'sales' | 'branch' | 'tl' | 'tm'>('tm');
+  const [activeInspectLevel, setActiveInspectLevel] = useState<'root' | 'sales' | 'branch' | 'tl' | 'tm'>('root');
+  // Drilldown level: 0 = Centered BharatEdge Logo, 1 = +Sales, 2 = +3 Branches, 3 = +TLs, 4 = +TMs
+  const [drillLevel, setDrillLevel] = useState<0 | 1 | 2 | 3 | 4>(0);
 
   const activeBranch = useMemo(() => {
     return branches.find(b => b.id === selectedBranchId) || branches[0];
@@ -746,1408 +751,1530 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     return activeTl.tms[0] || null;
   }, [activeTl, selectedTmId]);
 
-  const inspectedEntity: any = useMemo(() => {
-    if (activeInspectLevel === 'root') return salesTree;
-    if (activeInspectLevel === 'sales') return salesDept;
-    if (activeInspectLevel === 'branch') return activeBranch?.data || salesDept;
-    if (activeInspectLevel === 'tl') return activeTl?.data || salesDept;
-    if (activeInspectLevel === 'tm') return activeTm?.data || activeTl?.data || salesDept;
-    return activeTm?.data || activeTl?.data || salesDept;
-  }, [activeInspectLevel, salesTree, salesDept, activeBranch, activeTl, activeTm]);
+    const inspectedEntity: any = useMemo(() => {
+      if (activeInspectLevel === 'root') return salesTree;
+      if (activeInspectLevel === 'sales') return salesDept;
+      if (activeInspectLevel === 'branch') return activeBranch?.data || salesDept;
+      if (activeInspectLevel === 'tl') return activeTl?.data || salesDept;
+      if (activeInspectLevel === 'tm') return activeTm?.data || activeTl?.data || salesDept;
+      return activeTm?.data || activeTl?.data || salesDept;
+    }, [activeInspectLevel, salesTree, salesDept, activeBranch, activeTl, activeTm]);
 
-  // Waveform equalizer bars for sentiment visualizer
-  const waveformBars = useMemo(() => {
-    return [24, 38, 48, 32, 60, 75, 90, 65, 42, 80, 95, 100, 92, 82, 68, 52, 42, 62, 78, 52, 38, 28, 42, 32];
-  }, []);
+    // Waveform equalizer bars for sentiment visualizer
+    const waveformBars = useMemo(() => {
+      return [24, 38, 48, 32, 60, 75, 90, 65, 42, 80, 95, 100, 92, 82, 68, 52, 42, 62, 78, 52, 38, 28, 42, 32];
+    }, []);
 
     // Filtered BDM Matrix
-  const bdmList = useMemo(() => {
-    const list: any[] = [];
-    (salesTree.children?.[0]?.children || []).forEach(br => {
-      (br.children || []).forEach(tl => {
-        (tl.children || []).forEach(tm => {
-          list.push({
-            id: tm.id,
-            name: tm.name,
-            branch: br.name.replace(' Branch', ''),
-            tl: tl.name,
-            target: tm.target,
-            achievement: tm.achievement,
-            shortfall: tm.shortfall,
-            dealsCount: tm.dealsCount,
-            topService: tm.topService || 'Business Advisory',
-            pct: tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0
+    const bdmList = useMemo(() => {
+      const list: any[] = [];
+      (salesTree.children?.[0]?.children || []).forEach(br => {
+        (br.children || []).forEach(tl => {
+          (tl.children || []).forEach(tm => {
+            list.push({
+              id: tm.id,
+              name: tm.name,
+              branch: br.name.replace(' Branch', ''),
+              tl: tl.name,
+              target: tm.target,
+              achievement: tm.achievement,
+              shortfall: tm.shortfall,
+              dealsCount: tm.dealsCount,
+              topService: tm.topService || 'Business Advisory',
+              pct: tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0
+            });
           });
         });
       });
-    });
-    if (!matrixSearch.trim()) return list;
-    const q = matrixSearch.toLowerCase();
-    return list.filter(b =>
-      b.name.toLowerCase().includes(q) ||
-      b.branch.toLowerCase().includes(q) ||
-      b.tl.toLowerCase().includes(q) ||
-      b.topService.toLowerCase().includes(q)
-    );
-  }, [salesTree, matrixSearch]);
+      if (!matrixSearch.trim()) return list;
+      const q = matrixSearch.toLowerCase();
+      return list.filter(b =>
+        b.name.toLowerCase().includes(q) ||
+        b.branch.toLowerCase().includes(q) ||
+        b.tl.toLowerCase().includes(q) ||
+        b.topService.toLowerCase().includes(q)
+      );
+    }, [salesTree, matrixSearch]);
 
-  // Executive CSV Export Tool
-  const handleExportCsv = () => {
-    const headers = ['BDM Name', 'Branch', 'Team Leader', 'Target (INR)', 'Achievement (INR)', 'Shortfall (INR)', 'Deals Count', 'Top Service'];
-    const rows = bdmList.map(b => [
-      `"${b.name}"`,
-      `"${b.branch}"`,
-      `"${b.tl}"`,
-      b.target,
-      b.achievement,
-      b.shortfall,
-      b.dealsCount,
-      `"${b.topService}"`
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Sales_HOD_Hierarchy_Report_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+    // Executive CSV Export Tool
+    const handleExportCsv = () => {
+      const headers = ['BDM Name', 'Branch', 'Team Leader', 'Target (INR)', 'Achievement (INR)', 'Shortfall (INR)', 'Deals Count', 'Top Service'];
+      const rows = bdmList.map(b => [
+        `"${b.name}"`,
+        `"${b.branch}"`,
+        `"${b.tl}"`,
+        b.target,
+        b.achievement,
+        b.shortfall,
+        b.dealsCount,
+        `"${b.topService}"`
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `Sales_HOD_Hierarchy_Report_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
 
-  // ============================================================================
-  // RENDER (LIGHT THEME)
-  // ============================================================================
+    // ============================================================================
+    // RENDER (LIGHT THEME)
+    // ============================================================================
 
-  return (
-    <div className="space-y-8 bg-[#f8fafc] text-slate-800 p-4 sm:p-7 min-h-screen">
-      {/* ========================================================================= */}
-      {/* TOP EXECUTIVE COMMAND BAR */}
-      {/* ========================================================================= */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 text-white shadow-md shadow-indigo-500/20">
-              <Compass size={20} />
-            </span>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                Sales Executive Intelligence Hub
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/80">
-                  National HOD
-                </span>
-              </h1>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Real-time Zoho CRM Revenue Tracking, Hierarchy Shortfall Network & Quota Simulator
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Controls & Filters */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Timeframe Filter Tabs */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
-            {(['today', 'week', 'month', 'quarter', 'all'] as TimeframeOption[]).map(tf => (
-              <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer capitalize ${
-                  timeframe === tf
-                    ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {tf === 'month' ? 'October 2026' : tf === 'all' ? 'All Time' : tf}
-              </button>
-            ))}
-          </div>
-
-          {/* Month / Year Picker (when in month mode) */}
-          {timeframe === 'month' && (
-            <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-2xl border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
-              <Calendar size={13} className="text-indigo-600" />
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer"
-              >
-                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
-                  <option key={m} value={idx}>{m}</option>
-                ))}
-              </select>
-              <span>2026</span>
-            </div>
-          )}
-
-          {/* Target Simulator Tool Toggle */}
-          <button
-            onClick={() => setShowSimulator(s => !s)}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-              showSimulator
-                ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/20'
-                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm'
-            }`}
-          >
-            <Sliders size={14} className={showSimulator ? 'text-white' : 'text-amber-500'} />
-            <span>Target Simulator</span>
-          </button>
-
-          {/* Export Report Tool */}
-          <button
-            onClick={handleExportCsv}
-            title="Download CSV Hierarchy Summary"
-            className="p-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm transition-all cursor-pointer flex items-center justify-center"
-          >
-            <Download size={15} />
-          </button>
-
-          {/* Refresh Live Zoho Button */}
-          <button
-            onClick={onRefresh}
-            disabled={propsRefreshing || isLoading}
-            className="px-4 py-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 hover:brightness-110 transition-all cursor-pointer flex items-center gap-2"
-          >
-            <RefreshCw size={13} className={propsRefreshing || isLoading ? 'animate-spin' : ''} />
-            <span>Sync Zoho</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* TARGET SIMULATOR DRAWER TOOL (EXPANDABLE) */}
-      {/* ========================================================================= */}
-      <AnimatePresence>
-        {showSimulator && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="rounded-3xl bg-gradient-to-r from-amber-50 via-orange-50 to-indigo-50 border border-amber-200/80 p-6 shadow-md overflow-hidden"
-          >
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
-                  <SlidersHorizontal size={16} />
-                  <span>Interactive What-If Sales Quota Simulator</span>
-                </div>
-                <p className="text-xs text-slate-600 font-medium">
-                  Model executive revenue growth and shortfall reduction by simulating a team-wide conversion lift.
-                </p>
-                <div className="flex items-center gap-4 pt-2">
-                  <span className="text-xs font-bold text-slate-700">Conversion Lift:</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="50"
-                    step="5"
-                    value={simulationBoost}
-                    onChange={(e) => setSimulationBoost(Number(e.target.value))}
-                    className="w-48 accent-amber-500 cursor-pointer"
-                  />
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-xs shadow-sm">
-                    +{simulationBoost}%
+    return (
+      <div className="space-y-8 bg-[#f8fafc] text-slate-800 p-4 sm:p-7 min-h-screen">
+        {/* ========================================================================= */}
+        {/* TOP EXECUTIVE COMMAND BAR */}
+        {/* ========================================================================= */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 text-white shadow-md shadow-indigo-500/20">
+                <Compass size={20} />
+              </span>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  Sales Executive Intelligence Hub
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/80">
+                    National HOD
                   </span>
-                </div>
-              </div>
-
-              {/* Dynamic Recalculated Output Tiles */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase">Simulated Revenue</p>
-                  <p className="text-base font-black text-emerald-600 mt-0.5">
-                    {formatCompactRupee(overallAchievement * (1 + simulationBoost / 100))}
-                  </p>
-                  <p className="text-[10px] text-emerald-600 font-bold mt-0.5">
-                    +{formatCompactRupee(overallAchievement * (simulationBoost / 100))} lift
-                  </p>
-                </div>
-                <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase">Remaining Shortfall</p>
-                  <p className="text-base font-black text-rose-600 mt-0.5">
-                    {formatCompactRupee(Math.max(0, overallTarget - overallAchievement * (1 + simulationBoost / 100)))}
-                  </p>
-                  <p className="text-[10px] text-rose-600 font-bold mt-0.5">
-                    -{formatCompactRupee(Math.min(overallShortfall, overallAchievement * (simulationBoost / 100)))} gap closed
-                  </p>
-                </div>
-                <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm col-span-2 sm:col-span-1">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase">Projected Quota</p>
-                  <p className="text-base font-black text-indigo-700 mt-0.5">
-                    {Math.min(100, Math.round(((overallAchievement * (1 + simulationBoost / 100)) / overallTarget) * 100))}%
-                  </p>
-                  <p className="text-[10px] text-indigo-600 font-bold mt-0.5">Target: {formatCompactRupee(overallTarget)}</p>
-                </div>
+                </h1>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Real-time Zoho CRM Revenue Tracking, Hierarchy Shortfall Network & Quota Simulator
+                </p>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ========================================================================= */}
-      {/* 1. TOP EXECUTIVE REVENUE STRIP (CRISP WHITE LIGHT THEME) */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Card 1: Today's Revenue */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-indigo-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-          <div className="flex justify-between items-start mb-3 relative z-10">
-            <span className="p-3.5 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
-              <DollarSign size={20} />
-            </span>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-              Today Live
-            </span>
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Today's Revenue</p>
-            <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1">
-              {formatRupee(todayRevenue)}
-            </h3>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium">
-              <span>Booked Total: <strong className="text-slate-800">{formatCompactRupee(todayBooked)}</strong></span>
-              <span>Deals: <strong className="text-indigo-600">{todayDeals.length}</strong></span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Monthly Revenue */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-emerald-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-          <div className="flex justify-between items-start mb-3 relative z-10">
-            <span className="p-3.5 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
-              <TrendingUp size={20} />
-            </span>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-              October 2026
-            </span>
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue</p>
-            <h3 className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight mt-1">
-              {formatRupee(monthlyRevenue)}
-            </h3>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium">
-              <span>Booked Value: <strong className="text-slate-800">{formatCompactRupee(monthlyBooked)}</strong></span>
-              <span>Month Deals: <strong className="text-emerald-700">{currentMonthDeals.length}</strong></span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3: Revenue Breakdown */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-amber-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-          <div className="flex justify-between items-start mb-3 relative z-10">
-            <span className="p-3.5 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
-              <PieChartIcon size={20} />
-            </span>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
-              Received vs Pending
-            </span>
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Breakdown</p>
-            <div className="flex items-baseline gap-2 mt-1">
-              <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight">
-                {formatCompactRupee(totalReceivedAmount)}
-              </h3>
-              <span className="text-xs text-slate-400">rec /</span>
-              <span className="text-base font-bold text-rose-500">
-                {formatCompactRupee(totalPendingAmount)}
-              </span>
-              <span className="text-xs text-slate-400">pend</span>
-            </div>
-            {/* Visual Progress Bar */}
-            <div className="w-full h-2.5 bg-slate-100 rounded-full mt-3 overflow-hidden flex">
-              <div
-                style={{ width: `${totalBookedValue > 0 ? (totalReceivedAmount / totalBookedValue) * 100 : 50}%` }}
-                className="bg-emerald-500 h-full"
-                title="Received Ratio"
-              />
-              <div
-                style={{ width: `${totalBookedValue > 0 ? (totalPendingAmount / totalBookedValue) * 100 : 50}%` }}
-                className="bg-rose-400 h-full"
-                title="Pending Ratio"
-              />
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 font-medium">
-              <span>Rec Ratio: <strong className="text-slate-800">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
-              <span>Total Quoted: <strong className="text-slate-800">{formatCompactRupee(totalBookedValue)}</strong></span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Top High Performer & Branch */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-purple-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-          <div className="flex justify-between items-start mb-3 relative z-10">
-            <span className="p-3.5 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 shadow-sm">
-              <Trophy size={20} />
-            </span>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
-              National Leader
-            </span>
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top High Performer</p>
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1 truncate" title={topHighPerformer?.name}>
-              {topHighPerformer ? topHighPerformer.name : 'Calculating...'}
-            </h3>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium">
-              <span>Branch: <strong className="text-indigo-600">{topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
-              <span>Revenue: <strong className="text-emerald-600">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 2. NEW INTERACTIVE VISUAL GRAPHS (PIE CHARTS & TARGET COMPARATIVE BARS) */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Graph 1: Branch Revenue Share Donut Chart */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <PieChartIcon size={16} className="text-indigo-600" />
-                Branch Revenue Share
-              </h3>
-              <span className="text-xs font-bold text-slate-500">Regional Mix</span>
-            </div>
-            <p className="text-xs text-slate-400 mb-4">
-              Real-time received revenue contribution across Ahmedabad, Jaipur & Chennai.
-            </p>
           </div>
 
-          <div className="h-48 relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={branchPieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={75}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {branchPieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Total Rec.</span>
-              <span className="text-base font-black text-slate-900">{formatCompactRupee(totalReceivedAmount)}</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 text-center">
-            {branchPieData.map(b => (
-              <div key={b.name} className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-                <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-700">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
-                  <span>{b.name}</span>
-                </div>
-                <p className="text-xs font-black text-slate-900 mt-1">{formatCompactRupee(b.value)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Graph 2: Deal Stage Pipeline Composition Donut */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <Layers size={16} className="text-cyan-600" />
-                Pipeline Stage Distribution
-              </h3>
-              <span className="text-xs font-bold text-slate-500">{filteredDeals.length} Deals</span>
-            </div>
-            <p className="text-xs text-slate-400 mb-4">
-              Volume of deals progressing through Sales, Account, Legal, Operations & Won.
-            </p>
-          </div>
-
-          <div className="h-48 relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stagePieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={75}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {stagePieData.map((entry, index) => (
-                    <Cell key={`stage-cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  formatter={(val: any) => [`${val} Deals`, 'Volume']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Live Pipeline</span>
-              <span className="text-base font-black text-slate-900">{filteredDeals.length}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-slate-100 text-xs">
-            {stagePieData.map(st => (
-              <span key={st.name} className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: st.color }} />
-                <span>{st.name}: <strong>{st.value}</strong></span>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Graph 3: Branch Target vs Achievement Comparative Bar Chart */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <BarChart3 size={16} className="text-amber-500" />
-                Target vs Shortfall (in Lakhs)
-              </h3>
-              <span className="text-xs font-bold text-slate-500">Branch Quota</span>
-            </div>
-            <p className="text-xs text-slate-400 mb-4">
-              Comparison of Target benchmark vs. Achieved revenue and Shortfall gap.
-            </p>
-          </div>
-
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={branchBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <RechartsTooltip
-                  formatter={(val: any, name: any) => [`₹${val} Lakhs`, name]}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
-                />
-                <Bar dataKey="Target" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Achieved" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Shortfall" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="flex items-center justify-around mt-4 pt-4 border-t border-slate-100 text-xs font-bold">
-            <span className="flex items-center gap-1.5 text-slate-500">
-              <span className="w-2.5 h-2.5 rounded-sm bg-slate-400" /> Target
-            </span>
-            <span className="flex items-center gap-1.5 text-emerald-600">
-              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Achieved
-            </span>
-            <span className="flex items-center gap-1.5 text-rose-500">
-              <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> Shortfall
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. LIGHT THEME RADIAL MINDMAP FLOW (EXACT USER SPECIFICATION) */}
-      {(() => {
-        const itemStep = 38;
-        const currentTms = activeTl?.tms || [];
-        const tmCount = currentTms.length || 7;
-        const canvasHeight = Math.max(620, tmCount * itemStep + 70);
-
-        // Col 0: Logo Orb
-        const orbSocketY = canvasHeight / 2;
-        const x0 = 135; // right socket of orb
-
-        // Col 1: Sales Card
-        const col1Left = 190;
-        const col1Width = 115;
-        const col1Right = 305;
-        const col1Height = 46;
-        const col1Top = orbSocketY - col1Height / 2;
-
-        // Col 2: 3 Branches (Ahmedabad, Jaipur, Chennai)
-        const col2Left = 370;
-        const col2Width = 140;
-        const col2Right = 510;
-        const branchHeight = 44;
-        const branchGap = 16;
-        const totalBranchHeight = 3 * branchHeight + 2 * branchGap; // 164
-        const col2StartY = (canvasHeight - totalBranchHeight) / 2;
-        const activeBranchCenterY = col2StartY + activeBranchIndex * (branchHeight + branchGap) + branchHeight / 2;
-
-        // Col 3: TLs of Active Branch
-        const col3Left = 570;
-        const col3Width = 165;
-        const col3Right = 735;
-        const currentTls = activeBranch?.tls || [];
-        const tlCount = currentTls.length || 1;
-        const tlHeight = 42;
-        const tlGap = 14;
-        const totalTlHeight = tlCount * tlHeight + (tlCount - 1) * tlGap;
-        const col3StartY = (canvasHeight - totalTlHeight) / 2;
-        const activeTlCenterY = col3StartY + activeTlIndex * (tlHeight + tlGap) + tlHeight / 2;
-
-        // Col 4: TMs of Active TL
-        const col4Left = 795;
-        const col4Width = 205;
-        const totalTmHeight = tmCount * itemStep;
-        const col4StartY = Math.max(25, (canvasHeight - totalTmHeight) / 2);
-
-        // Inspector card metrics
-        const sentimentRate = inspectedEntity.target > 0
-          ? Math.min(150, Math.round((inspectedEntity.achievement / inspectedEntity.target) * 100))
-          : 0;
-        const isSurplus = (inspectedEntity.shortfall || 0) === 0;
-
-        return (
-          <div className="rounded-3xl bg-gradient-to-br from-white via-slate-50 to-indigo-50/20 border border-slate-200/90 p-5 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
-            {/* Subtle light geometric grid */}
-            <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:24px_24px] opacity-70 pointer-events-none" />
-
-            {/* TOP HEADER BREADCRUMB NAVIGATION */}
-            <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200/70">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+          {/* Action Controls & Filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Timeframe Filter Tabs */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
+              {(['today', 'week', 'month', 'quarter', 'all'] as TimeframeOption[]).map(tf => (
                 <button
-                  onClick={() => setActiveInspectLevel('root')}
-                  className="text-indigo-600 hover:underline font-bold cursor-pointer flex items-center gap-1"
-                >
-                  <span>🌐 BharatEdge</span>
-                </button>
-                <span className="text-slate-300">/</span>
-                <button
-                  onClick={() => setActiveInspectLevel('sales')}
-                  className={`hover:underline cursor-pointer font-bold ${activeInspectLevel === 'sales' ? 'text-indigo-600' : 'text-slate-700'}`}
-                >
-                  Sales
-                </button>
-                <span className="text-slate-300">/</span>
-                <button
-                  onClick={() => setActiveInspectLevel('branch')}
-                  className={`hover:underline cursor-pointer font-bold ${activeInspectLevel === 'branch' ? 'text-amber-600' : 'text-slate-700'}`}
-                >
-                  {activeBranch.name}
-                </button>
-                {activeTl && (
-                  <>
-                    <span className="text-slate-300">/</span>
-                    <button
-                      onClick={() => setActiveInspectLevel('tl')}
-                      className={`hover:underline cursor-pointer font-bold ${activeInspectLevel === 'tl' ? 'text-cyan-600' : 'text-slate-700'}`}
-                    >
-                      {activeTl.name}
-                    </button>
-                  </>
-                )}
-                {activeTm && activeInspectLevel === 'tm' && (
-                  <>
-                    <span className="text-slate-300">/</span>
-                    <span className="text-slate-900 font-extrabold">{activeTm.name}</span>
-                  </>
-                )}
-              </div>
-
-              {/* Quick Branch Switcher Pills */}
-              <div className="flex items-center gap-2">
-                {branches.map(b => (
-                  <button
-                    key={b.id}
-                    onClick={() => {
-                      setSelectedBranchId(b.id);
-                      setSelectedTlId(b.tls[0]?.id || '');
-                      setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
-                      setActiveInspectLevel('branch');
-                    }}
-                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      selectedBranchId === b.id
-                        ? 'bg-amber-500 text-white shadow-sm'
-                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  key={tf}
+                  onClick={() => setTimeframe(tf)}
+                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer capitalize ${timeframe === tf
+                      ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900'
                     }`}
-                  >
-                    {b.name}
-                  </button>
-                ))}
-              </div>
+                >
+                  {tf === 'month' ? 'October 2026' : tf === 'all' ? 'All Time' : tf}
+                </button>
+              ))}
             </div>
 
-            {/* ===================================================================== */}
-            {/* MAIN PROGRESSIVE CANVAS (HORIZONTAL SVG FLOW + NODES + INSPECTOR PANEL) */}
-            {/* ===================================================================== */}
-            <div className="overflow-x-auto pb-4">
-              <div
-                className="relative transition-transform duration-300 origin-top-left"
-                style={{
-                  minWidth: 1390,
-                  height: canvasHeight
-                }}
-              >
-                {/* SVG CONNECTIONS LAYER */}
-                <svg
-                  className="absolute inset-0 w-full h-full pointer-events-none"
-                  style={{ minWidth: 1390, height: canvasHeight }}
+            {/* Month / Year Picker (when in month mode) */}
+            {timeframe === 'month' && (
+              <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-2xl border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
+                <Calendar size={13} className="text-indigo-600" />
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                  className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer"
                 >
-                  <defs>
-                    <linearGradient id="activeLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#6366f1" />
-                      <stop offset="50%" stopColor="#0ea5e9" />
-                      <stop offset="100%" stopColor="#f59e0b" />
-                    </linearGradient>
-                    <linearGradient id="fanLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#f59e0b" />
-                      <stop offset="50%" stopColor="#06b6d4" />
-                      <stop offset="100%" stopColor="#6366f1" />
-                    </linearGradient>
-                  </defs>
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
+                    <option key={m} value={idx}>{m}</option>
+                  ))}
+                </select>
+                <span>2026</span>
+              </div>
+            )}
 
-                  {/* 1. Curve: Logo -> Sales */}
-                  <path
-                    d={`M ${x0} ${orbSocketY} C ${x0 + 25} ${orbSocketY}, ${col1Left - 25} ${orbSocketY}, ${col1Left} ${orbSocketY}`}
-                    stroke="url(#activeLightGrad)"
-                    strokeWidth="2.5"
-                    fill="none"
-                  />
-                  <circle cx={x0} cy={orbSocketY} r={4.5} fill="#6366f1" />
-                  <circle cx={col1Left} cy={orbSocketY} r={4} fill="#6366f1" />
+            {/* Target Simulator Tool Toggle */}
+            <button
+              onClick={() => setShowSimulator(s => !s)}
+              className={`px-3.5 py-2 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${showSimulator
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/20'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm'
+                }`}
+            >
+              <Sliders size={14} className={showSimulator ? 'text-white' : 'text-amber-500'} />
+              <span>Target Simulator</span>
+            </button>
 
-                  {/* 2. Curves: Sales -> 3 Branches */}
-                  {branches.map((b, i) => {
-                    const branchCenterY = col2StartY + i * (branchHeight + branchGap) + branchHeight / 2;
-                    const isBranchActive = i === activeBranchIndex;
-                    const dx = (col2Left - col1Right) * 0.5;
-                    const pathD = `M ${col1Right} ${orbSocketY} C ${col1Right + dx} ${orbSocketY}, ${col2Left - dx} ${branchCenterY}, ${col2Left} ${branchCenterY}`;
+            {/* Export Report Tool */}
+            <button
+              onClick={handleExportCsv}
+              title="Download CSV Hierarchy Summary"
+              className="p-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm transition-all cursor-pointer flex items-center justify-center"
+            >
+              <Download size={15} />
+            </button>
 
-                    return (
-                      <g key={b.id}>
-                        <path
-                          d={pathD}
-                          stroke={isBranchActive ? 'url(#activeLightGrad)' : '#cbd5e1'}
-                          strokeWidth={isBranchActive ? 2.5 : 1.5}
-                          fill="none"
-                          opacity={isBranchActive ? 1 : 0.65}
-                        />
-                        <circle
-                          cx={col2Left}
-                          cy={branchCenterY}
-                          r={isBranchActive ? 4 : 2.5}
-                          fill={isBranchActive ? '#f59e0b' : '#94a3b8'}
-                        />
-                      </g>
-                    );
-                  })}
-                  <circle cx={col1Right} cy={orbSocketY} r={4.5} fill="#f59e0b" />
+            {/* Refresh Live Zoho Button */}
+            <button
+              onClick={onRefresh}
+              disabled={propsRefreshing || isLoading}
+              className="px-4 py-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 hover:brightness-110 transition-all cursor-pointer flex items-center gap-2"
+            >
+              <RefreshCw size={13} className={propsRefreshing || isLoading ? 'animate-spin' : ''} />
+              <span>Sync Zoho</span>
+            </button>
+          </div>
+        </div>
 
-                  {/* 3. Curves: Active Branch -> TLs */}
-                  {currentTls.map((tl, t) => {
-                    const tlCenterY = col3StartY + t * (tlHeight + tlGap) + tlHeight / 2;
-                    const isTlActive = t === activeTlIndex;
-                    const dx = (col3Left - col2Right) * 0.5;
-                    const pathD = `M ${col2Right} ${activeBranchCenterY} C ${col2Right + dx} ${activeBranchCenterY}, ${col3Left - dx} ${tlCenterY}, ${col3Left} ${tlCenterY}`;
-
-                    return (
-                      <g key={tl.id}>
-                        <path
-                          d={pathD}
-                          stroke={isTlActive ? 'url(#fanLightGrad)' : '#cbd5e1'}
-                          strokeWidth={isTlActive ? 2.5 : 1.5}
-                          fill="none"
-                          opacity={isTlActive ? 1 : 0.65}
-                        />
-                        <circle
-                          cx={col3Left}
-                          cy={tlCenterY}
-                          r={isTlActive ? 4 : 2.5}
-                          fill={isTlActive ? '#0ea5e9' : '#94a3b8'}
-                        />
-                      </g>
-                    );
-                  })}
-                  <circle cx={col2Right} cy={activeBranchCenterY} r={4.5} fill="#f59e0b" />
-
-                  {/* 4. Curves: Active TL -> TMs */}
-                  {currentTms.map((tm, k) => {
-                    const tmCenterY = col4StartY + k * itemStep + 15;
-                    const isTmActive = activeTm?.id === tm.id;
-                    const dx = (col4Left - col3Right) * 0.5;
-                    const pathD = `M ${col3Right} ${activeTlCenterY} C ${col3Right + dx} ${activeTlCenterY}, ${col4Left - dx} ${tmCenterY}, ${col4Left} ${tmCenterY}`;
-
-                    return (
-                      <g key={tm.id}>
-                        <path
-                          d={pathD}
-                          stroke={isTmActive ? '#0ea5e9' : '#cbd5e1'}
-                          strokeWidth={isTmActive ? 2.5 : 1.2}
-                          fill="none"
-                          opacity={isTmActive ? 1 : 0.6}
-                        />
-                        <circle
-                          cx={col4Left}
-                          cy={tmCenterY}
-                          r={isTmActive ? 4 : 2}
-                          fill={isTmActive ? '#0ea5e9' : '#94a3b8'}
-                        />
-                      </g>
-                    );
-                  })}
-                  <circle cx={col3Right} cy={activeTlCenterY} r={4.5} fill="#0ea5e9" />
-                </svg>
-
-                {/* ================================================================= */}
-                {/* COLUMN 0: LOGO ORB (NO TEXT, BIG LOGO) */}
-                {/* ================================================================= */}
-                <div
-                  onClick={() => setActiveInspectLevel('root')}
-                  className="absolute cursor-pointer group"
-                  style={{
-                    left: 15,
-                    top: orbSocketY - 60,
-                    width: 120,
-                    height: 120
-                  }}
-                  title="Click to inspect Enterprise Overview"
-                >
-                  <div className="w-28 h-28 mx-auto rounded-full bg-white border border-indigo-100 shadow-[0_10px_35px_rgba(99,102,241,0.2)] flex items-center justify-center relative group-hover:border-indigo-300 group-hover:shadow-[0_12px_45px_rgba(99,102,241,0.3)] group-hover:scale-105 transition-all p-3">
-                    <div className="absolute inset-0 rounded-full border border-dashed border-indigo-200 animate-[spin_25s_linear_infinite]" />
-                    <img
-                      src="/logo.png"
-                      alt="BharatEdge"
-                      className="w-full h-full object-contain relative z-10 drop-shadow-sm"
+        {/* ========================================================================= */}
+        {/* TARGET SIMULATOR DRAWER TOOL (EXPANDABLE) */}
+        {/* ========================================================================= */}
+        <AnimatePresence>
+          {showSimulator && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="rounded-3xl bg-gradient-to-r from-amber-50 via-orange-50 to-indigo-50 border border-amber-200/80 p-6 shadow-md overflow-hidden"
+            >
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
+                    <SlidersHorizontal size={16} />
+                    <span>Interactive What-If Sales Quota Simulator</span>
+                  </div>
+                  <p className="text-xs text-slate-600 font-medium">
+                    Model executive revenue growth and shortfall reduction by simulating a team-wide conversion lift.
+                  </p>
+                  <div className="flex items-center gap-4 pt-2">
+                    <span className="text-xs font-bold text-slate-700">Conversion Lift:</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="50"
+                      step="5"
+                      value={simulationBoost}
+                      onChange={(e) => setSimulationBoost(Number(e.target.value))}
+                      className="w-48 accent-amber-500 cursor-pointer"
                     />
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-xs shadow-sm">
+                      +{simulationBoost}%
+                    </span>
                   </div>
                 </div>
 
-                {/* ================================================================= */}
-                {/* COLUMN 1: SALES NODE (NO EXTRA TEXTS) */}
-                {/* ================================================================= */}
-                <div
-                  onClick={() => setActiveInspectLevel('sales')}
-                  className={`absolute rounded-2xl px-4 py-2.5 transition-all duration-300 cursor-pointer flex items-center justify-between gap-2 ${
-                    activeInspectLevel === 'sales'
-                      ? 'bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-600 shadow-md text-indigo-950'
-                      : 'bg-white hover:bg-slate-50 border border-slate-200 shadow-sm text-slate-800'
-                  }`}
-                  style={{
-                    left: col1Left,
-                    top: col1Top,
-                    width: col1Width,
-                    height: col1Height
-                  }}
-                  title="Click to inspect National Sales"
-                >
-                  <span className="text-sm font-black tracking-tight">Sales</span>
-                  <span className="text-xs font-black text-emerald-600">
-                    {formatCompactRupee(salesDept.achievement)}
-                  </span>
+                {/* Dynamic Recalculated Output Tiles */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">Simulated Revenue</p>
+                    <p className="text-base font-black text-emerald-600 mt-0.5">
+                      {formatCompactRupee(overallAchievement * (1 + simulationBoost / 100))}
+                    </p>
+                    <p className="text-[10px] text-emerald-600 font-bold mt-0.5">
+                      +{formatCompactRupee(overallAchievement * (simulationBoost / 100))} lift
+                    </p>
+                  </div>
+                  <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">Remaining Shortfall</p>
+                    <p className="text-base font-black text-rose-600 mt-0.5">
+                      {formatCompactRupee(Math.max(0, overallTarget - overallAchievement * (1 + simulationBoost / 100)))}
+                    </p>
+                    <p className="text-[10px] text-rose-600 font-bold mt-0.5">
+                      -{formatCompactRupee(Math.min(overallShortfall, overallAchievement * (simulationBoost / 100)))} gap closed
+                    </p>
+                  </div>
+                  <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm col-span-2 sm:col-span-1">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">Projected Quota</p>
+                    <p className="text-base font-black text-indigo-700 mt-0.5">
+                      {Math.min(100, Math.round(((overallAchievement * (1 + simulationBoost / 100)) / overallTarget) * 100))}%
+                    </p>
+                    <p className="text-[10px] text-indigo-600 font-bold mt-0.5">Target: {formatCompactRupee(overallTarget)}</p>
+                  </div>
                 </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-                {/* ================================================================= */}
-                {/* COLUMN 2: 3 BRANCHES ONLY (AHMEDABAD, JAIPUR, CHENNAI) */}
-                {/* ================================================================= */}
+        {/* ========================================================================= */}
+        {/* 1. TOP EXECUTIVE REVENUE STRIP (CRISP WHITE LIGHT THEME) */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Card 1: Today's Revenue */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-indigo-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3.5 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
+                <DollarSign size={20} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                Today Live
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Today's Revenue</p>
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1">
+                {formatRupee(todayRevenue)}
+              </h3>
+              <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium">
+                <span>Booked Total: <strong className="text-slate-800">{formatCompactRupee(todayBooked)}</strong></span>
+                <span>Deals: <strong className="text-indigo-600">{todayDeals.length}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Monthly Revenue */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-emerald-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3.5 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
+                <TrendingUp size={20} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                October 2026
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue</p>
+              <h3 className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight mt-1">
+                {formatRupee(monthlyRevenue)}
+              </h3>
+              <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium">
+                <span>Booked Value: <strong className="text-slate-800">{formatCompactRupee(monthlyBooked)}</strong></span>
+                <span>Month Deals: <strong className="text-emerald-700">{currentMonthDeals.length}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Revenue Breakdown */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-amber-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3.5 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
+                <PieChartIcon size={20} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                Received vs Pending
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Breakdown</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight">
+                  {formatCompactRupee(totalReceivedAmount)}
+                </h3>
+                <span className="text-xs text-slate-400">rec /</span>
+                <span className="text-base font-bold text-rose-500">
+                  {formatCompactRupee(totalPendingAmount)}
+                </span>
+                <span className="text-xs text-slate-400">pend</span>
+              </div>
+              {/* Visual Progress Bar */}
+              <div className="w-full h-2.5 bg-slate-100 rounded-full mt-3 overflow-hidden flex">
                 <div
-                  className="absolute space-y-4"
-                  style={{
-                    left: col2Left,
-                    top: col2StartY,
-                    width: col2Width
-                  }}
-                >
-                  {branches.map((b, i) => {
-                    const isBranchActive = i === activeBranchIndex;
+                  style={{ width: `${totalBookedValue > 0 ? (totalReceivedAmount / totalBookedValue) * 100 : 50}%` }}
+                  className="bg-emerald-500 h-full"
+                  title="Received Ratio"
+                />
+                <div
+                  style={{ width: `${totalBookedValue > 0 ? (totalPendingAmount / totalBookedValue) * 100 : 50}%` }}
+                  className="bg-rose-400 h-full"
+                  title="Pending Ratio"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 font-medium">
+                <span>Rec Ratio: <strong className="text-slate-800">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
+                <span>Total Quoted: <strong className="text-slate-800">{formatCompactRupee(totalBookedValue)}</strong></span>
+              </div>
+            </div>
+          </div>
 
-                    return (
-                      <div
-                        key={b.id}
+          {/* Card 4: Top High Performer & Branch */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-purple-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+            <div className="flex justify-between items-start mb-3 relative z-10">
+              <span className="p-3.5 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 shadow-sm">
+                <Trophy size={20} />
+              </span>
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
+                National Leader
+              </span>
+            </div>
+            <div className="relative z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top High Performer</p>
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1 truncate" title={topHighPerformer?.name}>
+                {topHighPerformer ? topHighPerformer.name : 'Calculating...'}
+              </h3>
+              <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium">
+                <span>Branch: <strong className="text-indigo-600">{topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
+                <span>Revenue: <strong className="text-emerald-600">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 2. NEW INTERACTIVE VISUAL GRAPHS (PIE CHARTS & TARGET COMPARATIVE BARS) */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Graph 1: Branch Revenue Share Donut Chart */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <PieChartIcon size={16} className="text-indigo-600" />
+                  Branch Revenue Share
+                </h3>
+                <span className="text-xs font-bold text-slate-500">Regional Mix</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">
+                Real-time received revenue contribution across Ahmedabad, Jaipur & Chennai.
+              </p>
+            </div>
+
+            <div className="h-48 relative flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={branchPieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={75}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {branchPieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
+                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Total Rec.</span>
+                <span className="text-base font-black text-slate-900">{formatCompactRupee(totalReceivedAmount)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 text-center">
+              {branchPieData.map(b => (
+                <div key={b.name} className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                  <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-700">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
+                    <span>{b.name}</span>
+                  </div>
+                  <p className="text-xs font-black text-slate-900 mt-1">{formatCompactRupee(b.value)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Graph 2: Deal Stage Pipeline Composition Donut */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <Layers size={16} className="text-cyan-600" />
+                  Pipeline Stage Distribution
+                </h3>
+                <span className="text-xs font-bold text-slate-500">{filteredDeals.length} Deals</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">
+                Volume of deals progressing through Sales, Account, Legal, Operations & Won.
+              </p>
+            </div>
+
+            <div className="h-48 relative flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stagePieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={75}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {stagePieData.map((entry, index) => (
+                      <Cell key={`stage-cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    formatter={(val: any) => [`${val} Deals`, 'Volume']}
+                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Live Pipeline</span>
+                <span className="text-base font-black text-slate-900">{filteredDeals.length}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-slate-100 text-xs">
+              {stagePieData.map(st => (
+                <span key={st.name} className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: st.color }} />
+                  <span>{st.name}: <strong>{st.value}</strong></span>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Graph 3: Branch Target vs Achievement Comparative Bar Chart */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <BarChart3 size={16} className="text-amber-500" />
+                  Target vs Shortfall (in Lakhs)
+                </h3>
+                <span className="text-xs font-bold text-slate-500">Branch Quota</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">
+                Comparison of Target benchmark vs. Achieved revenue and Shortfall gap.
+              </p>
+            </div>
+
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={branchBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                  <RechartsTooltip
+                    formatter={(val: any, name: any) => [`₹${val} Lakhs`, name]}
+                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                  />
+                  <Bar dataKey="Target" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Achieved" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Shortfall" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="flex items-center justify-around mt-4 pt-4 border-t border-slate-100 text-xs font-bold">
+              <span className="flex items-center gap-1.5 text-slate-500">
+                <span className="w-2.5 h-2.5 rounded-sm bg-slate-400" /> Target
+              </span>
+              <span className="flex items-center gap-1.5 text-emerald-600">
+                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Achieved
+              </span>
+              <span className="flex items-center gap-1.5 text-rose-500">
+                <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> Shortfall
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 3. LIGHT THEME PROGRESSIVE CENTER-TO-LEFT MINDMAP FLOW */}
+        {(() => {
+          const itemStep = 38;
+          const currentTms = activeTl?.tms || [];
+          const tmCount = currentTms.length || 7;
+          const canvasHeight = Math.max(620, tmCount * itemStep + 70);
+
+          // Dynamic horizontal coordinates according to drillLevel
+          // When drillLevel === 0: Logo is in the CENTER of the available width (455px)
+          // As drillLevel increases (0 -> 1 -> 2 -> 3 -> 4), Logo smoothly glides to the left!
+          const col0Left = drillLevel === 0 ? 455 : drillLevel === 1 ? 330 : drillLevel === 2 ? 190 : drillLevel === 3 ? 75 : 15;
+          const orbSocketY = canvasHeight / 2;
+          const x0 = col0Left + 120; // right socket of orb
+
+          // Col 1: Sales Node
+          const col1Width = 115;
+          const col1Height = 46;
+          const col1Left = drillLevel === 1 ? 495 : drillLevel === 2 ? 355 : drillLevel === 3 ? 235 : 175;
+          const col1Right = col1Left + col1Width;
+          const col1Top = orbSocketY - col1Height / 2;
+
+          // Col 2: 3 Branches (Ahmedabad, Jaipur, Chennai)
+          const col2Width = 140;
+          const branchHeight = 44;
+          const branchGap = 16;
+          const totalBranchHeight = 3 * branchHeight + 2 * branchGap; // 164
+          const col2StartY = (canvasHeight - totalBranchHeight) / 2;
+          const col2Left = drillLevel === 2 ? 515 : drillLevel === 3 ? 390 : 330;
+          const col2Right = col2Left + col2Width;
+          const activeBranchCenterY = col2StartY + activeBranchIndex * (branchHeight + branchGap) + branchHeight / 2;
+
+          // Col 3: TLs of Active Branch
+          const currentTls = activeBranch?.tls || [];
+          const tlCount = currentTls.length || 1;
+          const tlHeight = 42;
+          const tlGap = 14;
+          const totalTlHeight = tlCount * tlHeight + (tlCount - 1) * tlGap;
+          const col3StartY = (canvasHeight - totalTlHeight) / 2;
+          const col3Width = 165;
+          const col3Left = drillLevel === 3 ? 570 : 510;
+          const col3Right = col3Left + col3Width;
+          const activeTlCenterY = col3StartY + activeTlIndex * (tlHeight + tlGap) + tlHeight / 2;
+
+          // Col 4: TMs of Active TL
+          const col4Width = 205;
+          const totalTmHeight = tmCount * itemStep;
+          const col4StartY = Math.max(25, (canvasHeight - totalTmHeight) / 2);
+          const col4Left = 715;
+
+          // Inspector card metrics
+          const sentimentRate = inspectedEntity.target > 0
+            ? Math.min(150, Math.round((inspectedEntity.achievement / inspectedEntity.target) * 100))
+            : 0;
+          const isSurplus = (inspectedEntity.shortfall || 0) === 0;
+
+          return (
+            <div className="rounded-3xl bg-gradient-to-br from-white via-slate-50 to-indigo-50/20 border border-slate-200/90 p-5 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
+              {/* Subtle light geometric grid */}
+              <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:24px_24px] opacity-70 pointer-events-none" />
+
+              {/* TOP HEADER BREADCRUMB NAVIGATION & RESET CONTROLS */}
+              <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200/70">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                  <button
+                    onClick={() => {
+                      setDrillLevel(0);
+                      setActiveInspectLevel('root');
+                    }}
+                    className={`hover:underline font-bold cursor-pointer flex items-center gap-1 ${
+                      drillLevel === 0 ? 'text-indigo-600 font-black' : 'text-slate-700'
+                    }`}
+                    title="Click to reset BharatEdge to center"
+                  >
+                    <span>🌐 BharatEdge</span>
+                  </button>
+
+                  {drillLevel >= 1 && (
+                    <>
+                      <span className="text-slate-300">/</span>
+                      <button
                         onClick={() => {
-                          setSelectedBranchId(b.id);
-                          setSelectedTlId(b.tls[0]?.id || '');
-                          setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                          setDrillLevel(1);
+                          setActiveInspectLevel('sales');
+                        }}
+                        className={`hover:underline cursor-pointer font-bold ${
+                          drillLevel === 1 ? 'text-indigo-600 font-black' : 'text-slate-700'
+                        }`}
+                      >
+                        Sales
+                      </button>
+                    </>
+                  )}
+
+                  {drillLevel >= 2 && activeBranch && (
+                    <>
+                      <span className="text-slate-300">/</span>
+                      <button
+                        onClick={() => {
+                          setDrillLevel(2);
                           setActiveInspectLevel('branch');
                         }}
-                        className={`rounded-2xl px-3.5 py-2.5 transition-all duration-300 cursor-pointer flex items-center justify-between gap-2 ${
-                          isBranchActive
-                            ? 'bg-gradient-to-r from-amber-50 to-orange-50/70 border-2 border-amber-500 shadow-md text-slate-900'
-                            : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-sm'
+                        className={`hover:underline cursor-pointer font-bold ${
+                          drillLevel === 2 ? 'text-amber-600 font-black' : 'text-slate-700'
                         }`}
-                        style={{ height: branchHeight }}
                       >
-                        <span className="text-xs font-black tracking-tight">{b.name}</span>
-                        <span className={`text-xs font-black ${isBranchActive ? 'text-amber-600' : 'text-emerald-600'}`}>
-                          {formatCompactRupee(b.achievement)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                        {activeBranch.name}
+                      </button>
+                    </>
+                  )}
 
-                {/* ================================================================= */}
-                {/* COLUMN 3: TLS ONLY OF ACTIVE BRANCH */}
-                {/* ================================================================= */}
-                <div
-                  className="absolute space-y-3.5"
-                  style={{
-                    left: col3Left,
-                    top: col3StartY,
-                    width: col3Width
-                  }}
-                >
-                  {currentTls.map((tl, t) => {
-                    const isTlActive = t === activeTlIndex;
-
-                    return (
-                      <div
-                        key={tl.id}
+                  {drillLevel >= 3 && activeTl && (
+                    <>
+                      <span className="text-slate-300">/</span>
+                      <button
                         onClick={() => {
-                          setSelectedTlId(tl.id);
-                          setSelectedTmId(tl.tms[0]?.id || '');
+                          setDrillLevel(3);
                           setActiveInspectLevel('tl');
                         }}
-                        className={`rounded-2xl px-3 py-2 transition-all duration-300 cursor-pointer flex items-center justify-between gap-2 ${
-                          isTlActive
-                            ? 'bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-500 shadow-md text-slate-900'
-                            : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-sm'
+                        className={`hover:underline cursor-pointer font-bold ${
+                          drillLevel === 3 ? 'text-cyan-600 font-black' : 'text-slate-700'
                         }`}
-                        style={{ height: tlHeight }}
                       >
-                        <span className="text-xs font-bold truncate max-w-[95px]" title={tl.name}>
-                          {tl.name}
-                        </span>
-                        <span className={`text-xs font-black ${isTlActive ? 'text-cyan-700' : 'text-emerald-600'}`}>
-                          {formatCompactRupee(tl.achievement)}
-                        </span>
-                      </div>
-                    );
-                  })}
+                        {activeTl.name}
+                      </button>
+                    </>
+                  )}
+
+                  {drillLevel >= 4 && activeTm && (
+                    <>
+                      <span className="text-slate-300">/</span>
+                      <span className="text-slate-900 font-black">{activeTm.name}</span>
+                    </>
+                  )}
                 </div>
 
-                {/* ================================================================= */}
-                {/* COLUMN 4: TMS ONLY OF ACTIVE TL */}
-                {/* ================================================================= */}
-                <div
-                  className="absolute space-y-2"
-                  style={{
-                    left: col4Left,
-                    top: col4StartY,
-                    width: col4Width
-                  }}
-                >
-                  {currentTms.map((tm) => {
-                    const isTmActive = activeTm?.id === tm.id;
-                    const pct = tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0;
+                {/* Quick Navigation & View Actions */}
+                <div className="flex items-center gap-2">
+                  {drillLevel > 0 && (
+                    <button
+                      onClick={() => {
+                        setDrillLevel(0);
+                        setActiveInspectLevel('root');
+                      }}
+                      className="px-3 py-1 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                      title="Center BharatEdge orb"
+                    >
+                      <RotateCcw size={11} className="text-slate-500" />
+                      <span>Center BharatEdge</span>
+                    </button>
+                  )}
 
-                    return (
-                      <div
-                        key={tm.id}
-                        onClick={() => {
-                          setSelectedTmId(tm.id);
-                          setActiveInspectLevel('tm');
-                        }}
-                        className={`flex items-center justify-between px-3 py-1.5 rounded-xl cursor-pointer transition-all duration-200 ${
-                          isTmActive
-                            ? 'bg-cyan-50 border-2 border-cyan-500 text-cyan-950 font-bold shadow-sm'
-                            : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-xs'
-                        }`}
-                        style={{ height: 30 }}
-                      >
-                        <span className="text-xs font-bold truncate max-w-[110px]" title={tm.name}>
-                          {tm.name}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-black text-slate-700">
-                            {formatCompactRupee(tm.achievement)}
-                          </span>
-                          <span className="text-xs">
-                            {pct >= 100 ? '🔥' : pct > 0 ? '👍' : '⚠️'}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                  {drillLevel < 4 && (
+                    <button
+                      onClick={() => {
+                        setDrillLevel(4);
+                        setActiveInspectLevel('tm');
+                      }}
+                      className="px-3 py-1 rounded-xl text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                      title="Expand all hierarchy levels"
+                    >
+                      <span>Expand All</span>
+                      <ChevronRight size={11} />
+                    </button>
+                  )}
 
-                {/* ================================================================= */}
-                {/* COLUMN 5: SLEEK INSPECTOR PANEL (RIGHT SIDE) */}
-                {/* ================================================================= */}
-                <div
-                  className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-hidden flex flex-col justify-between"
-                  style={{
-                    left: 1045,
-                    top: 15,
-                    width: 335,
-                    bottom: 15
-                  }}
-                >
-                  <div className="space-y-4">
-                    {/* Header */}
-                    <div>
-                      <div className="flex items-center gap-1.5 text-indigo-600 text-[11px] font-bold">
-                        <Briefcase size={12} />
-                        <span className="uppercase tracking-wider">
-                          {activeInspectLevel === 'root'
-                            ? 'ENTERPRISE CORE'
-                            : activeInspectLevel === 'sales'
-                            ? 'NATIONAL SALES'
-                            : activeInspectLevel === 'branch'
-                            ? 'REGIONAL BRANCH'
-                            : activeInspectLevel === 'tl'
-                            ? 'TEAM LEADER'
-                            : 'SALES BDM'}
-                        </span>
-                      </div>
-                      <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 leading-snug truncate" title={inspectedEntity.name}>
-                        {inspectedEntity.name}
-                      </h3>
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span className="text-emerald-700 font-bold">Active</span>
-                          <span className="text-slate-300">•</span>
-                          <span className="text-[10px] text-slate-400">Live Zoho CRM</span>
-                        </div>
+                  {drillLevel >= 2 && (
+                    <div className="flex items-center gap-1.5 ml-2 border-l border-slate-200 pl-2">
+                      {branches.map(b => (
                         <button
+                          key={b.id}
                           onClick={() => {
-                            if (inspectedEntity.deals?.[0]?.id) {
-                              window.open(`/crm/deals/${inspectedEntity.deals[0].id}`, '_blank');
-                            }
+                            setSelectedBranchId(b.id);
+                            setSelectedTlId(b.tls[0]?.id || '');
+                            setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                            setDrillLevel(3);
+                            setActiveInspectLevel('branch');
                           }}
-                          className="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-0.5 text-[10px] cursor-pointer"
+                          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
+                            selectedBranchId === b.id
+                              ? 'bg-amber-500 text-white shadow-sm'
+                              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                          }`}
                         >
-                          <span>Explore deals</span>
-                          <ChevronRight size={11} />
+                          {b.name}
                         </button>
-                      </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ===================================================================== */}
+              {/* MAIN PROGRESSIVE CANVAS (HORIZONTAL SVG FLOW + NODES + INSPECTOR PANEL) */}
+              {/* ===================================================================== */}
+              <div className="overflow-x-auto pb-4">
+                <div
+                  className="relative transition-all duration-700 ease-out origin-top-left"
+                  style={{
+                    minWidth: 1390,
+                    height: canvasHeight
+                  }}
+                >
+                  {/* SVG CONNECTIONS LAYER */}
+                  <svg
+                    className="absolute inset-0 w-full h-full pointer-events-none"
+                    style={{ minWidth: 1390, height: canvasHeight }}
+                  >
+                    <defs>
+                      <linearGradient id="activeLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#6366f1" />
+                        <stop offset="50%" stopColor="#0ea5e9" />
+                        <stop offset="100%" stopColor="#f59e0b" />
+                      </linearGradient>
+                      <linearGradient id="fanLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#f59e0b" />
+                        <stop offset="50%" stopColor="#06b6d4" />
+                        <stop offset="100%" stopColor="#6366f1" />
+                      </linearGradient>
+                    </defs>
+
+                    {/* 1. Curve: Logo -> Sales */}
+                    {drillLevel >= 1 && (
+                      <g className="transition-opacity duration-500">
+                        <path
+                          d={`M ${x0} ${orbSocketY} C ${x0 + (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left - (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left} ${orbSocketY}`}
+                          stroke="url(#activeLightGrad)"
+                          strokeWidth="2.5"
+                          fill="none"
+                        />
+                        <circle cx={x0} cy={orbSocketY} r={4.5} fill="#6366f1" />
+                        <circle cx={col1Left} cy={orbSocketY} r={4} fill="#6366f1" />
+                      </g>
+                    )}
+
+                    {/* 2. Curves: Sales -> 3 Branches */}
+                    {drillLevel >= 2 && branches.map((b, i) => {
+                      const branchCenterY = col2StartY + i * (branchHeight + branchGap) + branchHeight / 2;
+                      const isBranchActive = i === activeBranchIndex;
+                      const dx = (col2Left - col1Right) * 0.5;
+                      const pathD = `M ${col1Right} ${orbSocketY} C ${col1Right + dx} ${orbSocketY}, ${col2Left - dx} ${branchCenterY}, ${col2Left} ${branchCenterY}`;
+
+                      return (
+                        <g key={b.id} className="transition-opacity duration-500">
+                          <path
+                            d={pathD}
+                            stroke={isBranchActive ? 'url(#activeLightGrad)' : '#cbd5e1'}
+                            strokeWidth={isBranchActive ? 2.5 : 1.5}
+                            fill="none"
+                            opacity={isBranchActive ? 1 : 0.65}
+                          />
+                          <circle
+                            cx={col2Left}
+                            cy={branchCenterY}
+                            r={isBranchActive ? 4 : 2.5}
+                            fill={isBranchActive ? '#f59e0b' : '#94a3b8'}
+                          />
+                        </g>
+                      );
+                    })}
+                    {drillLevel >= 2 && <circle cx={col1Right} cy={orbSocketY} r={4.5} fill="#f59e0b" />}
+
+                    {/* 3. Curves: Active Branch -> TLs */}
+                    {drillLevel >= 3 && currentTls.map((tl, t) => {
+                      const tlCenterY = col3StartY + t * (tlHeight + tlGap) + tlHeight / 2;
+                      const isTlActive = t === activeTlIndex;
+                      const dx = (col3Left - col2Right) * 0.5;
+                      const pathD = `M ${col2Right} ${activeBranchCenterY} C ${col2Right + dx} ${activeBranchCenterY}, ${col3Left - dx} ${tlCenterY}, ${col3Left} ${tlCenterY}`;
+
+                      return (
+                        <g key={tl.id} className="transition-opacity duration-500">
+                          <path
+                            d={pathD}
+                            stroke={isTlActive ? 'url(#fanLightGrad)' : '#cbd5e1'}
+                            strokeWidth={isTlActive ? 2.5 : 1.5}
+                            fill="none"
+                            opacity={isTlActive ? 1 : 0.65}
+                          />
+                          <circle
+                            cx={col3Left}
+                            cy={tlCenterY}
+                            r={isTlActive ? 4 : 2.5}
+                            fill={isTlActive ? '#0ea5e9' : '#94a3b8'}
+                          />
+                        </g>
+                      );
+                    })}
+                    {drillLevel >= 3 && <circle cx={col2Right} cy={activeBranchCenterY} r={4.5} fill="#f59e0b" />}
+
+                    {/* 4. Curves: Active TL -> TMs */}
+                    {drillLevel >= 4 && currentTms.map((tm, k) => {
+                      const tmCenterY = col4StartY + k * itemStep + 15;
+                      const isTmActive = activeTm?.id === tm.id;
+                      const dx = (col4Left - col3Right) * 0.5;
+                      const pathD = `M ${col3Right} ${activeTlCenterY} C ${col3Right + dx} ${activeTlCenterY}, ${col4Left - dx} ${tmCenterY}, ${col4Left} ${tmCenterY}`;
+
+                      return (
+                        <g key={tm.id} className="transition-opacity duration-500">
+                          <path
+                            d={pathD}
+                            stroke={isTmActive ? '#0ea5e9' : '#cbd5e1'}
+                            strokeWidth={isTmActive ? 2.5 : 1.2}
+                            fill="none"
+                            opacity={isTmActive ? 1 : 0.6}
+                          />
+                          <circle
+                            cx={col4Left}
+                            cy={tmCenterY}
+                            r={isTmActive ? 4 : 2}
+                            fill={isTmActive ? '#0ea5e9' : '#94a3b8'}
+                          />
+                        </g>
+                      );
+                    })}
+                    {drillLevel >= 4 && <circle cx={col3Right} cy={activeTlCenterY} r={4.5} fill="#0ea5e9" />}
+                  </svg>
+
+                  {/* ================================================================= */}
+                  {/* COLUMN 0: BHARATEDGE LOGO ORB (CENTER -> GLIDES LEFT ON CLICK) */}
+                  {/* ================================================================= */}
+                  <div
+                    onClick={() => {
+                      if (drillLevel === 0) {
+                        setDrillLevel(1);
+                        setActiveInspectLevel('sales');
+                      } else {
+                        setActiveInspectLevel('root');
+                      }
+                    }}
+                    className="absolute cursor-pointer group"
+                    style={{
+                      left: col0Left,
+                      top: orbSocketY - 60,
+                      width: 120,
+                      height: 120,
+                      transition: 'left 0.65s cubic-bezier(0.16, 1, 0.3, 1)'
+                    }}
+                    title={drillLevel === 0 ? "Click to open Sales division" : "Click to inspect BharatEdge Enterprise Overview"}
+                  >
+                    <div className="w-28 h-28 mx-auto rounded-full bg-white border border-indigo-100 shadow-[0_10px_35px_rgba(99,102,241,0.2)] flex items-center justify-center relative group-hover:border-indigo-300 group-hover:shadow-[0_12px_45px_rgba(99,102,241,0.3)] group-hover:scale-105 transition-all p-3">
+                      <div className="absolute inset-0 rounded-full border border-dashed border-indigo-200 animate-[spin_25s_linear_infinite]" />
+                      <img
+                        src="/logo.png"
+                        alt="BharatEdge"
+                        className="w-full h-full object-contain relative z-10 drop-shadow-sm"
+                      />
                     </div>
 
-                    {/* Sentiment Rate Card */}
-                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200/80 space-y-2">
-                      <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
-                        <span>Sentiment / Achievement Rate</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                          isSurplus
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
-                          {isSurplus ? 'Target Met' : 'Moderate'}
+                    {/* Pulsating invitation pill when in center */}
+                    {drillLevel === 0 && (
+                      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap z-20 pointer-events-none">
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black bg-indigo-600 text-white shadow-md shadow-indigo-300 animate-pulse flex items-center gap-1">
+                          <span>Click to open Sales</span>
+                          <ChevronRight size={10} />
                         </span>
                       </div>
+                    )}
+                  </div>
 
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-slate-900 tracking-tight">
-                              {sentimentRate}%
+                  {/* ================================================================= */}
+                  {/* COLUMN 1: SALES NODE (APPEARS AT LEVEL >= 1, CLICKS TO OPEN BRANCHES) */}
+                  {/* ================================================================= */}
+                  <div
+                    onClick={() => {
+                      if (drillLevel === 1) {
+                        setDrillLevel(2);
+                        setActiveInspectLevel('branch');
+                      } else {
+                        setActiveInspectLevel('sales');
+                      }
+                    }}
+                    className={`absolute rounded-2xl px-4 py-2.5 cursor-pointer flex items-center justify-between gap-2 shadow-sm ${
+                      activeInspectLevel === 'sales'
+                        ? 'bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-600 shadow-md text-indigo-950'
+                        : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800'
+                    }`}
+                    style={{
+                      left: col1Left,
+                      top: col1Top,
+                      width: col1Width,
+                      height: col1Height,
+                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
+                      opacity: drillLevel >= 1 ? 1 : 0,
+                      pointerEvents: drillLevel >= 1 ? 'auto' : 'none',
+                      transform: drillLevel >= 1 ? 'scale(1)' : 'scale(0.85)'
+                    }}
+                    title={drillLevel === 1 ? "Click to open Branches" : "Click to inspect National Sales"}
+                  >
+                    <span className="text-sm font-black tracking-tight">Sales</span>
+                    <span className="text-xs font-black text-emerald-600">
+                      {formatCompactRupee(salesDept.achievement)}
+                    </span>
+
+                    {/* Indicator when at level 1 to invite opening branches */}
+                    {drillLevel === 1 && (
+                      <span className="absolute -right-2 -top-2 flex h-4 w-4">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 text-[9px] font-black text-white items-center justify-center">3</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ================================================================= */}
+                  {/* COLUMN 2: 3 BRANCHES ONLY (APPEARS AT LEVEL >= 2, CLICKS TO OPEN TLS) */}
+                  {/* ================================================================= */}
+                  <div
+                    className="absolute space-y-4"
+                    style={{
+                      left: col2Left,
+                      top: col2StartY,
+                      width: col2Width,
+                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
+                      opacity: drillLevel >= 2 ? 1 : 0,
+                      pointerEvents: drillLevel >= 2 ? 'auto' : 'none',
+                      transform: drillLevel >= 2 ? 'scale(1)' : 'scale(0.85)'
+                    }}
+                  >
+                    {branches.map((b, i) => {
+                      const isBranchActive = i === activeBranchIndex;
+
+                      return (
+                        <div
+                          key={b.id}
+                          onClick={() => {
+                            setSelectedBranchId(b.id);
+                            setSelectedTlId(b.tls[0]?.id || '');
+                            setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                            setDrillLevel(3);
+                            setActiveInspectLevel('branch');
+                          }}
+                          className={`rounded-2xl px-3.5 py-2.5 cursor-pointer flex items-center justify-between gap-2 shadow-sm transition-all duration-300 ${
+                            isBranchActive
+                              ? 'bg-gradient-to-r from-amber-50 to-orange-50/70 border-2 border-amber-500 shadow-md text-slate-900'
+                              : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
+                          }`}
+                          style={{ height: branchHeight }}
+                          title={`Click to view ${b.name} Team Leaders`}
+                        >
+                          <span className="text-xs font-black tracking-tight">{b.name}</span>
+                          <span className={`text-xs font-black ${isBranchActive ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {formatCompactRupee(b.achievement)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* ================================================================= */}
+                  {/* COLUMN 3: TLS ONLY OF ACTIVE BRANCH (APPEARS AT LEVEL >= 3, CLICKS TO OPEN TMS) */}
+                  {/* ================================================================= */}
+                  <div
+                    className="absolute space-y-3.5"
+                    style={{
+                      left: col3Left,
+                      top: col3StartY,
+                      width: col3Width,
+                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
+                      opacity: drillLevel >= 3 ? 1 : 0,
+                      pointerEvents: drillLevel >= 3 ? 'auto' : 'none',
+                      transform: drillLevel >= 3 ? 'scale(1)' : 'scale(0.85)'
+                    }}
+                  >
+                    {currentTls.map((tl, t) => {
+                      const isTlActive = t === activeTlIndex;
+
+                      return (
+                        <div
+                          key={tl.id}
+                          onClick={() => {
+                            setSelectedTlId(tl.id);
+                            setSelectedTmId(tl.tms[0]?.id || '');
+                            setDrillLevel(4);
+                            setActiveInspectLevel('tl');
+                          }}
+                          className={`rounded-2xl px-3 py-2 cursor-pointer flex items-center justify-between gap-2 shadow-sm transition-all duration-300 ${
+                            isTlActive
+                              ? 'bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-500 shadow-md text-slate-900'
+                              : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
+                          }`}
+                          style={{ height: tlHeight }}
+                          title={`Click to view ${tl.name} Team Members`}
+                        >
+                          <span className="text-xs font-bold truncate max-w-[95px]" title={tl.name}>
+                            {tl.name}
+                          </span>
+                          <span className={`text-xs font-black ${isTlActive ? 'text-cyan-700' : 'text-emerald-600'}`}>
+                            {formatCompactRupee(tl.achievement)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* ================================================================= */}
+                  {/* COLUMN 4: TMS ONLY OF ACTIVE TL (APPEARS AT LEVEL >= 4) */}
+                  {/* ================================================================= */}
+                  <div
+                    className="absolute space-y-2"
+                    style={{
+                      left: col4Left,
+                      top: col4StartY,
+                      width: col4Width,
+                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)',
+                      opacity: drillLevel >= 4 ? 1 : 0,
+                      pointerEvents: drillLevel >= 4 ? 'auto' : 'none',
+                      transform: drillLevel >= 4 ? 'scale(1)' : 'scale(0.85)'
+                    }}
+                  >
+                    {currentTms.map((tm) => {
+                      const isTmActive = activeTm?.id === tm.id;
+                      const pct = tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0;
+
+                      return (
+                        <div
+                          key={tm.id}
+                          onClick={() => {
+                            setSelectedTmId(tm.id);
+                            setActiveInspectLevel('tm');
+                          }}
+                          className={`flex items-center justify-between px-3 py-1.5 rounded-xl cursor-pointer transition-all duration-200 ${
+                            isTmActive
+                              ? 'bg-cyan-50 border-2 border-cyan-500 text-cyan-950 font-bold shadow-sm'
+                              : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-xs'
+                          }`}
+                          style={{ height: 30 }}
+                        >
+                          <span className="text-xs font-bold truncate max-w-[110px]" title={tm.name}>
+                            {tm.name}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-black text-slate-700">
+                              {formatCompactRupee(tm.achievement)}
                             </span>
-                            <span className={`text-xs font-bold ${isSurplus ? 'text-emerald-600' : 'text-rose-500'}`}>
-                              {isSurplus ? '+14% vs Target' : '-4% Last month'}
+                            <span className="text-xs">
+                              {pct >= 100 ? '🔥' : pct > 0 ? '👍' : '⚠️'}
                             </span>
                           </div>
                         </div>
-
-                        {/* Equalizer Sparkline */}
-                        <div className="flex items-end gap-[2px] h-7">
-                          {waveformBars.map((h, bIdx) => (
-                            <span
-                              key={bIdx}
-                              style={{ height: `${h}%` }}
-                              className={`w-1 rounded-full transition-all ${
-                                bIdx >= 8 && bIdx <= 15
-                                  ? 'bg-amber-500 shadow-sm'
-                                  : 'bg-slate-300'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 2x2 Core Metric Tiles */}
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-100">
-                        <div className="flex items-center gap-1 text-[10px] text-blue-700 font-bold">
-                          <CheckCircle2 size={11} className="text-blue-600" />
-                          <span>Deals Won</span>
-                        </div>
-                        <p className="text-base font-black text-blue-950 mt-0.5">
-                          {inspectedEntity.wonCount || inspectedEntity.dealsCount || 0}
-                        </p>
-                      </div>
-
-                      <div className="p-2.5 rounded-2xl bg-purple-50/70 border border-purple-100">
-                        <div className="flex items-center gap-1 text-[10px] text-purple-700 font-bold">
-                          <FileText size={11} className="text-purple-600" />
-                          <span>Quoted Value</span>
-                        </div>
-                        <p className="text-base font-black text-purple-950 mt-0.5">
-                          {formatCompactRupee(inspectedEntity.bookedAmount || inspectedEntity.achievement)}
-                        </p>
-                      </div>
-
-                      <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
-                        <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
-                          <Sparkles size={11} className="text-emerald-600" />
-                          <span>Received</span>
-                        </div>
-                        <p className="text-base font-black text-emerald-800 mt-0.5">
-                          {formatCompactRupee(inspectedEntity.achievement)}
-                        </p>
-                      </div>
-
-                      <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-100">
-                        <div className="flex items-center gap-1 text-[10px] text-rose-700 font-bold">
-                          <Target size={11} className="text-rose-600" />
-                          <span>Shortfall Gap</span>
-                        </div>
-                        <p className="text-base font-black text-rose-800 mt-0.5">
-                          {formatCompactRupee(inspectedEntity.shortfall)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* RI Analysis Box */}
-                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700">
-                        <Zap size={12} className="text-amber-500" />
-                        <span>RI Executive Intelligence</span>
-                      </div>
-                      <p className="text-xs font-bold text-slate-900">
-                        {isSurplus ? 'Propose Quota Scaling' : 'Target Gap Closure Strategy'}
-                      </p>
-                      <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                        {isSurplus
-                          ? `Target successfully achieved with ${formatCompactRupee(inspectedEntity.achievement)} received. Expanding bandwidth to capture enterprise deals.`
-                          : `Current shortfall gap is ${formatCompactRupee(inspectedEntity.shortfall)}. Recommended action: Accelerate verification on active stage deals.`}
-                      </p>
-                    </div>
+                      );
+                    })}
                   </div>
 
-                  {/* Bottom Floating Prompt Pill */}
-                  <div className="mt-3 p-2 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 shadow-inner">
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-700">
-                        AI Agent
-                      </span>
-                      <input
-                        type="text"
-                        placeholder="Ask a question..."
-                        className="bg-transparent text-[11px] text-slate-800 placeholder-slate-400 focus:outline-none w-full font-medium"
-                      />
+                  {/* ================================================================= */}
+                  {/* COLUMN 5: SLEEK INSPECTOR PANEL (RIGHT SIDE) */}
+                  {/* ================================================================= */}
+                  <div
+                    className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-hidden flex flex-col justify-between"
+                    style={{
+                      left: 1045,
+                      top: 15,
+                      width: 335,
+                      bottom: 15
+                    }}
+                  >
+                    <div className="space-y-4">
+                      {/* Header */}
+                      <div>
+                        <div className="flex items-center gap-1.5 text-indigo-600 text-[11px] font-bold">
+                          <Briefcase size={12} />
+                          <span className="uppercase tracking-wider">
+                            {activeInspectLevel === 'root'
+                              ? 'ENTERPRISE CORE'
+                              : activeInspectLevel === 'sales'
+                              ? 'NATIONAL SALES'
+                              : activeInspectLevel === 'branch'
+                              ? 'REGIONAL BRANCH'
+                              : activeInspectLevel === 'tl'
+                              ? 'TEAM LEADER'
+                              : 'SALES BDM'}
+                          </span>
+                        </div>
+                        <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 leading-snug truncate" title={inspectedEntity.name}>
+                          {inspectedEntity.name}
+                        </h3>
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-emerald-700 font-bold">Active</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-[10px] text-slate-400">Live Zoho CRM</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (inspectedEntity.deals?.[0]?.id) {
+                                window.open(`/crm/deals/${inspectedEntity.deals[0].id}`, '_blank');
+                              }
+                            }}
+                            className="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-0.5 text-[10px] cursor-pointer"
+                          >
+                            <span>Explore deals</span>
+                            <ChevronRight size={11} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Sentiment Rate Card */}
+                      <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200/80 space-y-2">
+                        <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
+                          <span>Sentiment / Achievement Rate</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                            sentimentRate >= 100
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : sentimentRate >= 50
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}>
+                            {sentimentRate >= 100 ? 'High' : sentimentRate >= 50 ? 'Moderate' : 'Needs Focus'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-baseline justify-between pt-1">
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-2xl sm:text-3xl font-black text-slate-900">
+                              {sentimentRate}%
+                            </span>
+                            <span className={`text-[11px] font-bold flex items-center gap-0.5 ${
+                              isSurplus ? 'text-emerald-600' : 'text-rose-500'
+                            }`}>
+                              {isSurplus ? '+12% Target met' : '-4% Last month'}
+                            </span>
+                          </div>
+
+                          {/* Equalizer Waveform Bars */}
+                          <div className="flex items-end gap-[2px] h-8 pb-1">
+                            {waveformBars.slice(0, 18).map((h, bIdx) => (
+                              <span
+                                key={bIdx}
+                                style={{ height: `${h}%` }}
+                                className={`w-1 rounded-full transition-all ${
+                                  bIdx >= 8 && bIdx <= 15
+                                    ? 'bg-amber-500 shadow-sm'
+                                    : 'bg-slate-300'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2x2 Core Metric Tiles */}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-100">
+                          <div className="flex items-center gap-1 text-[10px] text-blue-700 font-bold">
+                            <CheckCircle2 size={11} className="text-blue-600" />
+                            <span>Deals Won</span>
+                          </div>
+                          <p className="text-base font-black text-blue-950 mt-0.5">
+                            {inspectedEntity.wonCount || inspectedEntity.dealsCount || 0}
+                          </p>
+                        </div>
+
+                        <div className="p-2.5 rounded-2xl bg-purple-50/70 border border-purple-100">
+                          <div className="flex items-center gap-1 text-[10px] text-purple-700 font-bold">
+                            <FileText size={11} className="text-purple-600" />
+                            <span>Quoted Value</span>
+                          </div>
+                          <p className="text-base font-black text-purple-950 mt-0.5">
+                            {formatCompactRupee(inspectedEntity.bookedAmount || inspectedEntity.achievement)}
+                          </p>
+                        </div>
+
+                        <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
+                          <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
+                            <Sparkles size={11} className="text-emerald-600" />
+                            <span>Received</span>
+                          </div>
+                          <p className="text-base font-black text-emerald-800 mt-0.5">
+                            {formatCompactRupee(inspectedEntity.achievement)}
+                          </p>
+                        </div>
+
+                        <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-100">
+                          <div className="flex items-center gap-1 text-[10px] text-rose-700 font-bold">
+                            <Target size={11} className="text-rose-600" />
+                            <span>Shortfall Gap</span>
+                          </div>
+                          <p className="text-base font-black text-rose-800 mt-0.5">
+                            {formatCompactRupee(inspectedEntity.shortfall)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* RI Analysis Box */}
+                      <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700">
+                          <Zap size={12} className="text-amber-500" />
+                          <span>RI Executive Intelligence</span>
+                        </div>
+                        <p className="text-xs font-bold text-slate-800">
+                          {isSurplus ? 'Target Quota Exceeded' : 'Target Gap Closure Strategy'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          {isSurplus
+                            ? `Surplus of ${formatCompactRupee(Math.abs(inspectedEntity.achievement - inspectedEntity.target))} above standard benchmark.`
+                            : `Current shortfall gap is ${formatCompactRupee(inspectedEntity.shortfall)}. Recommended action: Accelerate verification on active stage deals.`}
+                        </p>
+                      </div>
                     </div>
-                    <button
-                      title="Send query"
-                      className="p-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer flex-shrink-0 shadow-xs"
-                    >
-                      <Send size={11} />
-                    </button>
+
+                    {/* AI Prompt Input */}
+                    <div className="relative mt-4">
+                      <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-1.5 pl-3">
+                        <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-lg">
+                          AI Agent
+                        </span>
+                        <input
+                          type="text"
+                          placeholder="Ask a question..."
+                          className="w-full text-xs bg-transparent text-slate-800 focus:outline-none placeholder:text-slate-400"
+                        />
+                        <button className="w-7 h-7 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-all cursor-pointer shadow-sm">
+                          <Send size={11} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
-      {/* ========================================================================= */}
-      {/* 4. MASTER TARGET & ACHIEVEMENT BAR VIEW (LIGHT THEME) */}
-      {/* ========================================================================= */}
-      <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <Target size={18} className="text-indigo-600" />
-              Target vs Achievement Overview (Entire Sales Team)
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5 font-medium">
-              National sales target benchmark vs. actual revenue received with shortfall gap.
-            </p>
-          </div>
-          <div className="flex items-center gap-4 text-xs font-bold">
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Target: {formatCompactRupee(overallTarget)}
-            </span>
-            <span className="flex items-center gap-1.5 text-emerald-700">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
-            </span>
-            <span className="flex items-center gap-1.5 text-rose-600">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
-            </span>
-          </div>
-        </div>
-
-        {/* Master Comparison Bar */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center text-xs font-bold">
-            <span className="text-slate-800">Full Sales Organization Progress</span>
-            <span className="text-indigo-700 font-extrabold">{overallAchievementPct}% Achieved</span>
-          </div>
-          <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200 flex">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${overallAchievementPct}%` }}
-              transition={{ duration: 1, ease: 'easeOut' }}
-              className="h-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-400 rounded-full shadow-sm"
-            />
-          </div>
-        </div>
-
-        {/* Branch-by-Branch Breakdown Bars */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
-          {(salesTree.children?.[0]?.children || []).map((br: SalesTreeNode) => {
-            const pct = br.target > 0 ? Math.min(100, Math.round((br.achievement / br.target) * 100)) : 0;
-            return (
-              <div key={br.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                <div className="flex justify-between items-center text-xs mb-2">
-                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <MapPin size={13} className="text-indigo-600" />
-                    {br.name}
-                  </span>
-                  <span className="text-emerald-700 font-black">{pct}%</span>
-                </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex mb-2">
-                  <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full" />
-                </div>
-                <div className="flex justify-between items-center text-[11px] text-slate-500">
-                  <span>Ach: <strong className="text-slate-800">{formatCompactRupee(br.achievement)}</strong></span>
-                  <span>Shortfall: <strong className="text-rose-600">{formatCompactRupee(br.shortfall)}</strong></span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 5. DEAL PIPELINE VIEW STAGES & SALES FUNNEL (LIGHT THEME) */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Deal Pipeline View Stages */}
+        {/* ========================================================================= */}
+        {/* 4. MASTER TARGET & ACHIEVEMENT BAR VIEW (LIGHT THEME) */}
+        {/* ========================================================================= */}
         <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <Layers size={18} className="text-indigo-600" />
-                Deal Pipeline View Stages
+                <Target size={18} className="text-indigo-600" />
+                Target vs Achievement Overview (Entire Sales Team)
               </h3>
               <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                Live deals distributed across operational workflow stages.
+                National sales target benchmark vs. actual revenue received with shortfall gap.
               </p>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-              {filteredDeals.length} Deals
-            </span>
+            <div className="flex items-center gap-4 text-xs font-bold">
+              <span className="flex items-center gap-1.5 text-slate-600">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Target: {formatCompactRupee(overallTarget)}
+              </span>
+              <span className="flex items-center gap-1.5 text-emerald-700">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
+              </span>
+              <span className="flex items-center gap-1.5 text-rose-600">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {stageStats.map(st => (
-              <div
-                key={st.name}
-                className="p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 flex items-center justify-between transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <span className={`w-3 h-3 rounded-full ${st.color}`} />
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900">{st.name}</h5>
-                    <p className="text-[11px] text-slate-500">
-                      Total Quoted: {formatCompactRupee(st.amount)}
+          {/* Master Comparison Bar */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-xs font-bold">
+              <span className="text-slate-800">Full Sales Organization Progress</span>
+              <span className="text-indigo-700 font-extrabold">{overallAchievementPct}% Achieved</span>
+            </div>
+            <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200 flex">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${overallAchievementPct}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="h-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-400 rounded-full shadow-sm"
+              />
+            </div>
+          </div>
+
+          {/* Branch-by-Branch Breakdown Bars */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
+            {(salesTree.children?.[0]?.children || []).map((br: SalesTreeNode) => {
+              const pct = br.target > 0 ? Math.min(100, Math.round((br.achievement / br.target) * 100)) : 0;
+              return (
+                <div key={br.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                  <div className="flex justify-between items-center text-xs mb-2">
+                    <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <MapPin size={13} className="text-indigo-600" />
+                      {br.name}
+                    </span>
+                    <span className="text-emerald-700 font-black">{pct}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex mb-2">
+                    <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full" />
+                  </div>
+                  <div className="flex justify-between items-center text-[11px] text-slate-500">
+                    <span>Ach: <strong className="text-slate-800">{formatCompactRupee(br.achievement)}</strong></span>
+                    <span>Shortfall: <strong className="text-rose-600">{formatCompactRupee(br.shortfall)}</strong></span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 5. DEAL PIPELINE VIEW STAGES & SALES FUNNEL (LIGHT THEME) */}
+        {/* ========================================================================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Deal Pipeline View Stages */}
+          <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Layers size={18} className="text-indigo-600" />
+                  Deal Pipeline View Stages
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                  Live deals distributed across operational workflow stages.
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                {filteredDeals.length} Deals
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {stageStats.map(st => (
+                <div
+                  key={st.name}
+                  className="p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 flex items-center justify-between transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`w-3 h-3 rounded-full ${st.color}`} />
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-900">{st.name}</h5>
+                      <p className="text-[11px] text-slate-500">
+                        Total Quoted: {formatCompactRupee(st.amount)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-black text-slate-900">{st.count} Deals</span>
+                    <p className="text-[11px] font-bold text-emerald-600">
+                      Rec: {formatCompactRupee(st.received)}
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-sm font-black text-slate-900">{st.count} Deals</span>
-                  <p className="text-[11px] font-bold text-emerald-600">
-                    Rec: {formatCompactRupee(st.received)}
-                  </p>
-                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sales Funnel */}
+          <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <BarChart3 size={18} className="text-cyan-600" />
+                  Executive Sales Funnel
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                  Conversion drop-off from initial quote to closed won delivery.
+                </p>
               </div>
-            ))}
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
+                Conversion
+              </span>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              {[
+                { stage: '1. Quotations Generated', count: Math.max(liveQuotations.length, filteredDeals.length * 2), color: 'bg-blue-500', pct: 100 },
+                { stage: '2. Deal Contracts Booked', count: filteredDeals.length, color: 'bg-indigo-500', pct: Math.round((filteredDeals.length / Math.max(1, liveQuotations.length)) * 100) },
+                { stage: '3. Accounts Verified', count: filteredDeals.filter(d => isDealPaymentVerified(d)).length, color: 'bg-purple-500', pct: Math.round((filteredDeals.filter(d => isDealPaymentVerified(d)).length / Math.max(1, filteredDeals.length)) * 100) },
+                { stage: '4. Legal / Operations', count: filteredDeals.filter(d => !String(d.stage || '').toLowerCase().includes('sales')).length, color: 'bg-cyan-500', pct: 75 },
+                { stage: '5. Closed Won Delivery', count: filteredDeals.filter(d => String(d.stage || '').toLowerCase().includes('won')).length, color: 'bg-emerald-500', pct: 45 }
+              ].map(fn => (
+                <div key={fn.stage} className="space-y-1">
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-slate-700">{fn.stage}</span>
+                    <span className="text-slate-900">{fn.count} Records ({fn.pct}%)</span>
+                  </div>
+                  <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, Math.max(5, fn.pct))}%` }}
+                      transition={{ duration: 0.8 }}
+                      className={`h-full ${fn.color} rounded-full`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Sales Funnel */}
-        <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <BarChart3 size={18} className="text-cyan-600" />
-                Executive Sales Funnel
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                Conversion drop-off from initial quote to closed won delivery.
-              </p>
+        {/* ========================================================================= */}
+        {/* 6. TOP SELLING SERVICES & BDM MATRIX TABLE (LIGHT THEME) */}
+        {/* ========================================================================= */}
+        <div className="space-y-6">
+          {/* Top Selling Services Strip */}
+          <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Sparkles size={18} className="text-amber-500" />
+                  Top Selling Services
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                  Highest revenue generating services and schemes booked this period.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-slate-500">{topServices.length} Top Services</span>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
-              Conversion
-            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {topServices.map((srv, idx) => (
+                <div
+                  key={srv.name}
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-indigo-300 transition-all flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-black flex items-center justify-center">
+                        #{idx + 1}
+                      </span>
+                      <span className="text-xs font-bold text-slate-500">{srv.count} deals</span>
+                    </div>
+                    <h5 className="text-xs font-bold text-slate-900 truncate" title={srv.name}>
+                      {srv.name}
+                    </h5>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Revenue:</span>
+                    <span className="font-black text-emerald-700">{formatCompactRupee(srv.received)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="space-y-3 pt-2">
-            {[
-              { stage: '1. Quotations Generated', count: Math.max(liveQuotations.length, filteredDeals.length * 2), color: 'bg-blue-500', pct: 100 },
-              { stage: '2. Deal Contracts Booked', count: filteredDeals.length, color: 'bg-indigo-500', pct: Math.round((filteredDeals.length / Math.max(1, liveQuotations.length)) * 100) },
-              { stage: '3. Accounts Verified', count: filteredDeals.filter(d => isDealPaymentVerified(d)).length, color: 'bg-purple-500', pct: Math.round((filteredDeals.filter(d => isDealPaymentVerified(d)).length / Math.max(1, filteredDeals.length)) * 100) },
-              { stage: '4. Legal / Operations', count: filteredDeals.filter(d => !String(d.stage || '').toLowerCase().includes('sales')).length, color: 'bg-cyan-500', pct: 75 },
-              { stage: '5. Closed Won Delivery', count: filteredDeals.filter(d => String(d.stage || '').toLowerCase().includes('won')).length, color: 'bg-emerald-500', pct: 45 }
-            ].map(fn => (
-              <div key={fn.stage} className="space-y-1">
-                <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-700">{fn.stage}</span>
-                  <span className="text-slate-900">{fn.count} Records ({fn.pct}%)</span>
-                </div>
-                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.min(100, Math.max(5, fn.pct))}%` }}
-                    transition={{ duration: 0.8 }}
-                    className={`h-full ${fn.color} rounded-full`}
+          {/* BDM Matrix Table */}
+          <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Users size={18} className="text-indigo-600" />
+                  BDM-Wise Performance Matrix
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                  Individual Business Development Manager targets, revenue achievement and shortfall gaps.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={matrixSearch}
+                    onChange={(e) => setMatrixSearch(e.target.value)}
+                    placeholder="Search BDM, TL, Branch..."
+                    className="pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 w-56 font-medium"
                   />
                 </div>
+                <button
+                  onClick={handleExportCsv}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Download size={13} />
+                  <span>Export</span>
+                </button>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 6. TOP SELLING SERVICES & BDM MATRIX TABLE (LIGHT THEME) */}
-      {/* ========================================================================= */}
-      <div className="space-y-6">
-        {/* Top Selling Services Strip */}
-        <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <Sparkles size={18} className="text-amber-500" />
-                Top Selling Services
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                Highest revenue generating services and schemes booked this period.
-              </p>
-            </div>
-            <span className="text-xs font-bold text-slate-500">{topServices.length} Top Services</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {topServices.map((srv, idx) => (
-              <div
-                key={srv.name}
-                className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-indigo-300 transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-black flex items-center justify-center">
-                      #{idx + 1}
-                    </span>
-                    <span className="text-xs font-bold text-slate-500">{srv.count} deals</span>
-                  </div>
-                  <h5 className="text-xs font-bold text-slate-900 truncate" title={srv.name}>
-                    {srv.name}
-                  </h5>
-                </div>
-                <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs">
-                  <span className="text-slate-500">Revenue:</span>
-                  <span className="font-black text-emerald-700">{formatCompactRupee(srv.received)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* BDM Matrix Table */}
-        <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-            <div>
-              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <Users size={18} className="text-indigo-600" />
-                BDM-Wise Performance Matrix
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                Individual Business Development Manager targets, revenue achievement and shortfall gaps.
-              </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  value={matrixSearch}
-                  onChange={(e) => setMatrixSearch(e.target.value)}
-                  placeholder="Search BDM, TL, Branch..."
-                  className="pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 w-56 font-medium"
-                />
-              </div>
-              <button
-                onClick={handleExportCsv}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                <Download size={13} />
-                <span>Export</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-2xl border border-slate-200/80">
-            <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
-                <tr>
-                  <th className="px-5 py-3.5">BDM Name</th>
-                  <th className="px-5 py-3.5">Branch</th>
-                  <th className="px-5 py-3.5">Team Leader</th>
-                  <th className="px-5 py-3.5 text-right">Target</th>
-                  <th className="px-5 py-3.5 text-right">Achieved</th>
-                  <th className="px-5 py-3.5 text-right">Shortfall</th>
-                  <th className="px-5 py-3.5 text-center">Progress</th>
-                  <th className="px-5 py-3.5">Top Selling Service</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-                {bdmList.slice(0, 25).map(bdm => (
-                  <tr key={bdm.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-5 py-3 font-bold text-slate-900">{bdm.name}</td>
-                    <td className="px-5 py-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                        {bdm.branch}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">{bdm.tl}</td>
-                    <td className="px-5 py-3 text-right font-semibold text-slate-500">{formatCompactRupee(bdm.target)}</td>
-                    <td className="px-5 py-3 text-right font-black text-emerald-700">{formatCompactRupee(bdm.achievement)}</td>
-                    <td className="px-5 py-3 text-right font-bold text-rose-600">
-                      {bdm.shortfall === 0 ? <span className="text-emerald-600 font-extrabold">Met 👍</span> : formatCompactRupee(bdm.shortfall)}
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                        bdm.pct >= 100
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : bdm.pct >= 50
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200'
-                      }`}>
-                        {bdm.pct}%
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-slate-600 truncate max-w-[180px]">{bdm.topService}</td>
+            <div className="overflow-x-auto rounded-2xl border border-slate-200/80">
+              <table className="w-full text-left text-xs whitespace-nowrap">
+                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="px-5 py-3.5">BDM Name</th>
+                    <th className="px-5 py-3.5">Branch</th>
+                    <th className="px-5 py-3.5">Team Leader</th>
+                    <th className="px-5 py-3.5 text-right">Target</th>
+                    <th className="px-5 py-3.5 text-right">Achieved</th>
+                    <th className="px-5 py-3.5 text-right">Shortfall</th>
+                    <th className="px-5 py-3.5 text-center">Progress</th>
+                    <th className="px-5 py-3.5">Top Selling Service</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                  {bdmList.slice(0, 25).map(bdm => (
+                    <tr key={bdm.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-5 py-3 font-bold text-slate-900">{bdm.name}</td>
+                      <td className="px-5 py-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                          {bdm.branch}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-slate-600">{bdm.tl}</td>
+                      <td className="px-5 py-3 text-right font-semibold text-slate-500">{formatCompactRupee(bdm.target)}</td>
+                      <td className="px-5 py-3 text-right font-black text-emerald-700">{formatCompactRupee(bdm.achievement)}</td>
+                      <td className="px-5 py-3 text-right font-bold text-rose-600">
+                        {bdm.shortfall === 0 ? <span className="text-emerald-600 font-extrabold">Met 👍</span> : formatCompactRupee(bdm.shortfall)}
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${bdm.pct >= 100
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : bdm.pct >= 50
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          }`}>
+                          {bdm.pct}%
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-slate-600 truncate max-w-[180px]">{bdm.topService}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {bdmList.length > 25 && (
+              <p className="text-xs text-slate-400 text-center mt-3 font-medium">
+                Showing top 25 of {bdmList.length} Sales BDMs. Use search or click Export for full roster.
+              </p>
+            )}
           </div>
-          {bdmList.length > 25 && (
-            <p className="text-xs text-slate-400 text-center mt-3 font-medium">
-              Showing top 25 of {bdmList.length} Sales BDMs. Use search or click Export for full roster.
-            </p>
-          )}
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
