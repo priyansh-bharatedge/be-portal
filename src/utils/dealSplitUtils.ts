@@ -292,6 +292,63 @@ export const getDealTotalAmount = (d: any): number => {
   return 0;
 };
 
+export const getDealAmountWithoutGst = (d: any): number => {
+  if (!d) return 0;
+  // 1. Highest Priority: Zoho CRM's official "Amount_Without_GST" (api name: Amount_Without_GST)
+  const rawWithoutGst =
+    d.Amount_Without_GST !== undefined ? d.Amount_Without_GST :
+    d.rawZohoDeal?.Amount_Without_GST !== undefined ? d.rawZohoDeal.Amount_Without_GST :
+    d.amount_without_gst !== undefined ? d.amount_without_gst :
+    d.rawZohoDeal?.amount_without_gst !== undefined ? d.rawZohoDeal.amount_without_gst :
+    d.Deal_Amount_Without_GST !== undefined ? d.Deal_Amount_Without_GST :
+    d.rawZohoDeal?.Deal_Amount_Without_GST;
+
+  if (rawWithoutGst !== undefined && rawWithoutGst !== null && rawWithoutGst !== '') {
+    const parsed = parseNum(rawWithoutGst);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+
+  // 2. Subform Without_GST
+  if (Array.isArray(d.servicesData) && d.servicesData.length > 0) {
+    const unique = deduplicateSubforms(d.servicesData);
+    const sBase = unique.reduce((sum: number, sf: any) => sum + parseNum(sf.baseAmount || sf.Without_GST || sf.Base), 0);
+    if (sBase > 0) return sBase;
+  }
+  if (Array.isArray(d.rawZohoDeal?.Subform_1) && d.rawZohoDeal.Subform_1.length > 0) {
+    const unique = deduplicateSubforms(d.rawZohoDeal.Subform_1);
+    const sBase = unique.reduce((sum: number, sf: any) => sum + parseNum(sf.Without_GST || sf.baseAmount || sf.Base), 0);
+    if (sBase > 0) return sBase;
+  }
+
+  // 3. Mathematical fallback from Total With GST / 1.18
+  const totalWithGst = getDealTotalAmount(d);
+  if (totalWithGst > 0) return Number((totalWithGst / 1.18).toFixed(2));
+
+  return 0;
+};
+
+export const getDealGstAmount = (d: any): number => {
+  if (!d) return 0;
+  // 1. Highest Priority: Zoho CRM's official "GST_Amount" (api name: GST_Amount)
+  const rawGst =
+    d.GST_Amount !== undefined ? d.GST_Amount :
+    d.rawZohoDeal?.GST_Amount !== undefined ? d.rawZohoDeal.GST_Amount :
+    d.gst_amount !== undefined ? d.gst_amount :
+    d.rawZohoDeal?.gst_amount;
+
+  if (rawGst !== undefined && rawGst !== null && rawGst !== '') {
+    const parsed = parseNum(rawGst);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+
+  const withGst = getDealTotalAmount(d);
+  const withoutGst = getDealAmountWithoutGst(d);
+  if (withGst > withoutGst && withoutGst > 0) {
+    return Number((withGst - withoutGst).toFixed(2));
+  }
+  return 0;
+};
+
 export const getDealPartnerBdmName = (d: any): string => {
   if (!d) return '';
   return (

@@ -427,6 +427,8 @@ export const CrmDashboard = () => {
         Cloned_Deal: zDeal.Cloned_Deal,
         Employee: zDeal.Employee,
         Total_deal_amount_inclusive_of_gst: zDeal.Total_deal_amount_inclusive_of_gst,
+        Amount_Without_GST: zDeal.Amount_Without_GST,
+        GST_Amount: zDeal.GST_Amount,
         Total_Received_Amount: zDeal.Total_Received_Amount,
         rawZohoDeal: zDeal
       };

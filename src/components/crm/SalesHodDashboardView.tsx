@@ -7,7 +7,7 @@ import {
   Sparkles, RefreshCw, Briefcase, Zap, Flame, UserCheck, Eye,
   Maximize2, Minimize2, Compass, Activity, FileText,
   GitBranch, Network, Share2, Send, ZoomIn, ZoomOut, RotateCcw,
-  SlidersHorizontal, Sliders, Download, Check, X, Info
+  SlidersHorizontal, Sliders, Download, Check, X, Info, Receipt, Calculator
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -27,6 +27,8 @@ import {
   getDealReceivedAmount,
   getDealPendingAmount,
   getDealTotalAmount,
+  getDealAmountWithoutGst,
+  getDealGstAmount,
   isDealPaymentVerified
 } from '../../utils/dealSplitUtils';
 
@@ -340,15 +342,29 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   // 1. TODAY'S REVENUE
   const todayRevenue = useMemo(() => todayDeals.reduce((sum, d) => sum + getDealReceivedAmount(d), 0), [todayDeals]);
   const todayBooked = useMemo(() => todayDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [todayDeals]);
+  const todayWithGst = useMemo(() => todayDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [todayDeals]);
+  const todayWithoutGst = useMemo(() => todayDeals.reduce((sum, d) => sum + getDealAmountWithoutGst(d), 0), [todayDeals]);
+  const todayGstTax = useMemo(() => todayDeals.reduce((sum, d) => sum + getDealGstAmount(d), 0), [todayDeals]);
 
-  // 2. MONTHLY REVENUE
+  // 2. MONTHLY REVENUE & GST AMOUNTS (October 2026 / Selected Month)
   const monthlyRevenue = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealReceivedAmount(d), 0), [currentMonthDeals]);
   const monthlyBooked = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [currentMonthDeals]);
+  const monthlyWithGst = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [currentMonthDeals]);
+  const monthlyWithoutGst = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealAmountWithoutGst(d), 0), [currentMonthDeals]);
+  const monthlyGstTax = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealGstAmount(d), 0), [currentMonthDeals]);
 
-  // 3. REVENUE BREAKDOWN
+  // 3. REVENUE BREAKDOWN & GST AMOUNTS FOR ACTIVE TIMEFRAME
   const totalReceivedAmount = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealReceivedAmount(d), 0), [filteredDeals]);
   const totalPendingAmount = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealPendingAmount(d), 0), [filteredDeals]);
   const totalBookedValue = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [filteredDeals]);
+  const totalWithGst = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [filteredDeals]);
+  const totalWithoutGst = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealAmountWithoutGst(d), 0), [filteredDeals]);
+  const totalGstTax = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealGstAmount(d), 0), [filteredDeals]);
+
+  // Active Timeframe GST amounts for display
+  const activeWithGst = timeframe === 'month' ? monthlyWithGst : totalWithGst;
+  const activeWithoutGst = timeframe === 'month' ? monthlyWithoutGst : totalWithoutGst;
+  const activeGstTax = timeframe === 'month' ? monthlyGstTax : totalGstTax;
 
   // 4. TOP SELLING SERVICES
   const topServices = useMemo(() => {
@@ -1203,117 +1219,215 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         </AnimatePresence>
 
         {/* ========================================================================= */}
-        {/* 1. TOP EXECUTIVE REVENUE STRIP (CRISP WHITE LIGHT THEME) */}
+        {/* 1. TOP EXECUTIVE REVENUE & GST STRIP (CRISP WHITE LIGHT THEME) */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
           {/* Card 1: Today's Revenue */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-indigo-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-indigo-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3.5 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
-                <DollarSign size={20} />
-              </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                Today Live
-              </span>
-            </div>
-            <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Today's Revenue</p>
-              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1">
-                {formatRupee(todayRevenue)}
-              </h3>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium">
-                <span>Booked Total: <strong className="text-slate-800">{formatCompactRupee(todayBooked)}</strong></span>
-                <span>Deals: <strong className="text-indigo-600">{todayDeals.length}</strong></span>
+            <div>
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-3 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
+                  <DollarSign size={18} />
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  Today Live
+                </span>
               </div>
+              <div className="relative z-10">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Today's Revenue</p>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
+                  {formatRupee(todayRevenue)}
+                </h3>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+              <span>Booked: <strong className="text-slate-800">{formatCompactRupee(todayBooked)}</strong></span>
+              <span>Deals: <strong className="text-indigo-600">{todayDeals.length}</strong></span>
             </div>
           </div>
 
           {/* Card 2: Monthly Revenue */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-emerald-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-emerald-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3.5 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
-                <TrendingUp size={20} />
-              </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                October 2026
-              </span>
-            </div>
-            <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue</p>
-              <h3 className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight mt-1">
-                {formatRupee(monthlyRevenue)}
-              </h3>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium">
-                <span>Booked Value: <strong className="text-slate-800">{formatCompactRupee(monthlyBooked)}</strong></span>
-                <span>Month Deals: <strong className="text-emerald-700">{currentMonthDeals.length}</strong></span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Revenue Breakdown */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-amber-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3.5 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
-                <PieChartIcon size={20} />
-              </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
-                Received vs Pending
-              </span>
-            </div>
-            <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Breakdown</p>
-              <div className="flex items-baseline gap-2 mt-1">
-                <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight">
-                  {formatCompactRupee(totalReceivedAmount)}
-                </h3>
-                <span className="text-xs text-slate-400">rec /</span>
-                <span className="text-base font-bold text-rose-500">
-                  {formatCompactRupee(totalPendingAmount)}
+            <div>
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-3 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
+                  <TrendingUp size={18} />
                 </span>
-                <span className="text-xs text-slate-400">pend</span>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                  October 2026
+                </span>
               </div>
-              {/* Visual Progress Bar */}
-              <div className="w-full h-2.5 bg-slate-100 rounded-full mt-3 overflow-hidden flex">
-                <div
-                  style={{ width: `${totalBookedValue > 0 ? (totalReceivedAmount / totalBookedValue) * 100 : 50}%` }}
-                  className="bg-emerald-500 h-full"
-                  title="Received Ratio"
-                />
-                <div
-                  style={{ width: `${totalBookedValue > 0 ? (totalPendingAmount / totalBookedValue) * 100 : 50}%` }}
-                  className="bg-rose-400 h-full"
-                  title="Pending Ratio"
-                />
+              <div className="relative z-10">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue</p>
+                <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight mt-1" title={formatRupee(monthlyRevenue)}>
+                  {formatRupee(monthlyRevenue)}
+                </h3>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 font-medium">
-                <span>Rec Ratio: <strong className="text-slate-800">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
-                <span>Total Quoted: <strong className="text-slate-800">{formatCompactRupee(totalBookedValue)}</strong></span>
-              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+              <span>Booked: <strong className="text-slate-800">{formatCompactRupee(monthlyBooked)}</strong></span>
+              <span>Deals: <strong className="text-emerald-700">{currentMonthDeals.length}</strong></span>
             </div>
           </div>
 
-          {/* Card 4: Top High Performer & Branch */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-purple-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-            <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3.5 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 shadow-sm">
-                <Trophy size={20} />
-              </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
-                National Leader
-              </span>
+          {/* Card 3: With GST Amount */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-cyan-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+            <div>
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-3 rounded-2xl bg-cyan-50 text-cyan-600 border border-cyan-100 shadow-sm">
+                  <Receipt size={18} />
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
+                  Incl. 18% GST
+                </span>
+              </div>
+              <div className="relative z-10">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">With GST Amount</p>
+                <h3 className="text-xl sm:text-2xl font-black text-cyan-600 tracking-tight mt-1 truncate" title={formatRupee(activeWithGst)}>
+                  {formatRupee(activeWithGst)}
+                </h3>
+              </div>
             </div>
-            <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top High Performer</p>
-              <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1 truncate" title={topHighPerformer?.name}>
-                {topHighPerformer ? topHighPerformer.name : 'Calculating...'}
-              </h3>
-              <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium">
-                <span>Branch: <strong className="text-indigo-600">{topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
-                <span>Revenue: <strong className="text-emerald-600">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+              <span>GST Tax: <strong className="text-slate-800">{formatCompactRupee(activeGstTax)}</strong></span>
+              <span>Gross: <strong className="text-cyan-700">{formatCompactRupee(activeWithGst)}</strong></span>
+            </div>
+          </div>
+
+          {/* Card 4: Without GST Amount */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-blue-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+            <div>
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-3 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 shadow-sm">
+                  <Calculator size={18} />
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                  Excl. GST (Base)
+                </span>
+              </div>
+              <div className="relative z-10">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Without GST Amount</p>
+                <h3 className="text-xl sm:text-2xl font-black text-blue-600 tracking-tight mt-1 truncate" title={formatRupee(activeWithoutGst)}>
+                  {formatRupee(activeWithoutGst)}
+                </h3>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+              <span>Net Base: <strong className="text-slate-800">{formatCompactRupee(activeWithoutGst)}</strong></span>
+              <span>Deals: <strong className="text-blue-700">{currentMonthDeals.length}</strong></span>
+            </div>
+          </div>
+
+          {/* Card 5: Revenue Breakdown */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-amber-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+            <div>
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
+                  <PieChartIcon size={18} />
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                  Rec vs Pend
+                </span>
+              </div>
+              <div className="relative z-10">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Breakdown</p>
+                <div className="flex items-baseline gap-1.5 mt-1">
+                  <h3 className="text-lg sm:text-xl font-black text-emerald-600 tracking-tight">
+                    {formatCompactRupee(totalReceivedAmount)}
+                  </h3>
+                  <span className="text-[11px] text-slate-400">/</span>
+                  <span className="text-sm font-bold text-rose-500">
+                    {formatCompactRupee(totalPendingAmount)}
+                  </span>
+                </div>
+                {/* Visual Progress Bar */}
+                <div className="w-full h-2 bg-slate-100 rounded-full mt-2.5 overflow-hidden flex">
+                  <div
+                    style={{ width: `${totalBookedValue > 0 ? (totalReceivedAmount / totalBookedValue) * 100 : 50}%` }}
+                    className="bg-emerald-500 h-full"
+                    title="Received Ratio"
+                  />
+                  <div
+                    style={{ width: `${totalBookedValue > 0 ? (totalPendingAmount / totalBookedValue) * 100 : 50}%` }}
+                    className="bg-rose-400 h-full"
+                    title="Pending Ratio"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+              <span>Ratio: <strong className="text-slate-800">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
+              <span>Total: <strong className="text-slate-800">{formatCompactRupee(totalBookedValue)}</strong></span>
+            </div>
+          </div>
+
+          {/* Card 6: Top High Performer & Branch */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-purple-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+            <div>
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-3 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 shadow-sm">
+                  <Trophy size={18} />
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
+                  National Leader
+                </span>
+              </div>
+              <div className="relative z-10">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top High Performer</p>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 truncate" title={topHighPerformer?.name}>
+                  {topHighPerformer ? topHighPerformer.name : 'Calculating...'}
+                </h3>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
+              <span>Branch: <strong className="text-indigo-600">{topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
+              <span>Rev: <strong className="text-emerald-600">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* GST Audit & Revenue Reconciliation Section */}
+        <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 shadow-xl relative overflow-hidden border border-slate-800">
+          <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <span className="p-3.5 rounded-2xl bg-white/10 text-cyan-400 border border-white/10 backdrop-blur-md shrink-0">
+                <Receipt size={24} />
+              </span>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base sm:text-lg font-black tracking-tight text-white">GST Tax & Revenue Audit</h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                    Live Zoho Reconciliation
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 mt-1 font-medium max-w-2xl">
+                  Reconciliation of Gross Deal Amount (<code className="text-cyan-300 text-[11px] font-mono">Total_deal_amount_inclusive_of_gst</code>) vs Net Base (<code className="text-blue-300 text-[11px] font-mono">Amount_Without_GST</code>) and 18% Statutory GST (<code className="text-amber-300 text-[11px] font-mono">GST_Amount</code>).
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 shrink-0">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">With GST (Gross)</span>
+                <span className="text-base sm:text-lg font-black text-cyan-400">{formatRupee(activeWithGst)}</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">100% Total Quoted</span>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Without GST (Net Base)</span>
+                <span className="text-base sm:text-lg font-black text-emerald-400">{formatRupee(activeWithoutGst)}</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">~84.7% Base Value</span>
+              </div>
+              <div className="col-span-2 sm:col-span-1 bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">GST Component (18%)</span>
+                <span className="text-base sm:text-lg font-black text-amber-400">{formatRupee(activeGstTax)}</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">Tax Offset Collected</span>
               </div>
             </div>
           </div>
