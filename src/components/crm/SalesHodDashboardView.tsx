@@ -1481,37 +1481,114 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         <stop offset="50%" stopColor="#06b6d4" />
                         <stop offset="100%" stopColor="#6366f1" />
                       </linearGradient>
+
+                      {/* Arrowhead Markers */}
+                      <marker
+                        id="arrowhead-indigo"
+                        viewBox="0 0 10 10"
+                        refX="7"
+                        refY="5"
+                        markerWidth="6"
+                        markerHeight="6"
+                        orient="auto"
+                      >
+                        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#6366f1" />
+                      </marker>
+                      <marker
+                        id="arrowhead-amber"
+                        viewBox="0 0 10 10"
+                        refX="7"
+                        refY="5"
+                        markerWidth="6"
+                        markerHeight="6"
+                        orient="auto"
+                      >
+                        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#f59e0b" />
+                      </marker>
+                      <marker
+                        id="arrowhead-cyan"
+                        viewBox="0 0 10 10"
+                        refX="7"
+                        refY="5"
+                        markerWidth="6"
+                        markerHeight="6"
+                        orient="auto"
+                      >
+                        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#0ea5e9" />
+                      </marker>
+                      <marker
+                        id="arrowhead-slate"
+                        viewBox="0 0 10 10"
+                        refX="7"
+                        refY="5"
+                        markerWidth="5"
+                        markerHeight="5"
+                        orient="auto"
+                      >
+                        <path d="M 0 2 L 7 5 L 0 8 z" fill="#94a3b8" />
+                      </marker>
                     </defs>
 
-                    {/* 1. Curve: Logo -> Sales */}
+                    {/* 1. Curve & Arrow: Logo -> Sales */}
                     {drillLevel >= 1 && (
                       <g className="transition-opacity duration-500">
-                        <path
-                          d={`M ${x0} ${orbSocketY} C ${x0 + (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left - (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left} ${orbSocketY}`}
-                          stroke="url(#activeLightGrad)"
-                          strokeWidth="2.5"
-                          fill="none"
+                        {/* Soft glow behind line */}
+                        <line
+                          x1={x0}
+                          y1={orbSocketY}
+                          x2={col1Left}
+                          y2={orbSocketY}
+                          stroke="#c7d2fe"
+                          strokeWidth="6"
+                          strokeLinecap="round"
+                          opacity="0.45"
                         />
+                        {/* Main bold connecting line with Arrow */}
+                        <line
+                          x1={x0}
+                          y1={orbSocketY}
+                          x2={col1Left - 2}
+                          y2={orbSocketY}
+                          stroke="#6366f1"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          markerEnd="url(#arrowhead-indigo)"
+                        />
+                        {/* Directional Chevron in the middle */}
+                        {(() => {
+                          const midX = (x0 + col1Left) / 2;
+                          return (
+                            <path
+                              d={`M ${midX - 3} ${orbSocketY - 3.5} L ${midX + 2} ${orbSocketY} L ${midX - 3} ${orbSocketY + 3.5}`}
+                              stroke="#ffffff"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              fill="none"
+                            />
+                          );
+                        })()}
                         <circle cx={x0} cy={orbSocketY} r={4.5} fill="#6366f1" />
                         <circle cx={col1Left} cy={orbSocketY} r={4} fill="#6366f1" />
                       </g>
                     )}
 
-                    {/* 2. Curves: Sales -> 3 Branches */}
+                    {/* 2. Curves & Arrows: Sales -> 3 Branches */}
                     {drillLevel >= 2 && branches.map((b, i) => {
                       const branchCenterY = col2StartY + i * (branchHeight + branchGap) + branchHeight / 2;
                       const isBranchActive = i === activeBranchIndex;
                       const dx = (col2Left - col1Right) * 0.5;
-                      const pathD = `M ${col1Right} ${orbSocketY} C ${col1Right + dx} ${orbSocketY}, ${col2Left - dx} ${branchCenterY}, ${col2Left} ${branchCenterY}`;
+                      const pathD = `M ${col1Right} ${orbSocketY} C ${col1Right + dx} ${orbSocketY}, ${col2Left - dx} ${branchCenterY}, ${col2Left - 3} ${branchCenterY}`;
 
                       return (
                         <g key={b.id} className="transition-opacity duration-500">
                           <path
                             d={pathD}
-                            stroke={isBranchActive ? 'url(#activeLightGrad)' : '#cbd5e1'}
+                            stroke={isBranchActive ? '#f59e0b' : '#cbd5e1'}
                             strokeWidth={isBranchActive ? 2.5 : 1.5}
                             fill="none"
                             opacity={isBranchActive ? 1 : 0.65}
+                            markerEnd={isBranchActive ? 'url(#arrowhead-amber)' : 'url(#arrowhead-slate)'}
                           />
                           <circle
                             cx={col2Left}
@@ -1524,21 +1601,22 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     })}
                     {drillLevel >= 2 && <circle cx={col1Right} cy={orbSocketY} r={4.5} fill="#f59e0b" />}
 
-                    {/* 3. Curves: Active Branch -> TLs */}
+                    {/* 3. Curves & Arrows: Active Branch -> TLs */}
                     {drillLevel >= 3 && currentTls.map((tl, t) => {
                       const tlCenterY = col3StartY + t * (tlHeight + tlGap) + tlHeight / 2;
                       const isTlActive = t === activeTlIndex;
                       const dx = (col3Left - col2Right) * 0.5;
-                      const pathD = `M ${col2Right} ${activeBranchCenterY} C ${col2Right + dx} ${activeBranchCenterY}, ${col3Left - dx} ${tlCenterY}, ${col3Left} ${tlCenterY}`;
+                      const pathD = `M ${col2Right} ${activeBranchCenterY} C ${col2Right + dx} ${activeBranchCenterY}, ${col3Left - dx} ${tlCenterY}, ${col3Left - 3} ${tlCenterY}`;
 
                       return (
                         <g key={tl.id} className="transition-opacity duration-500">
                           <path
                             d={pathD}
-                            stroke={isTlActive ? 'url(#fanLightGrad)' : '#cbd5e1'}
+                            stroke={isTlActive ? '#0ea5e9' : '#cbd5e1'}
                             strokeWidth={isTlActive ? 2.5 : 1.5}
                             fill="none"
                             opacity={isTlActive ? 1 : 0.65}
+                            markerEnd={isTlActive ? 'url(#arrowhead-cyan)' : 'url(#arrowhead-slate)'}
                           />
                           <circle
                             cx={col3Left}
@@ -1551,12 +1629,12 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     })}
                     {drillLevel >= 3 && <circle cx={col2Right} cy={activeBranchCenterY} r={4.5} fill="#f59e0b" />}
 
-                    {/* 4. Curves: Active TL -> TMs */}
+                    {/* 4. Curves & Arrows: Active TL -> TMs */}
                     {drillLevel >= 4 && currentTms.map((tm, k) => {
                       const tmCenterY = col4StartY + k * itemStep + 15;
                       const isTmActive = activeTm?.id === tm.id;
                       const dx = (col4Left - col3Right) * 0.5;
-                      const pathD = `M ${col3Right} ${activeTlCenterY} C ${col3Right + dx} ${activeTlCenterY}, ${col4Left - dx} ${tmCenterY}, ${col4Left} ${tmCenterY}`;
+                      const pathD = `M ${col3Right} ${activeTlCenterY} C ${col3Right + dx} ${activeTlCenterY}, ${col4Left - dx} ${tmCenterY}, ${col4Left - 3} ${tmCenterY}`;
 
                       return (
                         <g key={tm.id} className="transition-opacity duration-500">
@@ -1566,6 +1644,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                             strokeWidth={isTmActive ? 2.5 : 1.2}
                             fill="none"
                             opacity={isTmActive ? 1 : 0.6}
+                            markerEnd={isTmActive ? 'url(#arrowhead-cyan)' : undefined}
                           />
                           <circle
                             cx={col4Left}
