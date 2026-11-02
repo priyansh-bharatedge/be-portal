@@ -1436,9 +1436,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. NEW INTERACTIVE VISUAL GRAPHS (PIE CHARTS & TARGET COMPARATIVE BARS) */}
+      {/* 2. NEW INTERACTIVE VISUAL GRAPHS (PIE CHARTS) */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Graph 1: Branch Revenue Share Donut Chart */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
           <div>
@@ -1545,51 +1545,6 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 <span>{st.name}: <strong>{st.value}</strong></span>
               </span>
             ))}
-          </div>
-        </div>
-
-        {/* Graph 3: Branch Target vs Achievement Comparative Bar Chart */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <BarChart3 size={16} className="text-amber-500" />
-                Target vs Shortfall (in Lakhs)
-              </h3>
-              <span className="text-xs font-bold text-slate-500">Branch Quota</span>
-            </div>
-            <p className="text-xs text-slate-400 mb-4">
-              Comparison of Target benchmark vs. Achieved revenue and Shortfall gap.
-            </p>
-          </div>
-
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={branchBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <RechartsTooltip
-                  formatter={(val: any, name: any) => [`₹${val} Lakhs`, name]}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
-                />
-                <Bar dataKey="Target" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Achieved" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Shortfall" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="flex items-center justify-around mt-4 pt-4 border-t border-slate-100 text-xs font-bold">
-            <span className="flex items-center gap-1.5 text-slate-500">
-              <span className="w-2.5 h-2.5 rounded-sm bg-slate-400" /> Target
-            </span>
-            <span className="flex items-center gap-1.5 text-emerald-600">
-              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Achieved
-            </span>
-            <span className="flex items-center gap-1.5 text-rose-500">
-              <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> Shortfall
-            </span>
           </div>
         </div>
       </div>
