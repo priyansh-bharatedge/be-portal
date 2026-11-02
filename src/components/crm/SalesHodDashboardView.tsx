@@ -2400,46 +2400,207 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         {/* 6. TOP SELLING SERVICES & BDM MATRIX TABLE (LIGHT THEME) */}
         {/* ========================================================================= */}
         <div className="space-y-6">
-          {/* Top Selling Services Strip */}
-          <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Sparkles size={18} className="text-amber-500" />
-                  Top Selling Services
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                  Highest revenue generating services and schemes booked this period.
-                </p>
-              </div>
-              <span className="text-xs font-bold text-slate-500">{topServices.length} Top Services</span>
-            </div>
+          {/* Top Selling Services Strip (Sleek Apple/Linear Executive Cards) */}
+          {(() => {
+            const maxRevenue = topServices[0]?.received || 1;
+            const totalRevenue = topServices.reduce((sum, s) => sum + s.received, 0);
+            const totalDeals = topServices.reduce((sum, s) => sum + s.count, 0);
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {topServices.map((srv, idx) => (
-                <div
-                  key={srv.name}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-indigo-300 transition-all flex flex-col justify-between"
-                >
+            const formatServiceName = (name: string) => {
+              if (!name) return 'Business Advisory';
+              const upper = name.toUpperCase().trim();
+              if (upper === 'CGSS') return 'CGSS Scheme';
+              if (upper === 'GEM REGISTRATION') return 'GeM Portal Registration';
+              if (upper === 'ISO CERTIFICATE') return 'ISO Certification';
+              if (upper === 'SEED SUPPORT SCHEME') return 'Seed Support Scheme';
+              if (upper === 'GUJARAT SAMRIDDHI YOJANA') return 'Gujarat Samriddhi Yojana';
+              if (upper === 'STARTUP INDIA CERTIFICATE') return 'Startup India Certificate';
+              return name.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            };
+
+            const getServiceMeta = (name: string, idx: number) => {
+              const upper = (name || '').toUpperCase();
+              if (upper.includes('GENERAL')) {
+                return {
+                  icon: Briefcase,
+                  iconGrad: 'from-blue-600 to-indigo-600',
+                  badgeBg: 'bg-blue-50 text-blue-700 border-blue-200',
+                  tag: 'Core Consulting'
+                };
+              }
+              if (upper.includes('ADVISORY') || upper.includes('BUSINESS')) {
+                return {
+                  icon: Compass,
+                  iconGrad: 'from-indigo-600 to-purple-600',
+                  badgeBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                  tag: 'Business Strategy'
+                };
+              }
+              if (upper.includes('STARTUP') || upper.includes('CERTIFICATE') || upper.includes('ISO')) {
+                return {
+                  icon: Award,
+                  iconGrad: 'from-amber-500 to-orange-600',
+                  badgeBg: 'bg-amber-50 text-amber-800 border-amber-200',
+                  tag: 'Certification'
+                };
+              }
+              if (upper.includes('GEM') || upper.includes('REGISTRATION')) {
+                return {
+                  icon: Building2,
+                  iconGrad: 'from-cyan-600 to-teal-600',
+                  badgeBg: 'bg-cyan-50 text-cyan-800 border-cyan-200',
+                  tag: 'Govt E-Market'
+                };
+              }
+              if (upper.includes('SCHEME') || upper.includes('YOJANA') || upper.includes('CGSS') || upper.includes('SEED')) {
+                return {
+                  icon: Zap,
+                  iconGrad: 'from-emerald-600 to-teal-600',
+                  badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+                  tag: 'Subsidy & Grants'
+                };
+              }
+              return {
+                icon: Sparkles,
+                iconGrad: 'from-purple-600 to-indigo-600',
+                badgeBg: 'bg-purple-50 text-purple-700 border-purple-200',
+                tag: 'Enterprise'
+              };
+            };
+
+            return (
+              <div className="rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-black flex items-center justify-center">
-                        #{idx + 1}
+                    <div className="flex items-center gap-2">
+                      <span className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 shadow-xs">
+                        <Sparkles size={18} />
                       </span>
-                      <span className="text-xs font-bold text-slate-500">{srv.count} deals</span>
+                      <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                        Top Selling Services & Schemes
+                      </h3>
                     </div>
-                    <h5 className="text-xs font-bold text-slate-900 truncate" title={srv.name}>
-                      {srv.name}
-                    </h5>
+                    <p className="text-xs text-slate-500 mt-1 font-medium">
+                      Real-time revenue contribution and deal volume across BharatEdge core business verticals.
+                    </p>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Revenue:</span>
-                    <span className="font-black text-emerald-700">{formatCompactRupee(srv.received)}</span>
+
+                  <div className="flex items-center gap-3">
+                    <span className="px-3.5 py-1.5 rounded-2xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs">
+                      Total: <strong className="font-black text-emerald-700">{formatCompactRupee(totalRevenue)}</strong>
+                    </span>
+                    <span className="px-3 py-1.5 rounded-2xl text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-xs">
+                      {totalDeals} Deals
+                    </span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+
+                {/* Cards Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {topServices.map((srv, idx) => {
+                    const meta = getServiceMeta(srv.name, idx);
+                    const SrvIcon = meta.icon;
+                    const pctOfTop = Math.min(100, Math.round((srv.received / maxRevenue) * 100));
+                    const avgTicket = srv.count > 0 ? Math.round(srv.received / srv.count) : 0;
+                    const isTop1 = idx === 0;
+
+                    return (
+                      <motion.div
+                        key={srv.name}
+                        whileHover={{ y: -3 }}
+                        transition={{ duration: 0.2 }}
+                        className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between group ${
+                          isTop1
+                            ? 'bg-gradient-to-br from-amber-50/50 via-white to-orange-50/20 border-amber-300 shadow-md shadow-amber-500/5 ring-1 ring-amber-200/60'
+                            : 'bg-white hover:bg-slate-50/50 border-slate-200/80 hover:border-indigo-300 shadow-xs hover:shadow-md'
+                        }`}
+                      >
+                        <div>
+                          {/* Card Top Row: Rank Badge & Category */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                                  idx === 0
+                                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
+                                    : idx === 1
+                                    ? 'bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-xs'
+                                    : idx === 2
+                                    ? 'bg-gradient-to-r from-cyan-500 to-teal-600 text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-700 font-bold'
+                                }`}
+                              >
+                                #{idx + 1}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold border ${meta.badgeBg}`}>
+                                {meta.tag}
+                              </span>
+                            </div>
+
+                            <span className="text-[11px] font-black text-slate-600 bg-slate-100/80 px-2 py-0.5 rounded-md">
+                              {srv.count} deals
+                            </span>
+                          </div>
+
+                          {/* Service Title */}
+                          <div className="flex items-start gap-2.5 mb-3">
+                            <span
+                              className={`p-2 rounded-xl bg-gradient-to-tr ${meta.iconGrad} text-white shadow-xs shrink-0 mt-0.5`}
+                            >
+                              <SrvIcon size={14} />
+                            </span>
+                            <h4
+                              className="text-xs sm:text-sm font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-tight"
+                              title={srv.name}
+                            >
+                              {formatServiceName(srv.name)}
+                            </h4>
+                          </div>
+                        </div>
+
+                        {/* Revenue & Avg Ticket */}
+                        <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                          <div className="flex items-baseline justify-between">
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                                Received
+                              </span>
+                              <span className="text-base sm:text-lg font-black text-emerald-700 tracking-tight">
+                                {formatCompactRupee(srv.received)}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                                Avg Ticket
+                              </span>
+                              <span className="text-xs font-black text-slate-700">
+                                {formatCompactRupee(avgTicket)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Relative Share Progress Bar */}
+                          <div className="space-y-1">
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                              <div
+                                style={{ width: `${pctOfTop}%` }}
+                                className={`h-full rounded-full bg-gradient-to-r ${meta.iconGrad}`}
+                              />
+                            </div>
+                            <div className="flex justify-between items-center text-[9px] font-bold text-slate-400">
+                              <span>Share of #1</span>
+                              <span className="text-slate-600">{pctOfTop}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* BDM Matrix Table */}
           <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
