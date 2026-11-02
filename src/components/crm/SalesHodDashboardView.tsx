@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Calendar, Search, Filter, TrendingUp, TrendingDown, Users,
+  Calendar, Search, Filter, TrendingUp, TrendingDown, User, Users,
   Layers, ChevronRight, ChevronDown, Award, Trophy, Target,
   DollarSign, PieChart as PieChartIcon, BarChart3, ArrowUpRight,
   Shield, CheckCircle2, Clock, AlertTriangle, Building2, MapPin,
@@ -38,6 +38,21 @@ export type TimeframeOption = 'today' | 'week' | 'month' | 'quarter' | 'all';
 
 export interface SalesHodDashboardViewProps {
   deals?: any[];
+  personal?: {
+    dealsCount: number;
+    wonCount: number;
+    received: number;
+    bookedAmount: number;
+    deals: any[];
+  };
+  team?: {
+    dealsCount: number;
+    wonCount: number;
+    received: number;
+    bookedAmount: number;
+    membersCount: number;
+    deals: any[];
+  };
   employees?: any[];
   quotations?: any[];
   clients?: any[];
@@ -62,6 +77,21 @@ export interface SalesTreeNode {
   children?: SalesTreeNode[];
   topService?: string;
   deals?: any[];
+  personal?: {
+    dealsCount: number;
+    wonCount: number;
+    received: number;
+    bookedAmount: number;
+    deals: any[];
+  };
+  team?: {
+    dealsCount: number;
+    wonCount: number;
+    received: number;
+    bookedAmount: number;
+    membersCount: number;
+    deals: any[];
+  };
 }
 
 const TARGET_BENCHMARKS = {
@@ -413,20 +443,20 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       let branchAllDeals: any[] = [];
 
       const tlNodes: SalesTreeNode[] = bc.tls.map(tl => {
-        let tlReceived = 0;
-        let tlBooked = 0;
-        let tlDealsCount = 0;
-        let tlAllDeals: any[] = [];
+        let teamReceived = 0;
+        let teamBooked = 0;
+        let teamDealsCount = 0;
+        let teamAllDeals: any[] = [];
 
         const tmNodes: SalesTreeNode[] = tl.tms.map(tmName => {
           const matched = matchBdmDeals(tmName, new Set<string>());
           const tmTarget = TARGET_BENCHMARKS.tm;
           const tmShortfall = Math.max(0, tmTarget - matched.received);
 
-          tlReceived += matched.received;
-          tlBooked += matched.booked;
-          tlDealsCount += matched.count;
-          tlAllDeals = [...tlAllDeals, ...matched.deals];
+          teamReceived += matched.received;
+          teamBooked += matched.booked;
+          teamDealsCount += matched.count;
+          teamAllDeals = [...teamAllDeals, ...matched.deals];
 
           // Determine TM's top service
           const sMap = new Map<string, number>();
@@ -458,18 +488,23 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           };
         });
 
-        // Add TL direct deals
+        // Direct / Personal deals closed by the TL themselves
         const tlDirect = matchBdmDeals(tl.name, new Set<string>());
-        tlReceived += tlDirect.received;
-        tlBooked += tlDirect.booked;
-        tlDealsCount += tlDirect.count;
-        tlAllDeals = [...tlAllDeals, ...tlDirect.deals];
+        const personalReceived = tlDirect.received;
+        const personalBooked = tlDirect.booked;
+        const personalDealsCount = tlDirect.count;
+        const personalAllDeals = tlDirect.deals;
 
-        const tlShortfall = Math.max(0, tl.target - tlReceived);
-        branchReceived += tlReceived;
-        branchBooked += tlBooked;
-        branchDealsCount += tlDealsCount;
-        branchAllDeals = [...branchAllDeals, ...tlAllDeals];
+        const combinedReceived = teamReceived + personalReceived;
+        const combinedBooked = teamBooked + personalBooked;
+        const combinedDealsCount = teamDealsCount + personalDealsCount;
+        const combinedAllDeals = [...teamAllDeals, ...personalAllDeals];
+
+        const tlShortfall = Math.max(0, tl.target - combinedReceived);
+        branchReceived += combinedReceived;
+        branchBooked += combinedBooked;
+        branchDealsCount += combinedDealsCount;
+        branchAllDeals = [...branchAllDeals, ...combinedAllDeals];
 
         return {
           id: `tl_${tl.name.toLowerCase().replace(/\s+/g, '_')}`,
@@ -478,13 +513,28 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           subtitle: tl.title,
           branchName: bc.name,
           target: tl.target,
-          achievement: tlReceived,
+          achievement: combinedReceived,
           shortfall: tlShortfall,
-          bookedAmount: tlBooked,
-          dealsCount: tlDealsCount,
-          wonCount: tlAllDeals.filter(d => isDealPaymentVerified(d)).length,
+          bookedAmount: combinedBooked,
+          dealsCount: combinedDealsCount,
+          wonCount: combinedAllDeals.filter(d => isDealPaymentVerified(d)).length,
           children: tmNodes,
-          deals: tlAllDeals
+          deals: combinedAllDeals,
+          personal: {
+            dealsCount: personalDealsCount,
+            wonCount: personalAllDeals.filter(d => isDealPaymentVerified(d)).length,
+            received: personalReceived,
+            bookedAmount: personalBooked,
+            deals: personalAllDeals
+          },
+          team: {
+            dealsCount: teamDealsCount,
+            wonCount: teamAllDeals.filter(d => isDealPaymentVerified(d)).length,
+            received: teamReceived,
+            bookedAmount: teamBooked,
+            membersCount: tl.tms.length,
+            deals: teamAllDeals
+          }
         };
       });
 
@@ -687,6 +737,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         achievement: tl.achievement,
         shortfall: tl.shortfall,
         dealsCount: tl.dealsCount,
+        personal: tl.personal,
+        team: tl.team,
         tms: (tl.children || []).map(tm => ({
           id: tm.id,
           name: tm.name,
@@ -720,6 +772,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   const [activeInspectLevel, setActiveInspectLevel] = useState<'root' | 'sales' | 'branch' | 'tl' | 'tm'>('root');
   // Drilldown level: 0 = Centered BharatEdge Logo, 1 = +Sales, 2 = +3 Branches, 3 = +TLs, 4 = +TMs
   const [drillLevel, setDrillLevel] = useState<0 | 1 | 2 | 3 | 4>(0);
+  // TL View Mode: all = Combined, personal = Personal (Self), team = Team
+  const [tlViewMode, setTlViewMode] = useState<'all' | 'personal' | 'team'>('all');
 
   const activeBranch = useMemo(() => {
     return branches.find(b => b.id === selectedBranchId) || branches[0];
@@ -1313,10 +1367,32 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           const col4Left = 715;
 
           // Inspector card metrics
-          const sentimentRate = inspectedEntity.target > 0
-            ? Math.min(150, Math.round((inspectedEntity.achievement / inspectedEntity.target) * 100))
+          const isTl = activeInspectLevel === 'tl' || Boolean(inspectedEntity.personal && inspectedEntity.team);
+          const personal = inspectedEntity.personal;
+          const team = inspectedEntity.team;
+
+          const currentDisplayTarget = (isTl && tlViewMode === 'personal') ? 400000 : (inspectedEntity.target || 0);
+          const currentDisplayAchievement = (isTl && tlViewMode === 'personal' && personal)
+            ? personal.received
+            : (isTl && tlViewMode === 'team' && team)
+            ? team.received
+            : (inspectedEntity.achievement || 0);
+          const currentDisplayBooked = (isTl && tlViewMode === 'personal' && personal)
+            ? personal.bookedAmount
+            : (isTl && tlViewMode === 'team' && team)
+            ? team.bookedAmount
+            : (inspectedEntity.bookedAmount || inspectedEntity.achievement || 0);
+          const currentDisplayWon = (isTl && tlViewMode === 'personal' && personal)
+            ? (personal.wonCount || personal.dealsCount || 0)
+            : (isTl && tlViewMode === 'team' && team)
+            ? (team.wonCount || team.dealsCount || 0)
+            : (inspectedEntity.wonCount || inspectedEntity.dealsCount || 0);
+          const currentDisplayShortfall = Math.max(0, currentDisplayTarget - currentDisplayAchievement);
+
+          const sentimentRate = currentDisplayTarget > 0
+            ? Math.min(150, Math.round((currentDisplayAchievement / currentDisplayTarget) * 100))
             : 0;
-          const isSurplus = (inspectedEntity.shortfall || 0) === 0;
+          const isSurplus = currentDisplayShortfall === 0;
 
           return (
             <div className="rounded-3xl bg-gradient-to-br from-white via-slate-50 to-indigo-50/20 border border-slate-200/90 p-5 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
@@ -1803,7 +1879,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   {/* COLUMN 5: SLEEK INSPECTOR PANEL (RIGHT SIDE) */}
                   {/* ================================================================= */}
                   <div
-                    className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-hidden flex flex-col justify-between"
+                    className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5"
                     style={{
                       left: 1045,
                       top: 15,
@@ -1811,101 +1887,210 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       bottom: 15
                     }}
                   >
-                    <div className="space-y-4">
-                      {/* Header */}
-                      <div>
-                        <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug truncate" title={inspectedEntity.name}>
-                          {inspectedEntity.name}
-                        </h3>
+                    {/* Header */}
+                    <div>
+                      <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug truncate" title={inspectedEntity.name}>
+                        {inspectedEntity.name}
+                      </h3>
+                    </div>
+
+                    {/* TL View Mode Toggle Pills */}
+                    {isTl && (
+                      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl">
+                        <button
+                          onClick={() => setTlViewMode('all')}
+                          className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                            tlViewMode === 'all'
+                              ? 'bg-white text-indigo-950 shadow-xs'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Combined
+                        </button>
+                        <button
+                          onClick={() => setTlViewMode('personal')}
+                          className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                            tlViewMode === 'personal'
+                              ? 'bg-white text-blue-900 shadow-xs'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          <User size={11} />
+                          <span>Personal</span>
+                        </button>
+                        <button
+                          onClick={() => setTlViewMode('team')}
+                          className={`flex-1 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                            tlViewMode === 'team'
+                              ? 'bg-white text-cyan-900 shadow-xs'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          <Users size={11} />
+                          <span>Team</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Sentiment Rate Card */}
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
+                        <span>Sentiment / Achievement Rate</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                          sentimentRate >= 100
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : sentimentRate >= 50
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-rose-50 text-rose-700 border-rose-200'
+                        }`}>
+                          {sentimentRate >= 100 ? 'High' : sentimentRate >= 50 ? 'Moderate' : 'Needs Focus'}
+                        </span>
                       </div>
 
-                      {/* Sentiment Rate Card */}
-                      <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200/80 space-y-2">
-                        <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
-                          <span>Sentiment / Achievement Rate</span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                            sentimentRate >= 100
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : sentimentRate >= 50
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                      <div className="flex items-baseline justify-between pt-1">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-2xl sm:text-3xl font-black text-slate-900">
+                            {sentimentRate}%
+                          </span>
+                          <span className={`text-[11px] font-bold flex items-center gap-0.5 ${
+                            isSurplus ? 'text-emerald-600' : 'text-rose-500'
                           }`}>
-                            {sentimentRate >= 100 ? 'High' : sentimentRate >= 50 ? 'Moderate' : 'Needs Focus'}
+                            {isSurplus ? '+12% Target met' : '-4% Last month'}
                           </span>
                         </div>
 
-                        <div className="flex items-baseline justify-between pt-1">
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="text-2xl sm:text-3xl font-black text-slate-900">
-                              {sentimentRate}%
-                            </span>
-                            <span className={`text-[11px] font-bold flex items-center gap-0.5 ${
-                              isSurplus ? 'text-emerald-600' : 'text-rose-500'
-                            }`}>
-                              {isSurplus ? '+12% Target met' : '-4% Last month'}
-                            </span>
-                          </div>
-
-                          {/* Equalizer Waveform Bars */}
-                          <div className="flex items-end gap-[2px] h-8 pb-1">
-                            {waveformBars.slice(0, 18).map((h, bIdx) => (
-                              <span
-                                key={bIdx}
-                                style={{ height: `${h}%` }}
-                                className={`w-1 rounded-full transition-all ${
-                                  bIdx >= 8 && bIdx <= 15
-                                    ? 'bg-amber-500 shadow-sm'
-                                    : 'bg-slate-300'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 2x2 Core Metric Tiles */}
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-100">
-                          <div className="flex items-center gap-1 text-[10px] text-blue-700 font-bold">
-                            <CheckCircle2 size={11} className="text-blue-600" />
-                            <span>Deals Won</span>
-                          </div>
-                          <p className="text-base font-black text-blue-950 mt-0.5">
-                            {inspectedEntity.wonCount || inspectedEntity.dealsCount || 0}
-                          </p>
-                        </div>
-
-                        <div className="p-2.5 rounded-2xl bg-purple-50/70 border border-purple-100">
-                          <div className="flex items-center gap-1 text-[10px] text-purple-700 font-bold">
-                            <FileText size={11} className="text-purple-600" />
-                            <span>Quoted Value</span>
-                          </div>
-                          <p className="text-base font-black text-purple-950 mt-0.5">
-                            {formatCompactRupee(inspectedEntity.bookedAmount || inspectedEntity.achievement)}
-                          </p>
-                        </div>
-
-                        <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
-                          <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
-                            <Sparkles size={11} className="text-emerald-600" />
-                            <span>Received</span>
-                          </div>
-                          <p className="text-base font-black text-emerald-800 mt-0.5">
-                            {formatCompactRupee(inspectedEntity.achievement)}
-                          </p>
-                        </div>
-
-                        <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-100">
-                          <div className="flex items-center gap-1 text-[10px] text-rose-700 font-bold">
-                            <Target size={11} className="text-rose-600" />
-                            <span>Shortfall Gap</span>
-                          </div>
-                          <p className="text-base font-black text-rose-800 mt-0.5">
-                            {formatCompactRupee(inspectedEntity.shortfall)}
-                          </p>
+                        {/* Equalizer Waveform Bars */}
+                        <div className="flex items-end gap-[2px] h-8 pb-1">
+                          {waveformBars.slice(0, 18).map((h, bIdx) => (
+                            <span
+                              key={bIdx}
+                              style={{ height: `${h}%` }}
+                              className={`w-1 rounded-full transition-all ${
+                                bIdx >= 8 && bIdx <= 15
+                                  ? 'bg-amber-500 shadow-sm'
+                                  : 'bg-slate-300'
+                              }`}
+                            />
+                          ))}
                         </div>
                       </div>
                     </div>
+
+                    {/* 2x2 Core Metric Tiles */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-100">
+                        <div className="flex items-center gap-1 text-[10px] text-blue-700 font-bold">
+                          <CheckCircle2 size={11} className="text-blue-600" />
+                          <span>Deals Won</span>
+                        </div>
+                        <p className="text-base font-black text-blue-950 mt-0.5">
+                          {currentDisplayWon}
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 rounded-2xl bg-purple-50/70 border border-purple-100">
+                        <div className="flex items-center gap-1 text-[10px] text-purple-700 font-bold">
+                          <FileText size={11} className="text-purple-600" />
+                          <span>Quoted Value</span>
+                        </div>
+                        <p className="text-base font-black text-purple-950 mt-0.5">
+                          {formatCompactRupee(currentDisplayBooked)}
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
+                        <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
+                          <Sparkles size={11} className="text-emerald-600" />
+                          <span>Received</span>
+                        </div>
+                        <p className="text-base font-black text-emerald-800 mt-0.5">
+                          {formatCompactRupee(currentDisplayAchievement)}
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-100">
+                        <div className="flex items-center gap-1 text-[10px] text-rose-700 font-bold">
+                          <Target size={11} className="text-rose-600" />
+                          <span>Shortfall Gap</span>
+                        </div>
+                        <p className="text-base font-black text-rose-800 mt-0.5">
+                          {formatCompactRupee(currentDisplayShortfall)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* TL DUAL BREAKDOWN: PERSONAL VS TEAM */}
+                    {isTl && personal && team && (
+                      <div className="space-y-2 pt-1">
+                        {/* 1. Personal Records Card */}
+                        <div
+                          onClick={() => setTlViewMode('personal')}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                            tlViewMode === 'personal'
+                              ? 'bg-blue-50/95 border-blue-400 ring-2 ring-blue-200 shadow-sm'
+                              : 'bg-gradient-to-r from-blue-50/60 to-indigo-50/30 border-blue-200/70 hover:bg-blue-50/80'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs font-black text-blue-950 mb-1.5">
+                            <span className="flex items-center gap-1.5">
+                              <User size={13} className="text-blue-600" />
+                              <span>Personal Records (Self)</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                              {personal.wonCount || personal.dealsCount || 0} Won
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="bg-white/90 p-2 rounded-xl border border-blue-100 shadow-xs">
+                              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Received</span>
+                              <span className="text-sm font-black text-emerald-700">
+                                {formatCompactRupee(personal.received)}
+                              </span>
+                            </div>
+                            <div className="bg-white/90 p-2 rounded-xl border border-blue-100 shadow-xs">
+                              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Quoted</span>
+                              <span className="text-sm font-black text-slate-800">
+                                {formatCompactRupee(personal.bookedAmount)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2. Team Records Card */}
+                        <div
+                          onClick={() => setTlViewMode('team')}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                            tlViewMode === 'team'
+                              ? 'bg-cyan-50/95 border-cyan-400 ring-2 ring-cyan-200 shadow-sm'
+                              : 'bg-gradient-to-r from-cyan-50/60 to-teal-50/30 border-cyan-200/70 hover:bg-cyan-50/80'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs font-black text-cyan-950 mb-1.5">
+                            <span className="flex items-center gap-1.5">
+                              <Users size={13} className="text-cyan-700" />
+                              <span>Team Records ({team.membersCount || currentTms.length} Members)</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-cyan-800 bg-cyan-100 px-2 py-0.5 rounded-full">
+                              {team.wonCount || team.dealsCount || 0} Won
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="bg-white/90 p-2 rounded-xl border border-cyan-100 shadow-xs">
+                              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Received</span>
+                              <span className="text-sm font-black text-emerald-700">
+                                {formatCompactRupee(team.received)}
+                              </span>
+                            </div>
+                            <div className="bg-white/90 p-2 rounded-xl border border-cyan-100 shadow-xs">
+                              <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Quoted</span>
+                              <span className="text-sm font-black text-slate-800">
+                                {formatCompactRupee(team.bookedAmount)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
