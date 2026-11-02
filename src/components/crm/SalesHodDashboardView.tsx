@@ -187,6 +187,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   const [simulationBoost, setSimulationBoost] = useState<number>(15); // +15% default simulation
   const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'matrix'>('overview');
   const [matrixSearch, setMatrixSearch] = useState<string>('');
+  const [matrixFilter, setMatrixFilter] = useState<'all' | 'met' | 'progress' | 'gap' | 'ahmedabad' | 'jaipur' | 'chennai'>('all');
 
   // Load live data if props change
   useEffect(() => {
@@ -820,26 +821,55 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     }, []);
 
     // Filtered BDM Matrix
-    const bdmList = useMemo(() => {
+    const rawBdmList = useMemo(() => {
       const list: any[] = [];
       (salesTree.children?.[0]?.children || []).forEach(br => {
         (br.children || []).forEach(tl => {
           (tl.children || []).forEach(tm => {
+            const rawSrv = tm.topService || 'Business Advisory';
+            const cleanSrv = rawSrv.toUpperCase().trim() === 'CGSS'
+              ? 'CGSS Scheme'
+              : rawSrv.toUpperCase().trim() === 'GEM REGISTRATION'
+              ? 'GeM Portal Registration'
+              : rawSrv.toUpperCase().trim() === 'ISO CERTIFICATE'
+              ? 'ISO Certification'
+              : rawSrv.toLowerCase().split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
             list.push({
               id: tm.id,
               name: tm.name,
-              branch: br.name.replace(' Branch', ''),
+              branch: br.name.replace(' Branch', '').trim(),
               tl: tl.name,
               target: tm.target,
               achievement: tm.achievement,
               shortfall: tm.shortfall,
               dealsCount: tm.dealsCount,
-              topService: tm.topService || 'Business Advisory',
+              topService: cleanSrv,
               pct: tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0
             });
           });
         });
       });
+      return list;
+    }, [salesTree]);
+
+    const bdmList = useMemo(() => {
+      let list = [...rawBdmList];
+
+      if (matrixFilter === 'met') {
+        list = list.filter(b => b.shortfall === 0);
+      } else if (matrixFilter === 'progress') {
+        list = list.filter(b => b.pct >= 50 && b.shortfall > 0);
+      } else if (matrixFilter === 'gap') {
+        list = list.filter(b => b.pct < 50);
+      } else if (matrixFilter === 'ahmedabad') {
+        list = list.filter(b => b.branch.toLowerCase().includes('ahmedabad'));
+      } else if (matrixFilter === 'jaipur') {
+        list = list.filter(b => b.branch.toLowerCase().includes('jaipur'));
+      } else if (matrixFilter === 'chennai') {
+        list = list.filter(b => b.branch.toLowerCase().includes('chennai'));
+      }
+
       if (!matrixSearch.trim()) return list;
       const q = matrixSearch.toLowerCase();
       return list.filter(b =>
@@ -848,7 +878,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         b.tl.toLowerCase().includes(q) ||
         b.topService.toLowerCase().includes(q)
       );
-    }, [salesTree, matrixSearch]);
+    }, [rawBdmList, matrixSearch, matrixFilter]);
 
     // Executive CSV Export Tool
     const handleExportCsv = () => {
@@ -2602,88 +2632,254 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             );
           })()}
 
-          {/* BDM Matrix Table */}
-          <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Users size={18} className="text-indigo-600" />
-                  BDM-Wise Performance Matrix
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                  Individual Business Development Manager targets, revenue achievement and shortfall gaps.
-                </p>
+          {/* BDM Matrix Table (Aesthetic Modern Executive Table) */}
+          <div className="rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
+            {/* Header with Title and Global Search */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-5 pb-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20">
+                  <Users size={18} />
+                </span>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <span>BDM Performance Matrix</span>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                      Live Roster
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                    Individual Business Development Manager targets, revenue achievement, and shortfall gaps.
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* Action Controls & Search */}
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={matrixSearch}
                     onChange={(e) => setMatrixSearch(e.target.value)}
-                    placeholder="Search BDM, TL, Branch..."
-                    className="pl-9 pr-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 w-56 font-medium"
+                    placeholder="Search BDM, TL, Branch, Service..."
+                    className="pl-9 pr-8 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all w-64 font-medium shadow-xs"
                   />
+                  {matrixSearch && (
+                    <button
+                      onClick={() => setMatrixSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
                 </div>
+
                 <button
                   onClick={handleExportCsv}
-                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs hover:shadow-sm"
                 >
-                  <Download size={13} />
-                  <span>Export</span>
+                  <Download size={13} className="text-indigo-600" />
+                  <span>Export CSV</span>
                 </button>
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-slate-200/80">
+            {/* Quick Filter Tabs Strip */}
+            {(() => {
+              const rawTotal = rawBdmList.length;
+              const metCount = rawBdmList.filter(b => b.shortfall === 0).length;
+              const progressCount = rawBdmList.filter(b => b.pct >= 50 && b.shortfall > 0).length;
+              const gapCount = rawBdmList.filter(b => b.pct < 50).length;
+
+              return (
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                  <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/80 rounded-2xl">
+                    {[
+                      { key: 'all', label: `All BDMs (${rawTotal})` },
+                      { key: 'met', label: `Quota Met (${metCount})` },
+                      { key: 'progress', label: `In Progress (${progressCount})` },
+                      { key: 'gap', label: `Under Target (${gapCount})` },
+                      { key: 'ahmedabad', label: 'Ahmedabad' },
+                      { key: 'jaipur', label: 'Jaipur' },
+                      { key: 'chennai', label: 'Chennai' },
+                    ].map(tab => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setMatrixFilter(tab.key as any)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          matrixFilter === tab.key
+                            ? 'bg-white text-indigo-950 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="text-xs font-bold text-slate-500">
+                    Showing <strong className="text-slate-900">{bdmList.length}</strong> of {rawTotal} BDMs
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Aesthetic Table */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-200/90 shadow-2xs">
               <table className="w-full text-left text-xs whitespace-nowrap">
-                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                <thead className="bg-slate-50/90 text-slate-500 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
                   <tr>
-                    <th className="px-5 py-3.5">BDM Name</th>
+                    <th className="px-5 py-3.5">BDM Profile</th>
                     <th className="px-5 py-3.5">Branch</th>
                     <th className="px-5 py-3.5">Team Leader</th>
                     <th className="px-5 py-3.5 text-right">Target</th>
-                    <th className="px-5 py-3.5 text-right">Achieved</th>
+                    <th className="px-5 py-3.5 text-right">Revenue Achieved</th>
                     <th className="px-5 py-3.5 text-right">Shortfall</th>
-                    <th className="px-5 py-3.5 text-center">Progress</th>
+                    <th className="px-5 py-3.5 text-center min-w-[125px]">Target Progress</th>
                     <th className="px-5 py-3.5">Top Selling Service</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-                  {bdmList.slice(0, 25).map(bdm => (
-                    <tr key={bdm.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-5 py-3 font-bold text-slate-900">{bdm.name}</td>
-                      <td className="px-5 py-3">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                          {bdm.branch}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-slate-600">{bdm.tl}</td>
-                      <td className="px-5 py-3 text-right font-semibold text-slate-500">{formatCompactRupee(bdm.target)}</td>
-                      <td className="px-5 py-3 text-right font-black text-emerald-700">{formatCompactRupee(bdm.achievement)}</td>
-                      <td className="px-5 py-3 text-right font-bold text-rose-600">
-                        {bdm.shortfall === 0 ? <span className="text-emerald-600 font-extrabold">Met 👍</span> : formatCompactRupee(bdm.shortfall)}
-                      </td>
-                      <td className="px-5 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${bdm.pct >= 100
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : bdm.pct >= 50
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
-                          }`}>
-                          {bdm.pct}%
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-slate-600 truncate max-w-[180px]">{bdm.topService}</td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-slate-100 text-slate-700 font-medium bg-white">
+                  {bdmList.slice(0, 35).map(bdm => {
+                    const initials = bdm.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('');
+                    const isMet = bdm.shortfall === 0;
+
+                    return (
+                      <tr key={bdm.id} className="hover:bg-indigo-50/30 transition-colors group">
+                        {/* 1. BDM Profile */}
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <span
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black shadow-2xs ${
+                                  isMet
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : bdm.pct >= 50
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                }`}
+                              >
+                                {initials}
+                              </span>
+                              <span
+                                className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                                  isMet ? 'bg-emerald-500' : bdm.pct >= 50 ? 'bg-amber-500' : 'bg-slate-300'
+                                }`}
+                              />
+                            </div>
+                            <div>
+                              <h5 className="font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors text-xs">
+                                {bdm.name}
+                              </h5>
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                {bdm.dealsCount} deals closed
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 2. Branch */}
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${
+                              bdm.branch.toLowerCase().includes('ahmedabad')
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : bdm.branch.toLowerCase().includes('jaipur')
+                                ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                                : 'bg-cyan-50 text-cyan-800 border-cyan-200'
+                            }`}
+                          >
+                            {bdm.branch}
+                          </span>
+                        </td>
+
+                        {/* 3. Team Leader */}
+                        <td className="px-5 py-3.5">
+                          <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                            <User size={12} className="text-slate-400" />
+                            <span>{bdm.tl}</span>
+                          </span>
+                        </td>
+
+                        {/* 4. Target */}
+                        <td className="px-5 py-3.5 text-right font-bold text-slate-500">
+                          {formatCompactRupee(bdm.target)}
+                        </td>
+
+                        {/* 5. Achieved */}
+                        <td className="px-5 py-3.5 text-right">
+                          <span className="font-black text-emerald-700 text-sm">
+                            {formatCompactRupee(bdm.achievement)}
+                          </span>
+                        </td>
+
+                        {/* 6. Shortfall */}
+                        <td className="px-5 py-3.5 text-right">
+                          {isMet ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                              <CheckCircle2 size={11} className="text-emerald-600" />
+                              <span>Target Met</span>
+                            </span>
+                          ) : (
+                            <span className="text-xs font-bold text-rose-600">
+                              {formatCompactRupee(bdm.shortfall)}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 7. Progress & Mini Bar */}
+                        <td className="px-5 py-3.5 text-center">
+                          <div className="flex flex-col items-center gap-1 min-w-[95px]">
+                            <div className="flex items-center justify-between w-full text-[10px] font-black">
+                              <span
+                                className={
+                                  isMet
+                                    ? 'text-emerald-700'
+                                    : bdm.pct >= 50
+                                    ? 'text-amber-700'
+                                    : 'text-rose-600'
+                                }
+                              >
+                                {bdm.pct}%
+                              </span>
+                              {isMet && (
+                                <span className="text-[9px] font-bold text-emerald-600">Surplus</span>
+                              )}
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                              <div
+                                style={{ width: `${Math.min(100, Math.max(4, bdm.pct))}%` }}
+                                className={`h-full rounded-full ${
+                                  isMet
+                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                                    : bdm.pct >= 50
+                                    ? 'bg-gradient-to-r from-amber-500 to-orange-400'
+                                    : 'bg-gradient-to-r from-rose-400 to-rose-500'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 8. Top Selling Service */}
+                        <td className="px-5 py-3.5">
+                          <span
+                            className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-50 border border-slate-200/80 text-slate-700 truncate max-w-[190px] block shadow-2xs"
+                            title={bdm.topService}
+                          >
+                            {bdm.topService}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-            {bdmList.length > 25 && (
+
+            {bdmList.length > 35 && (
               <p className="text-xs text-slate-400 text-center mt-3 font-medium">
-                Showing top 25 of {bdmList.length} Sales BDMs. Use search or click Export for full roster.
+                Showing top 35 of {bdmList.length} Sales BDMs. Use filter pills, search, or Export CSV for complete records.
               </p>
             )}
           </div>
