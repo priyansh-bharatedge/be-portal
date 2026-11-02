@@ -395,6 +395,8 @@ export const CrmDashboard = () => {
         paymentVerified: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes',
         Booking_Date: zDeal.Booking_Date,
         Cloned_Deal: zDeal.Cloned_Deal,
+        Total_deal_amount_inclusive_of_gst: zDeal.Total_deal_amount_inclusive_of_gst,
+        Total_Received_Amount: zDeal.Total_Received_Amount,
         rawZohoDeal: zDeal
       };
     });

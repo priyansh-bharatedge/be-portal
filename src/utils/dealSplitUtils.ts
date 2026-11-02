@@ -137,6 +137,20 @@ const deduplicateSubforms = (list: any[]): any[] => {
 
 export const getDealReceivedAmount = (d: any): number => {
   if (!d) return 0;
+
+  // 1. Highest Priority: Zoho CRM's official "Total Received Amount"
+  const officialRec = parseNum(
+    d.Total_Received_Amount ??
+    d.rawZohoDeal?.Total_Received_Amount ??
+    d.Deal_Received_Amount ??
+    d.rawZohoDeal?.Deal_Received_Amount ??
+    d.Received_amount ??
+    d.rawZohoDeal?.Received_amount ??
+    d.Received_Amount ??
+    d.rawZohoDeal?.Received_Amount
+  );
+  if (officialRec > 0) return officialRec;
+
   if (d.rawReceived && d.rawReceived > 0) return d.rawReceived;
   if (d.totals?.receivedAmount && Number(d.totals.receivedAmount) > 0) return Number(d.totals.receivedAmount);
   if (d.received && d.received !== '₹0') {
@@ -205,6 +219,16 @@ export const getDealPendingAmount = (d: any): number => {
 
 export const getDealTotalAmount = (d: any): number => {
   if (!d) return 0;
+
+  // 1. Highest Priority: Zoho CRM's official "Total deal amount(inclusive of gst)"
+  const officialTotalGst = parseNum(
+    d.Total_deal_amount_inclusive_of_gst ??
+    d.rawZohoDeal?.Total_deal_amount_inclusive_of_gst ??
+    d.total_deal_amount_inclusive_of_gst ??
+    d.rawZohoDeal?.total_deal_amount_inclusive_of_gst
+  );
+  if (officialTotalGst > 0) return officialTotalGst;
+
   if (d.rawAmount && d.rawAmount > 0) return d.rawAmount;
   if (d.totals?.grandTotal && Number(d.totals.grandTotal) > 0) return Number(d.totals.grandTotal);
   if (d.amount && d.amount !== '₹0') {
