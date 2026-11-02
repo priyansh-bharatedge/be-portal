@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Calendar, Search, Filter, TrendingUp, TrendingDown, User, Users,
   Layers, ChevronRight, ChevronDown, Award, Trophy, Target,
-  DollarSign, PieChart as PieChartIcon, BarChart3, ArrowUpRight,
+  IndianRupee, PieChart as PieChartIcon, BarChart3, ArrowUpRight,
   Shield, CheckCircle2, Clock, AlertTriangle, Building2, MapPin,
   Sparkles, RefreshCw, Briefcase, Zap, Flame, UserCheck, Eye,
   Maximize2, Minimize2, Compass, Activity, FileText,
@@ -1325,7 +1325,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           <div>
             <div className="flex justify-between items-start mb-3 relative z-10">
               <span className="p-3 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
-                <DollarSign size={18} />
+                <IndianRupee size={18} />
               </span>
               <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
                 Today Live

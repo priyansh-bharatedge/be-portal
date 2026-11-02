@@ -7,7 +7,7 @@ import {
   Trash2,
   Eye,
   Printer,
-  DollarSign,
+  IndianRupee,
   CheckCircle,
   Clock,
   FileText,
@@ -442,7 +442,7 @@ export const Salary = () => {
             </span>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-be-orange border border-orange-100">
-            <DollarSign size={24} />
+            <IndianRupee size={24} />
           </div>
         </div>
 
@@ -714,7 +714,7 @@ export const Salary = () => {
                     colSpan={7}
                     className="px-6 py-14 text-center text-gray-500 bg-white rounded-2xl border border-gray-100"
                   >
-                    <DollarSign size={44} className="mx-auto text-gray-300 mb-2" />
+                    <IndianRupee size={44} className="mx-auto text-gray-300 mb-2" />
                     <p className="font-bold text-gray-800 text-base">No salary records found</p>
                     <p className="text-xs text-gray-400 mt-1">
                       Try adjusting your search query or filter parameters.
