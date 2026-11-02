@@ -393,6 +393,8 @@ export const CrmDashboard = () => {
         source: zDeal.source || (zDeal.Quotation ? 'Quotation' : 'Direct'),
         Payment_verifications: zDeal.Payment_verifications,
         paymentVerified: zDeal.Payment_verifications === true || zDeal.Payment_verifications === 'true' || zDeal.Payment_verifications === 'Verified' || zDeal.Payment_verifications === 'Yes',
+        Booking_Date: zDeal.Booking_Date,
+        Cloned_Deal: zDeal.Cloned_Deal,
         rawZohoDeal: zDeal
       };
     });
@@ -613,6 +615,43 @@ export const CrmDashboard = () => {
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const currentMonthName = monthNames[currentMonthIdx];
 
+  const isClonedDeal = (d: any): boolean => {
+    if (!d) return false;
+    const raw = d.rawZohoDeal || {};
+    const val =
+      d.Cloned_Deal !== undefined ? d.Cloned_Deal :
+      raw.Cloned_Deal !== undefined ? raw.Cloned_Deal :
+      d.cloned_deal !== undefined ? d.cloned_deal :
+      raw.cloned_deal !== undefined ? raw.cloned_deal :
+      d.Is_Cloned !== undefined ? d.Is_Cloned :
+      raw.Is_Cloned;
+    return val === true || val === 'true' || val === 1 || val === '1';
+  };
+
+  const isOctoberBooking = (d: any): boolean => {
+    if (!d) return false;
+    const raw =
+      d.Booking_Date ||
+      d.rawZohoDeal?.Booking_Date ||
+      d.booking_date ||
+      d.rawZohoDeal?.booking_date ||
+      d.rawDate ||
+      d.date;
+    if (!raw) return false;
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      if (/^2026-10-\d\d/.test(s) || /^\d{1,2}[\/\-]10[\/\-]2026/.test(s) || /2026.*oct/i.test(s) || /oct.*2026/i.test(s)) {
+        return true;
+      }
+    }
+    const ms = parseAnyDateToMs(raw) ?? (new Date(raw).getTime());
+    if (ms && !isNaN(ms)) {
+      const dt = new Date(ms);
+      return dt.getMonth() === 9 && dt.getFullYear() === 2026;
+    }
+    return false;
+  };
+
   const isDealToday = (d: any): boolean => {
     const raw = String(d.rawDate || d.date || d.Booking_Date || '');
     if (!raw) return false;
@@ -683,11 +722,11 @@ export const CrmDashboard = () => {
     : 0;
 
   // 2. REVENUE CALCULATIONS (TODAY, MONTH, ALL-TIME)
-  const todayDealsList = useMemo(() => rbacDeals.filter(isDealToday), [rbacDeals]);
+  const todayDealsList = useMemo(() => rbacDeals.filter(d => !isClonedDeal(d) && isOctoberBooking(d) && isDealToday(d)), [rbacDeals]);
   const todayRevenueReceived = useMemo(() => todayDealsList.reduce((sum, d) => sum + getUserDealReceived(d), 0), [todayDealsList, currentUser, isSuperAdmin, isHOD]);
   const todayRevenueBooked = useMemo(() => todayDealsList.reduce((sum, d) => sum + getUserDealAmount(d), 0), [todayDealsList, currentUser, isSuperAdmin, isHOD]);
 
-  const monthDealsList = useMemo(() => rbacDeals.filter(isDealThisMonth), [rbacDeals]);
+  const monthDealsList = useMemo(() => rbacDeals.filter(d => !isClonedDeal(d) && isOctoberBooking(d)), [rbacDeals]);
   const monthRevenueReceived = useMemo(() => monthDealsList.reduce((sum, d) => sum + getUserDealReceived(d), 0), [monthDealsList, currentUser, isSuperAdmin, isHOD]);
   const monthRevenueBooked = useMemo(() => monthDealsList.reduce((sum, d) => sum + getUserDealAmount(d), 0), [monthDealsList, currentUser, isSuperAdmin, isHOD]);
 

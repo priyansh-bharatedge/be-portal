@@ -125,15 +125,76 @@ const getDealDateMs = (d: any): number | null => {
   if (!d) return null;
   const raw =
     d.Booking_Date ||
+    d.rawZohoDeal?.Booking_Date ||
+    d.booking_date ||
+    d.rawZohoDeal?.booking_date ||
     d.Payment_Date ||
+    d.rawZohoDeal?.Payment_Date ||
     d.Closing_Date ||
     d.Created_Time ||
-    d.date ||
-    d.rawZohoDeal?.Booking_Date ||
-    d.rawZohoDeal?.Created_Time;
+    d.rawZohoDeal?.Created_Time ||
+    d.rawDate ||
+    d.date;
   if (!raw) return null;
-  const ms = new Date(raw).getTime();
-  return isNaN(ms) ? null : ms;
+  if (typeof raw === 'number') return isNaN(raw) ? null : raw;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split(/[\/\-]/);
+    if (parts.length === 3 && parts[0].length <= 2 && parts[2].length === 4) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const year = parseInt(parts[2], 10);
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        return new Date(year, month - 1, day).getTime();
+      }
+    }
+    const dt = new Date(trimmed);
+    const ms = dt.getTime();
+    if (!isNaN(ms)) return ms;
+  }
+  return null;
+};
+
+// Helper to check if Cloned_Deal checkbox is checked in Zoho CRM deal module (api name: Cloned_Deal)
+const isDealCloned = (d: any): boolean => {
+  if (!d) return false;
+  const raw = d.rawZohoDeal || {};
+  const val =
+    d.Cloned_Deal !== undefined ? d.Cloned_Deal :
+    raw.Cloned_Deal !== undefined ? raw.Cloned_Deal :
+    d.cloned_deal !== undefined ? d.cloned_deal :
+    raw.cloned_deal !== undefined ? raw.cloned_deal :
+    d.Is_Cloned !== undefined ? d.Is_Cloned :
+    raw.Is_Cloned;
+  return val === true || val === 'true' || val === 1 || val === '1';
+};
+
+// Helper to filter records with booking date in October month (previous month)
+const isOctoberBooking = (d: any): boolean => {
+  if (!d) return false;
+  const raw =
+    d.Booking_Date ||
+    d.rawZohoDeal?.Booking_Date ||
+    d.booking_date ||
+    d.rawZohoDeal?.booking_date ||
+    d.Payment_Date ||
+    d.rawZohoDeal?.Payment_Date ||
+    d.rawDate ||
+    d.date;
+  if (!raw) return false;
+
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (/^2026-10-\d\d/.test(s)) return true;
+    if (/^\d{1,2}[\/\-]10[\/\-]2026/.test(s)) return true;
+    if (/2026.*oct/i.test(s) || /oct.*2026/i.test(s)) return true;
+  }
+
+  const ms = getDealDateMs(d);
+  if (!ms) return false;
+  const dt = new Date(ms);
+  return dt.getMonth() === 9 && dt.getFullYear() === 2026;
 };
 
 const isDealToday = (d: any): boolean => {
@@ -217,7 +278,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     }
   }, [propsDeals]);
 
-  // Filter deals based on active timeframe
+  // Filter deals based on active timeframe with revenue filter: October booking date and unchecked Cloned_Deal
   const filteredDeals = useMemo(() => {
     const now = new Date();
     const nowMs = now.getTime();
@@ -225,6 +286,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
     return liveDeals.filter((d: any) => {
       if (!d) return false;
+
+      // Revenue filter: Cloned_Deal field must be unchecked
+      if (isDealCloned(d)) return false;
+
+      // Revenue filter: Booking Date must be in October month (previous month)
+      if (!isOctoberBooking(d)) return false;
+
       if (timeframe === 'today') return isDealToday(d);
 
       const ms = getDealDateMs(d);
@@ -248,9 +316,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   }, [liveDeals, timeframe, selectedMonth, selectedYear]);
 
   // Independent metrics for Today and Current Month
-  const todayDeals = useMemo(() => liveDeals.filter(d => isDealToday(d)), [liveDeals]);
+  const todayDeals = useMemo(() => liveDeals.filter(d => !isDealCloned(d) && isOctoberBooking(d) && isDealToday(d)), [liveDeals]);
   const currentMonthDeals = useMemo(() => {
     return liveDeals.filter(d => {
+      if (!d || isDealCloned(d) || !isOctoberBooking(d)) return false;
       const ms = getDealDateMs(d);
       if (!ms) return false;
       const dt = new Date(ms);
