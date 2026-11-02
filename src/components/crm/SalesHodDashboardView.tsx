@@ -1319,52 +1319,52 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         {/* ========================================================================= */}
         {/* 3. LIGHT THEME PROGRESSIVE CENTER-TO-LEFT MINDMAP FLOW */}
         {(() => {
-          const itemStep = 38;
+          const itemStep = 36;
           const currentTms = activeTl?.tms || [];
           const tmCount = currentTms.length || 7;
           const canvasHeight = Math.max(620, tmCount * itemStep + 70);
 
           // Dynamic horizontal coordinates according to drillLevel
-          // When drillLevel === 0: Logo is in the CENTER of the available width (455px)
-          // As drillLevel increases (0 -> 1 -> 2 -> 3 -> 4), Logo smoothly glides to the left!
-          const col0Left = drillLevel === 0 ? 455 : drillLevel === 1 ? 330 : drillLevel === 2 ? 190 : drillLevel === 3 ? 75 : 15;
+          // Center of the tree flow area (tree width ~800px, Inspector anchored on the right)
+          // drillLevel: 0 = Heroic Center Constellation, 1 = Sales, 2 = 3 Branches, 3 = TLs, 4 = TMs
+          const col0Left = drillLevel === 0 ? 320 : drillLevel === 1 ? 180 : drillLevel === 2 ? 75 : drillLevel === 3 ? 20 : 10;
           const orbSocketY = canvasHeight / 2;
-          const x0 = col0Left + 120; // right socket of orb
+          const x0 = drillLevel === 0 ? col0Left + 144 : drillLevel >= 3 ? col0Left + 85 : col0Left + 105;
 
           // Col 1: Sales Node
-          const col1Width = 115;
-          const col1Height = 46;
-          const col1Left = drillLevel === 1 ? 495 : drillLevel === 2 ? 355 : drillLevel === 3 ? 235 : 175;
+          const col1Width = 105;
+          const col1Height = 44;
+          const col1Left = drillLevel === 1 ? 380 : drillLevel === 2 ? 230 : drillLevel === 3 ? 145 : 120;
           const col1Right = col1Left + col1Width;
           const col1Top = orbSocketY - col1Height / 2;
 
           // Col 2: 3 Branches (Ahmedabad, Jaipur, Chennai)
-          const col2Width = 140;
+          const col2Width = 135;
           const branchHeight = 44;
           const branchGap = 16;
           const totalBranchHeight = 3 * branchHeight + 2 * branchGap; // 164
           const col2StartY = (canvasHeight - totalBranchHeight) / 2;
-          const col2Left = drillLevel === 2 ? 515 : drillLevel === 3 ? 390 : 330;
+          const col2Left = drillLevel === 2 ? 380 : drillLevel === 3 ? 275 : 245;
           const col2Right = col2Left + col2Width;
           const activeBranchCenterY = col2StartY + activeBranchIndex * (branchHeight + branchGap) + branchHeight / 2;
 
           // Col 3: TLs of Active Branch
           const currentTls = activeBranch?.tls || [];
           const tlCount = currentTls.length || 1;
-          const tlHeight = 42;
-          const tlGap = 14;
+          const tlHeight = 40;
+          const tlGap = 12;
           const totalTlHeight = tlCount * tlHeight + (tlCount - 1) * tlGap;
           const col3StartY = (canvasHeight - totalTlHeight) / 2;
-          const col3Width = 165;
-          const col3Left = drillLevel === 3 ? 570 : 510;
+          const col3Width = 155;
+          const col3Left = drillLevel === 3 ? 440 : 400;
           const col3Right = col3Left + col3Width;
           const activeTlCenterY = col3StartY + activeTlIndex * (tlHeight + tlGap) + tlHeight / 2;
 
           // Col 4: TMs of Active TL
-          const col4Width = 205;
+          const col4Width = 185;
           const totalTmHeight = tmCount * itemStep;
           const col4StartY = Math.max(25, (canvasHeight - totalTmHeight) / 2);
-          const col4Left = 715;
+          const col4Left = 575;
 
           // Inspector card metrics
           const isTl = activeInspectLevel === 'tl' || Boolean(inspectedEntity.personal && inspectedEntity.team);
@@ -1537,14 +1537,18 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 <div
                   className="relative transition-all duration-700 ease-out origin-top-left"
                   style={{
-                    minWidth: 1390,
+                    minWidth: 1160,
                     height: canvasHeight
                   }}
                 >
+                  {/* Atmospheric Glow Highlights in Canvas Background */}
+                  <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
+                  <div className="absolute bottom-1/4 left-1/2 w-80 h-80 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none" />
+
                   {/* SVG CONNECTIONS LAYER */}
                   <svg
                     className="absolute inset-0 w-full h-full pointer-events-none"
-                    style={{ minWidth: 1390, height: canvasHeight }}
+                    style={{ minWidth: 1160, height: canvasHeight }}
                   >
                     <defs>
                       <linearGradient id="activeLightGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -1557,16 +1561,46 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         <stop offset="50%" stopColor="#06b6d4" />
                         <stop offset="100%" stopColor="#6366f1" />
                       </linearGradient>
+                      <marker id="arrowhead-indigo" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                        <polygon points="0 0, 6 3, 0 6" fill="#6366f1" />
+                      </marker>
+                      <marker id="arrowhead-amber" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                        <polygon points="0 0, 6 3, 0 6" fill="#f59e0b" />
+                      </marker>
+                      <marker id="arrowhead-cyan" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                        <polygon points="0 0, 6 3, 0 6" fill="#0ea5e9" />
+                      </marker>
                     </defs>
+
+                    {/* Level 0 Branch Preview Dotted Curves */}
+                    {drillLevel === 0 && branches.map((b, i) => {
+                      const satY = orbSocketY + (i === 0 ? -75 : i === 1 ? 0 : 75);
+                      const satX = 540;
+                      const pathD = `M ${x0} ${orbSocketY} C ${x0 + 40} ${orbSocketY}, ${satX - 40} ${satY}, ${satX} ${satY}`;
+                      return (
+                        <g key={`sat_line_${b.id}`} className="transition-opacity duration-500">
+                          <path
+                            d={pathD}
+                            stroke="#6366f1"
+                            strokeWidth="2"
+                            strokeDasharray="4 4"
+                            fill="none"
+                            opacity={0.65}
+                          />
+                          <circle cx={satX} cy={satY} r={3.5} fill="#6366f1" />
+                        </g>
+                      );
+                    })}
 
                     {/* 1. Curve: Logo -> Sales */}
                     {drillLevel >= 1 && (
                       <g className="transition-opacity duration-500">
                         <path
                           d={`M ${x0} ${orbSocketY} C ${x0 + (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left - (col1Left - x0) * 0.5} ${orbSocketY}, ${col1Left} ${orbSocketY}`}
-                          stroke="url(#activeLightGrad)"
+                          stroke="#6366f1"
                           strokeWidth="2.5"
                           fill="none"
+                          markerEnd="url(#arrowhead-indigo)"
                         />
                         <circle cx={x0} cy={orbSocketY} r={4.5} fill="#6366f1" />
                         <circle cx={col1Left} cy={orbSocketY} r={4} fill="#6366f1" />
@@ -1588,6 +1622,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                             strokeWidth={isBranchActive ? 2.5 : 1.5}
                             fill="none"
                             opacity={isBranchActive ? 1 : 0.65}
+                            markerEnd={isBranchActive ? "url(#arrowhead-amber)" : undefined}
                           />
                           <circle
                             cx={col2Left}
@@ -1615,6 +1650,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                             strokeWidth={isTlActive ? 2.5 : 1.5}
                             fill="none"
                             opacity={isTlActive ? 1 : 0.65}
+                            markerEnd={isTlActive ? "url(#arrowhead-cyan)" : undefined}
                           />
                           <circle
                             cx={col3Left}
@@ -1639,7 +1675,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                           <path
                             d={pathD}
                             stroke={isTmActive ? '#0ea5e9' : '#cbd5e1'}
-                            strokeWidth={isTmActive ? 2.5 : 1.2}
+                            strokeWidth={isTmActive ? 2.2 : 1.2}
                             fill="none"
                             opacity={isTmActive ? 1 : 0.6}
                           />
@@ -1656,7 +1692,35 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   </svg>
 
                   {/* ================================================================= */}
-                  {/* COLUMN 0: BHARATEDGE LOGO ORB (CENTER -> GLIDES LEFT ON CLICK) */}
+                  {/* LEVEL 0 BRANCH PREVIEW SATELLITES (NEVER AN EMPTY VOID) */}
+                  {/* ================================================================= */}
+                  {drillLevel === 0 && (
+                    <div className="absolute space-y-3 z-10" style={{ left: 540, top: orbSocketY - 95 }}>
+                      {branches.map(b => (
+                        <div
+                          key={`sat_node_${b.id}`}
+                          onClick={() => {
+                            setSelectedBranchId(b.id);
+                            setSelectedTlId(b.tls[0]?.id || '');
+                            setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                            setDrillLevel(3);
+                            setActiveInspectLevel('branch');
+                          }}
+                          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-white/95 hover:bg-slate-50 border border-indigo-100 hover:border-indigo-400 shadow-sm hover:shadow-md transition-all cursor-pointer group w-52"
+                        >
+                          <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
+                            {b.name} Branch
+                          </span>
+                          <span className="text-xs font-black text-emerald-600">
+                            {formatCompactRupee(b.achievement)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ================================================================= */}
+                  {/* COLUMN 0: BHARATEDGE LOGO ORB (HEROIC CENTER -> GLIDES LEFT) */}
                   {/* ================================================================= */}
                   <div
                     onClick={() => {
@@ -1667,33 +1731,70 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         setActiveInspectLevel('root');
                       }
                     }}
-                    className="absolute cursor-pointer group"
+                    className="absolute cursor-pointer group flex flex-col items-center justify-center z-10"
                     style={{
                       left: col0Left,
-                      top: orbSocketY - 60,
-                      width: 120,
-                      height: 120,
-                      transition: 'left 0.65s cubic-bezier(0.16, 1, 0.3, 1)'
+                      top: drillLevel === 0 ? orbSocketY - 95 : orbSocketY - 45,
+                      width: drillLevel === 0 ? 144 : 90,
+                      transition: 'all 0.65s cubic-bezier(0.16, 1, 0.3, 1)'
                     }}
                     title={drillLevel === 0 ? "Click to open Sales division" : "Click to inspect BharatEdge Enterprise Overview"}
                   >
-                    <div className="w-28 h-28 mx-auto rounded-full bg-white border border-indigo-100 shadow-[0_10px_35px_rgba(99,102,241,0.2)] flex items-center justify-center relative group-hover:border-indigo-300 group-hover:shadow-[0_12px_45px_rgba(99,102,241,0.3)] group-hover:scale-105 transition-all p-3">
-                      <div className="absolute inset-0 rounded-full border border-dashed border-indigo-200 animate-[spin_25s_linear_infinite]" />
+                    {/* Glowing Ambient Atmospheric Halo */}
+                    <div
+                      className={`absolute rounded-full bg-gradient-to-tr from-indigo-500/25 via-purple-500/20 to-cyan-400/25 blur-2xl pointer-events-none transition-all duration-700 ${
+                        drillLevel === 0 ? 'w-48 h-48 -top-3 animate-pulse' : 'w-24 h-24 top-0 opacity-40'
+                      }`}
+                    />
+
+                    {/* Outer Concentric Planetary Rings (active at Level 0) */}
+                    {drillLevel === 0 && (
+                      <>
+                        <div className="absolute w-44 h-44 rounded-full border border-dashed border-indigo-300/70 animate-[spin_35s_linear_infinite] pointer-events-none" />
+                        <div className="absolute w-36 h-36 rounded-full border border-cyan-400/60 animate-[spin_18s_linear_infinite_reverse] pointer-events-none">
+                          <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-cyan-500 rounded-full shadow-[0_0_8px_#06b6d4]" />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Core Glass Sphere */}
+                    <div
+                      className={`relative rounded-full bg-white/95 backdrop-blur-xl border-2 border-indigo-200/90 shadow-[0_15px_45px_rgba(99,102,241,0.22)] flex items-center justify-center group-hover:scale-105 group-hover:border-indigo-400 group-hover:shadow-[0_20px_55px_rgba(99,102,241,0.35)] transition-all duration-300 ${
+                        drillLevel === 0 ? 'w-28 h-28 p-3' : 'w-20 h-20 p-2'
+                      }`}
+                    >
                       <img
                         src="/logo.png"
                         alt="BharatEdge"
-                        className="w-full h-full object-contain relative z-10 drop-shadow-sm"
+                        className="w-full h-full object-contain relative z-10 drop-shadow-sm select-none"
                       />
                     </div>
 
-                    {/* Pulsating invitation pill when in center */}
-                    {drillLevel === 0 && (
-                      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap z-20 pointer-events-none">
-                        <span className="px-3 py-1 rounded-full text-[10px] font-black bg-indigo-600 text-white shadow-md shadow-indigo-300 animate-pulse flex items-center gap-1">
-                          <span>Click to open Sales</span>
-                          <ChevronRight size={10} />
+                    {/* Rich Floating Badges & Action Buttons (Hero Level 0) */}
+                    {drillLevel === 0 ? (
+                      <div className="flex flex-col items-center mt-3 space-y-2 pointer-events-auto">
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/95 border border-indigo-200 text-indigo-900 shadow-sm flex items-center gap-1.5 whitespace-nowrap">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                          <span>Enterprise HQ • ₹1.33 Cr</span>
                         </span>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDrillLevel(2);
+                            setActiveInspectLevel('sales');
+                          }}
+                          className="px-4 py-1.5 rounded-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-cyan-600 text-white font-extrabold text-[11px] shadow-md shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                        >
+                          <Sparkles size={12} className="text-amber-300" />
+                          <span>Explore Sales Network</span>
+                          <ChevronRight size={12} />
+                        </button>
                       </div>
+                    ) : (
+                      <span className="text-[10px] font-black text-slate-500 mt-1 whitespace-nowrap tracking-wider uppercase">
+                        HQ
+                      </span>
                     )}
                   </div>
 
@@ -1709,7 +1810,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         setActiveInspectLevel('sales');
                       }
                     }}
-                    className={`absolute rounded-2xl px-4 py-2.5 cursor-pointer flex items-center justify-between gap-2 shadow-sm ${
+                    className={`absolute rounded-2xl px-3.5 py-2 cursor-pointer flex items-center justify-between gap-2 shadow-sm ${
                       activeInspectLevel === 'sales'
                         ? 'bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-600 shadow-md text-indigo-950'
                         : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-800'
@@ -1848,7 +1949,6 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   >
                     {currentTms.map((tm) => {
                       const isTmActive = activeTm?.id === tm.id;
-                      const pct = tm.target > 0 ? Math.round((tm.achievement / tm.target) * 100) : 0;
 
                       return (
                         <div
@@ -1876,14 +1976,14 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   </div>
 
                   {/* ================================================================= */}
-                  {/* COLUMN 5: SLEEK INSPECTOR PANEL (RIGHT SIDE) */}
+                  {/* COLUMN 5: SLEEK INSPECTOR PANEL (ALWAYS ON RIGHT SIDE) */}
                   {/* ================================================================= */}
                   <div
-                    className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5"
+                    className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5 z-20"
                     style={{
-                      left: 1045,
+                      right: 15,
                       top: 15,
-                      width: 335,
+                      width: 330,
                       bottom: 15
                     }}
                   >
@@ -2009,9 +2109,57 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       </div>
                     </div>
 
+                    {/* Regional Branch Hubs (Shown when viewing Organization or Sales overview) */}
+                    {(activeInspectLevel === 'root' || activeInspectLevel === 'sales') && (
+                      <div className="space-y-2 pt-1 border-t border-slate-100">
+                        <div className="text-xs font-black text-slate-700 flex items-center justify-between">
+                          <span>Regional Branch Hubs</span>
+                          <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full">3 Branches</span>
+                        </div>
+                        <div className="space-y-2">
+                          {branches.map(b => (
+                            <div
+                              key={b.id}
+                              onClick={() => {
+                                setSelectedBranchId(b.id);
+                                setSelectedTlId(b.tls[0]?.id || '');
+                                setSelectedTmId(b.tls[0]?.tms[0]?.id || '');
+                                setDrillLevel(3);
+                                setActiveInspectLevel('branch');
+                              }}
+                              className="p-3 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/80 shadow-xs hover:border-indigo-300 transition-all cursor-pointer flex items-center justify-between group"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500/10 to-cyan-500/10 text-indigo-600 flex items-center justify-center font-black text-xs border border-indigo-100">
+                                  {b.name[0]}
+                                </span>
+                                <div>
+                                  <h5 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                    {b.name} Branch
+                                  </h5>
+                                  <p className="text-[10px] text-slate-500 font-medium">
+                                    {b.tls.length} TLs • {b.tls.reduce((acc, t) => acc + t.tms.length, 0)} TMs
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xs font-black text-emerald-700 block">
+                                  {formatCompactRupee(b.achievement)}
+                                </span>
+                                <span className="text-[9px] font-bold text-indigo-600 flex items-center justify-end gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                                  <span>Explore</span>
+                                  <ChevronRight size={10} />
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* TL DUAL BREAKDOWN: PERSONAL VS TEAM */}
                     {isTl && personal && team && (
-                      <div className="space-y-2 pt-1">
+                      <div className="space-y-2 pt-1 border-t border-slate-100">
                         {/* 1. Personal Records Card */}
                         <div
                           onClick={() => setTlViewMode('personal')}
