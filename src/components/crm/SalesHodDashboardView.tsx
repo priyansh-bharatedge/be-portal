@@ -7,8 +7,9 @@ import {
   Sparkles, RefreshCw, Briefcase, Zap, Flame, UserCheck, Eye,
   Maximize2, Minimize2, Compass, Activity, FileText,
   GitBranch, Network, Share2, Send, ZoomIn, ZoomOut, RotateCcw,
-  SlidersHorizontal, Sliders, Download, Check, X, Info, Receipt, Calculator
+  SlidersHorizontal, Sliders, Download, Check, X, Info, Receipt, Calculator, ExternalLink
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   PieChart,
@@ -244,6 +245,17 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   const [flowZoom, setFlowZoom] = useState<number>(1.0);
   const [flowViewMode, setFlowViewMode] = useState<'network' | 'tree' | 'services'>('network');
   const [flowSearchQuery, setFlowSearchQuery] = useState<string>('');
+
+  const navigate = useNavigate();
+  const [selectedStageModal, setSelectedStageModal] = useState<{
+    name: string;
+    color: string;
+    count: number;
+    amount: number;
+    received: number;
+    deals: any[];
+  } | null>(null);
+  const [stageModalSearch, setStageModalSearch] = useState<string>('');
 
   // Executive Tools state
   const [showSimulator, setShowSimulator] = useState<boolean>(false);
@@ -862,11 +874,11 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   // Deal Stage Pipeline counts
   const stageStats = useMemo(() => {
     const stages = [
-      { name: 'Sales Stage', match: ['sales', 'pitch', 'lead'], count: 0, amount: 0, received: 0, color: 'bg-blue-500' },
-      { name: 'Account Verification', match: ['account', 'audit'], count: 0, amount: 0, received: 0, color: 'bg-purple-500' },
-      { name: 'Legal Drafting & Review', match: ['legal', 'draft'], count: 0, amount: 0, received: 0, color: 'bg-cyan-500' },
-      { name: 'Internal Operations', match: ['operation', 'allocat', 'execut'], count: 0, amount: 0, received: 0, color: 'bg-amber-500' },
-      { name: 'Closed Won Delivery', match: ['won', 'deliver', 'complet'], count: 0, amount: 0, received: 0, color: 'bg-emerald-500' }
+      { name: 'Sales Stage', match: ['sales', 'pitch', 'lead'], count: 0, amount: 0, received: 0, color: 'bg-blue-500', deals: [] as any[] },
+      { name: 'Account Verification', match: ['account', 'audit'], count: 0, amount: 0, received: 0, color: 'bg-purple-500', deals: [] as any[] },
+      { name: 'Legal Drafting & Review', match: ['legal', 'draft'], count: 0, amount: 0, received: 0, color: 'bg-cyan-500', deals: [] as any[] },
+      { name: 'Internal Operations', match: ['operation', 'allocat', 'execut'], count: 0, amount: 0, received: 0, color: 'bg-amber-500', deals: [] as any[] },
+      { name: 'Closed Won Delivery', match: ['won', 'deliver', 'complet'], count: 0, amount: 0, received: 0, color: 'bg-emerald-500', deals: [] as any[] }
     ];
 
     filteredDeals.forEach(d => {
@@ -880,6 +892,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           st.count++;
           st.amount += tot;
           st.received += rec;
+          st.deals.push(d);
           matched = true;
           break;
         }
@@ -888,6 +901,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         stages[0].count++;
         stages[0].amount += tot;
         stages[0].received += rec;
+        stages[0].deals.push(d);
       }
     });
 
@@ -928,7 +942,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       value: st.count,
       amount: st.amount,
       received: st.received,
-      color: colors[st.name] || '#64748b'
+      color: colors[st.name] || '#64748b',
+      deals: st.deals
     }));
   }, [stageStats]);
 
@@ -1616,10 +1631,21 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
           <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-slate-100 text-xs">
             {stagePieData.map(st => (
-              <span key={st.name} className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+              <button
+                key={st.name}
+                onClick={() => {
+                  const targetStage = stageStats.find(s => s.name.toLowerCase().includes(st.name.toLowerCase()) || st.fullName === s.name);
+                  if (targetStage) {
+                    setSelectedStageModal(targetStage);
+                    setStageModalSearch('');
+                  }
+                }}
+                className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 px-2.5 py-1 rounded-xl border border-slate-200 transition-all cursor-pointer shadow-2xs group"
+                title={`Click to view deals in ${st.fullName}`}
+              >
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: st.color }} />
-                <span>{st.name}: <strong>{st.value}</strong></span>
-              </span>
+                <span>{st.name}: <strong className="group-hover:text-indigo-600">{st.value}</strong></span>
+              </button>
             ))}
           </div>
         </div>
@@ -2621,22 +2647,35 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             {stageStats.map(st => (
               <div
                 key={st.name}
-                className="p-3.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 flex items-center justify-between transition-colors"
+                onClick={() => {
+                  setSelectedStageModal(st);
+                  setStageModalSearch('');
+                }}
+                className="p-3.5 rounded-2xl bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/80 hover:border-indigo-400 hover:shadow-md cursor-pointer flex items-center justify-between transition-all group active:scale-[0.99]"
+                title={`Click to view all ${st.count} deals in ${st.name}`}
               >
                 <div className="flex items-center gap-3">
-                  <span className={`w-3 h-3 rounded-full ${st.color}`} />
+                  <span className={`w-3.5 h-3.5 rounded-full ${st.color} group-hover:scale-125 transition-transform shrink-0`} />
                   <div>
-                    <h5 className="text-xs font-bold text-slate-900">{st.name}</h5>
+                    <h5 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                      <span>{st.name}</span>
+                      <Eye size={12} className="opacity-0 group-hover:opacity-100 text-indigo-500 transition-opacity" />
+                    </h5>
                     <p className="text-[11px] text-slate-500">
                       Total Quoted: {formatCompactRupee(st.amount)}
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-sm font-black text-slate-900">{st.count} Deals</span>
-                  <p className="text-[11px] font-bold text-emerald-600">
-                    Rec: {formatCompactRupee(st.received)}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <span className="text-sm font-black text-slate-900 group-hover:text-indigo-700 transition-colors block">{st.count} Deals</span>
+                    <p className="text-[11px] font-bold text-emerald-600">
+                      Rec: {formatCompactRupee(st.received)}
+                    </p>
+                  </div>
+                  <span className="p-1 rounded-lg bg-white group-hover:bg-indigo-100 text-slate-400 group-hover:text-indigo-600 transition-all">
+                    <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                  </span>
                 </div>
               </div>
             ))}
@@ -2662,15 +2701,35 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
           <div className="space-y-3 pt-2">
             {[
-              { stage: '1. Quotations Generated', count: Math.max(liveQuotations.length, filteredDeals.length * 2), color: 'bg-blue-500', pct: 100 },
-              { stage: '2. Deal Contracts Booked', count: filteredDeals.length, color: 'bg-indigo-500', pct: Math.round((filteredDeals.length / Math.max(1, liveQuotations.length)) * 100) },
-              { stage: '3. Accounts Verified', count: filteredDeals.filter(d => isDealPaymentVerified(d)).length, color: 'bg-purple-500', pct: Math.round((filteredDeals.filter(d => isDealPaymentVerified(d)).length / Math.max(1, filteredDeals.length)) * 100) },
-              { stage: '4. Legal / Operations', count: filteredDeals.filter(d => !String(d.stage || '').toLowerCase().includes('sales')).length, color: 'bg-cyan-500', pct: 75 },
-              { stage: '5. Closed Won Delivery', count: filteredDeals.filter(d => String(d.stage || '').toLowerCase().includes('won')).length, color: 'bg-emerald-500', pct: 45 }
+              { stage: '1. Quotations Generated', count: Math.max(liveQuotations.length, filteredDeals.length * 2), color: 'bg-blue-500', pct: 100, deals: [] },
+              { stage: '2. Deal Contracts Booked', count: filteredDeals.length, color: 'bg-indigo-500', pct: Math.round((filteredDeals.length / Math.max(1, liveQuotations.length)) * 100), deals: filteredDeals },
+              { stage: '3. Accounts Verified', count: filteredDeals.filter(d => isDealPaymentVerified(d)).length, color: 'bg-purple-500', pct: Math.round((filteredDeals.filter(d => isDealPaymentVerified(d)).length / Math.max(1, filteredDeals.length)) * 100), deals: filteredDeals.filter(d => isDealPaymentVerified(d)) },
+              { stage: '4. Legal / Operations', count: filteredDeals.filter(d => !String(d.stage || '').toLowerCase().includes('sales')).length, color: 'bg-cyan-500', pct: 75, deals: filteredDeals.filter(d => !String(d.stage || '').toLowerCase().includes('sales')) },
+              { stage: '5. Closed Won Delivery', count: filteredDeals.filter(d => String(d.stage || '').toLowerCase().includes('won')).length, color: 'bg-emerald-500', pct: 45, deals: filteredDeals.filter(d => String(d.stage || '').toLowerCase().includes('won')) }
             ].map(fn => (
-              <div key={fn.stage} className="space-y-1">
+              <div
+                key={fn.stage}
+                onClick={() => {
+                  if (fn.deals.length > 0) {
+                    setSelectedStageModal({
+                      name: fn.stage,
+                      color: fn.color,
+                      count: fn.deals.length,
+                      amount: fn.deals.reduce((s, d) => s + getDealTotalAmount(d), 0),
+                      received: fn.deals.reduce((s, d) => s + getDealReceivedAmount(d), 0),
+                      deals: fn.deals
+                    });
+                    setStageModalSearch('');
+                  }
+                }}
+                className={`space-y-1 p-1.5 rounded-xl transition-all ${fn.deals.length > 0 ? 'cursor-pointer hover:bg-indigo-50/40 group' : ''}`}
+                title={fn.deals.length > 0 ? `Click to inspect ${fn.deals.length} deals in ${fn.stage}` : ''}
+              >
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-700">{fn.stage}</span>
+                  <span className="text-slate-700 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                    <span>{fn.stage}</span>
+                    {fn.deals.length > 0 && <Eye size={11} className="opacity-0 group-hover:opacity-100 text-indigo-500 transition-opacity" />}
+                  </span>
                   <span className="text-slate-900">{fn.count} Records ({fn.pct}%)</span>
                 </div>
                 <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
@@ -2902,9 +2961,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
               <div>
                 <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
                   <span>BDM Performance Matrix</span>
-                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                    Live Roster
-                  </span>
+
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5 font-medium">
                   Individual Business Development Manager targets, revenue achievement, and shortfall gaps.
@@ -3144,14 +3201,256 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
               </tbody>
             </table>
           </div>
-
-          {bdmList.length > 35 && (
-            <p className="text-xs text-slate-400 text-center mt-3 font-medium">
-              Showing top 35 of {bdmList.length} Sales BDMs. Use filter pills, search, or Export CSV for complete records.
-            </p>
-          )}
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 7. INTERACTIVE MODAL: STAGE DEALS DRILLDOWN VIEW */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {selectedStageModal && (
+          <div
+            onClick={() => setSelectedStageModal(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-50 via-white to-indigo-50/20">
+                <div className="flex items-center gap-3">
+                  <span className={`w-4 h-4 rounded-full ${selectedStageModal.color} shadow-sm shrink-0`} />
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <h3 className="text-lg sm:text-xl font-black text-slate-900">
+                        {selectedStageModal.name}
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        {selectedStageModal.count} Deals
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Live deal records progressing through this stage for October 2026
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate('/crm/deals')}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    title="Open Deals Page in new view"
+                  >
+                    <span>Go to Deals</span>
+                    <ExternalLink size={12} />
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedStageModal(null)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Stage Financial Summary Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 border-b border-slate-200 text-xs">
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Quoted</span>
+                  <span className="text-sm sm:text-base font-black text-slate-900 mt-0.5 block">
+                    {formatRupee(selectedStageModal.amount)}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Received</span>
+                  <span className="text-sm sm:text-base font-black text-emerald-700 mt-0.5 block">
+                    {formatRupee(selectedStageModal.received)}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Pending</span>
+                  <span className="text-sm sm:text-base font-black text-rose-600 mt-0.5 block">
+                    {formatRupee(Math.max(0, selectedStageModal.amount - selectedStageModal.received))}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Recovery Ratio</span>
+                  <span className="text-sm sm:text-base font-black text-indigo-700 mt-0.5 block">
+                    {selectedStageModal.amount > 0 ? Math.round((selectedStageModal.received / selectedStageModal.amount) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-md">
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={stageModalSearch}
+                    onChange={(e) => setStageModalSearch(e.target.value)}
+                    placeholder="Search by deal name, client, BDM owner, service..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all shadow-xs"
+                  />
+                  {stageModalSearch && (
+                    <button
+                      onClick={() => setStageModalSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {(() => {
+                  const filteredList = selectedStageModal.deals.filter(d => {
+                    if (!stageModalSearch) return true;
+                    const q = stageModalSearch.toLowerCase();
+                    const dName = String(d.Deal_Name || d.rawZohoDeal?.Deal_Name || d.client || '').toLowerCase();
+                    const comp = String(d.company || d.rawZohoDeal?.Company_Name || '').toLowerCase();
+                    const srv = String(d.service || d.Service_Name || '').toLowerCase();
+                    const owner = String(d.owner || d.rawZohoDeal?.Owner?.name || '').toLowerCase();
+                    return dName.includes(q) || comp.includes(q) || srv.includes(q) || owner.includes(q);
+                  });
+                  return (
+                    <span className="text-xs font-bold text-slate-500 whitespace-nowrap">
+                      Showing <strong className="text-slate-900">{filteredList.length}</strong> of {selectedStageModal.count} deals
+                    </span>
+                  );
+                })()}
+              </div>
+
+              {/* Scrollable Deals Table */}
+              <div className="overflow-y-auto flex-1 p-4">
+                {(() => {
+                  const filteredList = selectedStageModal.deals.filter(d => {
+                    if (!stageModalSearch) return true;
+                    const q = stageModalSearch.toLowerCase();
+                    const dName = String(d.Deal_Name || d.rawZohoDeal?.Deal_Name || d.client || '').toLowerCase();
+                    const comp = String(d.company || d.rawZohoDeal?.Company_Name || '').toLowerCase();
+                    const srv = String(d.service || d.Service_Name || '').toLowerCase();
+                    const owner = String(d.owner || d.rawZohoDeal?.Owner?.name || '').toLowerCase();
+                    return dName.includes(q) || comp.includes(q) || srv.includes(q) || owner.includes(q);
+                  });
+
+                  if (filteredList.length === 0) {
+                    return (
+                      <div className="py-12 text-center text-slate-400 space-y-2">
+                        <FileText size={32} className="mx-auto text-slate-300" />
+                        <p className="text-xs font-bold">No deals found for this stage or search filter.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                      <table className="w-full text-left text-xs whitespace-nowrap">
+                        <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                          <tr>
+                            <th className="px-4 py-3">#</th>
+                            <th className="px-4 py-3">Deal & Client</th>
+                            <th className="px-4 py-3">Service</th>
+                            <th className="px-4 py-3">BDM / Owner</th>
+                            <th className="px-4 py-3">Booking Date</th>
+                            <th className="px-4 py-3 text-right">Quoted Amount</th>
+                            <th className="px-4 py-3 text-right">Received</th>
+                            <th className="px-4 py-3 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-700 font-medium bg-white">
+                          {filteredList.map((deal, idx) => {
+                            const raw = deal.rawZohoDeal || deal;
+                            const dealTitle = deal.Deal_Name || raw.Deal_Name || deal.client || 'Deal';
+                            const clientName = deal.company || raw.Company_Name || raw.Account_Name?.name || raw.Client_Name || 'Client';
+                            const serviceName = deal.service || raw.Service_Name || 'Business Advisory';
+                            const ownerName = deal.owner || raw.Owner?.name || 'Managing Director';
+                            const bDate = deal.Booking_Date || raw.Booking_Date || deal.date || '-';
+                            const quoted = getDealTotalAmount(deal);
+                            const rec = getDealReceivedAmount(deal);
+                            const dealId = deal.id || raw.id || deal.zohoId;
+
+                            return (
+                              <tr key={dealId || idx} className="hover:bg-indigo-50/30 transition-colors">
+                                <td className="px-4 py-3 text-slate-400 font-mono text-[11px]">
+                                  {idx + 1}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="max-w-xs">
+                                    <h5 className="font-extrabold text-slate-900 truncate" title={dealTitle}>
+                                      {dealTitle}
+                                    </h5>
+                                    <span className="text-[10px] text-slate-400 truncate block" title={clientName}>
+                                      {clientName}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                    {serviceName}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                                    <User size={11} className="text-slate-400" />
+                                    <span>{ownerName}</span>
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-slate-500 text-[11px]">
+                                  {bDate}
+                                </td>
+                                <td className="px-4 py-3 text-right font-black text-slate-900">
+                                  {formatRupee(quoted)}
+                                </td>
+                                <td className="px-4 py-3 text-right font-black text-emerald-700">
+                                  {formatRupee(rec)}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <button
+                                    onClick={() => {
+                                      if (dealId) {
+                                        navigate(`/crm/deals/${dealId}`);
+                                      } else {
+                                        navigate('/crm/deals');
+                                      }
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold transition-all flex items-center gap-1 mx-auto cursor-pointer"
+                                    title="View full deal details"
+                                  >
+                                    <span>View</span>
+                                    <ArrowUpRight size={11} />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs font-bold text-slate-500">
+                <span>BharatEdge Sales Operations Intelligence</span>
+                <button
+                  onClick={() => setSelectedStageModal(null)}
+                  className="px-4 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 transition-all cursor-pointer shadow-xs"
+                >
+                  Close View
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
