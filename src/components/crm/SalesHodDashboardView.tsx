@@ -1550,7 +1550,76 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. LIGHT THEME PROGRESSIVE CENTER-TO-LEFT MINDMAP FLOW */}
+      {/* 3. MASTER TARGET & ACHIEVEMENT BAR VIEW (LIGHT THEME) */}
+      {/* ========================================================================= */}
+      <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <Target size={18} className="text-indigo-600" />
+              Target vs Achievement Overview (Entire Sales Team)
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
+              National sales target benchmark vs. actual revenue received with shortfall gap.
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-bold">
+            <span className="flex items-center gap-1.5 text-slate-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Target: {formatCompactRupee(overallTarget)}
+            </span>
+            <span className="flex items-center gap-1.5 text-emerald-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
+            </span>
+            <span className="flex items-center gap-1.5 text-rose-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
+            </span>
+          </div>
+        </div>
+
+        {/* Master Comparison Bar */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center text-xs font-bold">
+            <span className="text-slate-800">Full Sales Organization Progress</span>
+            <span className="text-indigo-700 font-extrabold">{overallAchievementPct}% Achieved</span>
+          </div>
+          <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200 flex">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${overallAchievementPct}%` }}
+              transition={{ duration: 1, ease: 'easeOut' }}
+              className="h-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-400 rounded-full shadow-sm"
+            />
+          </div>
+        </div>
+
+        {/* Branch-by-Branch Breakdown Bars */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
+          {(salesTree.children?.[0]?.children || []).map((br: SalesTreeNode) => {
+            const pct = br.target > 0 ? Math.min(100, Math.round((br.achievement / br.target) * 100)) : 0;
+            return (
+              <div key={br.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <div className="flex justify-between items-center text-xs mb-2">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <MapPin size={13} className="text-indigo-600" />
+                    {br.name}
+                  </span>
+                  <span className="text-emerald-700 font-black">{pct}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex mb-2">
+                  <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full" />
+                </div>
+                <div className="flex justify-between items-center text-[11px] text-slate-500">
+                  <span>Ach: <strong className="text-slate-800">{formatCompactRupee(br.achievement)}</strong></span>
+                  <span>Shortfall: <strong className="text-rose-600">{formatCompactRupee(br.shortfall)}</strong></span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4. LIGHT THEME PROGRESSIVE CENTER-TO-LEFT MINDMAP FLOW */}
       {(() => {
         const itemStep = 36;
         const currentTms = activeTl?.tms || [];
@@ -2450,75 +2519,6 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           </div>
         );
       })()}
-
-      {/* ========================================================================= */}
-      {/* 4. MASTER TARGET & ACHIEVEMENT BAR VIEW (LIGHT THEME) */}
-      {/* ========================================================================= */}
-      <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <Target size={18} className="text-indigo-600" />
-              Target vs Achievement Overview (Entire Sales Team)
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5 font-medium">
-              National sales target benchmark vs. actual revenue received with shortfall gap.
-            </p>
-          </div>
-          <div className="flex items-center gap-4 text-xs font-bold">
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Target: {formatCompactRupee(overallTarget)}
-            </span>
-            <span className="flex items-center gap-1.5 text-emerald-700">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
-            </span>
-            <span className="flex items-center gap-1.5 text-rose-600">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
-            </span>
-          </div>
-        </div>
-
-        {/* Master Comparison Bar */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center text-xs font-bold">
-            <span className="text-slate-800">Full Sales Organization Progress</span>
-            <span className="text-indigo-700 font-extrabold">{overallAchievementPct}% Achieved</span>
-          </div>
-          <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200 flex">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${overallAchievementPct}%` }}
-              transition={{ duration: 1, ease: 'easeOut' }}
-              className="h-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-400 rounded-full shadow-sm"
-            />
-          </div>
-        </div>
-
-        {/* Branch-by-Branch Breakdown Bars */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
-          {(salesTree.children?.[0]?.children || []).map((br: SalesTreeNode) => {
-            const pct = br.target > 0 ? Math.min(100, Math.round((br.achievement / br.target) * 100)) : 0;
-            return (
-              <div key={br.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                <div className="flex justify-between items-center text-xs mb-2">
-                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <MapPin size={13} className="text-indigo-600" />
-                    {br.name}
-                  </span>
-                  <span className="text-emerald-700 font-black">{pct}%</span>
-                </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex mb-2">
-                  <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full" />
-                </div>
-                <div className="flex justify-between items-center text-[11px] text-slate-500">
-                  <span>Ach: <strong className="text-slate-800">{formatCompactRupee(br.achievement)}</strong></span>
-                  <span>Shortfall: <strong className="text-rose-600">{formatCompactRupee(br.shortfall)}</strong></span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* ========================================================================= */}
       {/* 5. DEAL PIPELINE VIEW STAGES & SALES FUNNEL (LIGHT THEME) */}
