@@ -957,6 +957,10 @@ export async function fetchZohoWithRbac<T = any>(
 
     const baseUrl = getEndpointForModule(moduleName);
     
+    if (moduleName.toLowerCase() === 'deals' || moduleName.toLowerCase() === 'deal') {
+      queryParams.set('fields', 'id,Deal_Name,Account_Name,Contact_Name,Company,Company_Name,Client_Name,Clients,Owner,Employee,Stage,Pipeline,Closing_Date,Booking_Date,Payment_Date,Created_Time,Modified_Time,Amount,Total_deal_amount_inclusive_of_gst,Amount_Without_GST,GST_Amount,Total_Received_Amount,Received_amount,Total_Pending_Amount,Pending_amount,Choose_Wisely,Service_Name,Service_Count,Subform_1,Legal,Client_contact_detail,Client_Email_address,Gst_number,Pan_number,Aadhaar_Card,Billing_address,Company_address,City,State,Bank_details,Accounts_remark,Remark,Description,Partner_BDM,Partner_BDM_Amount,Partner_BDM_ID,Quotation,Payment_verifications,Deal_payment_screenshot,Cloned_Deal');
+    }
+
     // If criteria is present (role criteria or October criteria), append criteria query
     if (criteria) {
       queryParams.set('criteria', criteria);
