@@ -188,15 +188,9 @@ export const AppLayout = () => {
       {/* Nav List */}
       <div className="py-4 flex-1 overflow-y-auto">
         {isSidebarOpen && (
-          <div className="px-5 mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                CRM MODULE
-              </span>
-            </div>
-            <span className="px-2 py-0.5 rounded-full bg-slate-900 text-amber-400 text-[9px] font-black tracking-wider uppercase shadow-2xs">
-              HQ
+          <div className="px-6 mb-4 flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              {currentMenu.title} MODULE
             </span>
           </div>
         )}
@@ -244,12 +238,8 @@ export const AppLayout = () => {
             <div className="absolute -top-6 -right-6 w-20 h-20 bg-amber-500/15 rounded-full blur-xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
             
             <div className="flex items-center justify-between mb-2 relative z-10">
-              <span className="text-[9px] font-black uppercase tracking-widest text-amber-400/90 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 Active Role
-              </span>
-              <span className="px-2 py-0.5 rounded-full bg-white/10 text-white text-[9px] font-black tracking-wider uppercase border border-white/10">
-                Super Admin
               </span>
             </div>
 
@@ -261,22 +251,11 @@ export const AppLayout = () => {
                 <div className="text-xs font-black text-white tracking-tight truncate">
                   {currentUser.name || 'Super Admin'}
                 </div>
-                <div className="text-[10px] text-amber-200/90 font-bold flex items-center gap-1 mt-0.5">
-                  <ShieldCheck size={11} className="text-amber-400 shrink-0" />
-                  <span className="truncate">Master Authority</span>
+                <div className="text-[11px] text-gray-400 font-medium truncate mt-0.5">
+                  {roleInfo.label || 'Super Admin'}
                 </div>
               </div>
             </div>
-
-            {isSuperAdminUser && (
-              <button
-                onClick={() => setIsRoleModalOpen(true)}
-                className="mt-2.5 w-full py-1.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-[10px] font-black text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs hover:shadow-xs relative z-10"
-              >
-                <SwitchCamera size={12} className="text-amber-400" />
-                <span>Switch Role View</span>
-              </button>
-            )}
           </div>
 
           {/* Back to Modules Navigation */}
@@ -307,13 +286,12 @@ export const AppLayout = () => {
         </div>
       ) : (
         <div className="p-2.5 border-t border-slate-200/60 flex flex-col items-center space-y-2 bg-[#eaedf3]/60">
-          <button
-            onClick={() => setIsRoleModalOpen(true)}
-            className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/20 border border-amber-300 transition-transform hover:scale-105 cursor-pointer"
-            title="Super Admin - Switch Role"
+          <div
+            className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/20 border border-amber-300"
+            title="Super Admin"
           >
             <Crown size={16} />
-          </button>
+          </div>
           <button
             onClick={() => navigate('/modules')}
             className="p-2 text-slate-500 hover:text-slate-900 bg-white/90 hover:bg-white rounded-xl border border-white shadow-2xs hover:shadow-xs transition-all cursor-pointer"
@@ -569,21 +547,16 @@ export const AppLayout = () => {
             {/* User Profile */}
             <div className="flex items-center">
               {isSuperAdminDashboard ? (
-                <div 
-                  onClick={() => setIsRoleModalOpen(true)}
-                  className="flex items-center cursor-pointer group"
-                  title="Click to Switch Role View"
-                >
-                  <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-amber-400 via-amber-500 to-yellow-300 text-slate-950 flex items-center justify-center border border-amber-300 shrink-0 font-black text-xs shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
+                <div className="flex items-center">
+                  <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-amber-400 via-amber-500 to-yellow-300 text-slate-950 flex items-center justify-center border border-amber-300 shrink-0 font-black text-xs shadow-md shadow-amber-500/20">
                     <Crown size={17} className="fill-slate-950/20" />
                   </div>
                   <div className="hidden md:block text-left ml-2.5">
                     <div className="text-xs font-black text-slate-900 leading-tight flex items-center gap-1">
                       {currentUser.name}
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     </div>
-                    <div className="text-[10px] text-amber-600 font-black uppercase tracking-wider">
-                      Super Admin • Master Authority
+                    <div className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">
+                      {roleInfo.label || 'Super Admin'}
                     </div>
                   </div>
                 </div>
