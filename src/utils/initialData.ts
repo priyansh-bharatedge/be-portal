@@ -29,6 +29,8 @@ export interface EmployeeData {
   target?: string | number;
   Who_is_the_Team_Leader_TL?: any;
   Reporting_Manager?: any;
+  branch?: string;
+  Branches?: string;
 }
 
 export const INITIAL_EMPLOYEES: EmployeeData[] = [];

@@ -102,6 +102,7 @@ export const Employees = () => {
     education: '', certifications: '', skills: '', languages: [] as string[],
     emergencyFirstName: '', emergencyLastName: '', emergencyMobile: '', emergencyRelation: '',
     doj: new Date().toISOString().split('T')[0], dept: 'Sales', role: '', workEmail: '', previousEmployer: '', experience: '',
+    branch: 'Ahmedabad',
     employmentType: 'Full Time', hasPf: false,
     systemRole: 'TM' as SystemRole,
     teamLeaderId: '',
@@ -140,6 +141,14 @@ export const Employees = () => {
     } else if (rawRole === 'tm' || rawRole.includes('member')) {
       systemRole = 'TM';
     }
+
+    const rawBranch = z.Branches || z.Branch || z.branch || 'Ahmedabad';
+    let branch = 'Ahmedabad';
+    const bLower = String(rawBranch).toLowerCase();
+    if (bLower.includes('jaipur')) branch = 'Jaipur';
+    else if (bLower.includes('chennai')) branch = 'Chennai';
+    else if (bLower.includes('ahmedabad')) branch = 'Ahmedabad';
+    else branch = String(rawBranch);
 
     const fd = {
       empId,
@@ -188,6 +197,8 @@ export const Employees = () => {
       esicNumber: z.ESIC_Number || '',
       uanNumber: z.UAN_Number || '',
       medicalInsurance: z.Medical_Insurance_Number || '',
+      branch,
+      Branches: branch,
       monthlyTarget: z.Monthly_Target || z.Target || z.Sales_Target || '',
       target: z.Monthly_Target || z.Target || z.Sales_Target || '',
     };
@@ -203,6 +214,8 @@ export const Employees = () => {
       role: z.Designation_Job_Title || z.System_Role || 'Team Member',
       systemRole,
       salaryEntity: z.Salary_Entity || z.Company_Entity || 'BSPL',
+      branch,
+      Branches: branch,
       teamLeaderName: z.Who_is_the_Team_Leader_TL || '',
       reportingManagerName: z.Reporting_Manager || '',
       joined: z.Date_of_Joining || z.Created_Time?.split('T')[0] || new Date().toISOString().split('T')[0],
@@ -612,6 +625,8 @@ export const Employees = () => {
       finalTeamLeaderName = '';
     }
 
+    const finalBranch = formData.branch || 'Ahmedabad';
+
     const newEmp: EmployeeData = {
       id: finalEmpId,
       name: fullName,
@@ -621,6 +636,8 @@ export const Employees = () => {
       role: formData.role,
       systemRole: formData.systemRole,
       salaryEntity: formData.salaryEntity || 'BSPL',
+      branch: finalBranch,
+      Branches: finalBranch,
       teamLeaderId: finalTeamLeaderId,
       teamLeaderName: finalTeamLeaderName,
       reportingManagerId: finalReportingManagerId,
@@ -631,6 +648,8 @@ export const Employees = () => {
       target: formData.target || formData.monthlyTarget || '',
       formData: {
         ...formData,
+        branch: finalBranch,
+        Branches: finalBranch,
         salaryEntity: formData.salaryEntity || 'BSPL',
         empId: finalEmpId,
         teamLeaderId: finalTeamLeaderId,
@@ -802,6 +821,7 @@ export const Employees = () => {
       role: employee.role || employee.formData?.role || '',
       systemRole: sRole,
       salaryEntity: (employee.salaryEntity || employee.formData?.salaryEntity || 'BSPL') as string,
+      branch: employee.branch || employee.Branches || employee.formData?.branch || employee.formData?.Branches || 'Ahmedabad',
       teamLeaderId: resolvedTlId,
       teamLeaderName: resolvedTlName,
       reportingManagerId: resolvedRmId,
@@ -1361,7 +1381,12 @@ export const Employees = () => {
 
                     {/* Department & Role */}
                     <td className="px-6 py-4 border-t border-b border-gray-100 group-hover:border-orange-100">
-                      <div className="font-bold text-gray-800">{emp.dept}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-gray-800">{emp.dept}</span>
+                        <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                          {emp.branch || emp.Branches || emp.formData?.branch || emp.formData?.Branches || 'Ahmedabad'}
+                        </span>
+                      </div>
                       <div className="text-gray-500 text-xs font-medium">{emp.role}</div>
                     </td>
 
@@ -1718,6 +1743,18 @@ export const Employees = () => {
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Total Experience</label>
                         <input type="text" value={formData.experience} onChange={e => setFormData({ ...formData, experience: e.target.value })} className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange" placeholder="e.g. 3 Years" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Branch</label>
+                        <select
+                          value={formData.branch}
+                          onChange={e => setFormData({ ...formData, branch: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-xl outline-none border-gray-300 focus:ring-1 focus:ring-be-orange bg-white font-medium"
+                        >
+                          <option value="Ahmedabad">Ahmedabad</option>
+                          <option value="Jaipur">Jaipur</option>
+                          <option value="Chennai">Chennai</option>
+                        </select>
                       </div>
                     </div>
 

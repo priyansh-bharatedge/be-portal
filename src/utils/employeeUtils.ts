@@ -298,6 +298,14 @@ export function mapZohoRecordToEmployee(z: any): EmployeeData {
 
   const monthlyTarget = z.Monthly_Target || z.Target || z.Sales_Target || '';
 
+  const rawBranch = z.Branches || z.Branch || z.branch || 'Ahmedabad';
+  let branch = 'Ahmedabad';
+  const bLower = String(rawBranch).toLowerCase();
+  if (bLower.includes('jaipur')) branch = 'Jaipur';
+  else if (bLower.includes('chennai')) branch = 'Chennai';
+  else if (bLower.includes('ahmedabad')) branch = 'Ahmedabad';
+  else branch = String(rawBranch);
+
   const fd = {
     empId,
     salaryEntity: z.Salary_Entity || z.Company_Entity || 'BSPL',
@@ -347,6 +355,8 @@ export function mapZohoRecordToEmployee(z: any): EmployeeData {
     esicNumber: z.ESIC_Number || '',
     uanNumber: z.UAN_Number || '',
     medicalInsurance: z.Medical_Insurance_Number || '',
+    branch,
+    Branches: branch,
     monthlyTarget,
     target: monthlyTarget,
   };
@@ -360,6 +370,8 @@ export function mapZohoRecordToEmployee(z: any): EmployeeData {
     role: z.Designation_Job_Title || z.System_Role || 'Team Member',
     systemRole,
     salaryEntity: z.Salary_Entity || z.Company_Entity || 'BSPL',
+    branch,
+    Branches: branch,
     teamLeaderId: tlId,
     teamLeaderName: tlName,
     reportingManagerId: rmId,

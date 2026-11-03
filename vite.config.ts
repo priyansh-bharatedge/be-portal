@@ -1465,6 +1465,19 @@ function zohoApiPlugin(): Plugin {
     const dept = fd.dept || employee.dept;
     if (dept) payload.Department = dept;
 
+    const rawBranch = fd.branch || fd.Branches || employee.branch || employee.Branches;
+    if (rawBranch) {
+      const bLower = String(rawBranch).toLowerCase();
+      let normalizedBranch = 'Ahmedabad';
+      if (bLower.includes('jaipur')) normalizedBranch = 'Jaipur';
+      else if (bLower.includes('chennai')) normalizedBranch = 'Chennai';
+      else if (bLower.includes('ahmedabad')) normalizedBranch = 'Ahmedabad';
+      else normalizedBranch = String(rawBranch);
+      payload.Branches = normalizedBranch;
+    } else {
+      payload.Branches = 'Ahmedabad';
+    }
+
     // Designation / Job Title (API Name: Designation_Job_Title, Single Line)
     const role = fd.role || employee.role;
     if (role) payload.Designation_Job_Title = role;
@@ -4743,7 +4756,7 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const moduleName = env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
             const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
-            const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Contact_Number,Personal_Email_Address,Email,Gender,Marital_Status,Nationality,Blood_Group,Date_of_Birth,Date_of_Joining,Department,Designation_Job_Title,System_Role,Employment_Type,Permanent_Address,Current_Address,Education_Qualification,Professional_Certifications,Key_Skills,Languages_Known,Previous_Employer,Total_Experience,Emergency_Contact_First_Name,Emergency_Contact_Last_Name,Emergency_Contact_Number,Relationship_with_Contact,Who_is_the_Team_Leader_TL,Reporting_Manager,Pan_Number,Aadhaar_Number,Passport_Number,Driving_License_Number,Bank_Account_Number,Bank_Name,IFSC_Code,PF_Applicable,PF_Number,ESIC_Number,UAN_Number,Medical_Insurance_Number,Salary_Entity,Company_Entity,Password';
+            const employeeFields = 'id,Name,Middle_Name,Last_Name,Employment_ID,Contact_Number,Personal_Email_Address,Email,Gender,Marital_Status,Nationality,Blood_Group,Date_of_Birth,Date_of_Joining,Department,Designation_Job_Title,System_Role,Employment_Type,Permanent_Address,Current_Address,Education_Qualification,Professional_Certifications,Key_Skills,Languages_Known,Previous_Employer,Total_Experience,Emergency_Contact_First_Name,Emergency_Contact_Last_Name,Emergency_Contact_Number,Relationship_with_Contact,Who_is_the_Team_Leader_TL,Reporting_Manager,Pan_Number,Aadhaar_Number,Passport_Number,Driving_License_Number,Bank_Account_Number,Bank_Name,IFSC_Code,PF_Applicable,PF_Number,ESIC_Number,UAN_Number,Medical_Insurance_Number,Salary_Entity,Company_Entity,Password,Branches';
             const crmEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${employeeFields}&${buildZohoPaginationQuery(urlObj)}`;
 
             console.log(`[Vite Zoho Plugin] Fetching live Employees from Zoho CRM (${moduleName})`);
