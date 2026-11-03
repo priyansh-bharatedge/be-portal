@@ -790,10 +790,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <button
               onClick={() => setActiveDepartment('sales')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'sales' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+                activeDepartment === 'sales' ? 'bg-white text-indigo-600 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-white font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/60'
               }`}
             >
-              <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-white' : 'text-sky-400'} />
+              <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-indigo-600' : 'text-sky-400'} />
               <span>Sales Dashboard</span>
             </button>
 
@@ -801,10 +801,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <button
               onClick={() => setActiveDepartment('operations')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'operations' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+                activeDepartment === 'operations' ? 'bg-white text-orange-600 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-white font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/60'
               }`}
             >
-              <Layers size={14} className={activeDepartment === 'operations' ? 'text-white' : 'text-orange-400'} />
+              <Layers size={14} className={activeDepartment === 'operations' ? 'text-orange-600' : 'text-orange-400'} />
               <span>Operations Dashboard</span>
             </button>
 
@@ -812,10 +812,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <button
               onClick={() => setActiveDepartment('others')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'others' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+                activeDepartment === 'others' ? 'bg-white text-emerald-600 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-white font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/60'
               }`}
             >
-              <Building2 size={14} className={activeDepartment === 'others' ? 'text-white' : 'text-emerald-400'} />
+              <Building2 size={14} className={activeDepartment === 'others' ? 'text-emerald-600' : 'text-emerald-400'} />
               <span>Other Departments</span>
             </button>
           </div>
@@ -842,7 +842,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             {/* + New Deal Pill Button */}
             <button
               onClick={() => navigate('/crm/deals')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full text-xs font-black transition-all shadow-md shadow-indigo-500/25 cursor-pointer hover:scale-105"
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50/90 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-full text-xs font-black transition-all shadow-xs cursor-pointer hover:scale-105"
             >
               <Plus size={14} />
               <span>New Deal</span>
@@ -1141,7 +1141,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 <button
                   onClick={() => navigate('/settings')}
                   title="Dashboard Settings"
-                  className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 cursor-pointer transition-transform hover:rotate-45"
+                  className="w-8 h-8 rounded-full bg-white hover:bg-indigo-50 text-indigo-600 border border-white/90 flex items-center justify-center shadow-xs cursor-pointer transition-transform hover:rotate-45"
                 >
                   <Settings size={14} />
                 </button>
@@ -1258,7 +1258,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
               <button
                 onClick={() => navigate('/crm/deals')}
-                className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md shadow-indigo-500/25 cursor-pointer self-start sm:self-center"
+                className="flex items-center px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-center"
               >
                 All Deals ({activeDeals.length}) <ArrowRight size={13} className="ml-1.5" />
               </button>
@@ -1342,33 +1342,33 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             onClick={() => setActiveDepartment('sales')}
             className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
               activeDepartment === 'sales'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 font-black scale-105'
+                ? 'bg-white text-indigo-600 shadow-md shadow-black/5 border border-white font-black scale-105'
                 : 'text-gray-600 hover:text-gray-950 hover:bg-white/80'
             }`}
           >
-            <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-white' : 'text-blue-500'} />
+            <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-indigo-600' : 'text-blue-500'} />
             <span>Sales</span>
           </button>
           <button
             onClick={() => setActiveDepartment('operations')}
             className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
               activeDepartment === 'operations'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 font-black scale-105'
+                ? 'bg-white text-orange-600 shadow-md shadow-black/5 border border-white font-black scale-105'
                 : 'text-gray-600 hover:text-gray-950 hover:bg-white/80'
             }`}
           >
-            <Layers size={14} className={activeDepartment === 'operations' ? 'text-white' : 'text-orange-500'} />
+            <Layers size={14} className={activeDepartment === 'operations' ? 'text-orange-600' : 'text-orange-500'} />
             <span>Operations</span>
           </button>
           <button
             onClick={() => setActiveDepartment('others')}
             className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
               activeDepartment === 'others'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 font-black scale-105'
+                ? 'bg-white text-emerald-600 shadow-md shadow-black/5 border border-white font-black scale-105'
                 : 'text-gray-600 hover:text-gray-950 hover:bg-white/80'
             }`}
           >
-            <Building2 size={14} className={activeDepartment === 'others' ? 'text-white' : 'text-emerald-500'} />
+            <Building2 size={14} className={activeDepartment === 'others' ? 'text-emerald-600' : 'text-emerald-500'} />
             <span>Other Depts</span>
           </button>
         </div>
