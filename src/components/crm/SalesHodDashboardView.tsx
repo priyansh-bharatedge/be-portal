@@ -1159,35 +1159,43 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   // ============================================================================
 
   return (
-    <div className="space-y-8 bg-[#f8fafc] text-slate-800 p-4 sm:p-7 min-h-screen">
+    <div className="space-y-6 text-gray-900 transition-all duration-300 font-sans relative">
+      {/* ========================================================================= */}
+      {/* ATMOSPHERIC WARM PASTEL MESH GRADIENT GLOWS (Matching reference aesthetic) */}
+      {/* ========================================================================= */}
+      <div className="absolute -top-10 -left-10 w-[500px] h-[500px] bg-gradient-to-br from-amber-200/20 via-orange-100/10 to-transparent rounded-full blur-[120px] pointer-events-none -z-10" />
+      <div className="absolute top-20 -right-10 w-[600px] h-[600px] bg-gradient-to-bl from-emerald-100/25 via-teal-100/10 to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute top-1/2 left-1/4 w-[500px] h-[500px] bg-gradient-to-tr from-rose-100/15 via-amber-100/10 to-transparent rounded-full blur-[130px] pointer-events-none -z-10" />
+
       {/* ========================================================================= */}
       {/* TOP EXECUTIVE COMMAND BAR */}
       {/* ========================================================================= */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-white/70 backdrop-blur-2xl p-5 sm:p-6 rounded-[28px] border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)]">
         <div>
-          <div className="flex items-center gap-2.5">
-            <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 text-white shadow-md shadow-indigo-500/20">
-              <Compass size={20} />
+          <div className="flex items-center gap-3">
+            <span className="p-3 rounded-2xl bg-gray-950 text-white shadow-md shadow-black/15 flex items-center justify-center">
+              <Compass size={20} className="text-amber-400" />
             </span>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight">
                 Sales Executive Intelligence Hub
               </h1>
+              <p className="text-xs text-gray-400 font-medium">Real-time national revenue realization, pipeline & BDM hierarchy stats</p>
             </div>
           </div>
         </div>
 
         {/* Action Controls & Filters */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* Timeframe Filter Tabs */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
+          <div className="inline-flex items-center gap-1 p-1 bg-white/60 backdrop-blur-xl border border-white/80 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
             {(['today', 'week', 'month', 'quarter', 'all'] as TimeframeOption[]).map(tf => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
-                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer capitalize ${timeframe === tf
-                  ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
-                  : 'text-slate-600 hover:text-slate-900'
+                className={`px-4 py-2 rounded-full transition-all duration-200 cursor-pointer text-xs font-bold capitalize ${timeframe === tf
+                  ? 'bg-gray-950 text-white shadow-sm shadow-black/20 scale-[1.02]'
+                  : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
                   }`}
               >
                 {tf === 'month' ? 'October 2026' : tf === 'all' ? 'All Time' : tf}
@@ -1197,12 +1205,12 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
           {/* Month / Year Picker (when in month mode) */}
           {timeframe === 'month' && (
-            <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-2xl border border-slate-200 shadow-sm text-xs font-bold text-slate-700">
-              <Calendar size={13} className="text-indigo-600" />
+            <div className="flex items-center gap-1.5 bg-white/70 backdrop-blur-xl px-4 py-2 rounded-full border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)] text-xs font-bold text-gray-800">
+              <Calendar size={13} className="text-amber-600" />
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="bg-transparent text-slate-800 font-bold focus:outline-none cursor-pointer"
+                className="bg-transparent text-gray-900 font-bold focus:outline-none cursor-pointer"
               >
                 {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
                   <option key={m} value={idx}>{m}</option>
@@ -1215,12 +1223,12 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           {/* Target Simulator Tool Toggle */}
           <button
             onClick={() => setShowSimulator(s => !s)}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${showSimulator
+            className={`px-4 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${showSimulator
               ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/20'
-              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm'
+              : 'bg-white/70 hover:bg-white text-gray-700 border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.02)]'
               }`}
           >
-            <Sliders size={14} className={showSimulator ? 'text-white' : 'text-amber-500'} />
+            <Sliders size={13} className={showSimulator ? 'text-white' : 'text-amber-500'} />
             <span>Target Simulator</span>
           </button>
 
@@ -1228,18 +1236,18 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           <button
             onClick={handleExportCsv}
             title="Download CSV Hierarchy Summary"
-            className="p-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm transition-all cursor-pointer flex items-center justify-center"
+            className="p-2.5 rounded-full bg-white/70 hover:bg-white border border-white/80 text-gray-700 shadow-[0_4px_20px_rgba(0,0,0,0.02)] transition-all cursor-pointer flex items-center justify-center"
           >
-            <Download size={15} />
+            <Download size={14} />
           </button>
 
           {/* Refresh Live Zoho Button */}
           <button
             onClick={onRefresh}
             disabled={propsRefreshing || isLoading}
-            className="px-4 py-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 hover:brightness-110 transition-all cursor-pointer flex items-center gap-2"
+            className="px-4 py-2 rounded-full bg-gray-950 hover:bg-black text-white font-bold text-xs shadow-md shadow-black/15 transition-all cursor-pointer flex items-center gap-2 hover:scale-[1.02] disabled:opacity-50"
           >
-            <RefreshCw size={13} className={propsRefreshing || isLoading ? 'animate-spin' : ''} />
+            <RefreshCw size={13} className={propsRefreshing || isLoading ? 'animate-spin text-amber-400' : ''} />
             <span>Sync Zoho</span>
           </button>
         </div>
@@ -1254,19 +1262,19 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            className="rounded-3xl bg-gradient-to-r from-amber-50 via-orange-50 to-indigo-50 border border-amber-200/80 p-6 shadow-md overflow-hidden"
+            className="rounded-[28px] bg-white/75 backdrop-blur-2xl border border-amber-200/70 p-6 shadow-[0_12px_40px_rgba(245,158,11,0.08)] overflow-hidden"
           >
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="space-y-1">
-                <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
-                  <SlidersHorizontal size={16} />
+                <div className="flex items-center gap-2 text-amber-900 font-extrabold text-sm">
+                  <SlidersHorizontal size={16} className="text-amber-600" />
                   <span>Interactive What-If Sales Quota Simulator</span>
                 </div>
-                <p className="text-xs text-slate-600 font-medium">
+                <p className="text-xs text-gray-600 font-medium">
                   Model executive revenue growth and shortfall reduction by simulating a team-wide conversion lift.
                 </p>
                 <div className="flex items-center gap-4 pt-2">
-                  <span className="text-xs font-bold text-slate-700">Conversion Lift:</span>
+                  <span className="text-xs font-bold text-gray-700">Conversion Lift:</span>
                   <input
                     type="range"
                     min="0"
@@ -1276,7 +1284,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     onChange={(e) => setSimulationBoost(Number(e.target.value))}
                     className="w-48 accent-amber-500 cursor-pointer"
                   />
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-xs shadow-sm">
+                  <span className="px-3 py-0.5 rounded-full bg-amber-500 text-white font-black text-xs shadow-sm">
                     +{simulationBoost}%
                   </span>
                 </div>
@@ -1284,8 +1292,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
               {/* Dynamic Recalculated Output Tiles */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase">Simulated Revenue</p>
+                <div className="p-4 bg-white/80 backdrop-blur-md rounded-[20px] border border-amber-100 shadow-xs">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Simulated Revenue</p>
                   <p className="text-base font-black text-emerald-600 mt-0.5">
                     {formatCompactRupee(overallAchievement * (1 + simulationBoost / 100))}
                   </p>
@@ -1293,8 +1301,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     +{formatCompactRupee(overallAchievement * (simulationBoost / 100))} lift
                   </p>
                 </div>
-                <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase">Remaining Shortfall</p>
+                <div className="p-4 bg-white/80 backdrop-blur-md rounded-[20px] border border-amber-100 shadow-xs">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remaining Shortfall</p>
                   <p className="text-base font-black text-rose-600 mt-0.5">
                     {formatCompactRupee(Math.max(0, overallTarget - overallAchievement * (1 + simulationBoost / 100)))}
                   </p>
@@ -1302,8 +1310,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     -{formatCompactRupee(Math.min(overallShortfall, overallAchievement * (simulationBoost / 100)))} gap closed
                   </p>
                 </div>
-                <div className="p-3.5 bg-white/90 rounded-2xl border border-amber-200 shadow-sm col-span-2 sm:col-span-1">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase">Projected Quota</p>
+                <div className="p-4 bg-white/80 backdrop-blur-md rounded-[20px] border border-amber-100 shadow-xs col-span-2 sm:col-span-1">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Projected Quota</p>
                   <p className="text-base font-black text-indigo-700 mt-0.5">
                     {Math.min(100, Math.round(((overallAchievement * (1 + simulationBoost / 100)) / overallTarget) * 100))}%
                   </p>
@@ -1316,182 +1324,176 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       </AnimatePresence>
 
       {/* ========================================================================= */}
-      {/* 1. TOP EXECUTIVE REVENUE & GST STRIP (CRISP WHITE LIGHT THEME) */}
+      {/* 1. TOP EXECUTIVE REVENUE & GST STRIP (FROSTED GLASS BENTO CARDS) */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
         {/* Card 1: Today's Revenue */}
-        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-indigo-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+        <div className="bg-white/70 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[185px]">
           <div>
             <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
+              <span className="p-3 rounded-2xl bg-indigo-50/80 text-indigo-600 border border-indigo-100/80 shadow-2xs">
                 <IndianRupee size={18} />
               </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50/90 text-indigo-800 border border-indigo-100/80">
                 Today Live
               </span>
             </div>
             <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Today's Revenue</p>
-              <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Today's Revenue</p>
+              <h3 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight mt-1">
                 {formatRupee(todayRevenue)}
               </h3>
             </div>
           </div>
-          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-            <span>Booked: <strong className="text-slate-800">{formatCompactRupee(todayBooked)}</strong></span>
-            <span>Deals: <strong className="text-indigo-600">{todayDeals.length}</strong></span>
+          <div className="flex items-center justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100/80 font-medium relative z-10">
+            <span>Booked: <strong className="text-gray-800">{formatCompactRupee(todayBooked)}</strong></span>
+            <span>Deals: <strong className="text-indigo-600 font-bold">{todayDeals.length}</strong></span>
           </div>
         </div>
 
         {/* Card 2: Monthly Revenue */}
-        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-emerald-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+        <div className="bg-white/70 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[185px]">
           <div>
             <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm">
+              <span className="p-3 rounded-2xl bg-emerald-50/80 text-emerald-600 border border-emerald-100/80 shadow-2xs">
                 <TrendingUp size={18} />
               </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50/90 text-emerald-800 border border-emerald-100/80">
                 October 2026
               </span>
             </div>
             <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue</p>
-              <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight mt-1" title={formatRupee(monthlyRevenue)}>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Monthly Revenue</p>
+              <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight mt-1 truncate" title={formatRupee(monthlyRevenue)}>
                 {formatRupee(monthlyRevenue)}
               </h3>
             </div>
           </div>
-          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-            <span>Booked: <strong className="text-slate-800">{formatCompactRupee(monthlyBooked)}</strong></span>
-            <span>Deals: <strong className="text-emerald-700">{currentMonthDeals.length}</strong></span>
+          <div className="flex items-center justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100/80 font-medium relative z-10">
+            <span>Booked: <strong className="text-gray-800">{formatCompactRupee(monthlyBooked)}</strong></span>
+            <span>Deals: <strong className="text-emerald-700 font-bold">{currentMonthDeals.length}</strong></span>
           </div>
         </div>
 
         {/* Card 3: With GST Amount */}
-        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-cyan-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+        <div className="bg-white/70 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[185px]">
           <div>
             <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3 rounded-2xl bg-cyan-50 text-cyan-600 border border-cyan-100 shadow-sm">
+              <span className="p-3 rounded-2xl bg-cyan-50/80 text-cyan-600 border border-cyan-100/80 shadow-2xs">
                 <ReceiptIndianRupee size={18} />
               </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50/90 text-cyan-800 border border-cyan-100/80">
                 Incl. 18% GST
               </span>
             </div>
             <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">With GST Amount</p>
-              <h3 className="text-xl sm:text-2xl font-black text-cyan-600 tracking-tight mt-1 truncate" title={formatRupee(activeWithGst)}>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">With GST Amount</p>
+              <h3 className="text-xl sm:text-2xl font-black text-cyan-700 tracking-tight mt-1 truncate" title={formatRupee(activeWithGst)}>
                 {formatRupee(activeWithGst)}
               </h3>
             </div>
           </div>
-          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-            <span>GST Tax: <strong className="text-slate-800">{formatCompactRupee(activeGstTax)}</strong></span>
-            <span>Gross: <strong className="text-cyan-700">{formatCompactRupee(activeWithGst)}</strong></span>
+          <div className="flex items-center justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100/80 font-medium relative z-10">
+            <span>GST Tax: <strong className="text-gray-800">{formatCompactRupee(activeGstTax)}</strong></span>
+            <span>Gross: <strong className="text-cyan-700 font-bold">{formatCompactRupee(activeWithGst)}</strong></span>
           </div>
         </div>
 
         {/* Card 4: Without GST Amount */}
-        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-blue-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+        <div className="bg-white/70 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[185px]">
           <div>
             <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 shadow-sm">
+              <span className="p-3 rounded-2xl bg-blue-50/80 text-blue-600 border border-blue-100/80 shadow-2xs">
                 <Calculator size={18} />
               </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50/90 text-blue-800 border border-blue-100/80">
                 Excl. GST (Base)
               </span>
             </div>
             <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Without GST Amount</p>
-              <h3 className="text-xl sm:text-2xl font-black text-blue-600 tracking-tight mt-1 truncate" title={formatRupee(activeWithoutGst)}>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Without GST Amount</p>
+              <h3 className="text-xl sm:text-2xl font-black text-blue-700 tracking-tight mt-1 truncate" title={formatRupee(activeWithoutGst)}>
                 {formatRupee(activeWithoutGst)}
               </h3>
             </div>
           </div>
-          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-            <span>Net Base: <strong className="text-slate-800">{formatCompactRupee(activeWithoutGst)}</strong></span>
-            <span>Deals: <strong className="text-blue-700">{currentMonthDeals.length}</strong></span>
+          <div className="flex items-center justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100/80 font-medium relative z-10">
+            <span>Net Base: <strong className="text-gray-800">{formatCompactRupee(activeWithoutGst)}</strong></span>
+            <span>Deals: <strong className="text-blue-700 font-bold">{currentMonthDeals.length}</strong></span>
           </div>
         </div>
 
-        {/* Card 5: Revenue Breakdown */}
-        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-amber-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+        {/* Card 5: Payment Breakdown */}
+        <div className="bg-white/70 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[185px]">
           <div>
             <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-100 shadow-sm">
+              <span className="p-3 rounded-2xl bg-amber-50/80 text-amber-600 border border-amber-100/80 shadow-2xs">
                 <PieChartIcon size={18} />
               </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50/90 text-amber-800 border border-amber-100/80">
                 Rec vs Pend
               </span>
             </div>
             <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Breakdown</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Payment Breakdown</p>
               <div className="flex items-baseline gap-1.5 mt-1">
                 <h3 className="text-lg sm:text-xl font-black text-emerald-600 tracking-tight">
                   {formatCompactRupee(totalReceivedAmount)}
                 </h3>
-                <span className="text-[11px] text-slate-400">/</span>
+                <span className="text-[11px] text-gray-400">/</span>
                 <span className="text-sm font-bold text-rose-500">
                   {formatCompactRupee(totalPendingAmount)}
                 </span>
               </div>
               {/* Visual Progress Bar */}
-              <div className="w-full h-2 bg-slate-100 rounded-full mt-2.5 overflow-hidden flex">
+              <div className="w-full h-2 bg-gray-100 rounded-full mt-2.5 overflow-hidden flex">
                 <div
                   style={{ width: `${totalBookedValue > 0 ? (totalReceivedAmount / totalBookedValue) * 100 : 50}%` }}
-                  className="bg-emerald-500 h-full"
+                  className="bg-emerald-500 h-full rounded-l-full"
                   title="Received Ratio"
                 />
                 <div
                   style={{ width: `${totalBookedValue > 0 ? (totalPendingAmount / totalBookedValue) * 100 : 50}%` }}
-                  className="bg-rose-400 h-full"
+                  className="bg-rose-400 h-full rounded-r-full"
                   title="Pending Ratio"
                 />
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-            <span>Ratio: <strong className="text-slate-800">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
-            <span>Total: <strong className="text-slate-800">{formatCompactRupee(totalBookedValue)}</strong></span>
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mt-3 pt-3 border-t border-gray-100/80 font-medium relative z-10">
+            <span>Ratio: <strong className="text-gray-800 font-bold">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
+            <span>Total: <strong className="text-gray-800 font-bold">{formatCompactRupee(totalBookedValue)}</strong></span>
           </div>
         </div>
 
         {/* Card 6: Top High Performer & Branch */}
-        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] hover:shadow-xl hover:border-purple-300 hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+        <div className="bg-white/70 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[185px]">
           <div>
             <div className="flex justify-between items-start mb-3 relative z-10">
-              <span className="p-3 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 shadow-sm">
+              <span className="p-3 rounded-2xl bg-purple-50/80 text-purple-600 border border-purple-100/80 shadow-2xs">
                 <Trophy size={18} />
               </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50/90 text-purple-800 border border-purple-100/80">
                 National Leader
               </span>
             </div>
             <div className="relative z-10">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top High Performer</p>
-              <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 truncate" title={topHighPerformer?.name}>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Top High Performer</p>
+              <h3 className="text-base sm:text-lg font-black text-gray-950 mt-1 truncate" title={topHighPerformer?.name}>
                 {topHighPerformer ? topHighPerformer.name : 'Calculating...'}
               </h3>
             </div>
           </div>
-          <div className="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 font-medium relative z-10">
-            <span>Branch: <strong className="text-indigo-600">{topHighPerformer?.branch || topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
-            <span>Rev: <strong className="text-emerald-600">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
+          <div className="flex items-center justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100/80 font-medium relative z-10">
+            <span>Branch: <strong className="text-indigo-600 font-bold">{topHighPerformer?.branch || topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
+            <span>Rev: <strong className="text-emerald-600 font-bold">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
           </div>
         </div>
       </div>
 
       {/* GST Audit & Revenue Reconciliation Section */}
-      <div className="rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 shadow-xl relative overflow-hidden border border-slate-800">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="rounded-[28px] bg-gradient-to-r from-gray-950 via-slate-900 to-gray-950 text-white p-5 sm:p-7 shadow-[0_16px_40px_rgba(0,0,0,0.15)] relative overflow-hidden border border-white/10">
+        <div className="absolute right-0 top-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <span className="p-3.5 rounded-2xl bg-white/10 text-cyan-400 border border-white/10 backdrop-blur-md shrink-0">
@@ -1500,27 +1502,29 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base sm:text-lg font-black tracking-tight text-white">GST Tax & Revenue Audit</h3>
-
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-400/20 text-cyan-300 border border-cyan-400/30">
+                  Verified Inflow
+                </span>
               </div>
-
+              <p className="text-xs text-gray-300 font-medium mt-0.5">Comprehensive audit breakdown of gross quoted billing vs net base and 18% tax component</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 shrink-0">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">With GST (Gross)</span>
-              <span className="text-base sm:text-lg font-black text-cyan-400">{formatRupee(activeWithGst)}</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">100% Total Quoted</span>
+            <div className="bg-white/10 border border-white/15 rounded-[22px] p-4 backdrop-blur-md">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">With GST (Gross)</span>
+              <span className="text-base sm:text-lg font-black text-cyan-300">{formatRupee(activeWithGst)}</span>
+              <span className="text-[10px] text-gray-400 block mt-0.5">100% Total Quoted</span>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Without GST (Net Base)</span>
-              <span className="text-base sm:text-lg font-black text-emerald-400">{formatRupee(activeWithoutGst)}</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">~84.7% Base Value</span>
+            <div className="bg-white/10 border border-white/15 rounded-[22px] p-4 backdrop-blur-md">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">Without GST (Net Base)</span>
+              <span className="text-base sm:text-lg font-black text-emerald-300">{formatRupee(activeWithoutGst)}</span>
+              <span className="text-[10px] text-gray-400 block mt-0.5">~84.7% Base Value</span>
             </div>
-            <div className="col-span-2 sm:col-span-1 bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">GST Component (18%)</span>
-              <span className="text-base sm:text-lg font-black text-amber-400">{formatRupee(activeGstTax)}</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">Tax Offset Collected</span>
+            <div className="col-span-2 sm:col-span-1 bg-white/10 border border-white/15 rounded-[22px] p-4 backdrop-blur-md">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-300 block">GST Component (18%)</span>
+              <span className="text-base sm:text-lg font-black text-amber-300">{formatRupee(activeGstTax)}</span>
+              <span className="text-[10px] text-gray-400 block mt-0.5">Tax Offset Collected</span>
             </div>
           </div>
         </div>
@@ -1531,16 +1535,16 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Graph 1: Branch Revenue Share Donut Chart */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+        <div className="bg-white/70 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <h3 className="text-base font-black text-gray-950 flex items-center gap-2">
                 <PieChartIcon size={16} className="text-indigo-600" />
                 Branch Revenue Share
               </h3>
-              <span className="text-xs font-bold text-slate-500">Regional Mix</span>
+              <span className="text-xs font-bold text-gray-500">Regional Mix</span>
             </div>
-            <p className="text-xs text-slate-400 mb-4">
+            <p className="text-xs text-gray-400 mb-4">
               Real-time received revenue contribution across Ahmedabad, Jaipur & Chennai.
             </p>
           </div>
@@ -1563,40 +1567,40 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 </Pie>
                 <RechartsTooltip
                   formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(12px)', borderRadius: '1rem', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontSize: '12px' }}
                 />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Total Rec.</span>
-              <span className="text-base font-black text-slate-900">{formatCompactRupee(totalReceivedAmount)}</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase">Total Rec.</span>
+              <span className="text-base font-black text-gray-950">{formatCompactRupee(totalReceivedAmount)}</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 text-center">
+          <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-100 text-center">
             {branchPieData.map(b => (
-              <div key={b.name} className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-                <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-700">
+              <div key={b.name} className="p-2.5 rounded-[18px] bg-white/60 backdrop-blur-md border border-white/80 shadow-2xs">
+                <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-gray-700">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
                   <span>{b.name}</span>
                 </div>
-                <p className="text-xs font-black text-slate-900 mt-1">{formatCompactRupee(b.value)}</p>
+                <p className="text-xs font-black text-gray-950 mt-1">{formatCompactRupee(b.value)}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Graph 2: Deal Stage Pipeline Composition Donut */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-[0_4px_25px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+        <div className="bg-white/70 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <h3 className="text-base font-black text-gray-950 flex items-center gap-2">
                 <Layers size={16} className="text-cyan-600" />
                 Pipeline Stage Distribution
               </h3>
-              <span className="text-xs font-bold text-slate-500">{filteredDeals.length} Deals</span>
+              <span className="text-xs font-bold text-gray-500">{filteredDeals.length} Deals</span>
             </div>
-            <p className="text-xs text-slate-400 mb-4">
+            <p className="text-xs text-gray-400 mb-4">
               Volume of deals progressing through Sales, Account, Legal, Operations & Won.
             </p>
           </div>
@@ -1619,17 +1623,17 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 </Pie>
                 <RechartsTooltip
                   formatter={(val: any) => [`${val} Deals`, 'Volume']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(12px)', borderRadius: '1rem', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontSize: '12px' }}
                 />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Live Pipeline</span>
-              <span className="text-base font-black text-slate-900">{filteredDeals.length}</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase">Live Pipeline</span>
+              <span className="text-base font-black text-gray-950">{filteredDeals.length}</span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-gray-100 text-xs">
             {stagePieData.map(st => (
               <button
                 key={st.name}
@@ -1640,11 +1644,11 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     setStageModalSearch('');
                   }
                 }}
-                className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 px-2.5 py-1 rounded-xl border border-slate-200 transition-all cursor-pointer shadow-2xs group"
+                className="flex items-center gap-1.5 text-[11px] font-bold text-gray-700 bg-white/70 hover:bg-white px-3 py-1.5 rounded-full border border-white/80 transition-all cursor-pointer shadow-2xs hover:shadow-xs group hover:scale-[1.02]"
                 title={`Click to view deals in ${st.fullName}`}
               >
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: st.color }} />
-                <span>{st.name}: <strong className="group-hover:text-indigo-600">{st.value}</strong></span>
+                <span>{st.name}: <strong className="text-gray-950 group-hover:text-indigo-600">{st.value}</strong></span>
               </button>
             ))}
           </div>
@@ -1652,22 +1656,22 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. MASTER TARGET & ACHIEVEMENT BAR VIEW (LIGHT THEME) */}
+      {/* 3. MASTER TARGET & ACHIEVEMENT BAR VIEW */}
       {/* ========================================================================= */}
-      <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+      <div className="rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+            <h3 className="text-lg font-black text-gray-950 flex items-center gap-2">
               <Target size={18} className="text-indigo-600" />
               Target vs Achievement Overview (Entire Sales Team)
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5 font-medium">
+            <p className="text-xs text-gray-400 mt-0.5 font-medium">
               National sales target benchmark vs. actual revenue received with shortfall gap.
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs font-bold">
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-400" /> Target: {formatCompactRupee(overallTarget)}
+            <span className="flex items-center gap-1.5 text-gray-600">
+              <span className="w-2.5 h-2.5 rounded-full bg-gray-400" /> Target: {formatCompactRupee(overallTarget)}
             </span>
             <span className="flex items-center gap-1.5 text-emerald-700">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
@@ -1681,10 +1685,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         {/* Master Comparison Bar */}
         <div className="space-y-2">
           <div className="flex justify-between items-center text-xs font-bold">
-            <span className="text-slate-800">Full Sales Organization Progress</span>
-            <span className="text-indigo-700 font-extrabold">{overallAchievementPct}% Achieved</span>
+            <span className="text-gray-900 font-extrabold">Full Sales Organization Progress</span>
+            <span className="text-indigo-700 font-black">{overallAchievementPct}% Achieved</span>
           </div>
-          <div className="w-full h-4 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200 flex">
+          <div className="w-full h-4 bg-gray-100/80 rounded-full overflow-hidden p-0.5 border border-white/80 shadow-inner flex">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${overallAchievementPct}%` }}
@@ -1695,23 +1699,23 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         </div>
 
         {/* Branch-by-Branch Breakdown Bars */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-100">
           {(salesTree.children?.[0]?.children || []).map((br: SalesTreeNode) => {
             const pct = br.target > 0 ? Math.min(100, Math.round((br.achievement / br.target) * 100)) : 0;
             return (
-              <div key={br.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
+              <div key={br.id} className="p-4 rounded-[22px] bg-white/60 backdrop-blur-md border border-white/80 shadow-2xs">
                 <div className="flex justify-between items-center text-xs mb-2">
-                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="font-bold text-gray-900 flex items-center gap-1.5">
                     <MapPin size={13} className="text-indigo-600" />
                     {br.name}
                   </span>
                   <span className="text-emerald-700 font-black">{pct}%</span>
                 </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden flex mb-2">
-                  <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full" />
+                <div className="w-full h-2 bg-gray-200/80 rounded-full overflow-hidden flex mb-2">
+                  <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full rounded-full" />
                 </div>
-                <div className="flex justify-between items-center text-[11px] text-slate-500">
-                  <span>Ach: <strong className="text-slate-800">{formatCompactRupee(br.achievement)}</strong></span>
+                <div className="flex justify-between items-center text-[11px] text-gray-500">
+                  <span>Ach: <strong className="text-gray-900">{formatCompactRupee(br.achievement)}</strong></span>
                   <span>Shortfall: <strong className="text-rose-600">{formatCompactRupee(br.shortfall)}</strong></span>
                 </div>
               </div>
@@ -1875,19 +1879,19 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         const topPersonService = personBestServices[0] || null;
 
         return (
-          <div className="rounded-3xl bg-gradient-to-br from-white via-slate-50 to-indigo-50/20 border border-slate-200/90 p-5 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
+          <div className="rounded-[28px] bg-white/60 backdrop-blur-2xl border border-white/80 p-5 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)] relative overflow-hidden">
             {/* Subtle light geometric grid */}
             <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:24px_24px] opacity-70 pointer-events-none" />
 
             {/* TOP HEADER BREADCRUMB NAVIGATION & RESET CONTROLS */}
-            <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200/70">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100">
+              <div className="inline-flex items-center gap-1.5 p-1.5 bg-white/70 backdrop-blur-md border border-white/80 rounded-full shadow-2xs text-xs font-bold text-gray-600">
                 <button
                   onClick={() => {
                     setDrillLevel(0);
                     setActiveInspectLevel('root');
                   }}
-                  className={`hover:underline font-bold cursor-pointer flex items-center gap-1 ${drillLevel === 0 ? 'text-indigo-600 font-black' : 'text-slate-700'
+                  className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${drillLevel === 0 ? 'bg-gray-950 text-white font-black shadow-xs' : 'text-gray-700 hover:text-gray-950'
                     }`}
                   title="Click to reset BharatEdge to center"
                 >
@@ -1896,13 +1900,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                 {drillLevel >= 1 && (
                   <>
-                    <span className="text-slate-300">/</span>
+                    <span className="text-gray-300">/</span>
                     <button
                       onClick={() => {
                         setDrillLevel(1);
                         setActiveInspectLevel('sales');
                       }}
-                      className={`hover:underline cursor-pointer font-bold ${drillLevel === 1 ? 'text-indigo-600 font-black' : 'text-slate-700'
+                      className={`px-3 py-1 rounded-full transition-all cursor-pointer font-bold ${drillLevel === 1 ? 'bg-gray-950 text-white font-black shadow-xs' : 'text-gray-700 hover:text-gray-950'
                         }`}
                     >
                       Sales
@@ -1912,13 +1916,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                 {drillLevel >= 2 && activeBranch && (
                   <>
-                    <span className="text-slate-300">/</span>
+                    <span className="text-gray-300">/</span>
                     <button
                       onClick={() => {
                         setDrillLevel(2);
                         setActiveInspectLevel('branch');
                       }}
-                      className={`hover:underline cursor-pointer font-bold ${drillLevel === 2 ? 'text-amber-600 font-black' : 'text-slate-700'
+                      className={`px-3 py-1 rounded-full transition-all cursor-pointer font-bold ${drillLevel === 2 ? 'bg-amber-500 text-white font-black shadow-xs' : 'text-gray-700 hover:text-gray-950'
                         }`}
                     >
                       {activeBranch.name}
@@ -1928,13 +1932,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                 {drillLevel >= 3 && activeTl && (
                   <>
-                    <span className="text-slate-300">/</span>
+                    <span className="text-gray-300">/</span>
                     <button
                       onClick={() => {
                         setDrillLevel(3);
                         setActiveInspectLevel('tl');
                       }}
-                      className={`hover:underline cursor-pointer font-bold ${drillLevel === 3 ? 'text-cyan-600 font-black' : 'text-slate-700'
+                      className={`px-3 py-1 rounded-full transition-all cursor-pointer font-bold ${drillLevel === 3 ? 'bg-cyan-600 text-white font-black shadow-xs' : 'text-gray-700 hover:text-gray-950'
                         }`}
                     >
                       {activeTl.name}
@@ -1944,8 +1948,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                 {drillLevel >= 4 && activeTm && (
                   <>
-                    <span className="text-slate-300">/</span>
-                    <span className="text-slate-900 font-black">{activeTm.name}</span>
+                    <span className="text-gray-300">/</span>
+                    <span className="px-3 py-1 rounded-full bg-cyan-50 text-cyan-900 border border-cyan-200 font-black">{activeTm.name}</span>
                   </>
                 )}
               </div>
@@ -1958,10 +1962,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       setDrillLevel(0);
                       setActiveInspectLevel('root');
                     }}
-                    className="px-3 py-1 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 border border-slate-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                    className="px-3.5 py-1.5 rounded-full text-xs font-bold text-gray-700 hover:text-gray-950 bg-white/80 hover:bg-white border border-white/80 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
                     title="Center BharatEdge orb"
                   >
-                    <RotateCcw size={11} className="text-slate-500" />
+                    <RotateCcw size={12} className="text-gray-500" />
                     <span>Center BharatEdge</span>
                   </button>
                 )}
@@ -1972,16 +1976,16 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       setDrillLevel(4);
                       setActiveInspectLevel('tm');
                     }}
-                    className="px-3 py-1 rounded-xl text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                    className="px-4 py-1.5 rounded-full text-xs font-bold text-white bg-gray-950 hover:bg-black transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-black/15 hover:scale-[1.02]"
                     title="Expand all hierarchy levels"
                   >
                     <span>Expand All</span>
-                    <ChevronRight size={11} />
+                    <ChevronRight size={12} />
                   </button>
                 )}
 
                 {drillLevel >= 2 && (
-                  <div className="flex items-center gap-1.5 ml-2 border-l border-slate-200 pl-2">
+                  <div className="flex items-center gap-1 ml-2 border-l border-gray-200/80 pl-2">
                     {branches.map(b => (
                       <button
                         key={b.id}
@@ -1992,9 +1996,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                           setDrillLevel(3);
                           setActiveInspectLevel('branch');
                         }}
-                        className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${selectedBranchId === b.id
-                          ? 'bg-amber-500 text-white shadow-sm'
-                          : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${selectedBranchId === b.id
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'bg-white/70 text-gray-700 hover:bg-white border border-white/80'
                           }`}
                       >
                         {b.name}
@@ -2448,7 +2452,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 {/* COLUMN 5: SLEEK INSPECTOR PANEL (ALWAYS ON RIGHT SIDE) */}
                 {/* ================================================================= */}
                 <div
-                  className="absolute rounded-3xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-[0_10px_40px_rgba(0,0,0,0.06)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5 z-20"
+                  className="absolute rounded-[26px] bg-white/85 backdrop-blur-2xl border border-white/90 shadow-[0_14px_45px_rgba(0,0,0,0.06)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5 z-20"
                   style={{
                     right: 15,
                     top: 15,
@@ -2458,42 +2462,42 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 >
                   {/* Header */}
                   <div>
-                    <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug truncate" title={inspectedEntity.name}>
+                    <h3 className="text-lg sm:text-xl font-black text-gray-950 leading-snug truncate" title={inspectedEntity.name}>
                       {inspectedEntity.name}
                     </h3>
                   </div>
 
                   {/* TL View Mode Toggle Pills (Personal vs Team) */}
                   {isTl && (
-                    <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100/70 backdrop-blur-md rounded-full border border-gray-200/50">
                       <button
                         onClick={() => setTlViewMode('personal')}
-                        className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${tlViewMode === 'personal'
-                          ? 'bg-white text-blue-900 shadow-xs ring-1 ring-blue-200'
-                          : 'text-slate-500 hover:text-slate-800'
+                        className={`py-1.5 text-xs font-bold rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${tlViewMode === 'personal'
+                          ? 'bg-gray-950 text-white shadow-xs'
+                          : 'text-gray-500 hover:text-gray-900'
                           }`}
                       >
-                        <User size={12} className={tlViewMode === 'personal' ? 'text-blue-600' : 'text-slate-400'} />
+                        <User size={12} className={tlViewMode === 'personal' ? 'text-amber-400' : 'text-gray-400'} />
                         <span>Personal</span>
                       </button>
                       <button
                         onClick={() => setTlViewMode('team')}
-                        className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${tlViewMode === 'team'
-                          ? 'bg-white text-cyan-900 shadow-xs ring-1 ring-cyan-200'
-                          : 'text-slate-500 hover:text-slate-800'
+                        className={`py-1.5 text-xs font-bold rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${tlViewMode === 'team'
+                          ? 'bg-gray-950 text-white shadow-xs'
+                          : 'text-gray-500 hover:text-gray-900'
                           }`}
                       >
-                        <Users size={12} className={tlViewMode === 'team' ? 'text-cyan-600' : 'text-slate-400'} />
+                        <Users size={12} className={tlViewMode === 'team' ? 'text-cyan-400' : 'text-gray-400'} />
                         <span>Team</span>
                       </button>
                     </div>
                   )}
 
                   {/* Sentiment Rate Card */}
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-slate-200/80 space-y-2">
-                    <div className="flex items-center justify-between text-xs text-slate-600 font-bold">
+                  <div className="p-4 rounded-[22px] bg-white/70 backdrop-blur-md border border-white/80 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between text-xs text-gray-600 font-bold">
                       <span>Sentiment / Achievement Rate</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${sentimentRate >= 100
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${sentimentRate >= 100
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : sentimentRate >= 50
                           ? 'bg-amber-50 text-amber-700 border-amber-200'
@@ -2505,7 +2509,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                     <div className="flex items-baseline justify-between pt-1">
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-2xl sm:text-3xl font-black text-slate-900">
+                        <span className="text-2xl sm:text-3xl font-black text-gray-950">
                           {sentimentRate}%
                         </span>
                         <span className={`text-[11px] font-bold flex items-center gap-0.5 ${isSurplus ? 'text-emerald-600' : 'text-rose-500'
@@ -2522,7 +2526,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                             style={{ height: `${h}%` }}
                             className={`w-1 rounded-full transition-all ${bIdx >= 8 && bIdx <= 15
                               ? 'bg-amber-500 shadow-sm'
-                              : 'bg-slate-300'
+                              : 'bg-gray-300'
                               }`}
                           />
                         ))}
@@ -2532,70 +2536,70 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                   {/* 2x2 Core Metric Tiles */}
                   <div className="grid grid-cols-2 gap-2.5">
-                    <div className="p-2.5 rounded-2xl bg-blue-50/70 border border-blue-100">
+                    <div className="p-3 rounded-[18px] bg-white/75 backdrop-blur-md border border-white/80 shadow-2xs">
                       <div className="flex items-center gap-1 text-[10px] text-blue-700 font-bold">
                         <CheckCircle2 size={11} className="text-blue-600" />
                         <span>Deals Won</span>
                       </div>
-                      <p className="text-base font-black text-blue-950 mt-0.5">
+                      <p className="text-base font-black text-gray-950 mt-0.5">
                         {currentDisplayWon}
                       </p>
                     </div>
 
-                    <div className="p-2.5 rounded-2xl bg-purple-50/70 border border-purple-100">
+                    <div className="p-3 rounded-[18px] bg-white/75 backdrop-blur-md border border-white/80 shadow-2xs">
                       <div className="flex items-center gap-1 text-[10px] text-purple-700 font-bold">
                         <FileText size={11} className="text-purple-600" />
                         <span>Quoted Value</span>
                       </div>
-                      <p className="text-base font-black text-purple-950 mt-0.5">
+                      <p className="text-base font-black text-gray-950 mt-0.5">
                         {formatCompactRupee(currentDisplayBooked)}
                       </p>
                     </div>
 
-                    <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
+                    <div className="p-3 rounded-[18px] bg-white/75 backdrop-blur-md border border-white/80 shadow-2xs">
                       <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
                         <Sparkles size={11} className="text-emerald-600" />
                         <span>Received</span>
                       </div>
-                      <p className="text-base font-black text-emerald-800 mt-0.5">
+                      <p className="text-base font-black text-emerald-700 mt-0.5">
                         {formatCompactRupee(currentDisplayAchievement)}
                       </p>
                     </div>
 
-                    <div className="p-2.5 rounded-2xl bg-rose-50/70 border border-rose-100">
+                    <div className="p-3 rounded-[18px] bg-white/75 backdrop-blur-md border border-white/80 shadow-2xs">
                       <div className="flex items-center gap-1 text-[10px] text-rose-700 font-bold">
                         <Target size={11} className="text-rose-600" />
                         <span>Shortfall Gap</span>
                       </div>
-                      <p className="text-base font-black text-rose-800 mt-0.5">
+                      <p className="text-base font-black text-rose-700 mt-0.5">
                         {formatCompactRupee(currentDisplayShortfall)}
                       </p>
                     </div>
                   </div>
 
                   {/* BEST SELLING SERVICE SECTION */}
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-50/80 via-orange-50/40 to-indigo-50/30 border border-amber-200/80 shadow-2xs space-y-2.5">
-                    <div className="flex items-center justify-between text-xs font-black text-slate-800">
+                  <div className="p-3.5 rounded-[22px] bg-white/70 backdrop-blur-md border border-white/80 shadow-xs space-y-2.5">
+                    <div className="flex items-center justify-between text-xs font-black text-gray-900">
                       <span className="flex items-center gap-1.5 text-amber-950">
                         <Award size={14} className="text-amber-600 fill-amber-500/20" />
                         <span>Best Selling Service</span>
                       </span>
                       {topPersonService && topPersonService.count > 0 ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-50 text-amber-900 border border-amber-200">
                           Top Driver
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
                           Awaiting Sales
                         </span>
                       )}
                     </div>
 
                     {topPersonService && topPersonService.count > 0 ? (
-                      <div className="bg-white/95 backdrop-blur-xs rounded-xl p-3 border border-amber-200/90 shadow-2xs space-y-2.5">
+                      <div className="bg-white/90 backdrop-blur-xs rounded-[18px] p-3 border border-amber-100 shadow-2xs space-y-2.5">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <h4 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight leading-snug">
+                            <h4 className="text-xs sm:text-sm font-black text-gray-950 tracking-tight leading-snug">
                               {topPersonService.name}
                             </h4>
                             <span className="text-[10px] font-bold text-amber-700 flex items-center gap-1 mt-0.5">
@@ -2603,22 +2607,22 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                               <span>{topPersonService.count} {topPersonService.count === 1 ? 'deal closed' : 'deals closed'}</span>
                             </span>
                           </div>
-                          <span className="p-1.5 rounded-xl bg-gradient-to-tr from-amber-500/10 to-orange-500/10 text-amber-700 border border-amber-200 shrink-0">
+                          <span className="p-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
                             <Briefcase size={13} />
                           </span>
                         </div>
 
                         {/* Revenue & Share Breakdown */}
-                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
-                          <div className="bg-slate-50/80 p-2 rounded-lg border border-slate-100">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Rec. Revenue</span>
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-xs">
+                          <div className="bg-white/80 p-2 rounded-xl border border-gray-100">
+                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Rec. Revenue</span>
                             <span className="text-xs font-black text-emerald-700 block mt-0.5">
                               {formatCompactRupee(topPersonService.received)}
                             </span>
                           </div>
-                          <div className="bg-slate-50/80 p-2 rounded-lg border border-slate-100">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Quoted Value</span>
-                            <span className="text-xs font-black text-slate-800 block mt-0.5">
+                          <div className="bg-white/80 p-2 rounded-xl border border-gray-100">
+                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Quoted Value</span>
+                            <span className="text-xs font-black text-gray-900 block mt-0.5">
                               {formatCompactRupee(topPersonService.booked)}
                             </span>
                           </div>
@@ -2627,13 +2631,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         {/* Share of Person's Total Deals */}
                         {currentDisplayWon > 0 && (
                           <div className="space-y-1 pt-0.5">
-                            <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                            <div className="flex justify-between items-center text-[10px] font-bold text-gray-500">
                               <span>Share of Sales</span>
                               <span className="text-amber-800 font-black">
                                 {Math.min(100, Math.round((topPersonService.count / currentDisplayWon) * 100))}%
                               </span>
                             </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden flex">
                               <div
                                 style={{ width: `${Math.min(100, Math.round((topPersonService.count / currentDisplayWon) * 100))}%` }}
                                 className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
@@ -2644,13 +2648,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                         {/* Runner-up services if any */}
                         {personBestServices.length > 1 && (
-                          <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Other Services Sold</span>
+                          <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400 block">Other Services Sold</span>
                             <div className="space-y-1">
                               {personBestServices.slice(1, 3).map(s => (
-                                <div key={s.name} className="flex items-center justify-between text-[11px] font-medium text-slate-600 bg-slate-50/50 px-2 py-1 rounded-lg border border-slate-100">
+                                <div key={s.name} className="flex items-center justify-between text-[11px] font-medium text-gray-600 bg-white/70 px-2.5 py-1 rounded-lg border border-gray-100">
                                   <span className="truncate max-w-[150px]" title={s.name}>{s.name}</span>
-                                  <span className="font-bold text-slate-800 shrink-0">{s.count} ({formatCompactRupee(s.received)})</span>
+                                  <span className="font-bold text-gray-900 shrink-0">{s.count} ({formatCompactRupee(s.received)})</span>
                                 </div>
                               ))}
                             </div>
@@ -2658,9 +2662,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         )}
                       </div>
                     ) : (
-                      <div className="bg-white/80 rounded-xl p-3 border border-slate-200 text-center">
-                        <p className="text-xs font-bold text-slate-500">No services booked yet</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Deals will automatically register here once created.</p>
+                      <div className="bg-white/80 rounded-xl p-3 border border-gray-200 text-center">
+                        <p className="text-xs font-bold text-gray-500">No services booked yet</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Deals will automatically register here once created.</p>
                       </div>
                     )}
                   </div>
@@ -2851,18 +2855,18 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         </div>
 
         {/* Sales Funnel */}
-        <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+        <div className="rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)]">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <h3 className="text-lg font-black text-gray-950 flex items-center gap-2">
                 <BarChart3 size={18} className="text-cyan-600" />
                 Executive Sales Funnel
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5 font-medium">
+              <p className="text-xs text-gray-400 mt-0.5 font-medium">
                 Conversion drop-off from initial quote to closed won delivery.
               </p>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-50 text-cyan-700 border border-cyan-100">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-50/80 text-cyan-800 border border-cyan-100 shadow-2xs">
               Conversion
             </span>
           </div>
@@ -2890,17 +2894,17 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     setStageModalSearch('');
                   }
                 }}
-                className={`space-y-1 p-1.5 rounded-xl transition-all ${fn.deals.length > 0 ? 'cursor-pointer hover:bg-indigo-50/40 group' : ''}`}
+                className={`space-y-1 p-1.5 rounded-xl transition-all ${fn.deals.length > 0 ? 'cursor-pointer hover:bg-white/80 group' : ''}`}
                 title={fn.deals.length > 0 ? `Click to inspect ${fn.deals.length} deals in ${fn.stage}` : ''}
               >
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-700 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                  <span className="text-gray-700 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
                     <span>{fn.stage}</span>
                     {fn.deals.length > 0 && <Eye size={11} className="opacity-0 group-hover:opacity-100 text-indigo-500 transition-opacity" />}
                   </span>
-                  <span className="text-slate-900">{fn.count} Records ({fn.pct}%)</span>
+                  <span className="text-gray-900 font-extrabold">{fn.count} Records ({fn.pct}%)</span>
                 </div>
-                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                <div className="w-full h-3 bg-gray-100/80 rounded-full overflow-hidden p-0.5 border border-white/80 shadow-inner">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.min(100, Math.max(5, fn.pct))}%` }}
@@ -2987,7 +2991,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           };
 
           return (
-            <div className="rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)] relative overflow-hidden">
+            <div className="rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)] relative overflow-hidden">
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
                 <div>
@@ -3119,19 +3123,18 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         })()}
 
         {/* BDM Matrix Table (Aesthetic Modern Executive Table) */}
-        <div className="rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-7 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
+        <div className="rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)]">
           {/* Header with Title and Global Search */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-5 pb-5 border-b border-slate-100">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-5 pb-5 border-b border-gray-100">
             <div className="flex items-center gap-3">
-              <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/20">
-                <Users size={18} />
+              <span className="p-3 rounded-2xl bg-gray-950 text-white shadow-md shadow-black/15">
+                <Users size={18} className="text-amber-400" />
               </span>
               <div>
-                <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <h3 className="text-lg font-black text-gray-950 tracking-tight flex items-center gap-2">
                   <span>BDM Performance Matrix</span>
-
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                <p className="text-xs text-gray-400 mt-0.5 font-medium">
                   Individual Business Development Manager targets, revenue achievement, and shortfall gaps.
                 </p>
               </div>
@@ -3140,18 +3143,18 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             {/* Action Controls & Search */}
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   value={matrixSearch}
                   onChange={(e) => setMatrixSearch(e.target.value)}
                   placeholder="Search BDM, TL, Branch, Service..."
-                  className="pl-9 pr-8 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all w-64 font-medium shadow-xs"
+                  className="pl-9 pr-8 py-2 rounded-full bg-white/70 backdrop-blur-md border border-white/80 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-indigo-400 focus:bg-white transition-all w-64 font-medium shadow-2xs"
                 />
                 {matrixSearch && (
                   <button
                     onClick={() => setMatrixSearch('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
                   >
                     <X size={12} />
                   </button>
@@ -3160,7 +3163,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
               <button
                 onClick={handleExportCsv}
-                className="px-4 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-xs hover:shadow-sm"
+                className="px-4 py-2 rounded-full bg-white/70 hover:bg-white border border-white/80 text-gray-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs hover:shadow-xs"
               >
                 <Download size={13} className="text-indigo-600" />
                 <span>Export CSV</span>
@@ -3177,7 +3180,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
             return (
               <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-                <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100/80 rounded-2xl">
+                <div className="inline-flex flex-wrap items-center gap-1.5 p-1 bg-white/60 backdrop-blur-xl rounded-full border border-white/80 shadow-2xs">
                   {[
                     { key: 'all', label: `All BDMs (${rawTotal})` },
                     { key: 'met', label: `Quota Met (${metCount})` },
@@ -3190,9 +3193,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     <button
                       key={tab.key}
                       onClick={() => setMatrixFilter(tab.key as any)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${matrixFilter === tab.key
-                        ? 'bg-white text-indigo-950 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800'
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${matrixFilter === tab.key
+                        ? 'bg-gray-950 text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-950 hover:bg-white/60'
                         }`}
                     >
                       {tab.label}
@@ -3200,17 +3203,17 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   ))}
                 </div>
 
-                <div className="text-xs font-bold text-slate-500">
-                  Showing <strong className="text-slate-900">{bdmList.length}</strong> of {rawTotal} BDMs
+                <div className="text-xs font-bold text-gray-500">
+                  Showing <strong className="text-gray-950">{bdmList.length}</strong> of {rawTotal} BDMs
                 </div>
               </div>
             );
           })()}
 
           {/* Aesthetic Table */}
-          <div className="overflow-x-auto rounded-2xl border border-slate-200/90 shadow-2xs">
+          <div className="overflow-x-auto rounded-[22px] border border-white/80 bg-white/40 backdrop-blur-md shadow-2xs">
             <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead className="bg-slate-50/90 text-slate-500 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+              <thead className="bg-white/70 text-gray-500 font-bold border-b border-gray-100 text-[11px] uppercase tracking-wider backdrop-blur-sm">
                 <tr>
                   <th className="px-5 py-3.5">BDM Profile</th>
                   <th className="px-5 py-3.5">Branch</th>
@@ -3223,13 +3226,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   <th className="px-5 py-3.5">Top Selling Service</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium bg-white">
+              <tbody className="divide-y divide-gray-100/70 text-gray-700 font-medium">
                 {bdmList.map(bdm => {
                   const initials = bdm.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('');
                   const isMet = bdm.shortfall === 0;
 
                   return (
-                    <tr key={bdm.id} className="hover:bg-indigo-50/30 transition-colors group">
+                    <tr key={bdm.id} className="hover:bg-white/80 transition-colors group">
                       {/* 1. BDM Profile */}
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
@@ -3239,21 +3242,21 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                                 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                 : bdm.pct >= 50
                                   ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                  : 'bg-gray-100 text-gray-700 border border-gray-200'
                                 }`}
                             >
                               {initials}
                             </span>
                             <span
-                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${isMet ? 'bg-emerald-500' : bdm.pct >= 50 ? 'bg-amber-500' : 'bg-slate-300'
+                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${isMet ? 'bg-emerald-500' : bdm.pct >= 50 ? 'bg-amber-500' : 'bg-gray-300'
                                 }`}
                             />
                           </div>
                           <div>
-                            <h5 className="font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors text-xs">
+                            <h5 className="font-extrabold text-gray-950 group-hover:text-indigo-600 transition-colors text-xs">
                               {bdm.name}
                             </h5>
-                            <span className="text-[10px] text-slate-400 font-medium">
+                            <span className="text-[10px] text-gray-400 font-medium">
                               Business Development Manager
                             </span>
                           </div>
@@ -3263,7 +3266,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       {/* 2. Branch */}
                       <td className="px-5 py-3.5">
                         <span
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border ${bdm.branch.toLowerCase().includes('ahmedabad')
+                          className={`px-3 py-1 rounded-full text-[10px] font-black border ${bdm.branch.toLowerCase().includes('ahmedabad')
                             ? 'bg-amber-50 text-amber-800 border-amber-200'
                             : bdm.branch.toLowerCase().includes('jaipur')
                               ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
@@ -3276,8 +3279,8 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                       {/* 3. Team Leader */}
                       <td className="px-5 py-3.5">
-                        <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                          <User size={12} className="text-slate-400" />
+                        <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                          <User size={12} className="text-gray-400" />
                           <span>{bdm.tl}</span>
                         </span>
                       </td>
@@ -3285,29 +3288,29 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       {/* 4. Deals Created */}
                       <td className="px-5 py-3.5 text-center">
                         <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black shadow-2xs border ${bdm.dealsCount > 0
-                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200/80'
-                            : 'bg-slate-50 text-slate-400 border-slate-200/80'
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black shadow-2xs border ${bdm.dealsCount > 0
+                            ? 'bg-indigo-50/80 text-indigo-700 border-indigo-200/80'
+                            : 'bg-gray-50 text-gray-400 border-gray-200/80'
                             }`}
                         >
-                          <FileText size={12} className={bdm.dealsCount > 0 ? 'text-indigo-600' : 'text-slate-400'} />
+                          <FileText size={12} className={bdm.dealsCount > 0 ? 'text-indigo-600' : 'text-gray-400'} />
                           <span>{bdm.dealsCount} {bdm.dealsCount === 1 ? 'Deal' : 'Deals'}</span>
                         </span>
                       </td>
 
-                      {/* 4. Target */}
-                      <td className="px-5 py-3.5 text-right font-bold text-slate-500">
+                      {/* 5. Target */}
+                      <td className="px-5 py-3.5 text-right font-bold text-gray-400">
                         {formatCompactRupee(bdm.target)}
                       </td>
 
-                      {/* 5. Achieved */}
+                      {/* 6. Achieved */}
                       <td className="px-5 py-3.5 text-right">
                         <span className="font-black text-emerald-700 text-sm">
                           {formatCompactRupee(bdm.achievement)}
                         </span>
                       </td>
 
-                      {/* 6. Shortfall */}
+                      {/* 7. Shortfall */}
                       <td className="px-5 py-3.5 text-right">
                         {isMet ? (
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
@@ -3321,7 +3324,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         )}
                       </td>
 
-                      {/* 7. Progress & Mini Bar */}
+                      {/* 8. Progress & Mini Bar */}
                       <td className="px-5 py-3.5 text-center">
                         <div className="flex flex-col items-center gap-1 min-w-[95px]">
                           <div className="flex items-center justify-between w-full text-[10px] font-black">
@@ -3340,7 +3343,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                               <span className="text-[9px] font-bold text-emerald-600">Surplus</span>
                             )}
                           </div>
-                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden flex">
                             <div
                               style={{ width: `${Math.min(100, Math.max(4, bdm.pct))}%` }}
                               className={`h-full rounded-full ${isMet
@@ -3354,10 +3357,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 8. Top Selling Service */}
+                      {/* 9. Top Selling Service */}
                       <td className="px-5 py-3.5">
                         <span
-                          className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-50 border border-slate-200/80 text-slate-700 truncate max-w-[190px] block shadow-2xs"
+                          className="px-3 py-1 rounded-full text-[11px] font-bold bg-white/80 border border-white/90 text-gray-800 truncate max-w-[190px] block shadow-2xs"
                           title={bdm.topService}
                         >
                           {bdm.topService}
@@ -3379,7 +3382,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         {selectedStageModal && (
           <div
             onClick={() => setSelectedStageModal(null)}
-            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/60 backdrop-blur-md"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -3387,22 +3390,22 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden"
+              className="bg-white/95 backdrop-blur-2xl rounded-[28px] shadow-[0_25px_70px_rgba(0,0,0,0.2)] border border-white/90 w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden"
             >
               {/* Modal Header */}
-              <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-50 via-white to-indigo-50/20">
+              <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/60">
                 <div className="flex items-center gap-3">
                   <span className={`w-4 h-4 rounded-full ${selectedStageModal.color} shadow-sm shrink-0`} />
                   <div>
                     <div className="flex items-center gap-2.5">
-                      <h3 className="text-lg sm:text-xl font-black text-slate-900">
+                      <h3 className="text-lg sm:text-xl font-black text-gray-950">
                         {selectedStageModal.name}
                       </h3>
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      <span className="px-3 py-0.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
                         {selectedStageModal.count} Deals
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-gray-400 mt-0.5">
                       Live deal records progressing through this stage for October 2026
                     </p>
                   </div>
@@ -3411,7 +3414,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => navigate('/crm/deals')}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    className="px-4 py-2 rounded-full text-xs font-bold text-white bg-gray-950 hover:bg-black transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
                     title="Open Deals Page in new view"
                   >
                     <span>Go to Deals</span>
@@ -3420,7 +3423,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
                   <button
                     onClick={() => setSelectedStageModal(null)}
-                    className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                    className="p-2 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                     title="Close"
                   >
                     <X size={18} />
