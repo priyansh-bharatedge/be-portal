@@ -1664,18 +1664,33 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       )}
 
       {/* GST Audit & Revenue Reconciliation Section */}
-      <div className="rounded-[32px] bg-gradient-to-r from-white/75 via-white/60 to-white/75 backdrop-blur-2xl text-gray-950 p-6 sm:p-7 shadow-[0_12px_36px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] relative overflow-hidden border border-white/90">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-gradient-to-br from-cyan-300/15 via-teal-300/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+      <div className={isSuperAdmin 
+        ? "rounded-[32px] bg-white/25 hover:bg-white/35 backdrop-blur-3xl text-gray-950 p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] relative overflow-hidden border border-white/70 transition-all duration-300"
+        : "rounded-[28px] bg-white/75 backdrop-blur-2xl text-gray-950 p-5 sm:p-7 shadow-[0_10px_35px_rgba(0,0,0,0.025)] relative overflow-hidden border border-white/90"
+      }>
+        {/* Luminous Ambient Glows that refract through transparent glass */}
+        {isSuperAdmin && (
+          <>
+            <div className="absolute -top-16 -left-16 w-80 h-80 bg-gradient-to-br from-cyan-400/20 via-teal-300/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-16 -right-16 w-80 h-80 bg-gradient-to-tl from-amber-400/20 via-orange-300/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+          </>
+        )}
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <span className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/15 via-teal-500/10 to-emerald-500/15 border border-cyan-400/30 text-cyan-600 shadow-md shadow-cyan-500/10 flex items-center justify-center shrink-0">
+            <span className={isSuperAdmin
+              ? "w-14 h-14 rounded-2xl bg-white/40 backdrop-blur-2xl border border-white/80 text-cyan-600 shadow-sm flex items-center justify-center shrink-0"
+              : "p-3.5 rounded-2xl bg-cyan-50 text-cyan-600 border border-cyan-100 shadow-2xs shrink-0"
+            }>
               <ReceiptIndianRupee size={24} />
             </span>
             <div>
               <div className="flex flex-wrap items-center gap-2.5">
-                <h3 className="text-lg sm:text-xl font-black tracking-tight text-gray-950">GST Tax & Revenue Audit</h3>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50/90 text-cyan-800 border border-cyan-200/80 shadow-2xs flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
+                <h3 className="text-base sm:text-lg font-black tracking-tight text-gray-950">GST Tax & Revenue Audit</h3>
+                <span className={isSuperAdmin
+                  ? "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-500/15 text-cyan-800 border border-cyan-400/30 backdrop-blur-md shadow-2xs flex items-center gap-1.5"
+                  : "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50 text-cyan-800 border border-cyan-200/60"
+                }>
+                  {isSuperAdmin && <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />}
                   Verified Inflow
                 </span>
               </div>
@@ -1684,236 +1699,227 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 shrink-0 lg:min-w-[480px]">
-            <div className="bg-white/80 backdrop-blur-xl border border-white/95 rounded-[22px] p-4 shadow-2xs hover:shadow-xs transition-all">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">With GST (Gross)</span>
-                <span className="w-2 h-2 rounded-full bg-cyan-500" />
-              </div>
-              <span className="text-lg sm:text-xl font-black text-cyan-700 tracking-tight block">{formatRupee(activeWithGst)}</span>
-              <span className="text-[10px] font-bold text-gray-400 block mt-1">100% Total Quoted</span>
+            <div className={isSuperAdmin
+              ? "bg-white/35 hover:bg-white/55 backdrop-blur-2xl border border-white/70 rounded-[22px] p-4 shadow-[0_4px_16px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all"
+              : "bg-white/80 border border-white/90 rounded-[22px] p-4 shadow-2xs"
+            }>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">With GST (Gross)</span>
+              <span className="text-base sm:text-lg font-black text-cyan-700 block mt-0.5">{formatRupee(activeWithGst)}</span>
+              <span className="text-[10px] text-gray-400 block mt-0.5">100% Total Quoted</span>
             </div>
-            <div className="bg-white/80 backdrop-blur-xl border border-white/95 rounded-[22px] p-4 shadow-2xs hover:shadow-xs transition-all">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Without GST (Net Base)</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              </div>
-              <span className="text-lg sm:text-xl font-black text-emerald-700 tracking-tight block">{formatRupee(activeWithoutGst)}</span>
-              <span className="text-[10px] font-bold text-emerald-600 block mt-1">~84.7% Realized Base</span>
+            <div className={isSuperAdmin
+              ? "bg-white/35 hover:bg-white/55 backdrop-blur-2xl border border-white/70 rounded-[22px] p-4 shadow-[0_4px_16px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all"
+              : "bg-white/80 border border-white/90 rounded-[22px] p-4 shadow-2xs"
+            }>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Without GST (Net Base)</span>
+              <span className="text-base sm:text-lg font-black text-emerald-700 block mt-0.5">{formatRupee(activeWithoutGst)}</span>
+              <span className="text-[10px] text-gray-400 block mt-0.5">~84.7% Base Value</span>
             </div>
-            <div className="bg-white/80 backdrop-blur-xl border border-white/95 rounded-[22px] p-4 shadow-2xs hover:shadow-xs transition-all">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">GST Component (18%)</span>
-                <span className="w-2 h-2 rounded-full bg-amber-500" />
-              </div>
-              <span className="text-lg sm:text-xl font-black text-amber-700 tracking-tight block">{formatRupee(activeGstTax)}</span>
-              <span className="text-[10px] font-bold text-amber-600 block mt-1">Tax Offset In Bank</span>
+            <div className={isSuperAdmin
+              ? "bg-white/35 hover:bg-white/55 backdrop-blur-2xl border border-white/70 rounded-[22px] p-4 shadow-[0_4px_16px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all"
+              : "bg-white/80 border border-white/90 rounded-[22px] p-4 shadow-2xs"
+            }>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">GST Component (18%)</span>
+              <span className="text-base sm:text-lg font-black text-amber-700 block mt-0.5">{formatRupee(activeGstTax)}</span>
+              <span className="text-[10px] text-gray-400 block mt-0.5">Tax Offset Collected</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. HIGH-END EXECUTIVE VISUAL BENTO GRAPHS */}
+      {/* 2. TRANSPARENT FROSTED GLASS BENTO GRAPHS (PIE CHARTS) */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Graph 1: Branch Revenue Share Donut & Bento Module */}
-        <div className="bg-white/60 backdrop-blur-2xl rounded-[32px] p-6 sm:p-7 border border-white/90 shadow-[0_12px_36px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] flex flex-col justify-between transition-all duration-300">
-          <div>
+        {/* Graph 1: Branch Revenue Share Donut Chart */}
+        <div className={isSuperAdmin
+          ? "bg-white/25 hover:bg-white/35 backdrop-blur-3xl rounded-[32px] p-6 sm:p-7 border border-white/70 shadow-[0_20px_50px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] flex flex-col justify-between transition-all duration-300 relative overflow-hidden"
+          : "bg-white/75 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between transition-all duration-300"
+        }>
+          {isSuperAdmin && (
+            <>
+              <div className="absolute -top-16 -right-16 w-64 h-64 bg-gradient-to-br from-indigo-400/20 via-purple-400/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-gradient-to-tr from-cyan-400/15 via-blue-400/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+            </>
+          )}
+          <div className="relative z-10">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <span className="w-9 h-9 rounded-2xl bg-indigo-50/90 text-indigo-600 border border-indigo-100 flex items-center justify-center shadow-2xs">
-                  <PieChartIcon size={16} />
-                </span>
-                <div>
-                  <h3 className="text-base font-black text-gray-950 tracking-tight">
-                    Branch Revenue Share
-                  </h3>
-                  <p className="text-xs text-gray-400 font-medium">
-                    Regional contribution across Ahmedabad, Jaipur & Chennai
-                  </p>
-                </div>
-              </div>
-              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50/90 text-indigo-700 border border-indigo-100/80 shadow-2xs">
+              <h3 className="text-base font-black flex items-center gap-2 text-gray-950">
+                <PieChartIcon size={16} className={isSuperAdmin ? "text-indigo-500" : "text-indigo-600"} />
+                Branch Revenue Share
+              </h3>
+              <span className={isSuperAdmin
+                ? "px-3 py-1 rounded-full text-xs font-bold bg-white/40 backdrop-blur-xl border border-white/70 text-gray-700 shadow-2xs"
+                : "text-xs font-bold text-gray-500"
+              }>
                 Regional Mix
               </span>
             </div>
+            <p className="text-xs mb-4 text-gray-400">
+              Real-time received revenue contribution across Ahmedabad, Jaipur & Chennai.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center my-4">
-            {/* Donut Chart with Concentric Frosted Glass Center */}
-            <div className="md:col-span-5 h-52 relative flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={branchPieData.every(b => b.value === 0) ? [{ name: 'None', value: 1, color: '#e2e8f0' }] : branchPieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={82}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {branchPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip
-                    formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                      backdropFilter: 'blur(12px)', 
-                      borderRadius: '1rem', 
-                      border: '1px solid rgba(255,255,255,0.9)', 
-                      boxShadow: '0 10px 30px rgba(0,0,0,0.08)', 
-                      fontSize: '12px',
-                      color: '#0f172a'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Concentric Floating Frosted Glass Center */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="w-24 h-24 rounded-full bg-white/85 backdrop-blur-xl border border-white/95 shadow-sm flex flex-col items-center justify-center text-center p-1">
-                  <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">TOTAL REC.</span>
-                  <span className="text-sm font-black text-gray-950 mt-0.5">{formatCompactRupee(totalReceivedAmount)}</span>
-                </div>
+          {/* Centered Donut Chart with Floating Frosted Lens */}
+          <div className="h-52 relative flex items-center justify-center my-2 relative z-10">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={branchPieData.every(b => b.value === 0) ? [{ name: 'None', value: 1, color: '#e2e8f0' }] : branchPieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {branchPieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                    backdropFilter: 'blur(12px)', 
+                    borderRadius: '1rem', 
+                    border: '1px solid rgba(255,255,255,0.9)', 
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.08)', 
+                    fontSize: '12px',
+                    color: '#0f172a'
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Concentric Floating Frosted Glass Center */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <div className={isSuperAdmin
+                ? "w-28 h-28 rounded-full bg-white/45 backdrop-blur-2xl border border-white/80 shadow-[0_8px_24px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.95)] flex flex-col items-center justify-center text-center p-2"
+                : "flex flex-col items-center justify-center text-center"
+              }>
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">TOTAL REC.</span>
+                <span className="text-base sm:text-lg font-black text-gray-950 mt-0.5">{formatCompactRupee(totalReceivedAmount)}</span>
               </div>
             </div>
+          </div>
 
-            {/* Micro Branch Metric Cards on Right */}
-            <div className="md:col-span-7 space-y-2.5">
-              {branchPieData.map(b => {
-                const pct = totalReceivedAmount > 0 ? Math.round((b.value / totalReceivedAmount) * 100) : 0;
-                const cityCode = b.name.slice(0, 3).toUpperCase();
-                return (
-                  <div key={b.name} className="p-3 rounded-2xl bg-white/70 hover:bg-white/90 border border-white/90 shadow-2xs transition-all flex items-center justify-between gap-3 group">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-8 h-8 rounded-xl bg-gray-100/90 text-gray-700 font-black text-[10px] flex items-center justify-center shrink-0 border border-gray-200/60 shadow-2xs">
-                        {cityCode}
-                      </span>
-                      <div className="truncate">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: b.color }} />
-                          <span className="text-xs font-black text-gray-950 truncate">{b.name}</span>
-                        </div>
-                        <div className="w-24 sm:w-32 h-1.5 bg-gray-100 rounded-full mt-1.5 overflow-hidden">
-                          <div
-                            style={{ width: `${pct}%`, backgroundColor: b.color }}
-                            className="h-full rounded-full transition-all duration-500"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-xs font-black text-gray-950 block">{formatCompactRupee(b.value)}</span>
-                      <span className="text-[10px] font-bold text-gray-400 block">{pct}% Share</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {/* Bottom Legend Chips */}
+          <div className={isSuperAdmin
+            ? "grid grid-cols-3 gap-2.5 mt-4 pt-4 border-t border-white/60 text-center relative z-10"
+            : "grid grid-cols-3 gap-2 mt-4 pt-4 border-t text-center border-gray-100"
+          }>
+            {branchPieData.map(b => (
+              <div key={b.name} className={isSuperAdmin
+                ? "p-2.5 sm:p-3 rounded-[20px] bg-white/35 hover:bg-white/55 backdrop-blur-xl border border-white/70 shadow-[0_4px_12px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all"
+                : "p-2.5 rounded-[18px] backdrop-blur-md shadow-2xs bg-white/60 border border-white/80"
+              }>
+                <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-gray-700">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: b.color }} />
+                  <span>{b.name}</span>
+                </div>
+                <p className="text-xs sm:text-sm font-black mt-1 text-gray-950">{formatCompactRupee(b.value)}</p>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Graph 2: Deal Stage Pipeline Composition Donut & Bento Module */}
-        <div className="bg-white/60 backdrop-blur-2xl rounded-[32px] p-6 sm:p-7 border border-white/90 shadow-[0_12px_36px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] flex flex-col justify-between transition-all duration-300">
-          <div>
+        {/* Graph 2: Deal Stage Pipeline Composition Donut */}
+        <div className={isSuperAdmin
+          ? "bg-white/25 hover:bg-white/35 backdrop-blur-3xl rounded-[32px] p-6 sm:p-7 border border-white/70 shadow-[0_20px_50px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] flex flex-col justify-between transition-all duration-300 relative overflow-hidden"
+          : "bg-white/75 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between transition-all duration-300"
+        }>
+          {isSuperAdmin && (
+            <>
+              <div className="absolute -top-16 -left-16 w-64 h-64 bg-gradient-to-br from-sky-400/20 via-cyan-400/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-16 -right-16 w-64 h-64 bg-gradient-to-tl from-amber-400/20 via-orange-400/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+            </>
+          )}
+          <div className="relative z-10">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <span className="w-9 h-9 rounded-2xl bg-cyan-50/90 text-cyan-600 border border-cyan-100 flex items-center justify-center shadow-2xs">
-                  <Layers size={16} />
-                </span>
-                <div>
-                  <h3 className="text-base font-black text-gray-950 tracking-tight">
-                    Pipeline Stage Distribution
-                  </h3>
-                  <p className="text-xs text-gray-400 font-medium">
-                    Volume of deals progressing through Sales, Legal, Operations & Won
-                  </p>
-                </div>
-              </div>
-              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50/90 text-cyan-800 border border-cyan-200/80 shadow-2xs flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
+              <h3 className="text-base font-black flex items-center gap-2 text-gray-950">
+                <Layers size={16} className={isSuperAdmin ? "text-cyan-500" : "text-cyan-600"} />
+                Pipeline Stage Distribution
+              </h3>
+              <span className={isSuperAdmin
+                ? "px-3 py-1 rounded-full text-xs font-bold bg-white/40 backdrop-blur-xl border border-white/70 text-gray-700 shadow-2xs"
+                : "text-xs font-bold text-gray-500"
+              }>
                 {filteredDeals.length} Deals
               </span>
             </div>
+            <p className="text-xs mb-4 text-gray-400">
+              Volume of deals progressing through Sales, Account, Legal, Operations & Won.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center my-4">
-            {/* Donut Chart with Concentric Center */}
-            <div className="md:col-span-5 h-52 relative flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={stagePieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={82}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {stagePieData.map((entry, index) => (
-                      <Cell key={`stage-cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip
-                    formatter={(val: any) => [`${val} Deals`, 'Volume']}
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                      backdropFilter: 'blur(12px)', 
-                      borderRadius: '1rem', 
-                      border: '1px solid rgba(255,255,255,0.9)', 
-                      boxShadow: '0 10px 30px rgba(0,0,0,0.08)', 
-                      fontSize: '12px',
-                      color: '#0f172a'
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Concentric Center */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="w-24 h-24 rounded-full bg-white/85 backdrop-blur-xl border border-white/95 shadow-sm flex flex-col items-center justify-center text-center p-1">
-                  <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">PIPELINE</span>
-                  <span className="text-xl font-black text-gray-950">{filteredDeals.length}</span>
-                </div>
+          {/* Centered Donut Chart with Floating Frosted Lens */}
+          <div className="h-52 relative flex items-center justify-center my-2 relative z-10">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={stagePieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {stagePieData.map((entry, index) => (
+                    <Cell key={`stage-cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  formatter={(val: any) => [`${val} Deals`, 'Volume']}
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                    backdropFilter: 'blur(12px)', 
+                    borderRadius: '1rem', 
+                    border: '1px solid rgba(255,255,255,0.9)', 
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.08)', 
+                    fontSize: '12px',
+                    color: '#0f172a'
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Concentric Floating Frosted Glass Center */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <div className={isSuperAdmin
+                ? "w-28 h-28 rounded-full bg-white/45 backdrop-blur-2xl border border-white/80 shadow-[0_8px_24px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.95)] flex flex-col items-center justify-center text-center p-2"
+                : "flex flex-col items-center justify-center text-center"
+              }>
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">LIVE PIPELINE</span>
+                <span className="text-base sm:text-lg font-black text-gray-950 mt-0.5">{filteredDeals.length}</span>
               </div>
             </div>
+          </div>
 
-            {/* Interactive Stage Chips on Right */}
-            <div className="md:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {stagePieData.map(st => {
-                const pct = filteredDeals.length > 0 ? Math.round((st.value / filteredDeals.length) * 100) : 0;
-                return (
-                  <button
-                    key={st.name}
-                    onClick={() => {
-                      const targetStage = stageStats.find(s => s.name.toLowerCase().includes(st.name.toLowerCase()) || st.fullName === s.name);
-                      if (targetStage) {
-                        setSelectedStageModal(targetStage);
-                        setStageModalSearch('');
-                      }
-                    }}
-                    className="p-2.5 rounded-2xl bg-white/70 hover:bg-white border border-white/90 shadow-2xs hover:shadow-xs transition-all text-left flex flex-col justify-between group cursor-pointer hover:-translate-y-0.5"
-                    title={`Click to view deals in ${st.fullName}`}
-                  >
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.color }} />
-                        <span className="font-bold text-gray-800 text-[11px] truncate">{st.name}</span>
-                      </div>
-                      <span className="text-[11px] font-black text-gray-950 shrink-0">{st.value}</span>
-                    </div>
-                    <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        style={{ width: `${pct}%`, backgroundColor: st.color }}
-                        className="h-full rounded-full transition-all duration-500"
-                      />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+          {/* Bottom Interactive Stage Chips */}
+          <div className={isSuperAdmin
+            ? "flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-white/60 text-xs relative z-10"
+            : "flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t text-xs border-gray-100"
+          }>
+            {stagePieData.map(st => (
+              <button
+                key={st.name}
+                onClick={() => {
+                  const targetStage = stageStats.find(s => s.name.toLowerCase().includes(st.name.toLowerCase()) || st.fullName === s.name);
+                  if (targetStage) {
+                    setSelectedStageModal(targetStage);
+                    setStageModalSearch('');
+                  }
+                }}
+                className={isSuperAdmin
+                  ? "flex items-center gap-1.5 text-[11px] font-bold px-3.5 py-1.5 rounded-full bg-white/35 hover:bg-white/60 backdrop-blur-xl border border-white/70 text-gray-700 shadow-2xs hover:shadow-xs transition-all cursor-pointer hover:scale-[1.02]"
+                  : "flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full bg-white/70 hover:bg-white border border-white/80 text-gray-700 shadow-2xs hover:shadow-xs group hover:scale-[1.02] cursor-pointer"
+                }
+                title={`Click to view deals in ${st.fullName}`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: st.color }} />
+                <span>{st.name}: <strong className="text-gray-950 font-black">{st.value}</strong></span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -1921,37 +1927,43 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       {/* ========================================================================= */}
       {/* 3. MASTER TARGET & ACHIEVEMENT BAR VIEW */}
       {/* ========================================================================= */}
-      <div className="rounded-[32px] bg-white/60 backdrop-blur-2xl border border-white/90 p-6 sm:p-7 shadow-[0_12px_36px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] transition-all duration-300">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className={isSuperAdmin
+        ? "rounded-[32px] bg-white/25 hover:bg-white/35 backdrop-blur-3xl border border-white/70 p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] transition-all duration-300 relative overflow-hidden"
+        : "rounded-[28px] bg-white/75 backdrop-blur-2xl border border-white/90 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300"
+      }>
+        {isSuperAdmin && (
+          <div className="absolute -top-16 left-1/3 w-96 h-96 bg-gradient-to-b from-indigo-300/15 via-emerald-300/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+        )}
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h3 className={`text-lg font-black flex items-center gap-2 text-gray-950`}>
-              <Target size={18} className={isSuperAdmin ? "text-indigo-400" : "text-indigo-600"} />
+            <h3 className="text-lg font-black flex items-center gap-2 text-gray-950">
+              <Target size={18} className={isSuperAdmin ? "text-indigo-500" : "text-indigo-600"} />
               Target vs Achievement Overview (Entire Sales Team)
             </h3>
-            <p className={`text-xs mt-0.5 font-medium ${isSuperAdmin ? "text-white/60" : "text-gray-400"}`}>
+            <p className="text-xs mt-0.5 font-medium text-gray-400">
               National sales target benchmark vs. actual revenue received with shortfall gap.
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs font-bold">
-            <span className={`flex items-center gap-1.5 text-gray-600`}>
+            <span className="flex items-center gap-1.5 text-gray-600">
               <span className="w-2.5 h-2.5 rounded-full bg-gray-400" /> Target: {formatCompactRupee(overallTarget)}
             </span>
-            <span className="flex items-center gap-1.5 text-emerald-400">
+            <span className="flex items-center gap-1.5 text-emerald-600">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
             </span>
-            <span className="flex items-center gap-1.5 text-rose-400">
+            <span className="flex items-center gap-1.5 text-rose-500">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
             </span>
           </div>
         </div>
 
         {/* Master Comparison Bar */}
-        <div className="space-y-2">
+        <div className="space-y-2 relative z-10">
           <div className="flex justify-between items-center text-xs font-bold">
-            <span className={isSuperAdmin ? "text-white font-extrabold" : "text-gray-900 font-extrabold"}>Full Sales Organization Progress</span>
-            <span className={isSuperAdmin ? "text-indigo-300 font-black" : "text-indigo-700 font-black"}>{overallAchievementPct}% Achieved</span>
+            <span className="text-gray-900 font-extrabold">Full Sales Organization Progress</span>
+            <span className="text-indigo-700 font-black">{overallAchievementPct}% Achieved</span>
           </div>
-          <div className={`w-full h-4 rounded-full overflow-hidden p-0.5 border shadow-inner flex bg-gray-100/80 border-white/80`}>
+          <div className="w-full h-4 rounded-full overflow-hidden p-0.5 border shadow-inner flex bg-white/40 border-white/80">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${overallAchievementPct}%` }}
@@ -1962,31 +1974,34 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         </div>
 
         {/* Branch-by-Branch Breakdown Bars */}
-        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-100`}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-white/60 relative z-10">
           {(salesTree.children?.[0]?.children || []).map((br: SalesTreeNode) => {
             const pct = br.target > 0 ? Math.min(100, Math.round((br.achievement / br.target) * 100)) : 0;
             return (
-              <div key={br.id} className={`p-4 rounded-[22px] backdrop-blur-md shadow-2xs bg-white/60 border border-white/80`}>
+              <div key={br.id} className={isSuperAdmin
+                ? "p-4 rounded-[22px] bg-white/35 hover:bg-white/55 backdrop-blur-xl border border-white/70 shadow-[0_4px_12px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all"
+                : "p-4 rounded-[22px] backdrop-blur-md shadow-2xs bg-white/60 border border-white/80"
+              }>
                 <div className="flex justify-between items-center text-xs mb-2">
-                  <span className={`font-bold flex items-center gap-1.5 text-gray-900`}>
-                    <MapPin size={13} className={isSuperAdmin ? "text-indigo-400" : "text-indigo-600"} />
+                  <span className="font-bold flex items-center gap-1.5 text-gray-900">
+                    <MapPin size={13} className="text-indigo-600" />
                     {br.name}
                   </span>
-                  <span className={isSuperAdmin ? "text-emerald-400 font-black" : "text-emerald-700 font-black"}>{pct}%</span>
+                  <span className="text-emerald-700 font-black">{pct}%</span>
                 </div>
-                <div className={`w-full h-2 rounded-full overflow-hidden flex mb-2 bg-gray-200/80`}>
+                <div className="w-full h-2 rounded-full overflow-hidden flex mb-2 bg-gray-200/60">
                   <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full rounded-full" />
                 </div>
-                <div className={`flex justify-between items-center text-[11px] text-gray-500`}>
-                  <span>Ach: <strong className={isSuperAdmin ? "text-white" : "text-gray-900"}>{formatCompactRupee(br.achievement)}</strong></span>
-                  <span>Shortfall: <strong className="text-rose-400 font-bold">{formatCompactRupee(br.shortfall)}</strong></span>
+                <div className="flex justify-between items-center text-[11px] text-gray-500">
+                  <span>Ach: <strong className="text-gray-900">{formatCompactRupee(br.achievement)}</strong></span>
+                  <span>Shortfall: <strong className="text-rose-500 font-bold">{formatCompactRupee(br.shortfall)}</strong></span>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-      
+
       {/* ========================================================================= */}
       {/* 4. LIGHT THEME PROGRESSIVE CENTER-TO-LEFT MINDMAP FLOW */}
       {(() => {
