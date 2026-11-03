@@ -858,6 +858,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             clients={activeClients}
             isRefreshing={activeIsRefreshing}
             onRefresh={handleRefresh}
+            isSuperAdmin={true}
           />
         </div>
       )}
