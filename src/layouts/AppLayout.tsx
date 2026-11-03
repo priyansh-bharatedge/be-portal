@@ -283,7 +283,7 @@ export const AppLayout = () => {
   );
 
   return (
-    <div className={cn("h-screen flex overflow-hidden", isSuperAdminDashboard ? "bg-[#edf0f4]" : "bg-gray-50")}>
+    <div className={cn("h-screen flex overflow-hidden", isSuperAdminDashboard ? "bg-[#080b12]" : "bg-gray-50")}>
       {/* Desktop Sidebar */}
       <motion.aside 
         initial={false}
@@ -323,7 +323,7 @@ export const AppLayout = () => {
         <header className={cn(
           "h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 z-40 relative transition-colors",
           isSuperAdminDashboard 
-            ? "bg-[#edf0f4]/90 backdrop-blur-md border-b border-slate-200/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)]" 
+            ? "bg-[#080b12]/80 backdrop-blur-2xl border-b border-white/10 text-white shadow-[0_4px_20px_rgba(0,0,0,0.3)]" 
             : "bg-white border-b border-gray-100 shadow-sm"
         )}>
           <div className="flex items-center">
@@ -351,9 +351,9 @@ export const AppLayout = () => {
             {isSuperAdminDashboard ? (
               <div className="hidden sm:flex items-center text-xs font-bold">
                 <span className="px-2.5 py-1 rounded-full bg-slate-900 text-amber-400 text-[10px] font-black tracking-widest uppercase mr-2.5 shadow-2xs border border-amber-400/30">SUPER ADMIN</span>
-                <span className="text-slate-500 font-bold">CRM</span>
-                <span className="mx-2 text-slate-400">/</span>
-                <span className="text-slate-900 font-black">Executive Dashboard</span>
+                <span className="text-white/60 font-bold">CRM</span>
+                <span className="mx-2 text-white/40">/</span>
+                <span className="text-white font-black">Executive Dashboard</span>
               </div>
             ) : (
               <div className="hidden sm:flex items-center text-sm text-gray-500 font-medium">
@@ -372,14 +372,14 @@ export const AppLayout = () => {
             <button className={cn(
               "relative p-2 rounded-full transition-colors",
               isSuperAdminDashboard
-                ? "text-slate-500 hover:text-slate-800 bg-white/80 hover:bg-white border border-white shadow-2xs"
+                ? "text-white/70 hover:text-white bg-white/10 hover:bg-white/20 border border-white/15 shadow-2xs"
                 : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
             )}>
               <Bell size={18} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-500 rounded-full border-2 border-white"></span>
             </button>
 
-            <div className={cn("h-7 w-px hidden sm:block", isSuperAdminDashboard ? "bg-slate-300" : "bg-gray-200")}></div>
+            <div className={cn("h-7 w-px hidden sm:block", isSuperAdminDashboard ? "bg-white/15" : "bg-gray-200")}></div>
 
             {/* User Profile */}
             <div className="flex items-center">
@@ -389,7 +389,7 @@ export const AppLayout = () => {
                     <Crown size={17} className="fill-slate-950/20" />
                   </div>
                   <div className="hidden md:block text-left ml-2.5">
-                    <div className="text-xs font-black text-slate-900 leading-tight flex items-center gap-1">
+                    <div className="text-xs font-black text-white leading-tight flex items-center gap-1">
                       {currentUser.name}
                     </div>
                     <div className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">
@@ -419,7 +419,7 @@ export const AppLayout = () => {
         {/* Page Content */}
         <main className={cn(
           "flex-1 overflow-y-auto overflow-x-auto relative",
-          isSuperAdminDashboard ? "bg-[#edf0f4] p-4 sm:p-6 lg:p-8" : "p-4 sm:p-6 lg:p-8"
+          isSuperAdminDashboard ? "bg-[#080b12] p-3 sm:p-5 lg:p-7 relative" : "p-4 sm:p-6 lg:p-8"
         )}>
           <Outlet />
         </main>

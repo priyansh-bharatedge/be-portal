@@ -1728,16 +1728,19 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Graph 1: Branch Revenue Share Donut Chart */}
-        <div className="bg-white/70 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between">
+        <div className={isSuperAdmin
+          ? "bg-white/[0.05] hover:bg-white/[0.08] backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] text-white flex flex-col justify-between transition-all duration-300"
+          : "bg-white/70 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between"
+        }>
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-base font-black text-gray-950 flex items-center gap-2">
-                <PieChartIcon size={16} className="text-indigo-600" />
+              <h3 className={`text-base font-black flex items-center gap-2 ${isSuperAdmin ? "text-white" : "text-gray-950"}`}>
+                <PieChartIcon size={16} className={isSuperAdmin ? "text-indigo-400" : "text-indigo-600"} />
                 Branch Revenue Share
               </h3>
-              <span className="text-xs font-bold text-gray-500">Regional Mix</span>
+              <span className={`text-xs font-bold ${isSuperAdmin ? "text-white/60" : "text-gray-500"}`}>Regional Mix</span>
             </div>
-            <p className="text-xs text-gray-400 mb-4">
+            <p className={`text-xs mb-4 ${isSuperAdmin ? "text-white/60" : "text-gray-400"}`}>
               Real-time received revenue contribution across Ahmedabad, Jaipur & Chennai.
             </p>
           </div>
@@ -1760,40 +1763,51 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 </Pie>
                 <RechartsTooltip
                   formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
-                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(12px)', borderRadius: '1rem', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontSize: '12px' }}
+                  contentStyle={{ 
+                    backgroundColor: isSuperAdmin ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)', 
+                    backdropFilter: 'blur(12px)', 
+                    borderRadius: '1rem', 
+                    border: isSuperAdmin ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.8)', 
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.15)', 
+                    fontSize: '12px',
+                    color: isSuperAdmin ? '#fff' : '#0f172a'
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-gray-400 uppercase">Total Rec.</span>
-              <span className="text-base font-black text-gray-950">{formatCompactRupee(totalReceivedAmount)}</span>
+              <span className={`text-[10px] font-bold uppercase ${isSuperAdmin ? "text-white/60" : "text-gray-400"}`}>Total Rec.</span>
+              <span className={`text-base font-black ${isSuperAdmin ? "text-white" : "text-gray-950"}`}>{formatCompactRupee(totalReceivedAmount)}</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-100 text-center">
+          <div className={`grid grid-cols-3 gap-2 mt-4 pt-4 border-t text-center ${isSuperAdmin ? "border-white/10" : "border-gray-100"}`}>
             {branchPieData.map(b => (
-              <div key={b.name} className="p-2.5 rounded-[18px] bg-white/60 backdrop-blur-md border border-white/80 shadow-2xs">
-                <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-gray-700">
+              <div key={b.name} className={`p-2.5 rounded-[18px] backdrop-blur-md shadow-2xs ${isSuperAdmin ? "bg-white/10 border border-white/15 text-white" : "bg-white/60 border border-white/80"}`}>
+                <div className={`flex items-center justify-center gap-1.5 text-[11px] font-bold ${isSuperAdmin ? "text-white/80" : "text-gray-700"}`}>
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
                   <span>{b.name}</span>
                 </div>
-                <p className="text-xs font-black text-gray-950 mt-1">{formatCompactRupee(b.value)}</p>
+                <p className={`text-xs font-black mt-1 ${isSuperAdmin ? "text-white" : "text-gray-950"}`}>{formatCompactRupee(b.value)}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Graph 2: Deal Stage Pipeline Composition Donut */}
-        <div className="bg-white/70 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between">
+        <div className={isSuperAdmin
+          ? "bg-white/[0.05] hover:bg-white/[0.08] backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] text-white flex flex-col justify-between transition-all duration-300"
+          : "bg-white/70 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between"
+        }>
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-base font-black text-gray-950 flex items-center gap-2">
-                <Layers size={16} className="text-cyan-600" />
+              <h3 className={`text-base font-black flex items-center gap-2 ${isSuperAdmin ? "text-white" : "text-gray-950"}`}>
+                <Layers size={16} className={isSuperAdmin ? "text-cyan-400" : "text-cyan-600"} />
                 Pipeline Stage Distribution
               </h3>
-              <span className="text-xs font-bold text-gray-500">{filteredDeals.length} Deals</span>
+              <span className={`text-xs font-bold ${isSuperAdmin ? "text-white/60" : "text-gray-500"}`}>{filteredDeals.length} Deals</span>
             </div>
-            <p className="text-xs text-gray-400 mb-4">
+            <p className={`text-xs mb-4 ${isSuperAdmin ? "text-white/60" : "text-gray-400"}`}>
               Volume of deals progressing through Sales, Account, Legal, Operations & Won.
             </p>
           </div>
@@ -1816,17 +1830,25 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 </Pie>
                 <RechartsTooltip
                   formatter={(val: any) => [`${val} Deals`, 'Volume']}
-                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(12px)', borderRadius: '1rem', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', fontSize: '12px' }}
+                  contentStyle={{ 
+                    backgroundColor: isSuperAdmin ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)', 
+                    backdropFilter: 'blur(12px)', 
+                    borderRadius: '1rem', 
+                    border: isSuperAdmin ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.8)', 
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.15)', 
+                    fontSize: '12px',
+                    color: isSuperAdmin ? '#fff' : '#0f172a'
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-gray-400 uppercase">Live Pipeline</span>
-              <span className="text-base font-black text-gray-950">{filteredDeals.length}</span>
+              <span className={`text-[10px] font-bold uppercase ${isSuperAdmin ? "text-white/60" : "text-gray-400"}`}>Live Pipeline</span>
+              <span className={`text-base font-black ${isSuperAdmin ? "text-white" : "text-gray-950"}`}>{filteredDeals.length}</span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-gray-100 text-xs">
+          <div className={`flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t text-xs ${isSuperAdmin ? "border-white/10" : "border-gray-100"}`}>
             {stagePieData.map(st => (
               <button
                 key={st.name}
@@ -1837,11 +1859,15 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     setStageModalSearch('');
                   }
                 }}
-                className="flex items-center gap-1.5 text-[11px] font-bold text-gray-700 bg-white/70 hover:bg-white px-3 py-1.5 rounded-full border border-white/80 transition-all cursor-pointer shadow-2xs hover:shadow-xs group hover:scale-[1.02]"
+                className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full transition-all cursor-pointer shadow-2xs hover:shadow-xs group hover:scale-[1.02] ${
+                  isSuperAdmin
+                    ? "bg-white/10 hover:bg-white/20 border border-white/15 text-white"
+                    : "bg-white/70 hover:bg-white border border-white/80 text-gray-700"
+                }`}
                 title={`Click to view deals in ${st.fullName}`}
               >
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: st.color }} />
-                <span>{st.name}: <strong className="text-gray-950 group-hover:text-indigo-600">{st.value}</strong></span>
+                <span>{st.name}: <strong className={isSuperAdmin ? "text-white group-hover:text-cyan-300" : "text-gray-950 group-hover:text-indigo-600"}>{st.value}</strong></span>
               </button>
             ))}
           </div>
@@ -1851,25 +1877,28 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       {/* ========================================================================= */}
       {/* 3. MASTER TARGET & ACHIEVEMENT BAR VIEW */}
       {/* ========================================================================= */}
-      <div className="rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)]">
+      <div className={isSuperAdmin
+        ? "rounded-[28px] bg-white/[0.05] backdrop-blur-2xl border border-white/15 p-6 sm:p-7 shadow-[0_12px_36px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] text-white transition-all duration-300"
+        : "rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)]"
+      }>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h3 className="text-lg font-black text-gray-950 flex items-center gap-2">
-              <Target size={18} className="text-indigo-600" />
+            <h3 className={`text-lg font-black flex items-center gap-2 ${isSuperAdmin ? "text-white" : "text-gray-950"}`}>
+              <Target size={18} className={isSuperAdmin ? "text-indigo-400" : "text-indigo-600"} />
               Target vs Achievement Overview (Entire Sales Team)
             </h3>
-            <p className="text-xs text-gray-400 mt-0.5 font-medium">
+            <p className={`text-xs mt-0.5 font-medium ${isSuperAdmin ? "text-white/60" : "text-gray-400"}`}>
               National sales target benchmark vs. actual revenue received with shortfall gap.
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs font-bold">
-            <span className="flex items-center gap-1.5 text-gray-600">
+            <span className={`flex items-center gap-1.5 ${isSuperAdmin ? "text-white/80" : "text-gray-600"}`}>
               <span className="w-2.5 h-2.5 rounded-full bg-gray-400" /> Target: {formatCompactRupee(overallTarget)}
             </span>
-            <span className="flex items-center gap-1.5 text-emerald-700">
+            <span className="flex items-center gap-1.5 text-emerald-400">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
             </span>
-            <span className="flex items-center gap-1.5 text-rose-600">
+            <span className="flex items-center gap-1.5 text-rose-400">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
             </span>
           </div>
@@ -1878,10 +1907,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         {/* Master Comparison Bar */}
         <div className="space-y-2">
           <div className="flex justify-between items-center text-xs font-bold">
-            <span className="text-gray-900 font-extrabold">Full Sales Organization Progress</span>
-            <span className="text-indigo-700 font-black">{overallAchievementPct}% Achieved</span>
+            <span className={isSuperAdmin ? "text-white font-extrabold" : "text-gray-900 font-extrabold"}>Full Sales Organization Progress</span>
+            <span className={isSuperAdmin ? "text-indigo-300 font-black" : "text-indigo-700 font-black"}>{overallAchievementPct}% Achieved</span>
           </div>
-          <div className="w-full h-4 bg-gray-100/80 rounded-full overflow-hidden p-0.5 border border-white/80 shadow-inner flex">
+          <div className={`w-full h-4 rounded-full overflow-hidden p-0.5 border shadow-inner flex ${isSuperAdmin ? "bg-black/40 border-white/10" : "bg-gray-100/80 border-white/80"}`}>
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${overallAchievementPct}%` }}
@@ -1892,31 +1921,31 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         </div>
 
         {/* Branch-by-Branch Breakdown Bars */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-100">
+        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t ${isSuperAdmin ? "border-white/10" : "border-gray-100"}`}>
           {(salesTree.children?.[0]?.children || []).map((br: SalesTreeNode) => {
             const pct = br.target > 0 ? Math.min(100, Math.round((br.achievement / br.target) * 100)) : 0;
             return (
-              <div key={br.id} className="p-4 rounded-[22px] bg-white/60 backdrop-blur-md border border-white/80 shadow-2xs">
+              <div key={br.id} className={`p-4 rounded-[22px] backdrop-blur-md shadow-2xs ${isSuperAdmin ? "bg-white/10 border border-white/15 text-white" : "bg-white/60 border border-white/80"}`}>
                 <div className="flex justify-between items-center text-xs mb-2">
-                  <span className="font-bold text-gray-900 flex items-center gap-1.5">
-                    <MapPin size={13} className="text-indigo-600" />
+                  <span className={`font-bold flex items-center gap-1.5 ${isSuperAdmin ? "text-white" : "text-gray-900"}`}>
+                    <MapPin size={13} className={isSuperAdmin ? "text-indigo-400" : "text-indigo-600"} />
                     {br.name}
                   </span>
-                  <span className="text-emerald-700 font-black">{pct}%</span>
+                  <span className={isSuperAdmin ? "text-emerald-400 font-black" : "text-emerald-700 font-black"}>{pct}%</span>
                 </div>
-                <div className="w-full h-2 bg-gray-200/80 rounded-full overflow-hidden flex mb-2">
+                <div className={`w-full h-2 rounded-full overflow-hidden flex mb-2 ${isSuperAdmin ? "bg-black/30" : "bg-gray-200/80"}`}>
                   <div style={{ width: `${pct}%` }} className="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full rounded-full" />
                 </div>
-                <div className="flex justify-between items-center text-[11px] text-gray-500">
-                  <span>Ach: <strong className="text-gray-900">{formatCompactRupee(br.achievement)}</strong></span>
-                  <span>Shortfall: <strong className="text-rose-600">{formatCompactRupee(br.shortfall)}</strong></span>
+                <div className={`flex justify-between items-center text-[11px] ${isSuperAdmin ? "text-white/70" : "text-gray-500"}`}>
+                  <span>Ach: <strong className={isSuperAdmin ? "text-white" : "text-gray-900"}>{formatCompactRupee(br.achievement)}</strong></span>
+                  <span>Shortfall: <strong className="text-rose-400 font-bold">{formatCompactRupee(br.shortfall)}</strong></span>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
-
+      
       {/* ========================================================================= */}
       {/* 4. LIGHT THEME PROGRESSIVE CENTER-TO-LEFT MINDMAP FLOW */}
       {(() => {
