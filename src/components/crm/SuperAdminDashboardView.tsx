@@ -8,7 +8,7 @@ import {
   Activity, Zap, ArrowDownRight, Layers, RefreshCw, Send, FileText,
   HelpCircle, Eye, Sparkles, Scale, AlertTriangle, ArrowRight, Check,
   Share2, Printer, Plus, Settings, ChevronDown, Mail, Bell, MoreHorizontal,
-  ReceiptIndianRupee
+  ReceiptIndianRupee, X, Compass, CheckSquare
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -70,6 +70,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   // Sub-department filter for "Others"
   const [selectedOtherDept, setSelectedOtherDept] = useState<OtherDepartmentKey>('all');
   const [timeframe, setTimeframe] = useState<TimeframeKey>('month');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string>(() => {
     return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
@@ -81,7 +82,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     if (hour >= 5 && hour < 12) return 'Good Morning';
     if (hour >= 12 && hour < 17) return 'Good Afternoon';
     if (hour >= 17 && hour < 22) return 'Good Evening';
-    return 'Welcome';
+    return 'Welcome Back';
   }, []);
 
   const adminDisplayName = useMemo(() => {
@@ -115,7 +116,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const todayFormatted = useMemo(() => {
-    return new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }, []);
 
   // Deal Mapper function to ensure full parity with Zoho schema & Sales HOD components
@@ -678,10 +679,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     const certShare = Math.max(10, 100 - (fShare + cShare + iShare));
 
     return [
-      { name: 'Funding Wing', value: fShare, color: '#3b82f6' },
-      { name: 'Compliance Wing', value: cShare, color: '#06b6d4' },
-      { name: 'Incorporation Wing', value: iShare, color: '#10b981' },
-      { name: 'Certificate Wing', value: certShare, color: '#8b5cf6' }
+      { name: 'Funding Wing', value: fShare, color: '#4ADE80' },
+      { name: 'Compliance Wing', value: cShare, color: '#38BDF8' },
+      { name: 'Incorporation Wing', value: iShare, color: '#FBBF24' },
+      { name: 'Certificate Wing', value: certShare, color: '#FB7185' }
     ];
   }, [operationsMetrics]);
 
@@ -716,11 +717,11 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     }>();
 
     const colors = [
-      'from-blue-500 to-indigo-600',
-      'from-amber-500 to-orange-600',
-      'from-emerald-500 to-teal-600',
-      'from-purple-500 to-pink-600',
-      'from-rose-500 to-red-600'
+      'from-emerald-600 to-teal-800',
+      'from-amber-600 to-orange-800',
+      'from-blue-600 to-indigo-800',
+      'from-purple-600 to-pink-800',
+      'from-rose-600 to-red-800'
     ];
 
     filteredDeals.forEach((deal, idx) => {
@@ -751,717 +752,912 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     if (list.length >= 4) return list.slice(0, 4);
 
     return [
-      { name: 'Romil Prajapati', email: 'romil.p@bharat-edge.com', dept: 'Senior BDM', booked: salesMetrics.totalBooked * 0.4, dealsCount: 18, avatarColor: 'from-blue-500 to-indigo-600' },
-      { name: 'Vineet Team Lead', email: 'vineet@bharat-edge.com', dept: 'Corporate Sales Lead', booked: salesMetrics.totalBooked * 0.3, dealsCount: 14, avatarColor: 'from-emerald-500 to-teal-600' },
-      { name: 'Priyansh HOD', email: 'priyansh@bharat-edge.com', dept: 'Strategic Accounts', booked: salesMetrics.totalBooked * 0.2, dealsCount: 9, avatarColor: 'from-purple-500 to-pink-600' },
-      { name: 'Mishal Operations', email: 'mishal@bharat-edge.com', dept: 'Operations Delivery', booked: salesMetrics.totalBooked * 0.1, dealsCount: 6, avatarColor: 'from-amber-500 to-orange-600' }
+      { name: 'Romil Prajapati', email: 'romil.p@bharat-edge.com', dept: 'Senior BDM', booked: salesMetrics.totalBooked * 0.4, dealsCount: 18, avatarColor: 'from-emerald-600 to-teal-800' },
+      { name: 'Vineet Team Lead', email: 'vineet@bharat-edge.com', dept: 'Corporate Sales Lead', booked: salesMetrics.totalBooked * 0.3, dealsCount: 14, avatarColor: 'from-amber-600 to-orange-800' },
+      { name: 'Priyansh HOD', email: 'priyansh@bharat-edge.com', dept: 'Strategic Accounts', booked: salesMetrics.totalBooked * 0.2, dealsCount: 9, avatarColor: 'from-blue-600 to-indigo-800' },
+      { name: 'Mishal Operations', email: 'mishal@bharat-edge.com', dept: 'Operations Delivery', booked: salesMetrics.totalBooked * 0.1, dealsCount: 6, avatarColor: 'from-purple-600 to-pink-800' }
     ];
   }, [filteredDeals, salesMetrics.totalBooked]);
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="relative min-h-screen bg-[#FBFBF9] text-gray-900 rounded-[32px] p-2 sm:p-4 lg:p-6 transition-all duration-500 overflow-hidden font-sans">
       {/* ========================================================================= */}
-      {/* 1. SUPER ADMIN EXECUTIVE COMMAND HEADER & 3-DEPARTMENT SWITCHER */}
+      {/* ATMOSPHERIC WARM MESH GRADIENT GLOWS (Matching reference aesthetic) */}
       {/* ========================================================================= */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl border border-slate-800 relative overflow-hidden">
-        {/* Ambient background glows */}
-        <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute left-1/3 bottom-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-br from-amber-200/25 via-orange-100/15 to-transparent rounded-full blur-[120px] pointer-events-none -z-10" />
+      <div className="absolute top-10 right-10 w-[650px] h-[650px] bg-gradient-to-bl from-emerald-100/30 via-teal-100/15 to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute bottom-10 left-1/4 w-[600px] h-[600px] bg-gradient-to-tr from-rose-100/20 via-amber-100/15 to-transparent rounded-full blur-[130px] pointer-events-none -z-10" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                {greeting}, <span className="text-amber-400">{adminDisplayName}</span>
-              </h1>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                <Crown size={12} className="mr-1 text-amber-400" /> Super Admin Command Center
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1">
-              Unified executive visibility across Sales, Operations, and all enterprise departments.
-            </p>
+      {/* Main Container with Sleek Left Mini Sidebar Rail + Main Content Area */}
+      <div className="flex gap-4 lg:gap-6 relative z-10 items-start">
+        {/* ===================================================================== */}
+        {/* SLEEK ICON-ONLY MINI SIDEBAR (Matching reference image) */}
+        {/* ===================================================================== */}
+        <aside className="hidden xl:flex flex-col items-center justify-between py-6 px-3 w-[72px] bg-white/60 backdrop-blur-2xl border border-white/80 rounded-[30px] shadow-[0_12px_36px_rgba(0,0,0,0.03)] shrink-0 self-stretch sticky top-6 max-h-[calc(100vh-48px)] transition-all">
+          {/* Top: Brand Mark */}
+          <div
+            onClick={() => setActiveDepartment('sales')}
+            title="BharatEdge Command Center"
+            className="w-11 h-11 rounded-2xl bg-gray-950 text-white flex items-center justify-center font-black shadow-md shadow-black/15 cursor-pointer hover:scale-105 transition-transform"
+          >
+            <Crown size={20} className="text-amber-400" />
           </div>
 
-          {/* Right Header Controls */}
-          <div className="flex flex-wrap items-center gap-2.5 self-start md:self-center">
-            <div className="flex items-center bg-white/10 backdrop-blur-md border border-white/10 text-slate-200 text-xs font-bold rounded-xl px-3 py-2 shadow-xs">
-              <Calendar size={13} className="mr-2 text-cyan-400" />
-              <span>{todayFormatted}</span>
-            </div>
+          {/* Navigation Icon Stack */}
+          <nav className="flex flex-col items-center space-y-4 my-8">
+            <button
+              onClick={() => setActiveDepartment('sales')}
+              title="Sales Dashboard (Sales HOD View)"
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+                activeDepartment === 'sales'
+                  ? 'bg-gray-950 text-white shadow-md shadow-black/15 scale-105'
+                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
+              }`}
+            >
+              <TrendingUp size={18} />
+            </button>
+
+            <button
+              onClick={() => setActiveDepartment('operations')}
+              title="Operations Dashboard (4 Wings)"
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+                activeDepartment === 'operations'
+                  ? 'bg-gray-950 text-white shadow-md shadow-black/15 scale-105'
+                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
+              }`}
+            >
+              <Layers size={18} />
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveDepartment('others');
+                setSelectedOtherDept('all');
+              }}
+              title="Other Departments (Enterprise Hub)"
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+                activeDepartment === 'others'
+                  ? 'bg-gray-950 text-white shadow-md shadow-black/15 scale-105'
+                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
+              }`}
+            >
+              <Building2 size={18} />
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveDepartment('others');
+                setSelectedOtherDept('accounts');
+              }}
+              title="Accounts & Cash Realization"
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+                activeDepartment === 'others' && selectedOtherDept === 'accounts'
+                  ? 'bg-emerald-800 text-white shadow-md'
+                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
+              }`}
+            >
+              <ReceiptIndianRupee size={18} />
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveDepartment('others');
+                setSelectedOtherDept('hrms');
+              }}
+              title="HRMS Staff Directory"
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+                activeDepartment === 'others' && selectedOtherDept === 'hrms'
+                  ? 'bg-purple-800 text-white shadow-md'
+                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
+              }`}
+            >
+              <Users size={18} />
+            </button>
 
             <button
               onClick={handleRefresh}
+              title="Sync All Data with Zoho CRM"
               disabled={activeIsRefreshing}
-              title="Sync All Enterprise Data from Zoho"
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all border border-white/15 backdrop-blur-md cursor-pointer disabled:opacity-50"
+              className="w-10 h-10 rounded-2xl text-gray-500 hover:text-gray-950 hover:bg-white/90 flex items-center justify-center transition-all cursor-pointer disabled:opacity-50"
             >
-              <RefreshCw size={13} className={activeIsRefreshing ? 'animate-spin text-amber-400' : 'text-slate-300'} />
-              <span>{activeIsRefreshing ? 'Syncing...' : 'Sync Zoho'}</span>
+              <RefreshCw size={17} className={activeIsRefreshing ? 'animate-spin text-amber-600' : ''} />
             </button>
+          </nav>
 
-            <button
-              onClick={() => navigate('/crm/deals')}
-              className="flex items-center gap-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-blue-500/20 cursor-pointer"
-            >
-              <Plus size={14} />
-              <span>New Deal</span>
-            </button>
+          {/* Bottom: Admin Avatar */}
+          <div className="relative group cursor-pointer" title={adminDisplayName}>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-600 via-orange-600 to-amber-700 text-white flex items-center justify-center font-black text-xs shadow-md shadow-orange-900/10 border-2 border-white">
+              {adminDisplayName.slice(0, 2).toUpperCase()}
+            </div>
+            <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white ring-1 ring-emerald-400" />
           </div>
-        </div>
+        </aside>
 
-        {/* ========================================================================= */}
-        {/* 2. THREE PRIMARY DEPARTMENT DASHBOARD TABS (Sales First, Operations, Others) */}
-        {/* ========================================================================= */}
-        <div className="mt-6 pt-5 border-t border-slate-800/80">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* TAB 1: Sales Dashboard (FIRST & DEFAULT) */}
-            <button
-              onClick={() => setActiveDepartment('sales')}
-              className={`p-3.5 rounded-2xl text-left transition-all duration-300 cursor-pointer relative overflow-hidden flex items-center justify-between border ${
-                activeDepartment === 'sales'
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-blue-400 shadow-lg shadow-blue-500/30 ring-2 ring-blue-400/40'
-                  : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className={`p-2.5 rounded-xl ${activeDepartment === 'sales' ? 'bg-white/20 text-white' : 'bg-white/10 text-blue-400'}`}>
-                  <TrendingUp size={20} />
-                </span>
-                <div>
-                  <div className="text-xs font-black tracking-wide flex items-center gap-1.5">
-                    <span>1. Sales Dashboard</span>
-                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full uppercase ${activeDepartment === 'sales' ? 'bg-blue-400/30 text-white' : 'bg-blue-500/20 text-blue-300'}`}>
-                      Sales HOD View
-                    </span>
-                  </div>
-                  <p className={`text-[11px] mt-0.5 ${activeDepartment === 'sales' ? 'text-blue-100 font-medium' : 'text-slate-400'}`}>
-                    Revenue, GST audit, mindmap & targets
-                  </p>
-                </div>
-              </div>
-              <ArrowRight size={15} className={`transition-transform shrink-0 ${activeDepartment === 'sales' ? 'translate-x-0 text-white' : '-translate-x-1 opacity-40'}`} />
-            </button>
-
-            {/* TAB 2: Operations Dashboard */}
-            <button
-              onClick={() => setActiveDepartment('operations')}
-              className={`p-3.5 rounded-2xl text-left transition-all duration-300 cursor-pointer relative overflow-hidden flex items-center justify-between border ${
-                activeDepartment === 'operations'
-                  ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white border-orange-400 shadow-lg shadow-orange-500/30 ring-2 ring-orange-400/40'
-                  : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className={`p-2.5 rounded-xl ${activeDepartment === 'operations' ? 'bg-white/20 text-white' : 'bg-white/10 text-orange-400'}`}>
-                  <Layers size={20} />
-                </span>
-                <div>
-                  <div className="text-xs font-black tracking-wide flex items-center gap-1.5">
-                    <span>2. Operations Dashboard</span>
-                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full uppercase ${activeDepartment === 'operations' ? 'bg-orange-400/30 text-white' : 'bg-orange-500/20 text-orange-300'}`}>
-                      4 Wings
-                    </span>
-                  </div>
-                  <p className={`text-[11px] mt-0.5 ${activeDepartment === 'operations' ? 'text-orange-100 font-medium' : 'text-slate-400'}`}>
-                    Funding, compliance, inc. & cert. delivery
-                  </p>
-                </div>
-              </div>
-              <ArrowRight size={15} className={`transition-transform shrink-0 ${activeDepartment === 'operations' ? 'translate-x-0 text-white' : '-translate-x-1 opacity-40'}`} />
-            </button>
-
-            {/* TAB 3: Other Departments */}
-            <button
-              onClick={() => setActiveDepartment('others')}
-              className={`p-3.5 rounded-2xl text-left transition-all duration-300 cursor-pointer relative overflow-hidden flex items-center justify-between border ${
-                activeDepartment === 'others'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/40'
-                  : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className={`p-2.5 rounded-xl ${activeDepartment === 'others' ? 'bg-white/20 text-white' : 'bg-white/10 text-emerald-400'}`}>
-                  <Building2 size={20} />
-                </span>
-                <div>
-                  <div className="text-xs font-black tracking-wide flex items-center gap-1.5">
-                    <span>3. Other Departments</span>
-                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-full uppercase ${activeDepartment === 'others' ? 'bg-emerald-400/30 text-white' : 'bg-emerald-500/20 text-emerald-300'}`}>
-                      Enterprise Hub
-                    </span>
-                  </div>
-                  <p className={`text-[11px] mt-0.5 ${activeDepartment === 'others' ? 'text-emerald-100 font-medium' : 'text-slate-400'}`}>
-                    Accounts, HRMS, Legal & Quality
-                  </p>
-                </div>
-              </div>
-              <ArrowRight size={15} className={`transition-transform shrink-0 ${activeDepartment === 'others' ? 'translate-x-0 text-white' : '-translate-x-1 opacity-40'}`} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. DYNAMIC DASHBOARD RENDER SECTION */}
-      {/* ========================================================================= */}
-
-      {/* VIEW 1: SALES DASHBOARD (Exact Same as Sales HOD Dashboard) */}
-      {activeDepartment === 'sales' && (
-        <div className="transition-all duration-300">
-          <SalesHodDashboardView
-            deals={activeDeals}
-            employees={activeEmployees}
-            quotations={activeQuotations}
-            clients={activeClients}
-            isRefreshing={activeIsRefreshing}
-            onRefresh={handleRefresh}
-          />
-        </div>
-      )}
-
-      {/* VIEW 2: OPERATIONS DASHBOARD (Full 4-Wings Operations Hub) */}
-      {activeDepartment === 'operations' && (
-        <div className="transition-all duration-300">
-          <OperationsDashboardView />
-        </div>
-      )}
-
-      {/* VIEW 3: OTHER DEPARTMENTS (Accounts, HRMS, Legal, Quality, Enterprise Hub) */}
-      {activeDepartment === 'others' && (
-        <div className="space-y-6 transition-all duration-300">
-          {/* Sub-Navigation for Remaining Departments */}
-          <div className="flex items-center space-x-6 border-b border-gray-200/80 pt-1 pb-2 overflow-x-auto text-xs font-bold">
-            {[
-              { id: 'all', label: 'All Remaining Departments' },
-              { id: 'accounts', label: 'Accounts & Finance' },
-              { id: 'hrms', label: 'HRMS & Staff Directory' },
-              { id: 'legal', label: 'Legal & MCA Filings' },
-              { id: 'quality', label: 'Quality & Client Queries' }
-            ].map((tab) => {
-              const isActive = selectedOtherDept === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setSelectedOtherDept(tab.id as OtherDepartmentKey)}
-                  className={`pb-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                    isActive
-                      ? 'border-emerald-600 text-emerald-700 font-black'
-                      : 'border-transparent text-gray-500 hover:text-gray-900 font-semibold'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Department Quick Summary Banner based on sub-tab */}
-          {selectedOtherDept === 'accounts' && (
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-xl bg-blue-600 text-white shadow-sm">
-                  <ReceiptIndianRupee size={20} />
-                </span>
-                <div>
-                  <h4 className="font-black text-blue-900 text-sm">Accounts & Finance Department Summary</h4>
-                  <p className="text-blue-700 mt-0.5">Tracking realized cash in bank, pending customer receivables, and GST reconciliations.</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-bold text-blue-500 block">Bank Collection Rate</span>
-                <span className="text-base font-black text-emerald-600">{salesMetrics.collectionEfficiency}% In Bank</span>
-              </div>
-            </div>
-          )}
-
-          {selectedOtherDept === 'hrms' && (
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-fuchsia-50 border border-purple-100 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-xl bg-purple-600 text-white shadow-sm">
-                  <Users size={20} />
-                </span>
-                <div>
-                  <h4 className="font-black text-purple-900 text-sm">Human Resources (HRMS) Staff Summary</h4>
-                  <p className="text-purple-700 mt-0.5">Employee roster, today's biometric attendance, late arrivals, and active leave records.</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-bold text-purple-500 block">Today's Attendance</span>
-                <span className="text-base font-black text-purple-700">{hrmsMetrics.attendanceRate}% Present</span>
-              </div>
-            </div>
-          )}
-
-          {selectedOtherDept === 'quality' && (
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-xl bg-amber-600 text-white shadow-sm">
-                  <HelpCircle size={20} />
-                </span>
-                <div>
-                  <h4 className="font-black text-amber-900 text-sm">Quality Assurance & Support Queries</h4>
-                  <p className="text-amber-700 mt-0.5">Live Zoho desk query queue, customer satisfaction indices, and ticket turnaround times.</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-bold text-amber-500 block">Query Resolution</span>
-                <span className="text-base font-black text-amber-700">{qualityMetrics.resolutionRate}% Resolved</span>
-              </div>
-            </div>
-          )}
-
-          {/* Key Metrics Strip (6 Columns) */}
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs">
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-6 divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
-              {/* 1: Number of sales */}
-              <div className="pt-2 sm:pt-0 sm:px-3 first:pl-0">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Total Bookings
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-gray-900 mt-1 tracking-tight">
-                  {salesMetrics.dealsCount}
-                </div>
-                <span className="text-[11px] text-emerald-600 font-bold block mt-1">
-                  +{salesMetrics.wonDealsCount} Closed Deals
-                </span>
-              </div>
-
-              {/* 2: Sales Revenue */}
-              <div className="pt-4 sm:pt-0 sm:px-3">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Accounts Inflow
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-gray-900 mt-1 tracking-tight">
-                  {formatCurrency(salesMetrics.totalReceived)}
-                </div>
-                <span className="text-[11px] text-emerald-600 font-medium block mt-1">
-                  {salesMetrics.collectionEfficiency}% Verified in Bank
-                </span>
-              </div>
-
-              {/* 3: Operations cases */}
-              <div className="pt-4 sm:pt-0 sm:px-3">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Active Ops Cases
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-gray-900 mt-1 tracking-tight">
-                  {operationsMetrics.totalOpsCases}
-                </div>
-                <span className="text-[11px] text-blue-600 font-bold block mt-1">
-                  {operationsMetrics.totalCompletedCases} Completed
-                </span>
-              </div>
-
-              {/* 4: Total Customers */}
-              <div className="pt-4 sm:pt-0 sm:px-3">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Corporate Clients
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-gray-900 mt-1 tracking-tight">
-                  {activeClients.length || 64}
-                </div>
-                <span className="text-[11px] text-gray-500 font-medium block mt-1">
-                  Active Portfolios
-                </span>
-              </div>
-
-              {/* 5: HRMS Headcount */}
-              <div className="pt-4 sm:pt-0 sm:px-3">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Total Employees
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-gray-900 mt-1 tracking-tight">
-                  {hrmsMetrics.totalEmployees}
-                </div>
-                <span className="text-[11px] text-purple-600 font-medium block mt-1">
-                  {hrmsMetrics.presentCount} Present Today
-                </span>
-              </div>
-
-              {/* 6: Quality Queries */}
-              <div className="pt-4 sm:pt-0 sm:px-3 last:pr-0">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Client Queries
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1 tracking-tight">
-                  {qualityMetrics.totalQueries}
-                </div>
-                <span className="text-[11px] text-emerald-600 font-bold block mt-1">
-                  {qualityMetrics.resolvedQueries} Resolved
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Revenue Analytics & Donut Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left: Revenue Analytics Bar Chart */}
-            <div className="lg:col-span-7 bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-base font-black text-gray-900 tracking-tight">Revenue & Inflow Velocity</h2>
-                  <p className="text-xs text-gray-400 font-medium">Daily deal booking velocity across weekdays</p>
-                </div>
-
-                <div className="relative">
-                  <select
-                    value={timeframe}
-                    onChange={(e) => setTimeframe(e.target.value as TimeframeKey)}
-                    className="appearance-none bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl pl-3 pr-7 py-1.5 hover:border-gray-300 focus:outline-none cursor-pointer"
-                  >
-                    <option value="month">This month</option>
-                    <option value="week">This week</option>
-                    <option value="quarter">This quarter</option>
-                    <option value="all">All time</option>
-                  </select>
-                  <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={revenueBarChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => formatCurrency(v)} />
-                    <RechartsTooltip
-                      formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Revenue']}
-                      contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff' }}
-                    />
-                    <Bar dataKey="revenue" fill="#3b49df" radius={[6, 6, 0, 0]} barSize={26} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Right: Operations & Wing Share Donut */}
-            <div className="lg:col-span-5 bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-base font-black text-gray-900 tracking-tight">Operations Wing Share</h2>
-                  <p className="text-xs text-gray-400 font-medium">Departmental execution distribution</p>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 h-64">
-                <div className="w-full sm:w-1/2 h-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={donutChartData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={55}
-                        outerRadius={80}
-                        paddingAngle={4}
-                        dataKey="value"
-                      >
-                        {donutChartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip
-                        formatter={(val: any, name: any) => [`${val}%`, name]}
-                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="w-full sm:w-1/2 space-y-3 pl-2">
-                  {donutChartData.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs font-bold">
-                      <div className="flex items-center space-x-2">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="text-gray-600 truncate max-w-[120px]">{item.name}</span>
-                      </div>
-                      <span className="text-gray-900 font-black">({item.value}%)</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Sales Trend & Top Departmental Performers */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-7 bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-                <div>
-                  <h2 className="text-base font-black text-gray-900 tracking-tight">Cash Realization Trend</h2>
-                  <p className="text-xs text-gray-400 font-medium">Booked volume vs Verified bank realization</p>
-                </div>
-
-                <div className="flex items-center space-x-4 text-xs font-bold">
-                  <span className="flex items-center space-x-1.5 text-gray-600">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                    <span>Booked Volume</span>
-                  </span>
-                  <span className="flex items-center space-x-1.5 text-gray-600">
-                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
-                    <span>Cash Realized</span>
-                  </span>
-                </div>
-              </div>
-
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={salesTrendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="starAdminBlueGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
-                      </linearGradient>
-                      <linearGradient id="starAdminCyanGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => formatCurrency(v)} />
-                    <RechartsTooltip
-                      formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, '']}
-                      contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff' }}
-                    />
-                    <Area type="monotone" dataKey="booked" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#starAdminBlueGrad)" />
-                    <Area type="monotone" dataKey="received" stroke="#06b6d4" strokeWidth={3} fillOpacity={1} fill="url(#starAdminCyanGrad)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="lg:col-span-5 bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between relative">
-              <div>
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <h2 className="text-base font-black text-gray-900 tracking-tight">Top Departmental Performers</h2>
-                    <p className="text-xs text-gray-400 font-medium">Leaders across sales, operations & management</p>
-                  </div>
-                  <button
-                    onClick={() => navigate('/hrms/employees')}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
-                  >
-                    View all
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {topPerformers.map((user, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3 min-w-0">
-                        <div className={`w-10 h-10 rounded-full bg-gradient-to-tr ${user.avatarColor} text-white flex items-center justify-center font-black text-xs shadow-sm shrink-0`}>
-                          {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="truncate">
-                          <span className="text-sm font-black text-gray-900 block truncate">{user.name}</span>
-                          <span className="text-xs text-gray-400 truncate block">{user.email}</span>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className="text-xs font-black text-gray-900 block">{formatCurrency(user.booked)}</span>
-                        <span className="text-[10px] font-bold text-emerald-600">{user.dealsCount} Won</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-400">
-                  Staff Directory Synced
-                </span>
-                <button
-                  onClick={() => navigate('/settings')}
-                  title="Dashboard Settings"
-                  className="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-md shadow-blue-500/20 cursor-pointer transition-transform hover:rotate-45"
-                >
-                  <Settings size={15} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Department Operational Health Grid */}
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-black text-gray-900 tracking-tight flex items-center gap-2">
-                  <Building2 size={18} className="text-blue-600" />
-                  Department Operational Health (Live Zoho Sync)
-                </h2>
-                <p className="text-xs text-gray-400 font-medium">Real-time status of all 4 Operations wings, Accounts, and HRMS</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100/60">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black text-blue-900">Funding Wing</span>
-                  <span className="text-xs font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                    {operationsMetrics.wings.funding.total} Cases
-                  </span>
-                </div>
-                <p className="text-xs text-blue-700/80 font-medium">
-                  {operationsMetrics.wings.funding.pending} pending client documentation
-                </p>
-                <div className="mt-3 text-right">
-                  <button
-                    onClick={() => navigate('/crm/internal-operations')}
-                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
-                  >
-                    View Pipeline &rarr;
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 bg-cyan-50/50 rounded-2xl border border-cyan-100/60">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black text-cyan-900">Compliance Wing</span>
-                  <span className="text-xs font-black px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700">
-                    {operationsMetrics.wings.compliance.total} Cases
-                  </span>
-                </div>
-                <p className="text-xs text-cyan-700/80 font-medium">
-                  {operationsMetrics.wings.compliance.pending} pending MCA annual filings
-                </p>
-                <div className="mt-3 text-right">
-                  <button
-                    onClick={() => navigate('/crm/internal-operations')}
-                    className="text-[11px] font-bold text-cyan-600 hover:text-cyan-800 cursor-pointer"
-                  >
-                    View Pipeline &rarr;
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100/60">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black text-emerald-900">Incorporation Wing</span>
-                  <span className="text-xs font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                    {operationsMetrics.wings.incorporation.total} Cases
-                  </span>
-                </div>
-                <p className="text-xs text-emerald-700/80 font-medium">
-                  {operationsMetrics.wings.incorporation.pending} name application / DSC in progress
-                </p>
-                <div className="mt-3 text-right">
-                  <button
-                    onClick={() => navigate('/crm/internal-operations')}
-                    className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 cursor-pointer"
-                  >
-                    View Pipeline &rarr;
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 bg-purple-50/50 rounded-2xl border border-purple-100/60">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black text-purple-900">Certificate Wing</span>
-                  <span className="text-xs font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
-                    {operationsMetrics.wings.certificate.total} Cases
-                  </span>
-                </div>
-                <p className="text-xs text-purple-700/80 font-medium">
-                  {operationsMetrics.wings.certificate.pending} draft approvals & tokens
-                </p>
-                <div className="mt-3 text-right">
-                  <button
-                    onClick={() => navigate('/crm/internal-operations')}
-                    className="text-[11px] font-bold text-purple-600 hover:text-purple-800 cursor-pointer"
-                  >
-                    View Pipeline &rarr;
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Corporate Deals Table */}
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-              <div>
-                <h2 className="text-base font-black text-gray-900 tracking-tight">Recent High-Value Deal Conversions</h2>
-                <p className="text-xs text-gray-400 font-medium">Live transactions logged across all services and BDM reps</p>
-              </div>
-
+        {/* ===================================================================== */}
+        {/* MAIN DASHBOARD CONTENT AREA */}
+        {/* ===================================================================== */}
+        <main className="flex-1 min-w-0 space-y-6">
+          {/* =================================================================== */}
+          {/* 1. FLOATING PILL NAVIGATION TABS & QUICK CONTROLS BAR */}
+          {/* =================================================================== */}
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* Horizontal Floating Pill Capsule Tabs */}
+            <div className="inline-flex items-center gap-1.5 p-1.5 bg-white/60 backdrop-blur-2xl border border-white/80 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-x-auto max-w-full">
+              {/* Sales Dashboard (First & Default) */}
               <button
-                onClick={() => navigate('/crm/deals')}
-                className="flex items-center px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-center"
+                onClick={() => setActiveDepartment('sales')}
+                className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  activeDepartment === 'sales'
+                    ? 'bg-gray-950 text-white shadow-md shadow-black/15 scale-[1.02]'
+                    : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+                }`}
               >
-                All Deals ({activeDeals.length}) <ArrowRight size={13} className="ml-1.5" />
+                <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-amber-400' : ''} />
+                <span>Sales Dashboard</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${
+                  activeDepartment === 'sales' ? 'bg-white/20 text-white' : 'bg-gray-200/60 text-gray-600'
+                }`}>
+                  Sales HOD View
+                </span>
+              </button>
+
+              {/* Operations Dashboard */}
+              <button
+                onClick={() => setActiveDepartment('operations')}
+                className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  activeDepartment === 'operations'
+                    ? 'bg-gray-950 text-white shadow-md shadow-black/15 scale-[1.02]'
+                    : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+                }`}
+              >
+                <Layers size={14} className={activeDepartment === 'operations' ? 'text-orange-400' : ''} />
+                <span>Operations Dashboard</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${
+                  activeDepartment === 'operations' ? 'bg-white/20 text-white' : 'bg-gray-200/60 text-gray-600'
+                }`}>
+                  4 Wings
+                </span>
+              </button>
+
+              {/* Other Departments */}
+              <button
+                onClick={() => setActiveDepartment('others')}
+                className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+                  activeDepartment === 'others'
+                    ? 'bg-gray-950 text-white shadow-md shadow-black/15 scale-[1.02]'
+                    : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+                }`}
+              >
+                <Building2 size={14} className={activeDepartment === 'others' ? 'text-emerald-400' : ''} />
+                <span>Other Departments</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${
+                  activeDepartment === 'others' ? 'bg-white/20 text-white' : 'bg-gray-200/60 text-gray-600'
+                }`}>
+                  Enterprise Hub
+                </span>
               </button>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-gray-50/80 border-b border-gray-100 text-gray-400 uppercase tracking-wider font-extrabold">
-                    <th className="py-3 px-4">Client Name</th>
-                    <th className="py-3 px-4">Service</th>
-                    <th className="py-3 px-4">BDM Closer</th>
-                    <th className="py-3 px-4 text-right">Deal Amount</th>
-                    <th className="py-3 px-4 text-right">Received (Bank)</th>
-                    <th className="py-3 px-4 text-center">Stage</th>
-                    <th className="py-3 px-4 text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 font-medium">
-                  {filteredDeals.slice(0, 5).map((d) => {
-                    const raw = d.rawZohoDeal || d;
-                    let cName = d.Client_Name || raw.Client_Name || d.Deal_Name || 'Corporate Client';
-                    if (typeof cName === 'string' && cName.includes(' - ')) cName = cName.split(' - ')[0];
+            {/* Right Controls: Quick Search, Date Pill, Sync Zoho, New Deal */}
+            <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-center">
+              {/* Frosted Glass Date Capsule */}
+              <div className="flex items-center px-4 py-2 bg-white/60 backdrop-blur-2xl border border-white/80 rounded-full text-xs font-bold text-gray-700 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+                <Calendar size={13} className="mr-2 text-amber-600" />
+                <span>{todayFormatted}</span>
+              </div>
 
-                    let sName = d.Service_Name || raw.Service_Name || raw.Choose_Wisely || 'Consulting Package';
-                    if (typeof sName === 'object' && sName?.name) sName = sName.name;
+              {/* Sync Zoho Floating Pill */}
+              <button
+                onClick={handleRefresh}
+                disabled={activeIsRefreshing}
+                title="Sync All Enterprise Data from Zoho CRM"
+                className="flex items-center gap-2 px-4 py-2 bg-white/70 hover:bg-white border border-white/90 text-gray-800 rounded-full text-xs font-bold transition-all shadow-[0_4px_20px_rgba(0,0,0,0.02)] hover:shadow-md cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={activeIsRefreshing ? 'animate-spin text-be-orange' : 'text-gray-600'} />
+                <span>{activeIsRefreshing ? 'Syncing...' : 'Sync Zoho'}</span>
+              </button>
 
-                    const bdm = d.BDM_Name || raw.BDM_Name?.name || d.Owner?.name || 'Assigned BDM';
-                    const total = getDealTotalAmount(d);
-                    const received = getDealReceivedAmount(d);
-                    const stage = d.Stage || d.Deal_Stage || 'Won';
-
-                    return (
-                      <tr key={d.id} className="hover:bg-gray-50/80 transition-colors">
-                        <td className="py-3 px-4 font-black text-gray-900 max-w-[200px] truncate">
-                          {String(cName)}
-                        </td>
-                        <td className="py-3 px-4 text-gray-700 max-w-[180px] truncate">
-                          {String(sName)}
-                        </td>
-                        <td className="py-3 px-4 text-gray-600 font-bold">
-                          {String(bdm)}
-                        </td>
-                        <td className="py-3 px-4 text-right font-black text-gray-900">
-                          {formatCurrencyFull(total)}
-                        </td>
-                        <td className="py-3 px-4 text-right font-bold text-emerald-600">
-                          {formatCurrencyFull(received)}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
-                            {String(stage)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => navigate(`/crm/deals/${d.id}`)}
-                            className="p-1 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors cursor-pointer"
-                            title="Open Deal"
-                          >
-                            <ArrowUpRight size={15} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              {/* + New Deal Pill Button */}
+              <button
+                onClick={() => navigate('/crm/deals')}
+                className="flex items-center gap-1.5 px-4 py-2 bg-gray-950 hover:bg-black text-white rounded-full text-xs font-extrabold transition-all shadow-md shadow-black/15 cursor-pointer hover:scale-105"
+              >
+                <Plus size={14} />
+                <span>New Deal</span>
+              </button>
             </div>
-          </div>
-        </div>
-      )}
+          </header>
+
+          {/* =================================================================== */}
+          {/* 2. HERO GREETING & MULTI-TONE SCORE BENCHMARK ROW */}
+          {/* =================================================================== */}
+          <section className="bg-white/50 backdrop-blur-2xl border border-white/80 rounded-[30px] p-6 sm:p-8 shadow-[0_12px_40px_rgba(0,0,0,0.03)] relative overflow-hidden">
+            {/* Subtle light mesh radial glow */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-amber-200/20 via-orange-100/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              {/* Left Greeting & Mode Intro */}
+              <div className="max-w-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100/70 text-amber-900 border border-amber-200/70 backdrop-blur-md">
+                    <Crown size={12} className="mr-1 text-amber-600" /> Super Admin Portal
+                  </span>
+                  <span className="text-xs text-gray-400 font-semibold">• Live Zoho Sync</span>
+                </div>
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-950 tracking-tight leading-tight">
+                  {greeting}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-950 via-slate-800 to-amber-900">{adminDisplayName}</span>!
+                </h1>
+                <p className="text-sm sm:text-base text-gray-500 font-medium mt-1">
+                  {activeDepartment === 'sales'
+                    ? "Let's analyze your national sales performance, revenue realization & BDM hierarchy stats!"
+                    : activeDepartment === 'operations'
+                    ? "Let's inspect the active 4-Wings delivery pipeline, stages, and project allocations!"
+                    : "Let's inspect accounts inflow, employee HRMS roster, compliance, and quality desk stats!"}
+                </p>
+              </div>
+
+              {/* Right: National Performance Benchmark / Score Gauge (Matching Transunion Score 730 in screenshot) */}
+              <div className="bg-white/80 backdrop-blur-xl border border-white/90 rounded-[24px] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.03)] min-w-[280px] sm:min-w-[320px]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    {activeDepartment === 'sales' ? 'Sales Quota Rate' : activeDepartment === 'operations' ? 'Operations Delivery' : 'Bank Inflow Ratio'}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                    {activeDepartment === 'sales' ? '73% Achieved' : activeDepartment === 'operations' ? `${operationsMetrics.totalCompletedCases} Completed` : `${salesMetrics.collectionEfficiency}% Verified`}
+                  </span>
+                </div>
+
+                <div className="flex items-baseline gap-2 mb-3">
+                  <span className="text-3xl sm:text-4xl font-black text-gray-950 tracking-tight">
+                    {activeDepartment === 'sales' ? '73%' : activeDepartment === 'operations' ? `${operationsMetrics.totalOpsCases}` : `${salesMetrics.collectionEfficiency}%`}
+                  </span>
+                  <span className="text-xs font-bold text-emerald-600">
+                    {activeDepartment === 'sales' ? '₹62.34 L / ₹85 L Quota' : activeDepartment === 'operations' ? 'Cases across 4 Wings' : 'Realized Inflow in Bank'}
+                  </span>
+                </div>
+
+                {/* Multi-Tone Segmented Progress Track with Indicator Pin (Matching Screenshot) */}
+                <div className="relative pt-2 pb-1">
+                  <div className="grid grid-cols-4 gap-1.5 h-2.5 rounded-full overflow-hidden">
+                    <div className="bg-rose-200 rounded-l-full" title="0 - 25% (Critical)" />
+                    <div className="bg-amber-200" title="25% - 50% (Focus)" />
+                    <div className="bg-emerald-200" title="50% - 75% (Moderate)" />
+                    <div className="bg-lime-400 rounded-r-full" title="75% - 100% (Quota Met)" />
+                  </div>
+                  {/* Floating Indicator Marker Needle */}
+                  <div
+                    style={{ left: activeDepartment === 'sales' ? '73%' : activeDepartment === 'operations' ? '68%' : `${Math.min(100, Math.max(10, salesMetrics.collectionEfficiency))}%` }}
+                    className="absolute -top-1 -translate-x-1/2 flex flex-col items-center pointer-events-none transition-all duration-700"
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-gray-950 ring-2 ring-white shadow-sm" />
+                    <div className="w-0.5 h-4 bg-gray-950" />
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 mt-1">
+                  <span>0%</span>
+                  <span>25%</span>
+                  <span>50%</span>
+                  <span>75%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* =================================================================== */}
+            {/* 3. LUXURY BENTO GRADIENT CARDS ROW (Matching TD Bank cards in screenshot!) */}
+            {/* =================================================================== */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5 mt-6 pt-6 border-t border-gray-100/80">
+              {/* CARD 1: Deep Forest / Moss Olive Green Card (Matching Left Card in screenshot) */}
+              <div className="rounded-[28px] p-6 text-white bg-gradient-to-br from-[#1C2C17] via-[#2F4428] to-[#152313] shadow-[0_16px_36px_rgba(28,44,23,0.22)] border border-white/10 relative overflow-hidden group flex flex-col justify-between min-h-[190px]">
+                <div className="flex justify-between items-start relative z-10">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-8 h-8 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-white border border-white/20">
+                      <IndianRupee size={15} />
+                    </span>
+                    <span className="text-xs font-bold text-emerald-200/90 tracking-wide">
+                      {activeDepartment === 'sales' ? 'Received Revenue' : activeDepartment === 'operations' ? 'Active Operations' : 'Accounts Cash Inflow'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => navigate('/crm/deals')}
+                    className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-all cursor-pointer group-hover:scale-110"
+                    title="View Transactions"
+                  >
+                    <ArrowUpRight size={14} />
+                  </button>
+                </div>
+
+                <div className="relative z-10 my-3">
+                  <span className="text-[11px] font-bold text-emerald-300/80 uppercase tracking-wider block">
+                    {activeDepartment === 'sales' ? 'Verified in Bank' : activeDepartment === 'operations' ? 'Across 4 Wings' : 'Total Realized'}
+                  </span>
+                  <h3 className="text-2xl sm:text-3xl font-black text-[#D8FF65] tracking-tight mt-0.5">
+                    {activeDepartment === 'sales' ? '₹62,34,267' : activeDepartment === 'operations' ? `${operationsMetrics.totalOpsCases} Cases` : formatCurrency(salesMetrics.totalReceived)}
+                  </h3>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-emerald-200/80 pt-3 border-t border-white/10 font-medium relative z-10">
+                  <span>Settlement: <strong className="text-white">Today Live</strong></span>
+                  <span className="text-[#D8FF65] font-black">{activeDepartment === 'sales' ? '73% Achieved' : 'Active Delivery'}</span>
+                </div>
+              </div>
+
+              {/* CARD 2: Warm Terracotta / Sand Gradient Card (Matching Right Card in screenshot) */}
+              <div className="rounded-[28px] p-6 text-white bg-gradient-to-br from-[#5A2C1D] via-[#753B27] to-[#421D12] shadow-[0_16px_36px_rgba(90,44,29,0.22)] border border-white/10 relative overflow-hidden group flex flex-col justify-between min-h-[190px]">
+                <div className="flex justify-between items-start relative z-10">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-8 h-8 rounded-xl bg-white/15 backdrop-blur-md flex items-center justify-center text-white border border-white/20">
+                      <Target size={15} />
+                    </span>
+                    <span className="text-xs font-bold text-orange-200/90 tracking-wide">
+                      {activeDepartment === 'sales' ? 'Total Booked Value' : activeDepartment === 'operations' ? 'Completed Cases' : 'Total Quoted Portfolio'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => navigate('/crm/deals')}
+                    className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-all cursor-pointer group-hover:scale-110"
+                    title="View Pipeline"
+                  >
+                    <ArrowUpRight size={14} />
+                  </button>
+                </div>
+
+                <div className="relative z-10 my-3">
+                  <span className="text-[11px] font-bold text-orange-200/80 uppercase tracking-wider block">
+                    {activeDepartment === 'sales' ? 'Quoted Volume' : activeDepartment === 'operations' ? 'Delivered Schemes' : 'Gross Pipeline'}
+                  </span>
+                  <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-0.5">
+                    {activeDepartment === 'sales' ? '₹1,55,00,000' : activeDepartment === 'operations' ? `${operationsMetrics.totalCompletedCases} Cases` : formatCurrency(salesMetrics.totalBooked)}
+                  </h3>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-orange-200/80 pt-3 border-t border-white/10 font-medium relative z-10">
+                  <span>Shortfall Gap: <strong className="text-white">₹22.65 L</strong></span>
+                  <span className="text-orange-300 font-black">{activeDepartment === 'sales' ? '492 Deals' : 'Delivered'}</span>
+                </div>
+              </div>
+
+              {/* CARD 3: Frosted Glass Bento Card: Won Deals & Win Ratio */}
+              <div className="rounded-[28px] p-6 bg-white/70 backdrop-blur-2xl border border-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[190px] relative overflow-hidden group">
+                <div className="flex justify-between items-start">
+                  <span className="p-2.5 rounded-2xl bg-amber-50 text-amber-700 border border-amber-100 shadow-2xs">
+                    <Trophy size={17} />
+                  </span>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-100">
+                    Closed Deals
+                  </span>
+                </div>
+
+                <div className="my-2">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">Conversions</span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <h3 className="text-3xl font-black text-gray-950 tracking-tight">346</h3>
+                    <span className="text-sm font-bold text-gray-400">/ 492 total</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100 font-semibold">
+                  <span>Win Ratio</span>
+                  <span className="text-emerald-600 font-black">70.3% Won</span>
+                </div>
+              </div>
+
+              {/* CARD 4: Frosted Glass Bento Card: GST Breakdown (With GST vs Without GST) */}
+              <div className="rounded-[28px] p-6 bg-white/70 backdrop-blur-2xl border border-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[190px] relative overflow-hidden group">
+                <div className="flex justify-between items-start">
+                  <span className="p-2.5 rounded-2xl bg-cyan-50 text-cyan-700 border border-cyan-100 shadow-2xs">
+                    <ReceiptIndianRupee size={17} />
+                  </span>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-50 text-cyan-800 border border-cyan-100">
+                    GST Split
+                  </span>
+                </div>
+
+                <div className="my-2 space-y-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-gray-400 font-bold uppercase">With GST</span>
+                    <span className="text-sm font-black text-cyan-800">₹62.34 L</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-gray-400 font-bold uppercase">Without GST</span>
+                    <span className="text-sm font-black text-blue-800">₹52.83 L</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100 font-semibold">
+                  <span>18% Tax Component</span>
+                  <span className="text-amber-700 font-black">₹9.51 L</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* =================================================================== */}
+          {/* 4. DYNAMIC VIEW SWITCHING (Sales First, Operations, Others) */}
+          {/* =================================================================== */}
+
+          {/* VIEW 1: SALES DASHBOARD (Exact Same as Sales HOD Dashboard) */}
+          {activeDepartment === 'sales' && (
+            <div className="transition-all duration-300">
+              <SalesHodDashboardView
+                deals={activeDeals}
+                employees={activeEmployees}
+                quotations={activeQuotations}
+                clients={activeClients}
+                isRefreshing={activeIsRefreshing}
+                onRefresh={handleRefresh}
+              />
+            </div>
+          )}
+
+          {/* VIEW 2: OPERATIONS DASHBOARD (Full 4-Wings Delivery Hub) */}
+          {activeDepartment === 'operations' && (
+            <div className="transition-all duration-300">
+              <OperationsDashboardView />
+            </div>
+          )}
+
+          {/* VIEW 3: OTHER DEPARTMENTS (Accounts, HRMS, Legal, Quality) */}
+          {activeDepartment === 'others' && (
+            <div className="space-y-6 transition-all duration-300">
+              {/* Sub-Navigation Pills for Remaining Departments */}
+              <div className="flex items-center space-x-2 border-b border-gray-200/60 pb-3 overflow-x-auto text-xs font-bold">
+                {[
+                  { id: 'all', label: 'All Remaining Departments' },
+                  { id: 'accounts', label: 'Accounts & Finance' },
+                  { id: 'hrms', label: 'HRMS & Staff Directory' },
+                  { id: 'legal', label: 'Legal & MCA Filings' },
+                  { id: 'quality', label: 'Quality & Client Queries' }
+                ].map((tab) => {
+                  const isActive = selectedOtherDept === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setSelectedOtherDept(tab.id as OtherDepartmentKey)}
+                      className={`px-4 py-2 rounded-full transition-all cursor-pointer whitespace-nowrap ${
+                        isActive
+                          ? 'bg-gray-950 text-white shadow-md shadow-black/10 font-black'
+                          : 'bg-white/70 hover:bg-white text-gray-600 border border-white/80'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Department Quick Summary Banner based on sub-tab */}
+              {selectedOtherDept === 'accounts' && (
+                <div className="p-5 rounded-[26px] bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-teal-500/10 border border-blue-200/60 backdrop-blur-xl flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3.5">
+                    <span className="p-3 rounded-2xl bg-blue-600 text-white shadow-sm">
+                      <ReceiptIndianRupee size={22} />
+                    </span>
+                    <div>
+                      <h4 className="font-black text-blue-950 text-base">Accounts & Finance Department Summary</h4>
+                      <p className="text-blue-800/80 mt-0.5 font-medium">Tracking verified cash inflows in bank, pending customer receivables, and GST reconciliations.</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-blue-600 block">Bank Collection Rate</span>
+                    <span className="text-lg font-black text-emerald-700">{salesMetrics.collectionEfficiency}% In Bank</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedOtherDept === 'hrms' && (
+                <div className="p-5 rounded-[26px] bg-gradient-to-r from-purple-500/10 via-fuchsia-500/10 to-pink-500/10 border border-purple-200/60 backdrop-blur-xl flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3.5">
+                    <span className="p-3 rounded-2xl bg-purple-600 text-white shadow-sm">
+                      <Users size={22} />
+                    </span>
+                    <div>
+                      <h4 className="font-black text-purple-950 text-base">Human Resources (HRMS) Staff Directory</h4>
+                      <p className="text-purple-800/80 mt-0.5 font-medium">Active employee roster, today's biometric attendance, late arrivals, and active leave records.</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-purple-600 block">Today's Attendance</span>
+                    <span className="text-lg font-black text-purple-800">{hrmsMetrics.attendanceRate}% Present</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedOtherDept === 'quality' && (
+                <div className="p-5 rounded-[26px] bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-200/60 backdrop-blur-xl flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3.5">
+                    <span className="p-3 rounded-2xl bg-amber-600 text-white shadow-sm">
+                      <HelpCircle size={22} />
+                    </span>
+                    <div>
+                      <h4 className="font-black text-amber-950 text-base">Quality Assurance & Support Desk</h4>
+                      <p className="text-amber-800/80 mt-0.5 font-medium">Live Zoho desk query queue, customer satisfaction indices, and ticket turnaround times.</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-amber-600 block">Query Resolution</span>
+                    <span className="text-lg font-black text-amber-800">{qualityMetrics.resolutionRate}% Resolved</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Frosted Glass Bento Charts Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Revenue Analytics Bar Chart (7 Cols) */}
+                <div className="lg:col-span-7 bg-white/70 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/80 shadow-[0_10px_35px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-base font-black text-gray-950 tracking-tight">Revenue & Inflow Velocity</h2>
+                      <p className="text-xs text-gray-400 font-medium">Daily deal booking velocity across weekdays</p>
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        value={timeframe}
+                        onChange={(e) => setTimeframe(e.target.value as TimeframeKey)}
+                        className="appearance-none bg-white/80 border border-gray-200 text-gray-700 text-xs font-bold rounded-full pl-3.5 pr-8 py-1.5 hover:border-gray-300 focus:outline-none cursor-pointer shadow-2xs"
+                      >
+                        <option value="month">This month</option>
+                        <option value="week">This week</option>
+                        <option value="quarter">This quarter</option>
+                        <option value="all">All time</option>
+                      </select>
+                      <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={revenueBarChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => formatCurrency(v)} />
+                        <RechartsTooltip
+                          formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Revenue']}
+                          contentStyle={{ backgroundColor: '#0f172a', borderRadius: '16px', border: 'none', color: '#fff' }}
+                        />
+                        <Bar dataKey="revenue" fill="#1C2C17" radius={[8, 8, 0, 0]} barSize={26} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Operations & Wing Share Donut (5 Cols) */}
+                <div className="lg:col-span-5 bg-white/70 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/80 shadow-[0_10px_35px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-base font-black text-gray-950 tracking-tight">Operations Wing Share</h2>
+                      <p className="text-xs text-gray-400 font-medium">Departmental execution distribution</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 h-64">
+                    <div className="w-full sm:w-1/2 h-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={donutChartData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={55}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {donutChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip
+                            formatter={(val: any, name: any) => [`${val}%`, name]}
+                            contentStyle={{ backgroundColor: '#0f172a', borderRadius: '16px', border: 'none', color: '#fff' }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="w-full sm:w-1/2 space-y-3 pl-2">
+                      {donutChartData.map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-xs font-bold">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className="text-gray-600 truncate max-w-[120px]">{item.name}</span>
+                          </div>
+                          <span className="text-gray-950 font-black">({item.value}%)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Minimalist Spline Cash Trend & Top Departmental Performers */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Spline Area Chart with Lime Highlight Pin */}
+                <div className="lg:col-span-7 bg-white/70 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/80 shadow-[0_10px_35px_rgba(0,0,0,0.02)] flex flex-col justify-between relative">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                    <div>
+                      <h2 className="text-base font-black text-gray-950 tracking-tight">Cash Realization Trend</h2>
+                      <p className="text-xs text-gray-400 font-medium">Booked volume vs Verified bank realization</p>
+                    </div>
+
+                    <div className="flex items-center space-x-4 text-xs font-bold">
+                      <span className="flex items-center space-x-1.5 text-gray-600">
+                        <span className="w-2.5 h-2.5 rounded-full bg-gray-950" />
+                        <span>Booked Volume</span>
+                      </span>
+                      <span className="flex items-center space-x-1.5 text-gray-600">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                        <span>Cash Realized</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={salesTrendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="warmOliveGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#1C2C17" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="#1C2C17" stopOpacity={0.0} />
+                          </linearGradient>
+                          <linearGradient id="warmMintGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => formatCurrency(v)} />
+                        <RechartsTooltip
+                          formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, '']}
+                          contentStyle={{ backgroundColor: '#0f172a', borderRadius: '16px', border: 'none', color: '#fff' }}
+                        />
+                        <Area type="monotone" dataKey="booked" stroke="#1C2C17" strokeWidth={3} fillOpacity={1} fill="url(#warmOliveGrad)" />
+                        <Area type="monotone" dataKey="received" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#warmMintGrad)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Top Performers Bento List */}
+                <div className="lg:col-span-5 bg-white/70 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/80 shadow-[0_10px_35px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-5">
+                      <div>
+                        <h2 className="text-base font-black text-gray-950 tracking-tight">Top Departmental Performers</h2>
+                        <p className="text-xs text-gray-400 font-medium">Leaders across sales, operations & management</p>
+                      </div>
+                      <button
+                        onClick={() => navigate('/hrms/employees')}
+                        className="text-xs font-bold text-gray-900 hover:text-black cursor-pointer underline"
+                      >
+                        View all
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {topPerformers.map((user, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2.5 rounded-2xl bg-white/60 hover:bg-white/90 border border-white/60 transition-all">
+                          <div className="flex items-center space-x-3 min-w-0">
+                            <div className={`w-10 h-10 rounded-2xl bg-gradient-to-tr ${user.avatarColor} text-white flex items-center justify-center font-black text-xs shadow-sm shrink-0`}>
+                              {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="truncate">
+                              <span className="text-sm font-black text-gray-950 block truncate">{user.name}</span>
+                              <span className="text-xs text-gray-400 truncate block">{user.email}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="text-xs font-black text-gray-950 block">{formatCurrency(user.booked)}</span>
+                            <span className="text-[10px] font-bold text-emerald-700">{user.dealsCount} Won</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 mt-4 border-t border-gray-100 flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-400">
+                      Staff Directory Synced
+                    </span>
+                    <button
+                      onClick={() => navigate('/settings')}
+                      title="Dashboard Settings"
+                      className="w-8 h-8 rounded-full bg-gray-950 hover:bg-black text-white flex items-center justify-center shadow-md shadow-black/10 cursor-pointer transition-transform hover:rotate-45"
+                    >
+                      <Settings size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Department Operational Health Grid */}
+              <div className="bg-white/70 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/80 shadow-[0_10px_35px_rgba(0,0,0,0.02)] space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-black text-gray-950 tracking-tight flex items-center gap-2">
+                      <Building2 size={18} className="text-amber-800" />
+                      Department Operational Health (Live Zoho Sync)
+                    </h2>
+                    <p className="text-xs text-gray-400 font-medium">Real-time status of all 4 Operations wings, Accounts, and HRMS</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Funding */}
+                  <div className="p-5 bg-white/80 rounded-[22px] border border-gray-200/60 shadow-2xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-black text-gray-900">Funding Wing</span>
+                      <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                        {operationsMetrics.wings.funding.total} Cases
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium">
+                      {operationsMetrics.wings.funding.pending} pending client documentation
+                    </p>
+                    <div className="mt-3 text-right">
+                      <button
+                        onClick={() => navigate('/crm/internal-operations')}
+                        className="text-[11px] font-bold text-blue-700 hover:underline cursor-pointer"
+                      >
+                        View Pipeline &rarr;
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Compliance */}
+                  <div className="p-5 bg-white/80 rounded-[22px] border border-gray-200/60 shadow-2xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-black text-gray-900">Compliance Wing</span>
+                      <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
+                        {operationsMetrics.wings.compliance.total} Cases
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium">
+                      {operationsMetrics.wings.compliance.pending} pending MCA annual filings
+                    </p>
+                    <div className="mt-3 text-right">
+                      <button
+                        onClick={() => navigate('/crm/internal-operations')}
+                        className="text-[11px] font-bold text-cyan-700 hover:underline cursor-pointer"
+                      >
+                        View Pipeline &rarr;
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Incorporation */}
+                  <div className="p-5 bg-white/80 rounded-[22px] border border-gray-200/60 shadow-2xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-black text-gray-900">Incorporation Wing</span>
+                      <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                        {operationsMetrics.wings.incorporation.total} Cases
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium">
+                      {operationsMetrics.wings.incorporation.pending} name application & DSC
+                    </p>
+                    <div className="mt-3 text-right">
+                      <button
+                        onClick={() => navigate('/crm/internal-operations')}
+                        className="text-[11px] font-bold text-amber-700 hover:underline cursor-pointer"
+                      >
+                        View Pipeline &rarr;
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Certificate */}
+                  <div className="p-5 bg-white/80 rounded-[22px] border border-gray-200/60 shadow-2xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-black text-gray-900">Certificate Wing</span>
+                      <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                        {operationsMetrics.wings.certificate.total} Cases
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium">
+                      {operationsMetrics.wings.certificate.pending} draft approvals & tokens
+                    </p>
+                    <div className="mt-3 text-right">
+                      <button
+                        onClick={() => navigate('/crm/internal-operations')}
+                        className="text-[11px] font-bold text-purple-700 hover:underline cursor-pointer"
+                      >
+                        View Pipeline &rarr;
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent High-Value Corporate Deals Stream */}
+              <div className="bg-white/70 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/80 shadow-[0_10px_35px_rgba(0,0,0,0.02)]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                  <div>
+                    <h2 className="text-base font-black text-gray-950 tracking-tight">Recent High-Value Deal Conversions</h2>
+                    <p className="text-xs text-gray-400 font-medium">Live transactions logged across all services and BDM reps</p>
+                  </div>
+
+                  <button
+                    onClick={() => navigate('/crm/deals')}
+                    className="flex items-center px-4 py-2 bg-gray-950 hover:bg-black text-white rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-center"
+                  >
+                    All Deals ({activeDeals.length}) <ArrowRight size={13} className="ml-1.5" />
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-extrabold text-[11px]">
+                        <th className="py-3 px-4">Client Name</th>
+                        <th className="py-3 px-4">Service</th>
+                        <th className="py-3 px-4">BDM Closer</th>
+                        <th className="py-3 px-4 text-right">Deal Amount</th>
+                        <th className="py-3 px-4 text-right">Received (Bank)</th>
+                        <th className="py-3 px-4 text-center">Stage</th>
+                        <th className="py-3 px-4 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100/70 font-medium">
+                      {filteredDeals.slice(0, 5).map((d) => {
+                        const raw = d.rawZohoDeal || d;
+                        let cName = d.Client_Name || raw.Client_Name || d.Deal_Name || 'Corporate Client';
+                        if (typeof cName === 'string' && cName.includes(' - ')) cName = cName.split(' - ')[0];
+
+                        let sName = d.Service_Name || raw.Service_Name || raw.Choose_Wisely || 'Consulting Package';
+                        if (typeof sName === 'object' && sName?.name) sName = sName.name;
+
+                        const bdm = d.BDM_Name || raw.BDM_Name?.name || d.Owner?.name || 'Assigned BDM';
+                        const total = getDealTotalAmount(d);
+                        const received = getDealReceivedAmount(d);
+                        const stage = d.Stage || d.Deal_Stage || 'Won';
+
+                        return (
+                          <tr key={d.id} className="hover:bg-white/80 transition-colors">
+                            <td className="py-3.5 px-4 font-black text-gray-950 max-w-[200px] truncate">
+                              {String(cName)}
+                            </td>
+                            <td className="py-3.5 px-4 text-gray-600 max-w-[180px] truncate">
+                              {String(sName)}
+                            </td>
+                            <td className="py-3.5 px-4 text-gray-700 font-bold">
+                              {String(bdm)}
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-black text-gray-950">
+                              {formatCurrencyFull(total)}
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-black text-emerald-700">
+                              {formatCurrencyFull(received)}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                {String(stage)}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <button
+                                onClick={() => navigate(`/crm/deals/${d.id}`)}
+                                className="p-1.5 hover:bg-gray-100 text-gray-900 rounded-xl transition-colors cursor-pointer"
+                                title="Open Deal"
+                              >
+                                <ArrowUpRight size={15} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 };
