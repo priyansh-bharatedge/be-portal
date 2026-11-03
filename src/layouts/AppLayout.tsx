@@ -156,168 +156,7 @@ export const AppLayout = () => {
 
   const currentMenu = menuConfig[currentModule] || menuConfig.crm;
 
-  // =========================================================================
-  // LUXURY CLAYMORPHIC SIDEBAR FOR SUPER ADMIN DASHBOARD
-  // =========================================================================
-  const SuperAdminSidebarContent = () => (
-    <div className="flex flex-col h-full bg-gradient-to-b from-[#f8f9fb] via-[#f1f4f8] to-[#eaedf3] border-r border-slate-200/90 shadow-[4px_0_28px_rgba(0,0,0,0.03)] select-none">
-      {/* Brand Header */}
-      <div className="p-4 flex items-center justify-between min-h-[72px] border-b border-slate-200/70 bg-white/50 backdrop-blur-md">
-        <Link to="/modules" className="flex items-center overflow-visible group">
-          {isSidebarOpen ? (
-            <div className="flex items-center gap-2">
-              <Logo className="h-[46px] w-auto scale-[2.8] origin-left ml-5 drop-shadow-2xs" />
-            </div>
-          ) : (
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950 text-amber-400 font-black text-sm flex items-center justify-center mx-auto shadow-md border border-slate-800">
-              b
-            </div>
-          )}
-        </Link>
-        {isSidebarOpen && (
-          <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="w-7 h-7 rounded-xl bg-white/90 hover:bg-white border border-white text-slate-500 hover:text-slate-900 shadow-2xs hover:shadow-xs flex items-center justify-center transition-all cursor-pointer hidden md:flex"
-            title="Collapse Sidebar"
-          >
-            <ChevronLeft size={16} />
-          </button>
-        )}
-      </div>
-
-      {/* Nav List */}
-      <div className="py-4 flex-1 overflow-y-auto">
-        {isSidebarOpen && (
-          <div className="px-6 mb-4 flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-              {currentMenu.title} MODULE
-            </span>
-          </div>
-        )}
-        
-        <nav className="px-3 space-y-1.5">
-          {currentMenu.items.map((item) => {
-            const isActive = location.pathname.startsWith(item.path);
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center px-3.5 py-2.5 rounded-2xl text-xs transition-all group relative cursor-pointer",
-                  isActive 
-                    ? "bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white shadow-[0_8px_20px_rgba(15,23,42,0.22)] border border-slate-700/60 font-black" 
-                    : "text-slate-600 hover:text-slate-950 hover:bg-white/80 hover:shadow-2xs border border-transparent hover:border-white font-bold"
-                )}
-                title={!isSidebarOpen ? item.name : undefined}
-              >
-                <div className={cn(
-                  "w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-all",
-                  isActive 
-                    ? "bg-amber-400/20 text-amber-400 border border-amber-400/30 shadow-2xs" 
-                    : "bg-slate-100/80 text-slate-500 group-hover:bg-white group-hover:text-slate-800 group-hover:shadow-2xs"
-                )}>
-                  {item.icon}
-                </div>
-                {isSidebarOpen && (
-                  <span className="ml-3 truncate">{item.name}</span>
-                )}
-                {isSidebarOpen && isActive && (
-                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_#f59e0b]" />
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Luxury Footer (Active Role + Navigation Actions) */}
-      {isSidebarOpen ? (
-        <div className="border-t border-slate-200/70 p-3 space-y-2 bg-[#eaedf3]/50">
-          {/* Executive Active Role Card */}
-          <div className="p-3.5 rounded-[1.6rem] bg-gradient-to-br from-slate-950 via-slate-900 to-[#171b26] text-white shadow-[0_12px_28px_rgba(15,23,42,0.28)] border border-slate-800/80 relative overflow-hidden group">
-            <div className="absolute -top-6 -right-6 w-20 h-20 bg-amber-500/15 rounded-full blur-xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
-            
-            <div className="flex items-center justify-between mb-2 relative z-10">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                Active Role
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2.5 relative z-10">
-              <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-400 via-amber-500 to-yellow-300 text-slate-950 flex items-center justify-center font-black shadow-md shadow-amber-500/30 border border-amber-200 shrink-0">
-                <Crown size={16} className="fill-slate-950/20" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-black text-white tracking-tight truncate">
-                  {currentUser.name || 'Super Admin'}
-                </div>
-                <div className="text-[11px] text-gray-400 font-medium truncate mt-0.5">
-                  {roleInfo.label || 'Super Admin'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Back to Modules Navigation */}
-          <button
-            onClick={() => navigate('/modules')}
-            className="flex items-center w-full px-3 py-2 text-xs font-extrabold text-slate-700 bg-white/85 hover:bg-white border border-white hover:border-slate-200 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-xs transition-all group cursor-pointer"
-            title="Back to Module Selection"
-          >
-            <div className="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-amber-50 flex items-center justify-center mr-2 transition-colors shrink-0">
-              <ArrowLeft size={13} className="text-slate-500 group-hover:text-amber-600 transition-transform group-hover:-translate-x-0.5" />
-            </div>
-            <span className="truncate">Back to Modules</span>
-          </button>
-
-          {/* Logout */}
-          <button
-            onClick={() => {
-              if (logout) logout();
-              navigate('/login');
-            }}
-            className="flex items-center w-full px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50/80 rounded-2xl transition-colors group cursor-pointer"
-          >
-            <div className="w-6 h-6 rounded-lg bg-rose-50 flex items-center justify-center mr-2 group-hover:bg-rose-100 transition-colors shrink-0">
-              <LogOut size={13} className="text-rose-500 group-hover:scale-110 transition-transform" />
-            </div>
-            <span>Logout</span>
-          </button>
-        </div>
-      ) : (
-        <div className="p-2.5 border-t border-slate-200/60 flex flex-col items-center space-y-2 bg-[#eaedf3]/60">
-          <div
-            className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center shadow-md shadow-amber-500/20 border border-amber-300"
-            title="Super Admin"
-          >
-            <Crown size={16} />
-          </div>
-          <button
-            onClick={() => navigate('/modules')}
-            className="p-2 text-slate-500 hover:text-slate-900 bg-white/90 hover:bg-white rounded-xl border border-white shadow-2xs hover:shadow-xs transition-all cursor-pointer"
-            title="Back to Modules"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <button
-            onClick={() => {
-              if (logout) logout();
-              navigate('/login');
-            }}
-            className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-            title="Logout"
-          >
-            <LogOut size={16} />
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  // =========================================================================
-  // STANDARD SIDEBAR FOR ALL OTHER PAGES / MODULES / ROLES (UNMODIFIED)
-  // =========================================================================
-  const StandardSidebarContent = () => (
+  const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white border-r border-gray-100">
       <div className="p-4 flex items-center justify-between min-h-[72px] border-b border-gray-50">
         <Link to="/modules" className="flex items-center overflow-visible">
@@ -443,14 +282,12 @@ export const AppLayout = () => {
     </div>
   );
 
-  const SidebarContent = isSuperAdminDashboard ? SuperAdminSidebarContent : StandardSidebarContent;
-
   return (
     <div className={cn("h-screen flex overflow-hidden", isSuperAdminDashboard ? "bg-[#edf0f4]" : "bg-gray-50")}>
       {/* Desktop Sidebar */}
       <motion.aside 
         initial={false}
-        animate={{ width: isSidebarOpen ? (isSuperAdminDashboard ? 268 : 260) : 80 }}
+        animate={{ width: isSidebarOpen ? 260 : 80 }}
         className="hidden md:block flex-shrink-0 z-20"
       >
         <SidebarContent />
@@ -472,7 +309,7 @@ export const AppLayout = () => {
               animate={{ x: 0 }}
               exit={{ x: -260 }}
               transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-              className={cn("fixed inset-y-0 left-0 w-[268px] z-40 md:hidden", isSuperAdminDashboard ? "bg-[#f8f9fb]" : "bg-white")}
+              className="fixed inset-y-0 left-0 w-[260px] z-40 md:hidden bg-white"
             >
               <SidebarContent />
             </motion.aside>
