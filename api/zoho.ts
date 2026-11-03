@@ -2026,7 +2026,7 @@ function buildZohoPaginationQuery(req: ApiRequest, urlObj: URL): string {
 // Note: Zoho CRM standard Deals module does NOT support criteria search on Created_Time.
 // Deals uses Booking_Date. Other custom CRM modules (Quotations, Companies, Clients, Operation_Internal_CRM) use Created_Time.
 const OCTOBER_2026_CRITERIA = '(Created_Time:greater_equal:2026-10-01T00:00:00+05:30)';
-const OCTOBER_2026_DEALS_CRITERIA = '(((Booking_Date:greater_equal:2026-10-01)and(Booking_Date:less_equal:2026-10-31))and(Cloned_Deal:equals:false))';
+const OCTOBER_2026_DEALS_CRITERIA = '((Booking_Date:greater_equal:2026-10-01)and(Cloned_Deal:equals:false))';
 const OCTOBER_2026_START_MS = new Date('2026-10-01T00:00:00+05:30').getTime();
 const OCTOBER_2026_END_MS = new Date('2026-10-31T23:59:59+05:30').getTime();
 
@@ -2252,7 +2252,7 @@ async function executeZohoGet(
         const s = String(rawDate).trim();
         if (/^2026-10-\d\d/.test(s)) return true;
         const createdMs = new Date(rawDate).getTime();
-        return !isNaN(createdMs) ? (createdMs >= OCTOBER_2026_START_MS && createdMs <= OCTOBER_2026_END_MS) : false;
+        return !isNaN(createdMs) ? (createdMs >= OCTOBER_2026_START_MS) : false;
       });
     }
 

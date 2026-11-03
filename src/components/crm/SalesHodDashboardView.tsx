@@ -117,6 +117,11 @@ const formatRupee = (num: number): string => {
   return '₹' + Math.round(num).toLocaleString('en-IN');
 };
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
 const formatCompactRupee = (num: number): string => {
   if (!num || isNaN(num) || num === 0) return '₹0';
   if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)} Cr`;
@@ -316,8 +321,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       // Revenue filter: Cloned_Deal field must be unchecked
       if (isDealCloned(d)) return false;
 
-      // Revenue filter: Booking Date must be in October month (previous month)
-      if (!isOctoberBooking(d)) return false;
+      // Deals filtered dynamically by active timeframe
 
       if (timeframe === 'today') return isDealToday(d);
 
@@ -342,10 +346,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
   }, [liveDeals, timeframe, selectedMonth, selectedYear]);
 
   // Independent metrics for Today and Current Month
-  const todayDeals = useMemo(() => liveDeals.filter(d => !isDealCloned(d) && isOctoberBooking(d) && isDealToday(d)), [liveDeals]);
+  const todayDeals = useMemo(() => liveDeals.filter(d => !isDealCloned(d) && isDealToday(d)), [liveDeals]);
   const currentMonthDeals = useMemo(() => {
     return liveDeals.filter(d => {
-      if (!d || isDealCloned(d) || !isOctoberBooking(d)) return false;
+      if (!d || isDealCloned(d)) return false;
       const ms = getDealDateMs(d);
       if (!ms) return false;
       const dt = new Date(ms);
@@ -1203,7 +1207,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
                   }`}
               >
-                {tf === 'month' ? 'October 2026' : tf === 'all' ? 'All Time' : tf}
+                {tf === 'month' ? `${MONTH_NAMES[selectedMonth]} ${selectedYear}` : tf === 'all' ? 'All Time' : tf}
               </button>
             ))}
           </div>
@@ -1370,7 +1374,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   <TrendingUp size={18} />
                 </span>
                 <span className="px-2.5 sm:px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/25 text-lime-200 border border-emerald-400/40 backdrop-blur-md shadow-2xs whitespace-nowrap shrink-0">
-                  October 2026
+                  {MONTH_NAMES[selectedMonth]} {selectedYear}
                 </span>
               </div>
               <div className="relative z-10">
@@ -1536,7 +1540,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 <TrendingUp size={18} />
               </span>
               <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50/90 text-emerald-800 border border-emerald-100/80">
-                October 2026
+                {MONTH_NAMES[selectedMonth]} {selectedYear}
               </span>
             </div>
             <div className="relative z-10">
@@ -3756,7 +3760,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      Live deal records progressing through this stage for October 2026
+                      Live deal records progressing through this stage for {MONTH_NAMES[selectedMonth]} {selectedYear}
                     </p>
                   </div>
                 </div>
