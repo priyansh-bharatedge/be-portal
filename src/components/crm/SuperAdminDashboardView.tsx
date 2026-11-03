@@ -760,127 +760,18 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   }, [filteredDeals, salesMetrics.totalBooked]);
 
   return (
-    <div className="relative min-h-screen bg-[#FBFBF9] text-gray-900 rounded-[32px] p-2 sm:p-4 lg:p-6 transition-all duration-500 overflow-hidden font-sans">
+    <div className="relative min-h-screen text-gray-900 transition-all duration-300 font-sans space-y-6 pb-16">
       {/* ========================================================================= */}
       {/* ATMOSPHERIC WARM MESH GRADIENT GLOWS (Matching reference aesthetic) */}
       {/* ========================================================================= */}
-      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-br from-amber-200/25 via-orange-100/15 to-transparent rounded-full blur-[120px] pointer-events-none -z-10" />
-      <div className="absolute top-10 right-10 w-[650px] h-[650px] bg-gradient-to-bl from-emerald-100/30 via-teal-100/15 to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="absolute bottom-10 left-1/4 w-[600px] h-[600px] bg-gradient-to-tr from-rose-100/20 via-amber-100/15 to-transparent rounded-full blur-[130px] pointer-events-none -z-10" />
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-br from-amber-200/20 via-orange-100/10 to-transparent rounded-full blur-[120px] pointer-events-none -z-10" />
+      <div className="absolute top-10 right-10 w-[650px] h-[650px] bg-gradient-to-bl from-emerald-100/25 via-teal-100/10 to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute bottom-10 left-1/4 w-[600px] h-[600px] bg-gradient-to-tr from-rose-100/15 via-amber-100/10 to-transparent rounded-full blur-[130px] pointer-events-none -z-10" />
 
-      {/* Main Container with Sleek Left Mini Sidebar Rail + Main Content Area */}
-      <div className="flex gap-4 lg:gap-6 relative z-10 items-start">
-        {/* ===================================================================== */}
-        {/* SLEEK ICON-ONLY MINI SIDEBAR (Matching reference image) */}
-        {/* ===================================================================== */}
-        <aside className="hidden xl:flex flex-col items-center justify-between py-6 px-3 w-[72px] bg-white/60 backdrop-blur-2xl border border-white/80 rounded-[30px] shadow-[0_12px_36px_rgba(0,0,0,0.03)] shrink-0 self-stretch sticky top-6 max-h-[calc(100vh-48px)] transition-all">
-          {/* Top: Brand Mark */}
-          <div
-            onClick={() => setActiveDepartment('sales')}
-            title="BharatEdge Command Center"
-            className="w-11 h-11 rounded-2xl bg-gray-950 text-white flex items-center justify-center font-black shadow-md shadow-black/15 cursor-pointer hover:scale-105 transition-transform"
-          >
-            <Crown size={20} className="text-amber-400" />
-          </div>
-
-          {/* Navigation Icon Stack */}
-          <nav className="flex flex-col items-center space-y-4 my-8">
-            <button
-              onClick={() => setActiveDepartment('sales')}
-              title="Sales Dashboard (Sales HOD View)"
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
-                activeDepartment === 'sales'
-                  ? 'bg-gray-950 text-white shadow-md shadow-black/15 scale-105'
-                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
-              }`}
-            >
-              <TrendingUp size={18} />
-            </button>
-
-            <button
-              onClick={() => setActiveDepartment('operations')}
-              title="Operations Dashboard (4 Wings)"
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
-                activeDepartment === 'operations'
-                  ? 'bg-gray-950 text-white shadow-md shadow-black/15 scale-105'
-                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
-              }`}
-            >
-              <Layers size={18} />
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveDepartment('others');
-                setSelectedOtherDept('all');
-              }}
-              title="Other Departments (Enterprise Hub)"
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
-                activeDepartment === 'others'
-                  ? 'bg-gray-950 text-white shadow-md shadow-black/15 scale-105'
-                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
-              }`}
-            >
-              <Building2 size={18} />
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveDepartment('others');
-                setSelectedOtherDept('accounts');
-              }}
-              title="Accounts & Cash Realization"
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
-                activeDepartment === 'others' && selectedOtherDept === 'accounts'
-                  ? 'bg-emerald-800 text-white shadow-md'
-                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
-              }`}
-            >
-              <ReceiptIndianRupee size={18} />
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveDepartment('others');
-                setSelectedOtherDept('hrms');
-              }}
-              title="HRMS Staff Directory"
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
-                activeDepartment === 'others' && selectedOtherDept === 'hrms'
-                  ? 'bg-purple-800 text-white shadow-md'
-                  : 'text-gray-500 hover:text-gray-950 hover:bg-white/90'
-              }`}
-            >
-              <Users size={18} />
-            </button>
-
-            <button
-              onClick={handleRefresh}
-              title="Sync All Data with Zoho CRM"
-              disabled={activeIsRefreshing}
-              className="w-10 h-10 rounded-2xl text-gray-500 hover:text-gray-950 hover:bg-white/90 flex items-center justify-center transition-all cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw size={17} className={activeIsRefreshing ? 'animate-spin text-amber-600' : ''} />
-            </button>
-          </nav>
-
-          {/* Bottom: Admin Avatar */}
-          <div className="relative group cursor-pointer" title={adminDisplayName}>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-600 via-orange-600 to-amber-700 text-white flex items-center justify-center font-black text-xs shadow-md shadow-orange-900/10 border-2 border-white">
-              {adminDisplayName.slice(0, 2).toUpperCase()}
-            </div>
-            <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white ring-1 ring-emerald-400" />
-          </div>
-        </aside>
-
-        {/* ===================================================================== */}
-        {/* MAIN DASHBOARD CONTENT AREA */}
-        {/* ===================================================================== */}
-        <main className="flex-1 min-w-0 space-y-6">
-          {/* =================================================================== */}
-          {/* 1. FLOATING PILL NAVIGATION TABS & QUICK CONTROLS BAR */}
-          {/* =================================================================== */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* =================================================================== */}
+      {/* 1. FLOATING PILL NAVIGATION TABS & QUICK CONTROLS BAR */}
+      {/* =================================================================== */}
+      <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             {/* Horizontal Floating Pill Capsule Tabs */}
             <div className="inline-flex items-center gap-1.5 p-1.5 bg-white/60 backdrop-blur-2xl border border-white/80 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-x-auto max-w-full">
               {/* Sales Dashboard (First & Default) */}
@@ -1656,8 +1547,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
               </div>
             </div>
           )}
-        </main>
-      </div>
     </div>
   );
 };
