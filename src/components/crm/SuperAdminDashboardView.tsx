@@ -760,37 +760,37 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   }, [filteredDeals, salesMetrics.totalBooked]);
 
   return (
-    <div className="relative min-h-screen text-white font-sans transition-all duration-300 pb-28">
+    <div className="relative min-h-screen text-gray-900 font-sans transition-all duration-300 pb-28">
       {/* ========================================================================= */}
-      {/* ATMOSPHERIC BACKGROUND WITH REAL LIGHTING DEPTH & SPATIAL BLUR */}
+      {/* ATMOSPHERIC BACKGROUND WITH COLORFUL BLURRED MESH GRADIENT */}
       {/* ========================================================================= */}
-      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
-        {/* Warm Golden Ceiling Ambient Light (as in VisionOS reference image) */}
-        <div className="absolute -top-32 left-1/4 w-[750px] h-[400px] bg-gradient-to-b from-amber-400/25 via-orange-500/10 to-transparent rounded-full blur-[130px]" />
-        {/* Cyan / Azure Right-side Wash (as in VisionOS reference image) */}
-        <div className="absolute top-1/4 -right-24 w-[650px] h-[650px] bg-gradient-to-bl from-cyan-400/20 via-blue-600/10 to-transparent rounded-full blur-[140px]" />
-        {/* Violet / Rose Base Glow */}
-        <div className="absolute -bottom-24 left-10 w-[700px] h-[500px] bg-gradient-to-tr from-violet-600/20 via-fuchsia-500/10 to-transparent rounded-full blur-[150px]" />
-        {/* Spatial Room Blur Overlay */}
-        <div className="absolute inset-0 bg-[#080b12]/85 backdrop-blur-[60px]" />
+      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden bg-[#f4f6fa]">
+        {/* Warm Golden / Peach Glow */}
+        <div className="absolute -top-24 left-10 w-[650px] h-[550px] bg-gradient-to-br from-amber-300/45 via-orange-300/35 to-rose-300/25 rounded-full blur-[110px]" />
+        {/* Soft Emerald / Mint Glow */}
+        <div className="absolute top-1/4 -right-24 w-[700px] h-[700px] bg-gradient-to-bl from-emerald-300/40 via-teal-300/30 to-cyan-200/25 rounded-full blur-[130px]" />
+        {/* Soft Lavender / Violet Glow */}
+        <div className="absolute -bottom-24 left-1/3 w-[750px] h-[600px] bg-gradient-to-tr from-indigo-300/40 via-purple-300/30 to-pink-200/25 rounded-full blur-[140px]" />
+        {/* Sky Blue Glow */}
+        <div className="absolute top-1/2 left-10 w-[550px] h-[450px] bg-sky-200/40 rounded-full blur-[100px]" />
+        {/* Spatial Frosted Glass Diffuser */}
+        <div className="absolute inset-0 bg-white/35 backdrop-blur-[35px]" />
       </div>
 
       {/* ========================================================================= */}
       {/* MAIN FLOATING SPATIAL GLASS CANVAS (Apple Vision Pro Glass Window) */}
       {/* ========================================================================= */}
-      <div className="relative z-10 rounded-[36px] bg-white/[0.04] backdrop-blur-[50px] border border-white/20 shadow-[0_30px_100px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.25)] p-5 sm:p-7 lg:p-8 space-y-7">
+      <div className="relative z-10 rounded-[36px] bg-white/65 backdrop-blur-2xl border border-white/85 shadow-[0_20px_60px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.95)] p-5 sm:p-7 lg:p-8 space-y-7">
         
         {/* 1. FLOATING PILL NAVIGATION TABS & QUICK CONTROLS BAR */}
-        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-2 sm:p-2.5 rounded-[28px] bg-white/[0.05] backdrop-blur-2xl border border-white/15 shadow-[0_10px_30px_rgba(0,0,0,0.25),inset_0_1px_1px_rgba(255,255,255,0.15)]">
+        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-2 sm:p-2.5 rounded-[28px] bg-white/75 backdrop-blur-2xl border border-white/90 shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
           {/* Horizontal Floating Pill Capsule Tabs */}
-          <div className="inline-flex items-center gap-1.5 p-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full shadow-inner overflow-x-auto max-w-full">
+          <div className="inline-flex items-center gap-1.5 p-1 bg-white/80 backdrop-blur-xl border border-white/90 rounded-full shadow-2xs overflow-x-auto max-w-full">
             {/* Sales Dashboard (First & Default) */}
             <button
               onClick={() => setActiveDepartment('sales')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'sales'
-                  ? 'bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.6)] font-black scale-[1.02]'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'
+                activeDepartment === 'sales' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
               }`}
             >
               <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-white' : 'text-sky-400'} />
@@ -801,9 +801,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <button
               onClick={() => setActiveDepartment('operations')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'operations'
-                  ? 'bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.6)] font-black scale-[1.02]'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'
+                activeDepartment === 'operations' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
               }`}
             >
               <Layers size={14} className={activeDepartment === 'operations' ? 'text-white' : 'text-orange-400'} />
@@ -814,9 +812,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <button
               onClick={() => setActiveDepartment('others')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'others'
-                  ? 'bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.6)] font-black scale-[1.02]'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'
+                activeDepartment === 'others' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
               }`}
             >
               <Building2 size={14} className={activeDepartment === 'others' ? 'text-white' : 'text-emerald-400'} />
@@ -827,7 +823,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           {/* Right Controls: Quick Search, Date Pill, Sync Zoho, New Deal */}
           <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-center">
             {/* Frosted Glass Date Capsule */}
-            <div className="flex items-center px-4 py-2 bg-white/10 backdrop-blur-xl border border-white/15 rounded-full text-xs font-bold text-white/90 shadow-2xs">
+            <div className="flex items-center px-4 py-2 bg-white/80 backdrop-blur-xl border border-white/90 rounded-full text-xs font-bold text-gray-800 shadow-2xs">
               <Calendar size={13} className="mr-2 text-amber-400" />
               <span>{todayFormatted}</span>
             </div>
@@ -837,7 +833,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
               onClick={handleRefresh}
               disabled={activeIsRefreshing}
               title="Sync All Enterprise Data from Zoho CRM"
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-full text-xs font-bold transition-all shadow-2xs hover:shadow-md cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-white/80 hover:bg-white border border-white/90 text-gray-800 rounded-full text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer disabled:opacity-50"
             >
               <RefreshCw size={13} className={activeIsRefreshing ? 'animate-spin text-amber-400' : 'text-white/80'} />
               <span>{activeIsRefreshing ? 'Syncing...' : 'Sync Zoho'}</span>
@@ -846,7 +842,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             {/* + New Deal Pill Button */}
             <button
               onClick={() => navigate('/crm/deals')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white rounded-full text-xs font-extrabold transition-all shadow-[0_0_20px_rgba(14,165,233,0.5)] cursor-pointer hover:scale-105"
+              className="flex items-center gap-1.5 px-4 py-2 bg-gray-950 hover:bg-black text-white rounded-full text-xs font-black transition-all shadow-md shadow-black/15 cursor-pointer hover:scale-105"
             >
               <Plus size={14} />
               <span>New Deal</span>
@@ -897,9 +893,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 <button
                   key={tab.id}
                   onClick={() => setSelectedOtherDept(tab.id as OtherDepartmentKey)}
-                  className={`px-4 py-2 rounded-full transition-all cursor-pointer whitespace-nowrap ${isActive
-                    ? 'bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.6)] font-black'
-                    : 'bg-white/10 hover:bg-white/20 text-white/70 hover:text-white border border-white/15'
+                  className={`px-4 py-2 rounded-full transition-all cursor-pointer whitespace-nowrap ${isActive ? 'bg-gray-950 text-white shadow-md font-black' : 'bg-white/70 hover:bg-white text-gray-600 hover:text-gray-950 border border-white/90 shadow-2xs'
                     }`}
                 >
                   {tab.label}
@@ -910,14 +904,14 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
           {/* Department Quick Summary Banner based on sub-tab */}
           {selectedOtherDept === 'accounts' && (
-            <div className="p-5 rounded-[26px] bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-teal-500/10 border border-white/15 bg-white/[0.06] backdrop-blur-2xl flex items-center justify-between text-xs shadow-lg">
+            <div className="p-5 rounded-[26px] bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-teal-500/10 border border-white/15 bg-white/80 backdrop-blur-2xl flex items-center justify-between text-xs shadow-lg">
               <div className="flex items-center gap-3.5">
                 <span className="p-3 rounded-2xl bg-blue-600 text-white shadow-sm">
                   <ReceiptIndianRupee size={22} />
                 </span>
                 <div>
-                  <h4 className="font-black text-white text-base font-black">Accounts & Finance Department Summary</h4>
-                  <p className="text-white/70 mt-0.5 font-medium">Tracking verified cash inflows in bank, pending customer receivables, and GST reconciliations.</p>
+                  <h4 className="font-black text-gray-950 text-base font-black">Accounts & Finance Department Summary</h4>
+                  <p className="text-gray-500 mt-0.5 font-medium">Tracking verified cash inflows in bank, pending customer receivables, and GST reconciliations.</p>
                 </div>
               </div>
               <div className="text-right">
@@ -928,14 +922,14 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           )}
 
           {selectedOtherDept === 'hrms' && (
-            <div className="p-5 rounded-[26px] bg-gradient-to-r from-purple-500/10 via-fuchsia-500/10 to-pink-500/10 border border-white/15 bg-white/[0.06] backdrop-blur-2xl flex items-center justify-between text-xs shadow-lg">
+            <div className="p-5 rounded-[26px] bg-gradient-to-r from-purple-500/10 via-fuchsia-500/10 to-pink-500/10 border border-white/15 bg-white/80 backdrop-blur-2xl flex items-center justify-between text-xs shadow-lg">
               <div className="flex items-center gap-3.5">
                 <span className="p-3 rounded-2xl bg-purple-600 text-white shadow-sm">
                   <Users size={22} />
                 </span>
                 <div>
-                  <h4 className="font-black text-white text-base font-black">Human Resources (HRMS) Staff Directory</h4>
-                  <p className="text-white/70 mt-0.5 font-medium">Active employee roster, today's biometric attendance, late arrivals, and active leave records.</p>
+                  <h4 className="font-black text-gray-950 text-base font-black">Human Resources (HRMS) Staff Directory</h4>
+                  <p className="text-gray-500 mt-0.5 font-medium">Active employee roster, today's biometric attendance, late arrivals, and active leave records.</p>
                 </div>
               </div>
               <div className="text-right">
@@ -946,14 +940,14 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           )}
 
           {selectedOtherDept === 'quality' && (
-            <div className="p-5 rounded-[26px] bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-white/15 bg-white/[0.06] backdrop-blur-2xl flex items-center justify-between text-xs shadow-lg">
+            <div className="p-5 rounded-[26px] bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-white/15 bg-white/80 backdrop-blur-2xl flex items-center justify-between text-xs shadow-lg">
               <div className="flex items-center gap-3.5">
                 <span className="p-3 rounded-2xl bg-amber-600 text-white shadow-sm">
                   <HelpCircle size={22} />
                 </span>
                 <div>
-                  <h4 className="font-black text-white text-base font-black">Quality Assurance & Support Desk</h4>
-                  <p className="text-white/70 mt-0.5 font-medium">Live Zoho desk query queue, customer satisfaction indices, and ticket turnaround times.</p>
+                  <h4 className="font-black text-gray-950 text-base font-black">Quality Assurance & Support Desk</h4>
+                  <p className="text-gray-500 mt-0.5 font-medium">Live Zoho desk query queue, customer satisfaction indices, and ticket turnaround times.</p>
                 </div>
               </div>
               <div className="text-right">
@@ -966,11 +960,11 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           {/* Frosted Glass Bento Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Revenue Analytics Bar Chart (7 Cols) */}
-            <div className="lg:col-span-7 bg-white/[0.05] hover:bg-white/[0.08] backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] text-white flex flex-col justify-between">
+            <div className="lg:col-span-7 bg-white/75 hover:bg-white/85 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.95)] text-gray-950 flex flex-col justify-between">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-base font-black text-white tracking-tight">Revenue & Inflow Velocity</h2>
-                  <p className="text-xs text-white/60 font-medium">Daily deal booking velocity across weekdays</p>
+                  <h2 className="text-base font-black text-gray-950 tracking-tight">Revenue & Inflow Velocity</h2>
+                  <p className="text-xs text-gray-400 font-medium">Daily deal booking velocity across weekdays</p>
                 </div>
 
                 <div className="relative">
@@ -1005,11 +999,11 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             </div>
 
             {/* Operations & Wing Share Donut (5 Cols) */}
-            <div className="lg:col-span-5 bg-white/[0.05] hover:bg-white/[0.08] backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] text-white flex flex-col justify-between">
+            <div className="lg:col-span-5 bg-white/75 hover:bg-white/85 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.95)] text-gray-950 flex flex-col justify-between">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-base font-black text-white tracking-tight">Operations Wing Share</h2>
-                  <p className="text-xs text-white/60 font-medium">Departmental execution distribution</p>
+                  <h2 className="text-base font-black text-gray-950 tracking-tight">Operations Wing Share</h2>
+                  <p className="text-xs text-gray-400 font-medium">Departmental execution distribution</p>
                 </div>
               </div>
 
@@ -1043,7 +1037,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                     <div key={idx} className="flex items-center justify-between text-xs font-bold">
                       <div className="flex items-center space-x-2">
                         <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="text-white/70 truncate max-w-[120px]">{item.name}</span>
+                        <span className="text-gray-600 truncate max-w-[120px]">{item.name}</span>
                       </div>
                       <span className="text-white font-black">({item.value}%)</span>
                     </div>
@@ -1056,11 +1050,11 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           {/* Minimalist Spline Cash Trend & Top Departmental Performers */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Spline Area Chart with Lime Highlight Pin */}
-            <div className="lg:col-span-7 bg-white/[0.05] hover:bg-white/[0.08] backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] text-white flex flex-col justify-between relative">
+            <div className="lg:col-span-7 bg-white/75 hover:bg-white/85 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.95)] text-gray-950 flex flex-col justify-between relative">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
                 <div>
-                  <h2 className="text-base font-black text-white tracking-tight">Cash Realization Trend</h2>
-                  <p className="text-xs text-white/60 font-medium">Booked volume vs Verified bank realization</p>
+                  <h2 className="text-base font-black text-gray-950 tracking-tight">Cash Realization Trend</h2>
+                  <p className="text-xs text-gray-400 font-medium">Booked volume vs Verified bank realization</p>
                 </div>
 
                 <div className="flex items-center space-x-4 text-xs font-bold">
@@ -1103,12 +1097,12 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             </div>
 
             {/* Top Performers Bento List */}
-            <div className="lg:col-span-5 bg-white/[0.05] hover:bg-white/[0.08] backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] text-white flex flex-col justify-between">
+            <div className="lg:col-span-5 bg-white/75 hover:bg-white/85 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.95)] text-gray-950 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-5">
                   <div>
-                    <h2 className="text-base font-black text-white tracking-tight">Top Departmental Performers</h2>
-                    <p className="text-xs text-white/60 font-medium">Leaders across sales, operations & management</p>
+                    <h2 className="text-base font-black text-gray-950 tracking-tight">Top Departmental Performers</h2>
+                    <p className="text-xs text-gray-400 font-medium">Leaders across sales, operations & management</p>
                   </div>
                   <button
                     onClick={() => navigate('/hrms/employees')}
@@ -1156,14 +1150,14 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           </div>
 
           {/* Department Operational Health Grid */}
-          <div className="bg-white/[0.05] hover:bg-white/[0.08] backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] text-white space-y-4">
+          <div className="bg-white/75 hover:bg-white/85 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.95)] text-gray-950 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-black text-white tracking-tight flex items-center gap-2">
+                <h2 className="text-base font-black text-gray-950 tracking-tight flex items-center gap-2">
                   <Building2 size={18} className="text-amber-800" />
                   Department Operational Health (Live Zoho Sync)
                 </h2>
-                <p className="text-xs text-white/60 font-medium">Real-time status of all 4 Operations wings, Accounts, and HRMS</p>
+                <p className="text-xs text-gray-400 font-medium">Real-time status of all 4 Operations wings, Accounts, and HRMS</p>
               </div>
             </div>
 
@@ -1255,11 +1249,11 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           </div>
 
           {/* Recent High-Value Corporate Deals Stream */}
-          <div className="bg-white/[0.05] hover:bg-white/[0.08] backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] text-white">
+          <div className="bg-white/75 hover:bg-white/85 backdrop-blur-2xl p-6 sm:p-7 rounded-[28px] border border-white/90 shadow-[0_10px_35px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.95)] text-gray-950">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
               <div>
-                <h2 className="text-base font-black text-white tracking-tight">Recent High-Value Deal Conversions</h2>
-                <p className="text-xs text-white/60 font-medium">Live transactions logged across all services and BDM reps</p>
+                <h2 className="text-base font-black text-gray-950 tracking-tight">Recent High-Value Deal Conversions</h2>
+                <p className="text-xs text-gray-400 font-medium">Live transactions logged across all services and BDM reps</p>
               </div>
 
               <button
@@ -1343,13 +1337,11 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       {/* FLOATING SPATIAL DOCK AT BOTTOM (Exact Feature from VisionOS Reference) */}
       {/* ========================================================================= */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 pointer-events-auto">
-        <div className="flex items-center gap-1.5 p-1.5 bg-black/70 backdrop-blur-3xl border border-white/25 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.25)]">
+        <div className="flex items-center gap-1.5 p-1.5 bg-white/85 backdrop-blur-3xl border border-white/90 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)]">
           <button
             onClick={() => setActiveDepartment('sales')}
             className={`px-5 py-2 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
-              activeDepartment === 'sales'
-                ? 'bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.7)] font-black scale-105'
-                : 'text-white/70 hover:text-white hover:bg-white/10'
+              activeDepartment === 'sales' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-105' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
             }`}
           >
             <TrendingUp size={13} />
@@ -1358,9 +1350,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           <button
             onClick={() => setActiveDepartment('operations')}
             className={`px-5 py-2 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
-              activeDepartment === 'operations'
-                ? 'bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.7)] font-black scale-105'
-                : 'text-white/70 hover:text-white hover:bg-white/10'
+              activeDepartment === 'operations' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-105' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
             }`}
           >
             <Layers size={13} />
@@ -1369,9 +1359,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           <button
             onClick={() => setActiveDepartment('others')}
             className={`px-5 py-2 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
-              activeDepartment === 'others'
-                ? 'bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.7)] font-black scale-105'
-                : 'text-white/70 hover:text-white hover:bg-white/10'
+              activeDepartment === 'others' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-105' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
             }`}
           >
             <Building2 size={13} />
