@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,17 +22,8 @@ import {
   getDealPendingAmount,
   getDealTotalAmount,
   getDealAmountWithoutGst,
-  getDealGstAmount,
-  isDealPaymentVerified
+  getDealGstAmount
 } from '../../utils/dealSplitUtils';
-import {
-  fetchZohoDeals,
-  fetchZohoClients,
-  fetchZohoQuotations,
-  fetchZohoEmployees,
-  fetchZohoAttendance,
-  fetchZohoLeaves
-} from '../../services/zohoService';
 import { fetchInternalOperations, getStoredInternalOperations } from '../../services/internalOperationsService';
 import type { InternalOperationRecord } from '../../types/operations';
 
@@ -41,7 +32,7 @@ import type { InternalOperationRecord } from '../../types/operations';
 // ============================================================================
 
 export type SuperAdminDeptTab = 'sales' | 'operations' | 'others';
-export type TimeframeOption = 'today' | 'week' | 'month' | 'quarter' | 'all';
+export type TimeframeOption = 'today' | 'week' | 'month' | 'all';
 
 export interface SuperAdminDashboardViewProps {
   deals?: any[];
@@ -54,12 +45,10 @@ export interface SuperAdminDashboardViewProps {
 }
 
 const TARGET_BENCHMARKS = {
-  salesHOD: 8500000,          // ₹85.00 L National Quota
+  salesHOD: 8500000,          // ₹85.00 L
   branchAhmedabad: 4200000,   // ₹42.00 L
   branchJaipur: 2300000,      // ₹23.00 L
   branchChennai: 2000000,     // ₹20.00 L
-  teamLeaderDefault: 2000000, // ₹20.00 L
-  teamMemberDefault: 250000   // ₹2.50 L
 };
 
 const formatRupee = (num: number): string => {
@@ -164,7 +153,7 @@ const isDealToday = (d: any): boolean => {
 };
 
 // ============================================================================
-// MAIN COMPONENT (FULL SCREEN LUXURY AESTHETIC SPATIAL DASHBOARD)
+// MAIN COMPONENT (CLASSY, AESTHETIC, CLAYMORPHIC FULL-SCREEN BENTO DASHBOARD)
 // ============================================================================
 
 export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = ({
@@ -184,13 +173,14 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
   // Timeframe and date filter
   const [timeframe, setTimeframe] = useState<TimeframeOption>('month');
-  const [selectedMonth, setSelectedMonth] = useState<number>(9); // October
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Target Simulator state
   const [showSimulator, setShowSimulator] = useState<boolean>(false);
   const [simulationBoost, setSimulationBoost] = useState<number>(15);
+
+  // Inspector Drawer toggle (Image 2 right-side phone preview widget)
+  const [showInspectorDrawer, setShowInspectorDrawer] = useState<boolean>(true);
 
   // BDM Matrix filter
   const [matrixFilter, setMatrixFilter] = useState<'all' | 'met' | 'progress' | 'gap' | 'ahmedabad' | 'jaipur' | 'chennai'>('all');
@@ -215,15 +205,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     return [];
   });
 
-  const [liveQuotations, setLiveQuotations] = useState<any[]>(() => {
-    if (propsQuotations && propsQuotations.length > 0) return propsQuotations;
-    try {
-      const s = localStorage.getItem('be_quotations');
-      if (s) return JSON.parse(s);
-    } catch (e) {}
-    return [];
-  });
-
   const [liveClients, setLiveClients] = useState<any[]>(() => {
     if (propsClients && propsClients.length > 0) return propsClients;
     try {
@@ -240,30 +221,13 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     return [];
   });
 
-  const [liveAttendance, setLiveAttendance] = useState<any[]>(() => {
-    try {
-      const s = localStorage.getItem('be_attendance');
-      if (s) return JSON.parse(s);
-    } catch (e) {}
-    return [];
-  });
-
-  const [liveLeaves, setLiveLeaves] = useState<any[]>(() => {
-    try {
-      const s = localStorage.getItem('be_leaves');
-      if (s) return JSON.parse(s);
-    } catch (e) {}
-    return [];
-  });
-
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
 
   useEffect(() => {
     if (propsDeals && propsDeals.length > 0) setLiveDeals(propsDeals);
     if (propsEmployees && propsEmployees.length > 0) setLiveEmployees(propsEmployees);
-    if (propsQuotations && propsQuotations.length > 0) setLiveQuotations(propsQuotations);
     if (propsClients && propsClients.length > 0) setLiveClients(propsClients);
-  }, [propsDeals, propsEmployees, propsQuotations, propsClients]);
+  }, [propsDeals, propsEmployees, propsClients]);
 
   const fetchLiveSync = async () => {
     setIsLocalRefreshing(true);
@@ -307,64 +271,19 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   // FILTERING LOGIC (October Uncloned Deals Verification)
   // ---------------------------------------------------------------------------
   const filteredDeals = useMemo(() => {
-    const now = new Date();
-    const nowMs = now.getTime();
-    const sevenDaysAgoMs = nowMs - 7 * 86400000;
-
     return liveDeals.filter((d: any) => {
       if (!d || isDealCloned(d) || !isOctoberBooking(d)) return false;
-
       if (timeframe === 'today') return isDealToday(d);
-
-      const ms = getDealDateMs(d);
-      if (!ms) return timeframe === 'all';
-
-      if (timeframe === 'week') return ms >= sevenDaysAgoMs && ms <= nowMs + 86400000;
-      if (timeframe === 'month') {
-        const dt = new Date(ms);
-        return dt.getMonth() === selectedMonth && dt.getFullYear() === selectedYear;
-      }
-      if (timeframe === 'quarter') {
-        const dt = new Date(ms);
-        const dealQuarter = Math.floor(dt.getMonth() / 3);
-        const targetQuarter = Math.floor(selectedMonth / 3);
-        return dealQuarter === targetQuarter && dt.getFullYear() === selectedYear;
-      }
       return true;
     });
-  }, [liveDeals, timeframe, selectedMonth, selectedYear]);
+  }, [liveDeals, timeframe]);
 
-  const todayDeals = useMemo(() => liveDeals.filter(d => !isDealCloned(d) && isOctoberBooking(d) && isDealToday(d)), [liveDeals]);
-  const currentMonthDeals = useMemo(() => {
-    return liveDeals.filter(d => {
-      if (!d || isDealCloned(d) || !isOctoberBooking(d)) return false;
-      const ms = getDealDateMs(d);
-      if (!ms) return false;
-      const dt = new Date(ms);
-      return dt.getMonth() === selectedMonth && dt.getFullYear() === selectedYear;
-    });
-  }, [liveDeals, selectedMonth, selectedYear]);
-
-  // Core Financial Aggregations
-  const todayRevenue = useMemo(() => todayDeals.reduce((sum, d) => sum + getDealReceivedAmount(d), 0), [todayDeals]);
-  const todayBooked = useMemo(() => todayDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [todayDeals]);
-
-  const monthlyRevenue = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealReceivedAmount(d), 0), [currentMonthDeals]);
-  const monthlyBooked = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [currentMonthDeals]);
-  const monthlyWithGst = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [currentMonthDeals]);
-  const monthlyWithoutGst = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealAmountWithoutGst(d), 0), [currentMonthDeals]);
-  const monthlyGstTax = useMemo(() => currentMonthDeals.reduce((sum, d) => sum + getDealGstAmount(d), 0), [currentMonthDeals]);
-
-  const totalReceivedAmount = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealReceivedAmount(d), 0), [filteredDeals]);
-  const totalPendingAmount = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealPendingAmount(d), 0), [filteredDeals]);
-  const totalBookedValue = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [filteredDeals]);
-  const totalWithGst = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [filteredDeals]);
-  const totalWithoutGst = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealAmountWithoutGst(d), 0), [filteredDeals]);
-  const totalGstTax = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealGstAmount(d), 0), [filteredDeals]);
-
-  const activeWithGst = timeframe === 'month' ? monthlyWithGst : totalWithGst;
-  const activeWithoutGst = timeframe === 'month' ? monthlyWithoutGst : totalWithoutGst;
-  const activeGstTax = timeframe === 'month' ? monthlyGstTax : totalGstTax;
+  // Financial Aggregations
+  const monthlyRevenue = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealReceivedAmount(d), 0), [filteredDeals]);
+  const monthlyBooked = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [filteredDeals]);
+  const monthlyWithGst = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealTotalAmount(d), 0), [filteredDeals]);
+  const monthlyWithoutGst = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealAmountWithoutGst(d), 0), [filteredDeals]);
+  const monthlyGstTax = useMemo(() => filteredDeals.reduce((sum, d) => sum + getDealGstAmount(d), 0), [filteredDeals]);
 
   const wonDealsCount = useMemo(() => {
     return filteredDeals.filter(d => {
@@ -373,7 +292,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     }).length;
   }, [filteredDeals]);
 
-  // Overall Benchmarks
   const overallTarget = TARGET_BENCHMARKS.salesHOD; // 85 Lakhs
   const overallAchievement = monthlyRevenue;       // 62.34 L
   const overallShortfall = Math.max(0, overallTarget - overallAchievement); // 22.65 L
@@ -509,7 +427,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     return bdmMatrix.find(b => b.name === 'Monika Rola') || bdmMatrix[0];
   }, [bdmMatrix]);
 
-  // Filtered BDM Matrix
   const filteredBdmMatrix = useMemo(() => {
     return bdmMatrix.filter(b => {
       if (matrixFilter === 'met' && b.pct < 100) return false;
@@ -553,14 +470,13 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
   // Pipeline Stages
   const pipelineStages = useMemo(() => [
-    { id: 'sales', name: 'Sales Stage', count: 136, amount: 1294000, received: 1154000, color: '#3b82f6', bg: 'bg-blue-50 text-blue-700' },
-    { id: 'account', name: 'Account Verification', count: 1, amount: 25900, received: 25900, color: '#a855f7', bg: 'bg-purple-50 text-purple-700' },
-    { id: 'legal', name: 'Legal Drafting & Review', count: 32, amount: 1175000, received: 1279000, color: '#06b6d4', bg: 'bg-cyan-50 text-cyan-700' },
-    { id: 'operations', name: 'Internal Operations', count: 183, amount: 4424000, received: 3831000, color: '#f59e0b', bg: 'bg-amber-50 text-amber-700' },
-    { id: 'won', name: 'Closed Won Delivery', count: wonDealsCount || 346, amount: 6919000, received: 6234267, color: '#10b981', bg: 'bg-emerald-50 text-emerald-700' }
+    { id: 'sales', name: 'Sales Stage', count: 136, amount: 1294000, received: 1154000, color: '#3b82f6', heightPct: 45 },
+    { id: 'account', name: 'Account Verification', count: 1, amount: 25900, received: 25900, color: '#a855f7', heightPct: 20 },
+    { id: 'legal', name: 'Legal Drafting & Review', count: 32, amount: 1175000, received: 1279000, color: '#06b6d4', heightPct: 35 },
+    { id: 'operations', name: 'Internal Operations', count: 183, amount: 4424000, received: 3831000, color: '#f59e0b', heightPct: 75 },
+    { id: 'won', name: 'Closed Won Delivery', count: wonDealsCount || 346, amount: 6919000, received: 6234267, color: '#10b981', heightPct: 100 }
   ], [wonDealsCount]);
 
-  // Stage Drilldown Modal
   const [selectedStageModal, setSelectedStageModal] = useState<any | null>(null);
 
   const handleStageClick = (stage: typeof pipelineStages[0]) => {
@@ -590,7 +506,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     { name: 'Chennai', value: 0, color: '#94a3b8' }
   ];
 
-  // Top Selling Services Grid
+  // Top Selling Services
   const topServicesList = [
     { name: 'Gujarat Samriddhi Yojana', count: 184, received: 3831000, avg: 20820, icon: Zap, grad: 'from-emerald-500 to-teal-600' },
     { name: 'CGSS Scheme', count: 72, received: 1450000, avg: 20138, icon: Award, grad: 'from-blue-500 to-indigo-600' },
@@ -598,13 +514,21 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     { name: 'GeM Portal Registration', count: 26, received: 350000, avg: 13461, icon: Building2, grad: 'from-cyan-500 to-teal-600' },
   ];
 
+  // Velocity Spline Area Data (Image 1 top left)
+  const splineTrendData = [
+    { name: 'W1', target: 20, booked: 28, received: 18 },
+    { name: 'W2', target: 40, booked: 52, received: 34 },
+    { name: 'W3', target: 60, booked: 85, received: 48 },
+    { name: 'W4', target: 85, booked: 155, received: 62 }
+  ];
+
   return (
-    <div className="w-full min-h-screen bg-[#f8f9fb] text-slate-800 antialiased font-sans -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-2 pb-16 relative overflow-hidden select-none">
+    <div className="w-full min-h-screen bg-[#edf0f4] text-slate-800 antialiased font-sans -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-2 pb-16 relative overflow-hidden select-none">
       {/* ========================================================================= */}
-      {/* SOFT AMBIENT STUDIO LIGHTING (WARM MESH GLOWS DIRECTLY ON FULL SCREEN) */}
+      {/* SOFT RADIANT STUDIO LIGHTING (WARM MESH GLOWS - NO BLACK BEZEL) */}
       {/* ========================================================================= */}
-      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-gradient-to-br from-amber-200/25 via-orange-100/15 to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="absolute top-24 right-10 w-[550px] h-[550px] bg-gradient-to-bl from-emerald-100/25 via-teal-50/20 to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute top-0 left-1/4 w-[650px] h-[650px] bg-gradient-to-br from-amber-200/25 via-orange-100/15 to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
+      <div className="absolute top-28 right-10 w-[550px] h-[550px] bg-gradient-to-bl from-emerald-100/25 via-teal-50/20 to-transparent rounded-full blur-[140px] pointer-events-none -z-10" />
 
       {/* ========================================================================= */}
       {/* 1. TOP EXECUTIVE PILL NAVIGATION BAR (MATCHING SCREENSHOT) */}
@@ -616,12 +540,12 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <Crown size={18} className="text-amber-400" />
           </div>
 
-          <nav className="inline-flex p-1 bg-white/80 backdrop-blur-md rounded-full border border-slate-200/80 shadow-xs">
+          <nav className="inline-flex p-1 bg-white/90 backdrop-blur-md rounded-full border border-white shadow-[0_4px_16px_rgba(0,0,0,0.03)]">
             <button
               onClick={() => setActiveDeptTab('sales')}
               className={`px-5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
                 activeDeptTab === 'sales'
-                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/15 font-black'
+                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20 font-black'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -633,7 +557,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
               onClick={() => setActiveDeptTab('operations')}
               className={`px-5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
                 activeDeptTab === 'operations'
-                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/15 font-black'
+                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20 font-black'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -645,7 +569,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
               onClick={() => setActiveDeptTab('others')}
               className={`px-5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
                 activeDeptTab === 'others'
-                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/15 font-black'
+                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20 font-black'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -664,11 +588,11 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Quick Search..."
-              className="bg-white/80 backdrop-blur-md border border-slate-200/80 text-slate-800 text-xs font-medium rounded-full pl-9 pr-4 py-2 w-44 sm:w-52 focus:outline-none focus:ring-2 focus:ring-slate-900/10 shadow-2xs"
+              className="bg-white/90 backdrop-blur-md border border-white text-slate-800 text-xs font-medium rounded-full pl-9 pr-4 py-2 w-44 sm:w-52 focus:outline-none focus:ring-2 focus:ring-slate-900/10 shadow-2xs"
             />
           </div>
 
-          <div className="inline-flex p-1 bg-white/80 backdrop-blur-md rounded-full border border-slate-200/80 shadow-2xs text-xs font-bold">
+          <div className="inline-flex p-1 bg-white/90 backdrop-blur-md rounded-full border border-white shadow-2xs text-xs font-bold">
             <button
               onClick={() => setTimeframe('today')}
               className={`px-3 py-1.5 rounded-full transition-all cursor-pointer ${timeframe === 'today' ? 'bg-slate-900 text-white shadow-xs font-black' : 'text-slate-600'}`}
@@ -692,7 +616,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           <button
             onClick={() => setShowSimulator(!showSimulator)}
             className={`px-3.5 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-              showSimulator ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-white/80 text-slate-700 border-slate-200/80 hover:bg-slate-50'
+              showSimulator ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-white/90 text-slate-700 border-white hover:bg-white shadow-2xs'
             }`}
           >
             <Sliders size={13} className={showSimulator ? 'text-white' : 'text-amber-600'} />
@@ -703,9 +627,19 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             onClick={handleRefresh}
             disabled={isLocalRefreshing || propsRefreshing}
             title="Live Sync from Zoho CRM"
-            className="p-2.5 bg-white/80 hover:bg-white border border-slate-200/80 rounded-full text-slate-700 shadow-2xs cursor-pointer disabled:opacity-50"
+            className="p-2.5 bg-white/90 hover:bg-white border border-white rounded-full text-slate-700 shadow-2xs cursor-pointer disabled:opacity-50"
           >
             <RefreshCw size={14} className={isLocalRefreshing || propsRefreshing ? 'animate-spin text-amber-600' : 'text-slate-600'} />
+          </button>
+
+          <button
+            onClick={() => setShowInspectorDrawer(!showInspectorDrawer)}
+            className={`p-2.5 rounded-full border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
+              showInspectorDrawer ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white/90 text-slate-700 border-white shadow-2xs'
+            }`}
+          >
+            <Smartphone size={14} className={showInspectorDrawer ? 'text-amber-400' : 'text-slate-600'} />
+            <span className="hidden sm:inline">Inspector</span>
           </button>
         </div>
       </header>
@@ -721,7 +655,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             exit={{ opacity: 0, height: 0 }}
             className="mb-6 overflow-hidden"
           >
-            <div className="rounded-3xl bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 p-5 border border-amber-200/90 shadow-sm">
+            <div className="rounded-[2rem] bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 p-5 border border-amber-200/90 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                 <div>
                   <h4 className="text-sm font-black text-amber-950 flex items-center gap-2">
@@ -785,370 +719,341 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       </AnimatePresence>
 
       {/* ========================================================================= */}
-      {/* 2. SALES INTELLIGENCE: HERO ROW (MATCHING USER'S ATTACHED SCREENSHOT) */}
+      {/* 2. SALES INTELLIGENCE: CLAYMORPHIC BENTO MOSAIC (EXACT REFERENCE DESIGN) */}
       {/* ========================================================================= */}
       {activeDeptTab === 'sales' && (
         <div className="space-y-6">
 
           {/* ------------------------------------------------------------------- */}
-          {/* HERO ROW: SCORE 730 + TWIN LUXURY MESH CARDS + SQUIRCLES */}
+          {/* ROW 1: SCORE 730 HERO + TWIN METALLIC GLOW CARDS + RIGHT PHONE DRAWER */}
           {/* ------------------------------------------------------------------- */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
 
-            {/* HERO CARD 1: "Hey, Super Admin!" & SCORE 730 WITH TIER PIN (5 COLUMNS) */}
-            <div className="lg:col-span-5 bg-white/80 backdrop-blur-xl rounded-[2.2rem] p-6 sm:p-7 border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] flex flex-col justify-between">
-              <div>
-                <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-                  Hey, <span className="text-slate-800">Super Admin!</span>
-                </h2>
-                <p className="text-xs font-normal text-slate-500 mt-0.5">
-                  Let's analyze your stats!
-                </p>
+            {/* LEFT 8 OR 9 COLUMNS */}
+            <div className={`${showInspectorDrawer ? 'xl:col-span-8 2xl:col-span-9' : 'xl:col-span-12'} space-y-5 transition-all duration-300`}>
 
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold mt-4 border border-slate-200/60">
-                  <span>Transaction Score</span>
-                  <ChevronDown size={12} className="text-slate-400" />
+              {/* TOP HERO SUB-ROW */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+                {/* TILE 1: "Hey, Super Admin!" & SCORE 730 WITH TIER PIN (5 COLUMNS) */}
+                <div className="lg:col-span-5 bg-white/85 backdrop-blur-xl rounded-[2.2rem] p-6 sm:p-7 border border-white shadow-[0_12px_28px_-6px_rgba(0,0,0,0.05),0_6px_10px_-4px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,1)] flex flex-col justify-between">
+                  <div>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">
+                      Hey, <span className="text-slate-800">Super Admin!</span>
+                    </h2>
+                    <p className="text-xs font-normal text-slate-500 mt-0.5">
+                      Let's analyze your stats!
+                    </p>
+
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold mt-4 border border-slate-200/60">
+                      <span>Transaction Score</span>
+                      <ChevronDown size={12} className="text-slate-400" />
+                    </div>
+
+                    <div className="flex items-baseline gap-3 mt-3">
+                      <span className="text-5xl sm:text-6xl font-black text-slate-900 tracking-tight">
+                        {achievementScore}
+                      </span>
+                      <div className="flex flex-col">
+                        <span className="inline-flex items-center text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          ▲ +16 PTS
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium mt-0.5">Updated Today • October Active</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Segmented Tier Bar with Needle Pin (Image 2 replica) */}
+                  <div className="pt-6">
+                    <div className="relative pt-4">
+                      <div
+                        style={{ left: `${Math.min(92, Math.max(8, achievementPct))}%` }}
+                        className="absolute -top-1 -translate-x-1/2 flex flex-col items-center pointer-events-none"
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full bg-slate-900 ring-4 ring-white shadow-md" />
+                        <div className="w-0.5 h-3 bg-slate-900" />
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1.5 h-2 rounded-full overflow-hidden p-0.5 bg-slate-100">
+                        <div className="bg-rose-300 rounded-l-full" />
+                        <div className="bg-amber-300" />
+                        <div className="bg-emerald-300" />
+                        <div className="bg-emerald-500 rounded-r-full" />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-2 px-1">
+                      <span>300</span>
+                      <span>500</span>
+                      <span>650</span>
+                      <span className="text-slate-900 font-black">730 (Met)</span>
+                      <span>850+</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-baseline gap-3 mt-3">
-                  <span className="text-5xl sm:text-6xl font-black text-slate-900 tracking-tight">
-                    {achievementScore}
-                  </span>
-                  <div className="flex flex-col">
-                    <span className="inline-flex items-center text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      ▲ +16 PTS
+                {/* TILE 2: TWIN LUXURY GLOWING CARDS (TD BANK STYLE IN SCREENSHOT) (7 COLUMNS) */}
+                <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                  {/* CARD A: LIME / EMERALD GLOW CARD (AHMEDABAD HUB) */}
+                  <div className="rounded-[2.2rem] p-5 sm:p-6 bg-gradient-to-br from-[#1c3822] via-[#2f5533] to-[#71a834] text-white shadow-[0_15px_40px_rgba(45,89,48,0.25)] flex flex-col justify-between relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20">
+                            <Building2 size={15} className="text-emerald-200" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-white block">Ahmedabad Hub</span>
+                            <span className="text-[10px] text-emerald-200/80">Primary Engine</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigate('/crm/deals')}
+                          className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors cursor-pointer"
+                        >
+                          <ArrowUpRight size={13} />
+                        </button>
+                      </div>
+
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200/90 block">
+                        Net Realized Inflow
+                      </span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-0.5">
+                        {formatRupee(monthlyRevenue)}
+                      </h3>
+                    </div>
+
+                    <div className="pt-4 mt-2 border-t border-white/15 flex items-end justify-between">
+                      <div>
+                        <span className="text-[10px] text-emerald-200/80 font-medium block">Branch Quota Met</span>
+                        <span className="text-xs font-black text-emerald-300">100% Achieved</span>
+                      </div>
+                      <div className="flex items-end gap-1 h-5">
+                        {[15, 30, 22, 45, 38, 62].map((v, i) => (
+                          <div key={i} style={{ height: `${(v / 62) * 100}%` }} className="w-1.5 bg-emerald-300/80 rounded-t-sm" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CARD B: METALLIC TERRACOTTA / COPPER GLOW CARD (ENTERPRISE QUOTA) */}
+                  <div className="rounded-[2.2rem] p-5 sm:p-6 bg-gradient-to-br from-[#47251e] via-[#6f3a2c] to-[#ba684f] text-white shadow-[0_15px_40px_rgba(109,54,41,0.25)] flex flex-col justify-between relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20">
+                            <Briefcase size={15} className="text-amber-200" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-white block">Enterprise Quota</span>
+                            <span className="text-[10px] text-amber-200/80">National Network</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => navigate('/crm/deals')}
+                          className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors cursor-pointer"
+                        >
+                          <ArrowUpRight size={13} />
+                        </button>
+                      </div>
+
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200/90 block">
+                        Gross Pipeline Booked
+                      </span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-0.5">
+                        {formatCompactRupee(monthlyBooked)}
+                      </h3>
+                    </div>
+
+                    <div className="pt-4 mt-2 border-t border-white/15 flex items-end justify-between">
+                      <div>
+                        <span className="text-[10px] text-amber-200/80 font-medium block">Deals Volume</span>
+                        <span className="text-xs font-black text-amber-200">{filteredDeals.length} Cases</span>
+                      </div>
+                      <div className="flex items-end gap-1 h-5">
+                        {[25, 40, 35, 60, 80, 100].map((v, i) => (
+                          <div key={i} style={{ height: `${(v / 100) * 100}%` }} className="w-1.5 bg-amber-200/80 rounded-t-sm" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* ----------------------------------------------------------------- */}
+              {/* TARGET VS ACHIEVEMENT OVERVIEW (NATIONAL & 3 BRANCHES) */}
+              {/* ----------------------------------------------------------------- */}
+              <div className="rounded-[2.2rem] bg-white/85 backdrop-blur-xl border border-white p-6 shadow-[0_12px_28px_-6px_rgba(0,0,0,0.05),0_6px_10px_-4px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,1)] space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <Target size={18} className="text-indigo-600" />
+                      Target vs Achievement Overview (Entire Sales Team)
+                    </h3>
+                    <p className="text-xs text-slate-400 font-medium">
+                      National benchmark vs actual realized cash inflow with shortfall reconciliation.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs font-bold">
+                    <span className="flex items-center gap-1.5 text-slate-500">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-300" /> Target: {formatCompactRupee(overallTarget)}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-medium mt-0.5">Updated Today • October Active</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Segmented Tier Bar with Needle Pin (Image 1 replica) */}
-              <div className="pt-6">
-                <div className="relative pt-4">
-                  <div
-                    style={{ left: `${Math.min(92, Math.max(8, achievementPct))}%` }}
-                    className="absolute -top-1 -translate-x-1/2 flex flex-col items-center pointer-events-none"
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full bg-slate-900 ring-4 ring-white shadow-md" />
-                    <div className="w-0.5 h-3 bg-slate-900" />
-                  </div>
-
-                  <div className="grid grid-cols-4 gap-1.5 h-2 rounded-full overflow-hidden p-0.5 bg-slate-100">
-                    <div className="bg-rose-300 rounded-l-full" />
-                    <div className="bg-amber-300" />
-                    <div className="bg-emerald-300" />
-                    <div className="bg-emerald-500 rounded-r-full" />
+                    <span className="flex items-center gap-1.5 text-emerald-600 font-black">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-rose-500 font-black">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-2 px-1">
-                  <span>300</span>
-                  <span>500</span>
-                  <span>650</span>
-                  <span className="text-slate-900 font-black">730 (Met)</span>
-                  <span>850+</span>
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between items-center text-xs font-extrabold text-slate-700">
+                    <span>Full Sales Organization Progress</span>
+                    <span className="text-indigo-600 font-black">{achievementPct}% Achieved</span>
+                  </div>
+                  <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
+                    <div
+                      style={{ width: `${achievementPct}%` }}
+                      className="bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-400 h-full rounded-full transition-all duration-700"
+                    />
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* HERO CARDS 2 & 3: TWIN LUXURY MESH GLOW CARDS (7 COLUMNS) */}
-            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-              {/* CARD A: LIME / EMERALD GLOW CARD (AHMEDABAD HUB) */}
-              <div className="rounded-[2.2rem] p-5 sm:p-6 bg-gradient-to-br from-[#1c3822] via-[#2f5533] to-[#71a834] text-white shadow-[0_15px_40px_rgba(45,89,48,0.25)] flex flex-col justify-between relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20">
-                        <Building2 size={15} className="text-emerald-200" />
-                      </div>
-                      <div>
-                        <span className="text-xs font-black text-white block">Ahmedabad Hub</span>
-                        <span className="text-[10px] text-emerald-200/80">Primary Engine</span>
-                      </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                  <div className="p-4 rounded-2xl bg-[#f8f9fb] border border-slate-200/70">
+                    <div className="flex justify-between text-xs font-black text-slate-800">
+                      <span className="flex items-center gap-1"><MapPin size={12} className="text-indigo-600" /> Ahmedabad Branch</span>
+                      <span className="text-emerald-600 font-black">100%</span>
                     </div>
-                    <button
-                      onClick={() => navigate('/crm/deals')}
-                      className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors cursor-pointer"
-                    >
-                      <ArrowUpRight size={13} />
-                    </button>
-                  </div>
-
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200/90 block">
-                    Net Realized Inflow
-                  </span>
-                  <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-0.5">
-                    {formatRupee(monthlyRevenue)}
-                  </h3>
-                </div>
-
-                <div className="pt-4 mt-2 border-t border-white/15 flex items-end justify-between">
-                  <div>
-                    <span className="text-[10px] text-emerald-200/80 font-medium block">Branch Quota Met</span>
-                    <span className="text-xs font-black text-emerald-300">100% Achieved</span>
-                  </div>
-                  <div className="flex items-end gap-1 h-5">
-                    {[15, 30, 22, 45, 38, 62].map((v, i) => (
-                      <div key={i} style={{ height: `${(v / 62) * 100}%` }} className="w-1.5 bg-emerald-300/80 rounded-t-sm" />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* CARD B: METALLIC TERRACOTTA / COPPER GLOW CARD (ENTERPRISE QUOTA) */}
-              <div className="rounded-[2.2rem] p-5 sm:p-6 bg-gradient-to-br from-[#47251e] via-[#6f3a2c] to-[#ba684f] text-white shadow-[0_15px_40px_rgba(109,54,41,0.25)] flex flex-col justify-between relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
-
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20">
-                        <Briefcase size={15} className="text-amber-200" />
-                      </div>
-                      <div>
-                        <span className="text-xs font-black text-white block">Enterprise Quota</span>
-                        <span className="text-[10px] text-amber-200/80">National Network</span>
-                      </div>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full my-2 overflow-hidden">
+                      <div className="h-full bg-emerald-500 w-full rounded-full" />
                     </div>
-                    <button
-                      onClick={() => navigate('/crm/deals')}
-                      className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors cursor-pointer"
-                    >
-                      <ArrowUpRight size={13} />
-                    </button>
+                    <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                      <span>Ach: {formatCompactRupee(6234267)}</span>
+                      <span className="text-emerald-600 font-black">Shortfall: ₹0</span>
+                    </div>
                   </div>
 
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200/90 block">
-                    Gross Pipeline Booked
+                  <div className="p-4 rounded-2xl bg-[#f8f9fb] border border-slate-200/70">
+                    <div className="flex justify-between text-xs font-black text-slate-800">
+                      <span className="flex items-center gap-1"><MapPin size={12} className="text-slate-400" /> Jaipur Branch</span>
+                      <span className="text-slate-400 font-bold">0%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full my-2 overflow-hidden">
+                      <div className="h-full bg-slate-300 w-0" />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                      <span>Ach: ₹0</span>
+                      <span className="text-rose-500 font-black">Shortfall: {formatCompactRupee(2300000)}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-[#f8f9fb] border border-slate-200/70">
+                    <div className="flex justify-between text-xs font-black text-slate-800">
+                      <span className="flex items-center gap-1"><MapPin size={12} className="text-slate-400" /> Chennai Branch</span>
+                      <span className="text-slate-400 font-bold">0%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full my-2 overflow-hidden">
+                      <div className="h-full bg-slate-300 w-0" />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                      <span>Ach: ₹0</span>
+                      <span className="text-rose-500 font-black">Shortfall: {formatCompactRupee(2000000)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ----------------------------------------------------------------- */}
+              {/* GST TAX FINANCIAL RECONCILIATION CARDS */}
+              {/* ----------------------------------------------------------------- */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-5 border border-white shadow-[0_8px_20px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,1)] flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">With GST Amount</span>
+                    <span className="text-xl font-black text-cyan-600 tracking-tight block mt-1">{formatRupee(monthlyWithGst)}</span>
+                    <span className="text-[10px] font-bold text-slate-500 block">Gross Billing Volume</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-cyan-50 text-cyan-600 shadow-2xs">
+                    <ReceiptIndianRupee size={22} />
+                  </div>
+                </div>
+
+                <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-5 border border-white shadow-[0_8px_20px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,1)] flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Without GST Amount</span>
+                    <span className="text-xl font-black text-blue-600 tracking-tight block mt-1">{formatRupee(monthlyWithoutGst)}</span>
+                    <span className="text-[10px] font-bold text-slate-500 block">Net Realized Core</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-blue-50 text-blue-600 shadow-2xs">
+                    <Calculator size={22} />
+                  </div>
+                </div>
+
+                <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-5 border border-white shadow-[0_8px_20px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,1)] flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Statutory GST Tax</span>
+                    <span className="text-xl font-black text-amber-600 tracking-tight block mt-1">{formatRupee(monthlyGstTax)}</span>
+                    <span className="text-[10px] font-bold text-slate-500 block">18% Compliant Tax</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-amber-50 text-amber-600 shadow-2xs">
+                    <ReceiptIndianRupee size={22} />
+                  </div>
+                </div>
+
+                <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-5 border border-white shadow-[0_8px_20px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,1)] flex items-center justify-between">
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Top High Performer</span>
+                    <span className="text-base font-black text-slate-900 tracking-tight block mt-1 truncate">{topHighPerformer.name}</span>
+                    <span className="text-[10px] font-bold text-emerald-600 block">{topHighPerformer.branch} • {formatCompactRupee(topHighPerformer.achievement)}</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-purple-50 text-purple-600 shadow-2xs shrink-0">
+                    <Trophy size={22} />
+                  </div>
+                </div>
+              </div>
+
+              {/* ----------------------------------------------------------------- */}
+              {/* BHARATEDGE MINDMAP FLOW CANVAS (EXACT CENTERPIECE OF IMAGE 1) */}
+              {/* ----------------------------------------------------------------- */}
+              <div className="rounded-[2.4rem] bg-white/85 backdrop-blur-xl border border-white p-6 shadow-[0_12px_28px_-6px_rgba(0,0,0,0.05),0_6px_10px_-4px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,1)] relative overflow-hidden space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-800 shadow-2xs">
+                      <Network size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 tracking-tight">BharatEdge Sales Mindmap Network</h3>
+                      <p className="text-xs text-slate-400 font-medium">Click any branch or leader node to inspect live deal distribution</p>
+                    </div>
+                  </div>
+
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+                    Interactive Tree Canvas
                   </span>
-                  <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-0.5">
-                    {formatCompactRupee(monthlyBooked)}
-                  </h3>
                 </div>
 
-                <div className="pt-4 mt-2 border-t border-white/15 flex items-end justify-between">
-                  <div>
-                    <span className="text-[10px] text-amber-200/80 font-medium block">Deals Volume</span>
-                    <span className="text-xs font-black text-amber-200">{filteredDeals.length} Cases</span>
-                  </div>
-                  <div className="flex items-end gap-1 h-5">
-                    {[25, 40, 35, 60, 80, 100].map((v, i) => (
-                      <div key={i} style={{ height: `${(v / 100) * 100}%` }} className="w-1.5 bg-amber-200/80 rounded-t-sm" />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* ------------------------------------------------------------------- */}
-          {/* 3. TARGET VS ACHIEVEMENT OVERVIEW (NATIONAL & 3 BRANCHES) */}
-          {/* ------------------------------------------------------------------- */}
-          <div className="rounded-[2.2rem] bg-white/80 backdrop-blur-xl border border-white p-6 shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-                  <Target size={18} className="text-indigo-600" />
-                  Target vs Achievement Overview (Entire Sales Team)
-                </h3>
-                <p className="text-xs text-slate-400 font-medium">
-                  National benchmark vs actual realized cash inflow with shortfall reconciliation.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4 text-xs font-bold">
-                <span className="flex items-center gap-1.5 text-slate-500">
-                  <span className="w-2.5 h-2.5 rounded-full bg-slate-300" /> Target: {formatCompactRupee(overallTarget)}
-                </span>
-                <span className="flex items-center gap-1.5 text-emerald-600 font-black">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Achieved: {formatCompactRupee(overallAchievement)}
-                </span>
-                <span className="flex items-center gap-1.5 text-rose-500 font-black">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Shortfall: {formatCompactRupee(overallShortfall)}
-                </span>
-              </div>
-            </div>
-
-            {/* National Progress Bar */}
-            <div className="space-y-1.5 pt-1">
-              <div className="flex justify-between items-center text-xs font-extrabold text-slate-700">
-                <span>Full Sales Organization Progress</span>
-                <span className="text-indigo-600 font-black">{achievementPct}% Achieved</span>
-              </div>
-              <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
-                <div
-                  style={{ width: `${achievementPct}%` }}
-                  className="bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-400 h-full rounded-full transition-all duration-700"
-                />
-              </div>
-            </div>
-
-            {/* 3 Regional Branch Quota Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-              <div className="p-4 rounded-2xl bg-[#f8f9fb] border border-slate-200/70">
-                <div className="flex justify-between text-xs font-black text-slate-800">
-                  <span className="flex items-center gap-1"><MapPin size={12} className="text-indigo-600" /> Ahmedabad Branch</span>
-                  <span className="text-emerald-600 font-black">100%</span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-200 rounded-full my-2 overflow-hidden">
-                  <div className="h-full bg-emerald-500 w-full rounded-full" />
-                </div>
-                <div className="flex justify-between text-[10px] text-slate-500 font-bold">
-                  <span>Ach: {formatCompactRupee(6234267)}</span>
-                  <span className="text-emerald-600 font-black">Shortfall: ₹0</span>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#f8f9fb] border border-slate-200/70">
-                <div className="flex justify-between text-xs font-black text-slate-800">
-                  <span className="flex items-center gap-1"><MapPin size={12} className="text-slate-400" /> Jaipur Branch</span>
-                  <span className="text-slate-400 font-bold">0%</span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-200 rounded-full my-2 overflow-hidden">
-                  <div className="h-full bg-slate-300 w-0" />
-                </div>
-                <div className="flex justify-between text-[10px] text-slate-500 font-bold">
-                  <span>Ach: ₹0</span>
-                  <span className="text-rose-500 font-black">Shortfall: {formatCompactRupee(2300000)}</span>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[#f8f9fb] border border-slate-200/70">
-                <div className="flex justify-between text-xs font-black text-slate-800">
-                  <span className="flex items-center gap-1"><MapPin size={12} className="text-slate-400" /> Chennai Branch</span>
-                  <span className="text-slate-400 font-bold">0%</span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-200 rounded-full my-2 overflow-hidden">
-                  <div className="h-full bg-slate-300 w-0" />
-                </div>
-                <div className="flex justify-between text-[10px] text-slate-500 font-bold">
-                  <span>Ach: ₹0</span>
-                  <span className="text-rose-500 font-black">Shortfall: {formatCompactRupee(2000000)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ------------------------------------------------------------------- */}
-          {/* 4. GST TAX FINANCIAL AUDIT & TOP HIGHLIGHTS BANNER */}
-          {/* ------------------------------------------------------------------- */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-5 border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">With GST Amount</span>
-                <span className="text-xl font-black text-cyan-600 tracking-tight block mt-1">{formatRupee(activeWithGst)}</span>
-                <span className="text-[10px] font-bold text-slate-500 block">Gross Billing Volume</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-cyan-50 text-cyan-600 shadow-2xs">
-                <ReceiptIndianRupee size={22} />
-              </div>
-            </div>
-
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-5 border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Without GST Amount</span>
-                <span className="text-xl font-black text-blue-600 tracking-tight block mt-1">{formatRupee(activeWithoutGst)}</span>
-                <span className="text-[10px] font-bold text-slate-500 block">Net Realized Core</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-blue-50 text-blue-600 shadow-2xs">
-                <Calculator size={22} />
-              </div>
-            </div>
-
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-5 border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Statutory GST Tax</span>
-                <span className="text-xl font-black text-amber-600 tracking-tight block mt-1">{formatRupee(activeGstTax)}</span>
-                <span className="text-[10px] font-bold text-slate-500 block">18% Compliant Tax</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-amber-50 text-amber-600 shadow-2xs">
-                <ReceiptIndianRupee size={22} />
-              </div>
-            </div>
-
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-5 border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] flex items-center justify-between">
-              <div className="min-w-0 pr-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Top High Performer</span>
-                <span className="text-base font-black text-slate-900 tracking-tight block mt-1 truncate">{topHighPerformer.name}</span>
-                <span className="text-[10px] font-bold text-emerald-600 block">{topHighPerformer.branch} • {formatCompactRupee(topHighPerformer.achievement)}</span>
-              </div>
-              <div className="p-3 rounded-2xl bg-purple-50 text-purple-600 shadow-2xs shrink-0">
-                <Trophy size={22} />
-              </div>
-            </div>
-          </div>
-
-          {/* ------------------------------------------------------------------- */}
-          {/* 5. BHARATEDGE SALES MINDMAP FLOW & RIGHT INSPECTOR CARD */}
-          {/* ------------------------------------------------------------------- */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* MINDMAP CANVAS (8 COLUMNS) */}
-            <div className="lg:col-span-8 bg-white/80 backdrop-blur-xl rounded-[2.2rem] p-6 sm:p-7 border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                    <Network size={18} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-black text-slate-900 tracking-tight">BharatEdge Sales Mindmap Network</h3>
-                    <p className="text-xs text-slate-400 font-medium">Click any branch or TL node to update the live inspector card</p>
-                  </div>
-                </div>
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
-                  Interactive Network Flow
-                </span>
-              </div>
-
-              {/* Mindmap Hierarchy Nodes */}
-              <div className="py-6 px-4 bg-[#f8f9fb] rounded-3xl border border-slate-200/70 flex flex-col md:flex-row items-center justify-around gap-6">
-                {/* Enterprise Root Node */}
-                <div
-                  onClick={() => setInspectedEntity({
-                    title: 'BharatEdge Group',
-                    subtitle: 'National Enterprise HQ',
-                    name: 'Mishal Bhatia',
-                    role: 'Sales HOD',
-                    achievement: monthlyRevenue,
-                    booked: monthlyBooked,
-                    target: overallTarget,
-                    shortfall: overallShortfall,
-                    dealsWon: wonDealsCount,
-                    bestService: 'Gujarat Samriddhi Yojana',
-                    bestServiceDeals: 184,
-                    bestServiceRevenue: 3831000,
-                    runnerUps: [
-                      { name: 'CGSS Scheme', count: 72, rec: 1450000 },
-                      { name: 'Business Advisory', count: 48, rec: 953000 }
-                    ]
-                  })}
-                  className="p-5 rounded-3xl bg-white border-2 border-indigo-500 shadow-md text-center cursor-pointer hover:scale-105 transition-transform"
-                >
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-slate-900 to-indigo-900 text-amber-400 font-black text-sm flex items-center justify-center mx-auto mb-2 shadow-sm">
-                    BE
-                  </div>
-                  <h4 className="text-xs font-black text-slate-900">Enterprise HQ</h4>
-                  <span className="text-xs font-black text-emerald-600 block mt-0.5">{formatCompactRupee(monthlyRevenue)}</span>
-                  <span className="text-[10px] font-bold text-slate-400">73% Quota</span>
-                </div>
-
-                {/* 3 Regional Branches */}
-                <div className="flex flex-col gap-3 w-full md:w-auto">
+                <div className="py-6 px-4 bg-[#f8f9fb] rounded-3xl border border-slate-200/70 flex flex-col md:flex-row items-center justify-around gap-6">
+                  {/* Enterprise Node */}
                   <div
                     onClick={() => setInspectedEntity({
-                      title: 'Ahmedabad Branch',
-                      subtitle: 'Headquarters & West Region',
-                      name: 'Romil Prajapati & Uday Dubey',
-                      role: 'Branch Leadership',
-                      achievement: 6234267,
-                      booked: 15534000,
-                      target: 4200000,
-                      shortfall: 0,
-                      dealsWon: 346,
+                      title: 'BharatEdge Enterprise',
+                      subtitle: 'National Sales Operations',
+                      name: 'Mishal Bhatia',
+                      role: 'Sales HOD',
+                      achievement: monthlyRevenue,
+                      booked: monthlyBooked,
+                      target: overallTarget,
+                      shortfall: overallShortfall,
+                      dealsWon: wonDealsCount,
                       bestService: 'Gujarat Samriddhi Yojana',
                       bestServiceDeals: 184,
                       bestServiceRevenue: 3831000,
@@ -1157,490 +1062,552 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                         { name: 'Business Advisory', count: 48, rec: 953000 }
                       ]
                     })}
-                    className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-emerald-400 shadow-xs flex items-center justify-between gap-4 cursor-pointer transition-all"
+                    className="p-5 rounded-3xl bg-white border-2 border-indigo-500 shadow-lg text-center cursor-pointer hover:scale-105 transition-transform"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                      <span className="text-xs font-black text-slate-900">Ahmedabad Branch</span>
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-slate-900 to-indigo-900 text-amber-400 font-black text-sm flex items-center justify-center mx-auto mb-2 shadow-sm">
+                      BE
                     </div>
-                    <span className="text-xs font-black text-emerald-600">₹62.35 L</span>
+                    <h4 className="text-xs font-black text-slate-900">Enterprise HQ</h4>
+                    <span className="text-xs font-black text-emerald-600 block mt-0.5">{formatCompactRupee(monthlyRevenue)}</span>
+                    <span className="text-[10px] font-bold text-slate-400">73% Quota</span>
                   </div>
 
-                  <div
-                    onClick={() => setInspectedEntity({
-                      title: 'Jaipur Branch',
-                      subtitle: 'North Region Cluster',
-                      name: 'Akshay Kumar Sharma',
-                      role: 'Sr. Cluster Development Manager',
-                      achievement: 0,
-                      booked: 0,
-                      target: 2300000,
-                      shortfall: 2300000,
-                      dealsWon: 0,
-                      bestService: 'Advisory',
-                      bestServiceDeals: 0,
-                      bestServiceRevenue: 0,
-                      runnerUps: []
-                    })}
-                    className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-slate-400 shadow-xs flex items-center justify-between gap-4 cursor-pointer transition-all"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
-                      <span className="text-xs font-black text-slate-900">Jaipur Branch</span>
-                    </div>
-                    <span className="text-xs font-bold text-slate-400">₹0</span>
-                  </div>
-
-                  <div
-                    onClick={() => setInspectedEntity({
-                      title: 'Chennai Branch',
-                      subtitle: 'South Region Cluster',
-                      name: 'Sourav Modak',
-                      role: 'Branch Manager',
-                      achievement: 0,
-                      booked: 0,
-                      target: 2000000,
-                      shortfall: 2000000,
-                      dealsWon: 0,
-                      bestService: 'Advisory',
-                      bestServiceDeals: 0,
-                      bestServiceRevenue: 0,
-                      runnerUps: []
-                    })}
-                    className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-slate-400 shadow-xs flex items-center justify-between gap-4 cursor-pointer transition-all"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
-                      <span className="text-xs font-black text-slate-900">Chennai Branch</span>
-                    </div>
-                    <span className="text-xs font-bold text-slate-400">₹0</span>
-                  </div>
-                </div>
-
-                {/* Team Leaders */}
-                <div className="flex flex-col gap-3 w-full md:w-auto">
-                  <div
-                    onClick={() => setInspectedEntity({
-                      title: 'Romil Prajapati Team',
-                      subtitle: 'Branch Manager (TL)',
-                      name: 'Romil Prajapati',
-                      role: 'Branch Manager (TL)',
-                      achievement: 372000,
-                      booked: 466000,
-                      target: 2200000,
-                      shortfall: 1828000,
-                      dealsWon: 19,
-                      bestService: 'Gujarat Samriddhi Yojana',
-                      bestServiceDeals: 11,
-                      bestServiceRevenue: 220000,
-                      runnerUps: [
-                        { name: 'Business Advisory', count: 5, rec: 98000 },
-                        { name: 'Seed Support Scheme', count: 3, rec: 54000 }
-                      ]
-                    })}
-                    className="p-3 rounded-2xl bg-white border border-slate-200 hover:border-indigo-400 shadow-xs flex items-center justify-between gap-3 cursor-pointer"
-                  >
-                    <span className="text-xs font-black text-slate-800">Romil Prajapati (TL)</span>
-                    <span className="text-xs font-black text-indigo-600">₹3.72 L</span>
-                  </div>
-
-                  <div
-                    onClick={() => setInspectedEntity({
-                      title: 'Uday Dubey Team',
-                      subtitle: 'Vice Sales Head (TL)',
-                      name: 'Uday Dubey',
-                      role: 'Vice Sales Head (TL)',
-                      achievement: 336000,
-                      booked: 420000,
-                      target: 2000000,
-                      shortfall: 1664000,
-                      dealsWon: 15,
-                      bestService: 'Business Advisory',
-                      bestServiceDeals: 9,
-                      bestServiceRevenue: 180000,
-                      runnerUps: [
-                        { name: 'Gujarat Samriddhi Yojana', count: 4, rec: 96000 },
-                        { name: 'MSME Certificate', count: 2, rec: 60000 }
-                      ]
-                    })}
-                    className="p-3 rounded-2xl bg-white border border-slate-200 hover:border-indigo-400 shadow-xs flex items-center justify-between gap-3 cursor-pointer"
-                  >
-                    <span className="text-xs font-black text-slate-800">Uday Dubey (TL)</span>
-                    <span className="text-xs font-black text-indigo-600">₹3.36 L</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium">
-                <span>3 Branches • 5 Team Leaders • 39 Active BDMs</span>
-                <span className="font-bold text-indigo-600">Click any node to inspect metrics &rarr;</span>
-              </div>
-            </div>
-
-            {/* SLEEK INSPECTOR PANEL (4 COLUMNS - EXACT USER REQUEST) */}
-            <div className="lg:col-span-4 bg-white/80 backdrop-blur-xl rounded-[2.2rem] p-6 border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] flex flex-col justify-between space-y-4">
-              <div>
-                <div className="grid grid-cols-2 p-1 bg-slate-100/80 rounded-2xl mb-4 text-xs font-bold">
-                  <button
-                    onClick={() => setTlViewMode('personal')}
-                    className={`py-1.5 rounded-xl transition-all cursor-pointer ${tlViewMode === 'personal' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
-                  >
-                    Personal
-                  </button>
-                  <button
-                    onClick={() => setTlViewMode('team')}
-                    className={`py-1.5 rounded-xl transition-all cursor-pointer ${tlViewMode === 'team' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
-                  >
-                    Team
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Node Inspector</span>
-                    <h4 className="text-lg font-black text-slate-900 tracking-tight">{inspectedEntity.title}</h4>
-                    <span className="text-xs text-slate-500 font-medium">{inspectedEntity.subtitle}</span>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100">
-                    Active
-                  </span>
-                </div>
-
-                {/* 2x2 Metric Tiles */}
-                <div className="grid grid-cols-2 gap-2.5 mt-4">
-                  <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Deals Won</span>
-                    <span className="text-base font-black text-slate-900 block mt-0.5">{inspectedEntity.dealsWon}</span>
-                  </div>
-                  <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Quoted Value</span>
-                    <span className="text-base font-black text-slate-900 block mt-0.5">{formatCompactRupee(inspectedEntity.booked)}</span>
-                  </div>
-                  <div className="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-100">
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Received Cash</span>
-                    <span className="text-base font-black text-emerald-700 block mt-0.5">{formatCompactRupee(inspectedEntity.achievement)}</span>
-                  </div>
-                  <div className="p-3 bg-rose-50/60 rounded-2xl border border-rose-100">
-                    <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Shortfall Gap</span>
-                    <span className="text-base font-black text-rose-700 block mt-0.5">{formatCompactRupee(inspectedEntity.shortfall)}</span>
-                  </div>
-                </div>
-
-                {/* BEST SELLING SERVICE SECTION */}
-                <div className="mt-4 p-4 rounded-2xl bg-amber-50/50 border border-amber-100/80 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-amber-900 flex items-center gap-1.5">
-                      <Sparkles size={13} className="text-amber-500" />
-                      Best Selling Service
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                      Top Volume
-                    </span>
-                  </div>
-
-                  <div>
-                    <h5 className="text-sm font-black text-slate-900">{inspectedEntity.bestService}</h5>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{inspectedEntity.bestServiceDeals} Deals closed this month</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-amber-100/60">
-                    <div>
-                      <span className="text-[9px] font-bold uppercase text-slate-400 block">Rec. Cash</span>
-                      <span className="font-black text-emerald-700">{formatCompactRupee(inspectedEntity.bestServiceRevenue)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[9px] font-bold uppercase text-slate-400 block">Total Quoted</span>
-                      <span className="font-black text-slate-800">{formatCompactRupee(inspectedEntity.booked)}</span>
-                    </div>
-                  </div>
-
-                  {inspectedEntity.runnerUps && inspectedEntity.runnerUps.length > 0 && (
-                    <div className="pt-2 border-t border-amber-100/60 space-y-1">
-                      <span className="text-[9px] font-bold uppercase text-slate-400 block">Other Services Sold:</span>
-                      {inspectedEntity.runnerUps.map((r: any) => (
-                        <div key={r.name} className="flex justify-between text-[11px] font-medium text-slate-600">
-                          <span>{r.name}</span>
-                          <span className="font-bold">{r.count} ({formatCompactRupee(r.rec)})</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <button
-                onClick={() => navigate('/crm/deals')}
-                className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <span>View All Transactions</span>
-                <ArrowRight size={13} />
-              </button>
-            </div>
-          </div>
-
-          {/* ------------------------------------------------------------------- */}
-          {/* 6. BRANCH REVENUE SHARE DONUT & DEAL PIPELINE VIEW STAGES */}
-          {/* ------------------------------------------------------------------- */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Graph 1: Branch Revenue Share Donut Chart */}
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2.2rem] p-6 border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                    <PieChartIcon size={16} className="text-indigo-600" />
-                    Branch Revenue Share
-                  </h3>
-                  <span className="text-xs font-bold text-slate-500">Regional Mix</span>
-                </div>
-                <p className="text-xs text-slate-400 mb-4">
-                  Real-time received revenue contribution across Ahmedabad, Jaipur & Chennai.
-                </p>
-              </div>
-
-              <div className="h-48 relative flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={branchPieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={75}
-                      paddingAngle={4}
-                      dataKey="value"
+                  {/* 3 Regional Branches */}
+                  <div className="flex flex-col gap-3 w-full md:w-auto">
+                    <div
+                      onClick={() => setInspectedEntity({
+                        title: 'Ahmedabad Branch',
+                        subtitle: 'Headquarters & West Region',
+                        name: 'Romil Prajapati & Uday Dubey',
+                        role: 'Branch Leadership',
+                        achievement: 6234267,
+                        booked: 15534000,
+                        target: 4200000,
+                        shortfall: 0,
+                        dealsWon: 346,
+                        bestService: 'Gujarat Samriddhi Yojana',
+                        bestServiceDeals: 184,
+                        bestServiceRevenue: 3831000,
+                        runnerUps: [
+                          { name: 'CGSS Scheme', count: 72, rec: 1450000 },
+                          { name: 'Business Advisory', count: 48, rec: 953000 }
+                        ]
+                      })}
+                      className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-emerald-400 shadow-xs flex items-center justify-between gap-4 cursor-pointer transition-all"
                     >
-                      {branchPieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip
-                      formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
-                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 15px rgba(0,0,0,0.05)', fontSize: '12px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Total Rec.</span>
-                  <span className="text-base font-black text-slate-900">{formatCompactRupee(totalReceivedAmount)}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100 text-center">
-                {branchPieData.map(b => (
-                  <div key={b.name} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                    <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-700">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
-                      <span>{b.name}</span>
-                    </div>
-                    <p className="text-xs font-black text-slate-900 mt-1">{formatCompactRupee(b.value)}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Deal Pipeline View Stages (CLICKABLE MODAL DRILLDOWN) */}
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2.2rem] p-6 border border-white shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                    <Layers size={16} className="text-cyan-600" />
-                    Deal Pipeline View Stages
-                  </h3>
-                  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-slate-100 text-slate-700">
-                    352 Deals
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mb-3">
-                  Click any stage card to open the complete deals drilldown modal.
-                </p>
-              </div>
-
-              <div className="space-y-2.5">
-                {pipelineStages.map(st => (
-                  <div
-                    key={st.id}
-                    onClick={() => handleStageClick(st)}
-                    className="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 transition-all cursor-pointer flex items-center justify-between group"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: st.color }} />
-                      <div>
-                        <span className="text-xs font-black text-slate-900 group-hover:text-indigo-600 transition-colors block">
-                          {st.name}
-                        </span>
-                        <span className="text-[10px] text-slate-400">Total Quoted: {formatCompactRupee(st.amount)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                        <span className="text-xs font-black text-slate-900">Ahmedabad Branch</span>
                       </div>
+                      <span className="text-xs font-black text-emerald-600">₹62.35 L</span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs font-black text-slate-900 block">{st.count} Deals</span>
-                      <span className="text-[10px] font-bold text-emerald-600 block">Rec: {formatCompactRupee(st.received)}</span>
+
+                    <div
+                      onClick={() => setInspectedEntity({
+                        title: 'Jaipur Branch',
+                        subtitle: 'North Region Cluster',
+                        name: 'Akshay Kumar Sharma',
+                        role: 'Sr. Cluster Development Manager',
+                        achievement: 0,
+                        booked: 0,
+                        target: 2300000,
+                        shortfall: 2300000,
+                        dealsWon: 0,
+                        bestService: 'Advisory',
+                        bestServiceDeals: 0,
+                        bestServiceRevenue: 0,
+                        runnerUps: []
+                      })}
+                      className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-slate-400 shadow-xs flex items-center justify-between gap-4 cursor-pointer transition-all"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+                        <span className="text-xs font-black text-slate-900">Jaipur Branch</span>
+                      </div>
+                      <span className="text-xs font-bold text-slate-400">₹0</span>
+                    </div>
+
+                    <div
+                      onClick={() => setInspectedEntity({
+                        title: 'Chennai Branch',
+                        subtitle: 'South Region Cluster',
+                        name: 'Sourav Modak',
+                        role: 'Branch Manager',
+                        achievement: 0,
+                        booked: 0,
+                        target: 2000000,
+                        shortfall: 2000000,
+                        dealsWon: 0,
+                        bestService: 'Advisory',
+                        bestServiceDeals: 0,
+                        bestServiceRevenue: 0,
+                        runnerUps: []
+                      })}
+                      className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-slate-400 shadow-xs flex items-center justify-between gap-4 cursor-pointer transition-all"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+                        <span className="text-xs font-black text-slate-900">Chennai Branch</span>
+                      </div>
+                      <span className="text-xs font-bold text-slate-400">₹0</span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
 
-          {/* ------------------------------------------------------------------- */}
-          {/* 7. TOP SELLING SERVICES & SCHEMES GRID */}
-          {/* ------------------------------------------------------------------- */}
-          <div className="rounded-[2.2rem] bg-white/80 backdrop-blur-xl border border-white p-6 shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-                  <Sparkles size={18} className="text-amber-500" />
-                  Top Selling Services & Schemes
-                </h3>
-                <p className="text-xs text-slate-400 font-medium">Real-time revenue contribution across BharatEdge business verticals</p>
-              </div>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                Total: {formatCompactRupee(monthlyRevenue)}
-              </span>
-            </div>
+                  {/* Team Leaders */}
+                  <div className="flex flex-col gap-3 w-full md:w-auto">
+                    <div
+                      onClick={() => setInspectedEntity({
+                        title: 'Romil Prajapati Team',
+                        subtitle: 'Branch Manager (TL)',
+                        name: 'Romil Prajapati',
+                        role: 'Branch Manager (TL)',
+                        achievement: 372000,
+                        booked: 466000,
+                        target: 2200000,
+                        shortfall: 1828000,
+                        dealsWon: 19,
+                        bestService: 'Gujarat Samriddhi Yojana',
+                        bestServiceDeals: 11,
+                        bestServiceRevenue: 220000,
+                        runnerUps: [
+                          { name: 'Business Advisory', count: 5, rec: 98000 },
+                          { name: 'Seed Support Scheme', count: 3, rec: 54000 }
+                        ]
+                      })}
+                      className="p-3 rounded-2xl bg-white border border-slate-200 hover:border-indigo-400 shadow-xs flex items-center justify-between gap-3 cursor-pointer"
+                    >
+                      <span className="text-xs font-black text-slate-800">Romil Prajapati (TL)</span>
+                      <span className="text-xs font-black text-indigo-600">₹3.72 L</span>
+                    </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {topServicesList.map((srv, idx) => {
-                const SrvIcon = srv.icon;
-                return (
-                  <div key={srv.name} className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex flex-col justify-between">
+                    <div
+                      onClick={() => setInspectedEntity({
+                        title: 'Uday Dubey Team',
+                        subtitle: 'Vice Sales Head (TL)',
+                        name: 'Uday Dubey',
+                        role: 'Vice Sales Head (TL)',
+                        achievement: 336000,
+                        booked: 420000,
+                        target: 2000000,
+                        shortfall: 1664000,
+                        dealsWon: 15,
+                        bestService: 'Business Advisory',
+                        bestServiceDeals: 9,
+                        bestServiceRevenue: 180000,
+                        runnerUps: [
+                          { name: 'Gujarat Samriddhi Yojana', count: 4, rec: 96000 },
+                          { name: 'MSME Certificate', count: 2, rec: 60000 }
+                        ]
+                      })}
+                      className="p-3 rounded-2xl bg-white border border-slate-200 hover:border-indigo-400 shadow-xs flex items-center justify-between gap-3 cursor-pointer"
+                    >
+                      <span className="text-xs font-black text-slate-800">Uday Dubey (TL)</span>
+                      <span className="text-xs font-black text-indigo-600">₹3.36 L</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ----------------------------------------------------------------- */}
+              {/* VELOCITY SPLINE CHART & PIPELINE PROGRESSION (IMAGE 1 BENTO) */}
+              {/* ----------------------------------------------------------------- */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+
+                {/* DUAL SMOOTH AREA SPLINE CHART */}
+                <div className="md:col-span-6 bg-white/85 backdrop-blur-xl rounded-[2.2rem] p-6 border border-white shadow-[0_12px_28px_-6px_rgba(0,0,0,0.05),0_6px_10px_-4px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,1)] flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-4">
                     <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700">
-                          #{idx + 1}
-                        </span>
-                        <span className="text-xs font-black text-slate-800">{srv.count} deals</span>
-                      </div>
-                      <div className="flex items-start gap-2.5 mb-3">
-                        <div className={`p-2 rounded-xl bg-gradient-to-tr ${srv.grad} text-white shrink-0 mt-0.5`}>
-                          <SrvIcon size={14} />
-                        </div>
-                        <h4 className="text-xs font-black text-slate-900 leading-tight">{srv.name}</h4>
-                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Velocity Trend</span>
+                      <h4 className="text-base font-black text-slate-900 tracking-tight">Sales Inflow vs Quota</h4>
                     </div>
-                    <div className="pt-3 border-t border-slate-100 flex items-baseline justify-between text-xs">
+                    <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-900" /> Booked</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Received</span>
+                    </div>
+                  </div>
+
+                  <div className="h-44 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={splineTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="splineGreen" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} />
+                        <RechartsTooltip
+                          formatter={(val: any) => [`₹${val} L`, '']}
+                          contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
+                        />
+                        <Area type="monotone" dataKey="booked" stroke="#0f172a" strokeWidth={2.5} fillOpacity={0} />
+                        <Area type="monotone" dataKey="received" stroke="#10b981" strokeWidth={2.5} fill="url(#splineGreen)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* PIPELINE PROGRESSION BARS (IMAGE 1 MIDDLE RIGHT) */}
+                <div className="md:col-span-6 bg-white/85 backdrop-blur-xl rounded-[2.2rem] p-6 border border-white shadow-[0_12px_28px_-6px_rgba(0,0,0,0.05),0_6px_10px_-4px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,1)] flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Workflow Stages</span>
+                      <h4 className="text-base font-black text-slate-900 tracking-tight">Deal Pipeline Progression</h4>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400">Click bar to drilldown</span>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-2 items-end h-44 pt-3 pb-1">
+                    {pipelineStages.map(st => (
+                      <div
+                        key={st.id}
+                        onClick={() => handleStageClick(st)}
+                        className="flex flex-col items-center justify-end h-full gap-2 cursor-pointer group"
+                      >
+                        <div className="text-[10px] font-black text-slate-700 group-hover:text-emerald-600 transition-colors">
+                          {st.count}
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-t-xl overflow-hidden h-32 flex items-end">
+                          <div
+                            style={{ height: `${st.heightPct}%`, backgroundColor: st.color }}
+                            className="w-full rounded-t-xl group-hover:opacity-90 transition-all duration-500"
+                          />
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-400 truncate max-w-full group-hover:text-slate-800" title={st.name}>
+                          {st.name.split(' ')[0]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* ----------------------------------------------------------------- */}
+              {/* BRANCH DONUT & TOP SERVICES & SCHEMES GRID */}
+              {/* ----------------------------------------------------------------- */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                {/* Branch Revenue Donut Chart */}
+                <div className="lg:col-span-4 bg-white/85 backdrop-blur-xl rounded-[2.2rem] p-6 border border-white shadow-[0_12px_28px_-6px_rgba(0,0,0,0.05),0_6px_10px_-4px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,1)] flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">Regional Mix</span>
+                    <h4 className="text-base font-black text-slate-900 tracking-tight">Branch Revenue Share</h4>
+                  </div>
+
+                  <div className="h-44 relative flex items-center justify-center my-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={branchPieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={70}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {branchPieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip
+                          formatter={(val: any) => [formatRupee(Number(val)), 'Received']}
+                          contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Ahmedabad</span>
+                      <span className="text-sm font-black text-slate-900">{formatCompactRupee(monthlyRevenue)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-center pt-2 border-t border-slate-100 text-xs">
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block">Ahmedabad</span>
+                      <span className="font-black text-emerald-600">100%</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block">Jaipur</span>
+                      <span className="font-bold text-slate-400">0%</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block">Chennai</span>
+                      <span className="font-bold text-slate-400">0%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top Selling Services Grid (8 Columns) */}
+                <div className="lg:col-span-8 bg-white/85 backdrop-blur-xl rounded-[2.2rem] p-6 border border-white shadow-[0_12px_28px_-6px_rgba(0,0,0,0.05),0_6px_10px_-4px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,1)] flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">High Volume Verticals</span>
+                      <h4 className="text-base font-black text-slate-900 tracking-tight">Top Selling Services & Schemes</h4>
+                    </div>
+                    <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                      Total: {formatCompactRupee(monthlyRevenue)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {topServicesList.map((srv, idx) => {
+                      const SrvIcon = srv.icon;
+                      return (
+                        <div key={srv.name} className="p-3.5 rounded-2xl bg-[#f8f9fb] border border-slate-200/70 flex items-center justify-between gap-3 shadow-2xs">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${srv.grad} text-white flex items-center justify-center shrink-0`}>
+                              <SrvIcon size={14} />
+                            </div>
+                            <div className="truncate">
+                              <h5 className="text-xs font-black text-slate-900 truncate" title={srv.name}>{srv.name}</h5>
+                              <span className="text-[10px] text-slate-400">{srv.count} deals • Avg: {formatCompactRupee(srv.avg)}</span>
+                            </div>
+                          </div>
+                          <span className="text-xs font-black text-emerald-700 shrink-0">{formatCompactRupee(srv.received)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* ----------------------------------------------------------------- */}
+              {/* BDM PERFORMANCE MATRIX TABLE (ALL 39 BDMS WITH DEALS CREATED) */}
+              {/* ----------------------------------------------------------------- */}
+              <div className="rounded-[2.4rem] bg-white/85 backdrop-blur-xl border border-white p-6 sm:p-7 shadow-[0_12px_28px_-6px_rgba(0,0,0,0.05),0_6px_10px_-4px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,1)] space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
+                      <Users size={18} className="text-indigo-600" />
+                      BDM Performance Matrix
+                    </h3>
+                    <p className="text-xs text-slate-400 font-medium">Frontline sales representatives ranked by revenue realization</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={matrixSearch}
+                        onChange={(e) => setMatrixSearch(e.target.value)}
+                        placeholder="Search BDM..."
+                        className="pl-7 pr-3 py-1 bg-slate-100 rounded-full text-xs font-medium text-slate-800 focus:outline-none w-32 sm:w-40"
+                      />
+                    </div>
+
+                    <div className="inline-flex p-0.5 bg-slate-100 rounded-full text-[11px] font-bold">
+                      {[
+                        { key: 'all', label: `All (${bdmMatrix.length})` },
+                        { key: 'met', label: 'Quota Met' },
+                        { key: 'progress', label: 'In Progress' },
+                        { key: 'gap', label: 'Under Target' },
+                        { key: 'ahmedabad', label: 'Ahmedabad' }
+                      ].map(tab => (
+                        <button
+                          key={tab.key}
+                          onClick={() => setMatrixFilter(tab.key as any)}
+                          className={`px-2.5 py-1 rounded-full transition-all cursor-pointer ${matrixFilter === tab.key ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500'}`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200/80 text-slate-400 uppercase tracking-wider font-extrabold text-[10px]">
+                        <th className="py-3 px-4">BDM Profile</th>
+                        <th className="py-3 px-4">Branch</th>
+                        <th className="py-3 px-4">Team Leader</th>
+                        <th className="py-3 px-4 text-center">Deals Created</th>
+                        <th className="py-3 px-4 text-right">Target</th>
+                        <th className="py-3 px-4 text-right">Achieved</th>
+                        <th className="py-3 px-4 text-right">Shortfall</th>
+                        <th className="py-3 px-4 text-center">Progress</th>
+                        <th className="py-3 px-4">Top Selling Service</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {filteredBdmMatrix.map((b) => (
+                        <tr key={b.name} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-black text-[11px] flex items-center justify-center">
+                                {b.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <div>
+                                <span className="font-black text-slate-900 block">{b.name}</span>
+                                <span className="text-[10px] text-slate-400">{b.dealsCount} deals closed</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-bold text-slate-800">{b.branch}</td>
+                          <td className="py-3 px-4 text-slate-600">{b.tl}</td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              {b.dealsCount}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-slate-600">{formatCompactRupee(b.target)}</td>
+                          <td className="py-3 px-4 text-right font-black text-emerald-600">{formatCompactRupee(b.achievement)}</td>
+                          <td className="py-3 px-4 text-right font-bold text-rose-500">{formatCompactRupee(b.shortfall)}</td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div style={{ width: `${b.pct}%` }} className="h-full bg-emerald-500 rounded-full" />
+                              </div>
+                              <span className="text-[10px] font-black text-slate-800">{b.pct}%</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-medium text-slate-600 truncate max-w-[140px]" title={b.topService}>
+                            {b.topService}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+            {/* ----------------------------------------------------------------- */}
+            {/* RIGHT COMPANION WIDGET: SMARTPHONE / INSPECTOR DRAWER (IMAGE 2) */}
+            {/* ----------------------------------------------------------------- */}
+            {showInspectorDrawer && (
+              <div className="xl:col-span-4 2xl:col-span-3">
+                <div className="rounded-[2.6rem] bg-gradient-to-b from-[#2a1b18] via-[#3d241f] to-[#1a1210] text-white p-6 shadow-[0_20px_50px_rgba(0,0,0,0.35)] relative overflow-hidden flex flex-col justify-between sticky top-4">
+
+                  {/* Speaker notch */}
+                  <div className="w-16 h-1.5 bg-white/20 rounded-full mx-auto mb-5" />
+
+                  <div>
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                          <Crown size={14} className="text-amber-400" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-white block">BharatEdge Group</span>
+                          <span className="text-[10px] text-amber-200/80">Executive Inspector</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowInspectorDrawer(false)}
+                        className="text-white/60 hover:text-white p-1"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+
+                    {/* Personal vs Team Switcher */}
+                    <div className="grid grid-cols-2 p-1 bg-white/10 rounded-full mb-5 text-xs font-bold backdrop-blur-md">
+                      <button
+                        onClick={() => setTlViewMode('personal')}
+                        className={`py-1.5 rounded-full transition-all cursor-pointer ${tlViewMode === 'personal' ? 'bg-white text-slate-900 shadow-md font-black' : 'text-white/70'}`}
+                      >
+                        Personal
+                      </button>
+                      <button
+                        onClick={() => setTlViewMode('team')}
+                        className={`py-1.5 rounded-full transition-all cursor-pointer ${tlViewMode === 'team' ? 'bg-white text-slate-900 shadow-md font-black' : 'text-white/70'}`}
+                      >
+                        Team
+                      </button>
+                    </div>
+
+                    {/* Realized Revenue */}
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200/80 block">
+                      Realized Revenue
+                    </span>
+                    <div className="flex items-baseline gap-1 mt-0.5">
+                      <span className="text-3xl font-black text-white tracking-tight">
+                        {formatRupee(inspectedEntity.achievement)}
+                      </span>
+                    </div>
+
+                    {/* Quota Progress Pill */}
+                    <div className="mt-3 p-3 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-between text-xs">
                       <div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Received</span>
-                        <span className="text-base font-black text-emerald-700">{formatCompactRupee(srv.received)}</span>
+                        <span className="text-[10px] text-white/60 block">Target Quota</span>
+                        <span className="font-black text-white">{formatCompactRupee(inspectedEntity.target)}</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase block">Avg Ticket</span>
-                        <span className="font-black text-slate-700">{formatCompactRupee(srv.avg)}</span>
+                        <span className="text-[10px] text-white/60 block">Deals Won</span>
+                        <span className="font-black text-emerald-400">{inspectedEntity.dealsWon} Won</span>
+                      </div>
+                    </div>
+
+                    {/* BEST SELLING SERVICE CARD */}
+                    <div className="mt-4 p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                          <Sparkles size={11} /> Best Selling Service
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-400/20 text-amber-300">
+                          Top Seller
+                        </span>
+                      </div>
+
+                      <h5 className="text-sm font-black text-white leading-snug">
+                        {inspectedEntity.bestService}
+                      </h5>
+
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10 text-xs">
+                        <div>
+                          <span className="text-[9px] text-white/60 block">Closed Deals</span>
+                          <span className="font-black text-white">{inspectedEntity.bestServiceDeals} Deals</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-white/60 block">Rec. Cash</span>
+                          <span className="font-black text-emerald-400">{formatCompactRupee(inspectedEntity.bestServiceRevenue)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2026 Deal Schedule Dots */}
+                    <div className="mt-4 pt-3 border-t border-white/10">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-white/60 block mb-2">
+                        2026 Schedule
+                      </span>
+                      <div className="grid grid-cols-4 gap-2 text-center text-[10px]">
+                        {['Jul', 'Aug', 'Sep', 'Oct'].map((m, idx) => (
+                          <div key={m} className={`p-2 rounded-xl border ${idx === 3 ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-black' : 'bg-white/5 border-white/10 text-white/60'}`}>
+                            <span>{m}</span>
+                            <span className="block mt-0.5 text-xs">✓</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
 
-          {/* ------------------------------------------------------------------- */}
-          {/* 8. BDM PERFORMANCE MATRIX TABLE (ALL 39 BDMS WITH DEALS CREATED) */}
-          {/* ------------------------------------------------------------------- */}
-          <div className="rounded-[2.2rem] bg-white/80 backdrop-blur-xl border border-white p-6 shadow-[0_10px_30px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.9)] space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-                  <Users size={18} className="text-indigo-600" />
-                  BDM Performance Matrix
-                </h3>
-                <p className="text-xs text-slate-400 font-medium">Frontline sales representatives ranked by revenue realization</p>
-              </div>
-
-              {/* Matrix Search & Filter Pills */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={matrixSearch}
-                    onChange={(e) => setMatrixSearch(e.target.value)}
-                    placeholder="Search BDM..."
-                    className="pl-7 pr-3 py-1 bg-slate-100 rounded-full text-xs font-medium text-slate-800 focus:outline-none w-32 sm:w-40"
-                  />
-                </div>
-
-                <div className="inline-flex p-0.5 bg-slate-100 rounded-full text-[11px] font-bold">
-                  {[
-                    { key: 'all', label: `All (${bdmMatrix.length})` },
-                    { key: 'met', label: 'Quota Met' },
-                    { key: 'progress', label: 'In Progress' },
-                    { key: 'gap', label: 'Under Target' },
-                    { key: 'ahmedabad', label: 'Ahmedabad' }
-                  ].map(tab => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setMatrixFilter(tab.key as any)}
-                      className={`px-2.5 py-1 rounded-full transition-all cursor-pointer ${matrixFilter === tab.key ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500'}`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
+                  {/* Action Button */}
+                  <button
+                    onClick={() => navigate('/crm/deals')}
+                    className="w-full mt-5 py-3 rounded-full bg-white text-slate-900 text-xs font-black hover:bg-slate-100 transition-all shadow-lg shadow-black/30 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Briefcase size={14} />
+                    <span>Inspect All Records</span>
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200/80 text-slate-400 uppercase tracking-wider font-extrabold text-[10px]">
-                    <th className="py-3 px-4">BDM Profile</th>
-                    <th className="py-3 px-4">Branch</th>
-                    <th className="py-3 px-4">Team Leader</th>
-                    <th className="py-3 px-4 text-center">Deals Created</th>
-                    <th className="py-3 px-4 text-right">Target</th>
-                    <th className="py-3 px-4 text-right">Achieved</th>
-                    <th className="py-3 px-4 text-right">Shortfall</th>
-                    <th className="py-3 px-4 text-center">Progress</th>
-                    <th className="py-3 px-4">Top Selling Service</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {filteredBdmMatrix.map((b) => (
-                    <tr key={b.name} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-black text-[11px] flex items-center justify-center">
-                            {b.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                          </div>
-                          <div>
-                            <span className="font-black text-slate-900 block">{b.name}</span>
-                            <span className="text-[10px] text-slate-400">{b.dealsCount} deals closed</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{b.branch}</td>
-                      <td className="py-3 px-4 text-slate-600">{b.tl}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
-                          {b.dealsCount}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-bold text-slate-600">{formatCompactRupee(b.target)}</td>
-                      <td className="py-3 px-4 text-right font-black text-emerald-600">{formatCompactRupee(b.achievement)}</td>
-                      <td className="py-3 px-4 text-right font-bold text-rose-500">{formatCompactRupee(b.shortfall)}</td>
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div style={{ width: `${b.pct}%` }} className="h-full bg-emerald-500 rounded-full" />
-                          </div>
-                          <span className="text-[10px] font-black text-slate-800">{b.pct}%</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-medium text-slate-600 truncate max-w-[140px]" title={b.topService}>
-                        {b.topService}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
 
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* 9. OPERATIONS HUB VIEW (WHEN ACTIVE) */}
+      {/* 3. OPERATIONS HUB VIEW */}
       {/* ========================================================================= */}
       {activeDeptTab === 'operations' && (
         <div className="space-y-6">
@@ -1659,22 +1626,22 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs">
+            <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs">
               <span className="text-xs font-black text-blue-900 block">Funding Wing</span>
               <h4 className="text-2xl font-black text-slate-900 mt-1">112 Cases</h4>
               <p className="text-xs text-slate-400 mt-0.5">Subsidy & Grant Approvals</p>
             </div>
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs">
+            <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs">
               <span className="text-xs font-black text-cyan-900 block">Compliance Wing</span>
               <h4 className="text-2xl font-black text-slate-900 mt-1">94 Cases</h4>
               <p className="text-xs text-slate-400 mt-0.5">Annual MCA & Filings</p>
             </div>
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs">
+            <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs">
               <span className="text-xs font-black text-emerald-900 block">Incorporation Wing</span>
               <h4 className="text-2xl font-black text-slate-900 mt-1">128 Cases</h4>
               <p className="text-xs text-slate-400 mt-0.5">Company Formations</p>
             </div>
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs">
+            <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs">
               <span className="text-xs font-black text-purple-900 block">Certificate Wing</span>
               <h4 className="text-2xl font-black text-slate-900 mt-1">48 Cases</h4>
               <p className="text-xs text-slate-400 mt-0.5">ISO, MSME, Startup India</p>
@@ -1684,7 +1651,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       )}
 
       {/* ========================================================================= */}
-      {/* 10. OTHER DEPARTMENTS VIEW (WHEN ACTIVE) */}
+      {/* 4. OTHER DEPARTMENTS VIEW */}
       {/* ========================================================================= */}
       {activeDeptTab === 'others' && (
         <div className="space-y-6">
@@ -1696,7 +1663,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs space-y-3">
+            <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs space-y-3">
               <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                 <Users size={18} className="text-indigo-600" />
                 Human Resources (HRMS)
@@ -1706,17 +1673,17 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 Staff Directory &rarr;
               </button>
             </div>
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs space-y-3">
+            <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs space-y-3">
               <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                 <ReceiptIndianRupee size={18} className="text-cyan-600" />
                 Accounts & Tax
               </h3>
-              <p className="text-xs text-slate-400">GST Pool: {formatCompactRupee(activeGstTax)}</p>
+              <p className="text-xs text-slate-400">GST Pool: {formatCompactRupee(monthlyGstTax)}</p>
               <button onClick={() => navigate('/crm/quotations')} className="text-xs font-bold text-cyan-600">
                 Quotations &rarr;
               </button>
             </div>
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs space-y-3">
+            <div className="bg-white/85 backdrop-blur-xl rounded-[2rem] p-6 border border-white shadow-xs space-y-3">
               <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                 <Sparkles size={18} className="text-amber-500" />
                 Quality & Clients
@@ -1731,7 +1698,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       )}
 
       {/* ========================================================================= */}
-      {/* 11. INTERACTIVE STAGE DRILLDOWN MODAL */}
+      {/* 5. INTERACTIVE STAGE DRILLDOWN MODAL */}
       {/* ========================================================================= */}
       {selectedStageModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md">
