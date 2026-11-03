@@ -1328,26 +1328,23 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       {/* ========================================================================= */}
       {/* 1. TOP EXECUTIVE REVENUE & GST STRIP (FROSTED GLASS BENTO CARDS) */}
       {/* ========================================================================= */}
-      {isSuperAdmin ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
+            {isSuperAdmin ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
           {/* Card 1: Today's Revenue (Frosted White Glass) */}
-          <div className="bg-white/75 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+          <div className="bg-white/75 backdrop-blur-2xl rounded-[26px] p-4 sm:p-5 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[190px]">
             <div>
-              <div className="flex justify-between items-center mb-3">
-                <span className="w-10 h-10 rounded-2xl bg-indigo-50/80 text-indigo-600 border border-indigo-100/80 shadow-2xs flex items-center justify-center shrink-0">
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-2.5 sm:p-3 rounded-2xl bg-indigo-50/80 text-indigo-600 border border-indigo-100/80 shadow-2xs flex items-center justify-center shrink-0">
                   <IndianRupee size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50/90 text-indigo-800 border border-indigo-100/80 flex items-center gap-1.5">
+                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50/90 text-indigo-800 border border-indigo-100/80 flex items-center gap-1.5 whitespace-nowrap shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
                   Today Live
                 </span>
-                <div className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all shrink-0">
-                  <ArrowUpRight size={13} />
-                </div>
               </div>
-              <div className="mt-1">
+              <div className="relative z-10">
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Today's Revenue</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight mt-1">
+                <h3 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight mt-1 truncate">
                   {formatRupee(todayRevenue)}
                 </h3>
               </div>
@@ -1359,23 +1356,20 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           </div>
 
           {/* Card 2: Monthly Revenue (Highlighted Deep Olive/Moss Green Gradient) */}
-          <div className="rounded-[26px] p-5 sm:p-6 bg-gradient-to-br from-[#243d1a] via-[#1a2d13] to-[#12200d] text-white shadow-[0_16px_36px_rgba(36,61,26,0.35)] border border-emerald-500/20 hover:shadow-[0_22px_50px_rgba(36,61,26,0.5)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+          <div className="rounded-[26px] p-4 sm:p-5 bg-gradient-to-br from-[#243d1a] via-[#1a2d13] to-[#12200d] text-white shadow-[0_16px_36px_rgba(36,61,26,0.35)] border border-emerald-500/20 hover:shadow-[0_22px_50px_rgba(36,61,26,0.5)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[190px]">
             <div className="absolute -top-10 -right-10 w-36 h-36 bg-lime-400/25 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
             <div className="relative z-10">
-              <div className="flex justify-between items-center mb-3">
-                <span className="w-10 h-10 rounded-2xl bg-emerald-500/15 backdrop-blur-md text-lime-400 border border-emerald-400/30 shadow-2xs flex items-center justify-center shrink-0">
+              <div className="flex justify-between items-start mb-3">
+                <span className="p-2.5 sm:p-3 rounded-2xl bg-emerald-500/20 backdrop-blur-md text-lime-400 border border-emerald-400/30 shadow-2xs flex items-center justify-center shrink-0">
                   <TrendingUp size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/25 text-lime-200 border border-emerald-400/40 backdrop-blur-md shadow-2xs">
+                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/25 text-lime-200 border border-emerald-400/40 backdrop-blur-md shadow-2xs whitespace-nowrap shrink-0">
                   October 2026
                 </span>
-                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all shrink-0">
-                  <ArrowUpRight size={13} />
-                </div>
               </div>
-              <div className="mt-1">
+              <div className="relative z-10">
                 <p className="text-[11px] font-bold text-emerald-200/70 uppercase tracking-wider">Monthly Revenue</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-[#a3e635] tracking-tight mt-1 truncate drop-shadow-[0_2px_12px_rgba(163,230,53,0.35)]" title={formatRupee(monthlyRevenue)}>
+                <h3 className="text-xl sm:text-2xl font-black text-[#a3e635] tracking-tight mt-1 truncate drop-shadow-[0_2px_12px_rgba(163,230,53,0.35)]" title={formatRupee(monthlyRevenue)}>
                   {formatRupee(monthlyRevenue)}
                 </h3>
               </div>
@@ -1387,23 +1381,20 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           </div>
 
           {/* Card 3: With GST Amount (Highlighted Terracotta Sunset Copper Gradient) */}
-          <div className="rounded-[26px] p-5 sm:p-6 bg-gradient-to-br from-[#683321] via-[#4e2417] to-[#36170d] text-white shadow-[0_16px_36px_rgba(104,51,33,0.35)] border border-amber-500/20 hover:shadow-[0_22px_50px_rgba(104,51,33,0.5)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+          <div className="rounded-[26px] p-4 sm:p-5 bg-gradient-to-br from-[#683321] via-[#4e2417] to-[#36170d] text-white shadow-[0_16px_36px_rgba(104,51,33,0.35)] border border-amber-500/20 hover:shadow-[0_22px_50px_rgba(104,51,33,0.5)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[190px]">
             <div className="absolute -top-10 -right-10 w-36 h-36 bg-amber-400/25 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
             <div className="relative z-10">
-              <div className="flex justify-between items-center mb-3">
-                <span className="w-10 h-10 rounded-2xl bg-amber-500/15 backdrop-blur-md text-amber-300 border border-amber-400/30 shadow-2xs flex items-center justify-center shrink-0">
+              <div className="flex justify-between items-start mb-3">
+                <span className="p-2.5 sm:p-3 rounded-2xl bg-amber-500/20 backdrop-blur-md text-amber-300 border border-amber-400/30 shadow-2xs flex items-center justify-center shrink-0">
                   <ReceiptIndianRupee size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/25 text-amber-200 border border-amber-400/40 backdrop-blur-md shadow-2xs">
+                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/25 text-amber-200 border border-amber-400/40 backdrop-blur-md shadow-2xs whitespace-nowrap shrink-0">
                   Incl. 18% GST
                 </span>
-                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all shrink-0">
-                  <ArrowUpRight size={13} />
-                </div>
               </div>
-              <div className="mt-1">
+              <div className="relative z-10">
                 <p className="text-[11px] font-bold text-amber-200/70 uppercase tracking-wider">With GST Amount</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1 truncate drop-shadow-[0_2px_12px_rgba(251,146,60,0.3)]" title={formatRupee(activeWithGst)}>
+                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-1 truncate drop-shadow-[0_2px_12px_rgba(251,146,60,0.3)]" title={formatRupee(activeWithGst)}>
                   {formatRupee(activeWithGst)}
                 </h3>
               </div>
@@ -1415,22 +1406,19 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           </div>
 
           {/* Card 4: Without GST Amount (Frosted White Glass) */}
-          <div className="bg-white/75 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+          <div className="bg-white/75 backdrop-blur-2xl rounded-[26px] p-4 sm:p-5 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[190px]">
             <div>
-              <div className="flex justify-between items-center mb-3">
-                <span className="w-10 h-10 rounded-2xl bg-blue-50/80 text-blue-600 border border-blue-100/80 shadow-2xs flex items-center justify-center shrink-0">
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-2.5 sm:p-3 rounded-2xl bg-blue-50/80 text-blue-600 border border-blue-100/80 shadow-2xs flex items-center justify-center shrink-0">
                   <Calculator size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50/90 text-blue-800 border border-blue-100/80">
+                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50/90 text-blue-800 border border-blue-100/80 whitespace-nowrap shrink-0">
                   Excl. GST (Base)
                 </span>
-                <div className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all shrink-0">
-                  <ArrowUpRight size={13} />
-                </div>
               </div>
-              <div className="mt-1">
+              <div className="relative z-10">
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Without GST Amount</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-blue-700 tracking-tight mt-1 truncate" title={formatRupee(activeWithoutGst)}>
+                <h3 className="text-xl sm:text-2xl font-black text-blue-700 tracking-tight mt-1 truncate" title={formatRupee(activeWithoutGst)}>
                   {formatRupee(activeWithoutGst)}
                 </h3>
               </div>
@@ -1442,20 +1430,17 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           </div>
 
           {/* Card 5: Payment Breakdown (Frosted White Glass) */}
-          <div className="bg-white/75 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+          <div className="bg-white/75 backdrop-blur-2xl rounded-[26px] p-4 sm:p-5 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[190px]">
             <div>
-              <div className="flex justify-between items-center mb-3">
-                <span className="w-10 h-10 rounded-2xl bg-amber-50/80 text-amber-600 border border-amber-100/80 shadow-2xs flex items-center justify-center shrink-0">
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-2.5 sm:p-3 rounded-2xl bg-amber-50/80 text-amber-600 border border-amber-100/80 shadow-2xs flex items-center justify-center shrink-0">
                   <PieChartIcon size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50/90 text-amber-800 border border-amber-100/80">
+                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50/90 text-amber-800 border border-amber-100/80 whitespace-nowrap shrink-0">
                   Rec vs Pend
                 </span>
-                <div className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all shrink-0">
-                  <ArrowUpRight size={13} />
-                </div>
               </div>
-              <div className="mt-1">
+              <div className="relative z-10">
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Payment Breakdown</p>
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <h3 className="text-xl sm:text-2xl font-black text-emerald-700">
@@ -1488,20 +1473,17 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           </div>
 
           {/* Card 6: Top High Performer (Frosted White Glass) */}
-          <div className="bg-white/75 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+          <div className="bg-white/75 backdrop-blur-2xl rounded-[26px] p-4 sm:p-5 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[190px]">
             <div>
-              <div className="flex justify-between items-center mb-3">
-                <span className="w-10 h-10 rounded-2xl bg-purple-50/80 text-purple-600 border border-purple-100/80 shadow-2xs flex items-center justify-center shrink-0">
+              <div className="flex justify-between items-start mb-3 relative z-10">
+                <span className="p-2.5 sm:p-3 rounded-2xl bg-purple-50/80 text-purple-600 border border-purple-100/80 shadow-2xs flex items-center justify-center shrink-0">
                   <Trophy size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50/90 text-purple-800 border border-purple-100/80">
+                <span className="px-2.5 sm:px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50/90 text-purple-800 border border-purple-100/80 whitespace-nowrap shrink-0">
                   National Leader
                 </span>
-                <div className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all shrink-0">
-                  <ArrowUpRight size={13} />
-                </div>
               </div>
-              <div className="mt-1">
+              <div className="relative z-10">
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Top High Performer</p>
                 <h3 className="text-lg sm:text-xl font-black text-gray-950 tracking-tight mt-1 truncate" title={topHighPerformer?.name}>
                   {topHighPerformer?.name || 'Rituraj Singh'}
