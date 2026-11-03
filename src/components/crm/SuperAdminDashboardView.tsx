@@ -764,23 +764,23 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       {/* ========================================================================= */}
       {/* ATMOSPHERIC BACKGROUND WITH COLORFUL BLURRED MESH GRADIENT */}
       {/* ========================================================================= */}
-      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden bg-[#f4f6fa]">
-        {/* Warm Golden / Peach Glow */}
-        <div className="absolute -top-24 left-10 w-[650px] h-[550px] bg-gradient-to-br from-amber-300/45 via-orange-300/35 to-rose-300/25 rounded-full blur-[110px]" />
-        {/* Soft Emerald / Mint Glow */}
-        <div className="absolute top-1/4 -right-24 w-[700px] h-[700px] bg-gradient-to-bl from-emerald-300/40 via-teal-300/30 to-cyan-200/25 rounded-full blur-[130px]" />
-        {/* Soft Lavender / Violet Glow */}
-        <div className="absolute -bottom-24 left-1/3 w-[750px] h-[600px] bg-gradient-to-tr from-indigo-300/40 via-purple-300/30 to-pink-200/25 rounded-full blur-[140px]" />
-        {/* Sky Blue Glow */}
-        <div className="absolute top-1/2 left-10 w-[550px] h-[450px] bg-sky-200/40 rounded-full blur-[100px]" />
-        {/* Spatial Frosted Glass Diffuser */}
-        <div className="absolute inset-0 bg-white/35 backdrop-blur-[35px]" />
+      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden bg-[#f8f8fb]">
+        {/* Warm Sun-Drenched Amber / Peach Ambient Orb */}
+        <div className="absolute -top-32 left-1/4 w-[850px] h-[650px] bg-gradient-to-br from-amber-300/45 via-orange-300/35 to-rose-300/20 rounded-full blur-[130px]" />
+        {/* Soft Emerald / Mint / Sage Ambient Wash */}
+        <div className="absolute top-1/4 -right-20 w-[850px] h-[850px] bg-gradient-to-bl from-emerald-300/40 via-teal-300/30 to-cyan-200/20 rounded-full blur-[140px]" />
+        {/* Soft Lavender / Violet / Blush Ambient Base */}
+        <div className="absolute -bottom-32 left-1/4 w-[900px] h-[700px] bg-gradient-to-tr from-indigo-300/35 via-purple-300/25 to-pink-200/20 rounded-full blur-[150px]" />
+        {/* Soft Sky Blue Accent */}
+        <div className="absolute top-1/2 left-5 w-[650px] h-[550px] bg-sky-200/35 rounded-full blur-[110px]" />
+        {/* Subtle Crystal Glass Refraction Veil */}
+        <div className="absolute inset-0 bg-white/15 backdrop-blur-[15px]" />
       </div>
 
       {/* ========================================================================= */}
       {/* MAIN FLOATING SPATIAL GLASS CANVAS (Apple Vision Pro Glass Window) */}
       {/* ========================================================================= */}
-      <div className="relative z-10 rounded-[36px] bg-white/65 backdrop-blur-2xl border border-white/85 shadow-[0_20px_60px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.95)] p-5 sm:p-7 lg:p-8 space-y-7">
+      <div className="relative z-10 rounded-[36px] bg-white/40 backdrop-blur-3xl border border-white/80 shadow-[0_20px_70px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] p-5 sm:p-7 lg:p-8 space-y-7">
         
         {/* 1. FLOATING PILL NAVIGATION TABS & QUICK CONTROLS BAR */}
         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-2 sm:p-2.5 rounded-[28px] bg-white/75 backdrop-blur-2xl border border-white/90 shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
@@ -1337,32 +1337,38 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       {/* FLOATING SPATIAL DOCK AT BOTTOM (Exact Feature from VisionOS Reference) */}
       {/* ========================================================================= */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 pointer-events-auto">
-        <div className="flex items-center gap-1.5 p-1.5 bg-white/85 backdrop-blur-3xl border border-white/90 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)]">
+        <div className="flex items-center gap-2 p-2 bg-white/75 backdrop-blur-3xl border border-white/95 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.1),inset_0_1px_2px_rgba(255,255,255,0.95)]">
           <button
             onClick={() => setActiveDepartment('sales')}
-            className={`px-5 py-2 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
-              activeDepartment === 'sales' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-105' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+            className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
+              activeDepartment === 'sales'
+                ? 'bg-gray-950 text-white shadow-lg shadow-black/20 font-black scale-105'
+                : 'text-gray-600 hover:text-gray-950 hover:bg-white/80'
             }`}
           >
-            <TrendingUp size={13} />
+            <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-amber-400' : 'text-blue-500'} />
             <span>Sales</span>
           </button>
           <button
             onClick={() => setActiveDepartment('operations')}
-            className={`px-5 py-2 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
-              activeDepartment === 'operations' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-105' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+            className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
+              activeDepartment === 'operations'
+                ? 'bg-gray-950 text-white shadow-lg shadow-black/20 font-black scale-105'
+                : 'text-gray-600 hover:text-gray-950 hover:bg-white/80'
             }`}
           >
-            <Layers size={13} />
+            <Layers size={14} className={activeDepartment === 'operations' ? 'text-amber-400' : 'text-orange-500'} />
             <span>Operations</span>
           </button>
           <button
             onClick={() => setActiveDepartment('others')}
-            className={`px-5 py-2 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
-              activeDepartment === 'others' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-105' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+            className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
+              activeDepartment === 'others'
+                ? 'bg-gray-950 text-white shadow-lg shadow-black/20 font-black scale-105'
+                : 'text-gray-600 hover:text-gray-950 hover:bg-white/80'
             }`}
           >
-            <Building2 size={13} />
+            <Building2 size={14} className={activeDepartment === 'others' ? 'text-amber-400' : 'text-emerald-500'} />
             <span>Other Depts</span>
           </button>
         </div>

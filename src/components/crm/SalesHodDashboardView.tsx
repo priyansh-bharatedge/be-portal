@@ -1664,183 +1664,256 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       )}
 
       {/* GST Audit & Revenue Reconciliation Section */}
-      <div className="rounded-[28px] bg-white/75 backdrop-blur-2xl text-gray-950 p-5 sm:p-7 shadow-[0_10px_35px_rgba(0,0,0,0.025)] relative overflow-hidden border border-white/90">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-cyan-200/25 rounded-full blur-3xl pointer-events-none" />
+      <div className="rounded-[32px] bg-gradient-to-r from-white/75 via-white/60 to-white/75 backdrop-blur-2xl text-gray-950 p-6 sm:p-7 shadow-[0_12px_36px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] relative overflow-hidden border border-white/90">
+        <div className="absolute right-0 top-0 w-96 h-96 bg-gradient-to-br from-cyan-300/15 via-teal-300/10 to-transparent rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <span className="p-3.5 rounded-2xl bg-cyan-50 text-cyan-600 border border-cyan-100 shadow-2xs shrink-0">
+            <span className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/15 via-teal-500/10 to-emerald-500/15 border border-cyan-400/30 text-cyan-600 shadow-md shadow-cyan-500/10 flex items-center justify-center shrink-0">
               <ReceiptIndianRupee size={24} />
             </span>
             <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-black tracking-tight text-gray-950">GST Tax & Revenue Audit</h3>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50 text-cyan-800 border border-cyan-200/60">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h3 className="text-lg sm:text-xl font-black tracking-tight text-gray-950">GST Tax & Revenue Audit</h3>
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50/90 text-cyan-800 border border-cyan-200/80 shadow-2xs flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
                   Verified Inflow
                 </span>
               </div>
-              <p className="text-xs text-gray-500 font-medium mt-0.5">Comprehensive audit breakdown of gross quoted billing vs net base and 18% tax component</p>
+              <p className="text-xs text-gray-500 font-medium mt-1">Comprehensive audit breakdown of gross quoted billing vs net base and 18% tax component</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 shrink-0">
-            <div className="bg-white/80 border border-white/90 rounded-[22px] p-4 shadow-2xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">With GST (Gross)</span>
-              <span className="text-base sm:text-lg font-black text-cyan-700">{formatRupee(activeWithGst)}</span>
-              <span className="text-[10px] text-gray-400 block mt-0.5">100% Total Quoted</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 shrink-0 lg:min-w-[480px]">
+            <div className="bg-white/80 backdrop-blur-xl border border-white/95 rounded-[22px] p-4 shadow-2xs hover:shadow-xs transition-all">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">With GST (Gross)</span>
+                <span className="w-2 h-2 rounded-full bg-cyan-500" />
+              </div>
+              <span className="text-lg sm:text-xl font-black text-cyan-700 tracking-tight block">{formatRupee(activeWithGst)}</span>
+              <span className="text-[10px] font-bold text-gray-400 block mt-1">100% Total Quoted</span>
             </div>
-            <div className="bg-white/80 border border-white/90 rounded-[22px] p-4 shadow-2xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">Without GST (Net Base)</span>
-              <span className="text-base sm:text-lg font-black text-emerald-700">{formatRupee(activeWithoutGst)}</span>
-              <span className="text-[10px] text-gray-400 block mt-0.5">~84.7% Base Value</span>
+            <div className="bg-white/80 backdrop-blur-xl border border-white/95 rounded-[22px] p-4 shadow-2xs hover:shadow-xs transition-all">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Without GST (Net Base)</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              </div>
+              <span className="text-lg sm:text-xl font-black text-emerald-700 tracking-tight block">{formatRupee(activeWithoutGst)}</span>
+              <span className="text-[10px] font-bold text-emerald-600 block mt-1">~84.7% Realized Base</span>
             </div>
-            <div className="col-span-2 sm:col-span-1 bg-white/80 border border-white/90 rounded-[22px] p-4 shadow-2xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">GST Component (18%)</span>
-              <span className="text-base sm:text-lg font-black text-amber-700">{formatRupee(activeGstTax)}</span>
-              <span className="text-[10px] text-gray-400 block mt-0.5">Tax Offset Collected</span>
+            <div className="bg-white/80 backdrop-blur-xl border border-white/95 rounded-[22px] p-4 shadow-2xs hover:shadow-xs transition-all">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">GST Component (18%)</span>
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+              </div>
+              <span className="text-lg sm:text-xl font-black text-amber-700 tracking-tight block">{formatRupee(activeGstTax)}</span>
+              <span className="text-[10px] font-bold text-amber-600 block mt-1">Tax Offset In Bank</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. NEW INTERACTIVE VISUAL GRAPHS (PIE CHARTS) */}
+      {/* 2. HIGH-END EXECUTIVE VISUAL BENTO GRAPHS */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Graph 1: Branch Revenue Share Donut Chart */}
-        <div className="bg-white/75 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between transition-all duration-300">
+        {/* Graph 1: Branch Revenue Share Donut & Bento Module */}
+        <div className="bg-white/60 backdrop-blur-2xl rounded-[32px] p-6 sm:p-7 border border-white/90 shadow-[0_12px_36px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] flex flex-col justify-between transition-all duration-300">
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className={`text-base font-black flex items-center gap-2 text-gray-950`}>
-                <PieChartIcon size={16} className={isSuperAdmin ? "text-indigo-400" : "text-indigo-600"} />
-                Branch Revenue Share
-              </h3>
-              <span className={`text-xs font-bold text-gray-500`}>Regional Mix</span>
-            </div>
-            <p className={`text-xs mb-4 text-gray-400`}>
-              Real-time received revenue contribution across Ahmedabad, Jaipur & Chennai.
-            </p>
-          </div>
-
-          <div className="h-48 relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={branchPieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={75}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {branchPieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                    backdropFilter: 'blur(12px)', 
-                    borderRadius: '1rem', 
-                    border: '1px solid rgba(255,255,255,0.8)', 
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.15)', 
-                    fontSize: '12px',
-                    color: '#0f172a'
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className={`text-[10px] font-bold uppercase text-gray-400`}>Total Rec.</span>
-              <span className={`text-base font-black text-gray-950`}>{formatCompactRupee(totalReceivedAmount)}</span>
-            </div>
-          </div>
-
-          <div className={`grid grid-cols-3 gap-2 mt-4 pt-4 border-t text-center border-gray-100`}>
-            {branchPieData.map(b => (
-              <div key={b.name} className={`p-2.5 rounded-[18px] backdrop-blur-md shadow-2xs bg-white/60 border border-white/80`}>
-                <div className={`flex items-center justify-center gap-1.5 text-[11px] font-bold text-gray-700`}>
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
-                  <span>{b.name}</span>
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-2xl bg-indigo-50/90 text-indigo-600 border border-indigo-100 flex items-center justify-center shadow-2xs">
+                  <PieChartIcon size={16} />
+                </span>
+                <div>
+                  <h3 className="text-base font-black text-gray-950 tracking-tight">
+                    Branch Revenue Share
+                  </h3>
+                  <p className="text-xs text-gray-400 font-medium">
+                    Regional contribution across Ahmedabad, Jaipur & Chennai
+                  </p>
                 </div>
-                <p className={`text-xs font-black mt-1 text-gray-950`}>{formatCompactRupee(b.value)}</p>
               </div>
-            ))}
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50/90 text-indigo-700 border border-indigo-100/80 shadow-2xs">
+                Regional Mix
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center my-4">
+            {/* Donut Chart with Concentric Frosted Glass Center */}
+            <div className="md:col-span-5 h-52 relative flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={branchPieData.every(b => b.value === 0) ? [{ name: 'None', value: 1, color: '#e2e8f0' }] : branchPieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={82}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {branchPieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    formatter={(val: any) => [formatRupee(Number(val)), 'Received Revenue']}
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                      backdropFilter: 'blur(12px)', 
+                      borderRadius: '1rem', 
+                      border: '1px solid rgba(255,255,255,0.9)', 
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.08)', 
+                      fontSize: '12px',
+                      color: '#0f172a'
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Concentric Floating Frosted Glass Center */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="w-24 h-24 rounded-full bg-white/85 backdrop-blur-xl border border-white/95 shadow-sm flex flex-col items-center justify-center text-center p-1">
+                  <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">TOTAL REC.</span>
+                  <span className="text-sm font-black text-gray-950 mt-0.5">{formatCompactRupee(totalReceivedAmount)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Micro Branch Metric Cards on Right */}
+            <div className="md:col-span-7 space-y-2.5">
+              {branchPieData.map(b => {
+                const pct = totalReceivedAmount > 0 ? Math.round((b.value / totalReceivedAmount) * 100) : 0;
+                const cityCode = b.name.slice(0, 3).toUpperCase();
+                return (
+                  <div key={b.name} className="p-3 rounded-2xl bg-white/70 hover:bg-white/90 border border-white/90 shadow-2xs transition-all flex items-center justify-between gap-3 group">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-8 h-8 rounded-xl bg-gray-100/90 text-gray-700 font-black text-[10px] flex items-center justify-center shrink-0 border border-gray-200/60 shadow-2xs">
+                        {cityCode}
+                      </span>
+                      <div className="truncate">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: b.color }} />
+                          <span className="text-xs font-black text-gray-950 truncate">{b.name}</span>
+                        </div>
+                        <div className="w-24 sm:w-32 h-1.5 bg-gray-100 rounded-full mt-1.5 overflow-hidden">
+                          <div
+                            style={{ width: `${pct}%`, backgroundColor: b.color }}
+                            className="h-full rounded-full transition-all duration-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-xs font-black text-gray-950 block">{formatCompactRupee(b.value)}</span>
+                      <span className="text-[10px] font-bold text-gray-400 block">{pct}% Share</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Graph 2: Deal Stage Pipeline Composition Donut */}
-        <div className="bg-white/75 backdrop-blur-2xl rounded-[28px] p-6 sm:p-7 border border-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.025)] flex flex-col justify-between transition-all duration-300">
+        {/* Graph 2: Deal Stage Pipeline Composition Donut & Bento Module */}
+        <div className="bg-white/60 backdrop-blur-2xl rounded-[32px] p-6 sm:p-7 border border-white/90 shadow-[0_12px_36px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] flex flex-col justify-between transition-all duration-300">
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h3 className={`text-base font-black flex items-center gap-2 text-gray-950`}>
-                <Layers size={16} className={isSuperAdmin ? "text-cyan-400" : "text-cyan-600"} />
-                Pipeline Stage Distribution
-              </h3>
-              <span className={`text-xs font-bold text-gray-500`}>{filteredDeals.length} Deals</span>
-            </div>
-            <p className={`text-xs mb-4 text-gray-400`}>
-              Volume of deals progressing through Sales, Account, Legal, Operations & Won.
-            </p>
-          </div>
-
-          <div className="h-48 relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stagePieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={75}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {stagePieData.map((entry, index) => (
-                    <Cell key={`stage-cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  formatter={(val: any) => [`${val} Deals`, 'Volume']}
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                    backdropFilter: 'blur(12px)', 
-                    borderRadius: '1rem', 
-                    border: '1px solid rgba(255,255,255,0.8)', 
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.15)', 
-                    fontSize: '12px',
-                    color: '#0f172a'
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className={`text-[10px] font-bold uppercase text-gray-400`}>Live Pipeline</span>
-              <span className={`text-base font-black text-gray-950`}>{filteredDeals.length}</span>
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-2xl bg-cyan-50/90 text-cyan-600 border border-cyan-100 flex items-center justify-center shadow-2xs">
+                  <Layers size={16} />
+                </span>
+                <div>
+                  <h3 className="text-base font-black text-gray-950 tracking-tight">
+                    Pipeline Stage Distribution
+                  </h3>
+                  <p className="text-xs text-gray-400 font-medium">
+                    Volume of deals progressing through Sales, Legal, Operations & Won
+                  </p>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-50/90 text-cyan-800 border border-cyan-200/80 shadow-2xs flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
+                {filteredDeals.length} Deals
+              </span>
             </div>
           </div>
 
-          <div className={`flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t text-xs border-gray-100`}>
-            {stagePieData.map(st => (
-              <button
-                key={st.name}
-                onClick={() => {
-                  const targetStage = stageStats.find(s => s.name.toLowerCase().includes(st.name.toLowerCase()) || st.fullName === s.name);
-                  if (targetStage) {
-                    setSelectedStageModal(targetStage);
-                    setStageModalSearch('');
-                  }
-                }}
-                className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full transition-all cursor-pointer shadow-2xs hover:shadow-xs group hover:scale-[1.02] ${
-                  "bg-white/70 hover:bg-white border border-white/80 text-gray-700"
-                }`}
-                title={`Click to view deals in ${st.fullName}`}
-              >
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: st.color }} />
-                <span>{st.name}: <strong className={"text-gray-950 group-hover:text-indigo-600"}>{st.value}</strong></span>
-              </button>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center my-4">
+            {/* Donut Chart with Concentric Center */}
+            <div className="md:col-span-5 h-52 relative flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stagePieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={82}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {stagePieData.map((entry, index) => (
+                      <Cell key={`stage-cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    formatter={(val: any) => [`${val} Deals`, 'Volume']}
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                      backdropFilter: 'blur(12px)', 
+                      borderRadius: '1rem', 
+                      border: '1px solid rgba(255,255,255,0.9)', 
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.08)', 
+                      fontSize: '12px',
+                      color: '#0f172a'
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Concentric Center */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="w-24 h-24 rounded-full bg-white/85 backdrop-blur-xl border border-white/95 shadow-sm flex flex-col items-center justify-center text-center p-1">
+                  <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">PIPELINE</span>
+                  <span className="text-xl font-black text-gray-950">{filteredDeals.length}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Interactive Stage Chips on Right */}
+            <div className="md:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {stagePieData.map(st => {
+                const pct = filteredDeals.length > 0 ? Math.round((st.value / filteredDeals.length) * 100) : 0;
+                return (
+                  <button
+                    key={st.name}
+                    onClick={() => {
+                      const targetStage = stageStats.find(s => s.name.toLowerCase().includes(st.name.toLowerCase()) || st.fullName === s.name);
+                      if (targetStage) {
+                        setSelectedStageModal(targetStage);
+                        setStageModalSearch('');
+                      }
+                    }}
+                    className="p-2.5 rounded-2xl bg-white/70 hover:bg-white border border-white/90 shadow-2xs hover:shadow-xs transition-all text-left flex flex-col justify-between group cursor-pointer hover:-translate-y-0.5"
+                    title={`Click to view deals in ${st.fullName}`}
+                  >
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: st.color }} />
+                        <span className="font-bold text-gray-800 text-[11px] truncate">{st.name}</span>
+                      </div>
+                      <span className="text-[11px] font-black text-gray-950 shrink-0">{st.value}</span>
+                    </div>
+                    <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        style={{ width: `${pct}%`, backgroundColor: st.color }}
+                        className="h-full rounded-full transition-all duration-500"
+                      />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -1848,7 +1921,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       {/* ========================================================================= */}
       {/* 3. MASTER TARGET & ACHIEVEMENT BAR VIEW */}
       {/* ========================================================================= */}
-      <div className="rounded-[28px] bg-white/75 backdrop-blur-2xl border border-white/90 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300">
+      <div className="rounded-[32px] bg-white/60 backdrop-blur-2xl border border-white/90 p-6 sm:p-7 shadow-[0_12px_36px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] transition-all duration-300">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h3 className={`text-lg font-black flex items-center gap-2 text-gray-950`}>
