@@ -1157,105 +1157,115 @@ export const CrmDashboard = () => {
 
   return (
     <div className="space-y-8 pb-12">
-      {/* Top Header & Role Recognition Banner */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-orange-100/40 via-amber-50/20 to-transparent rounded-full blur-3xl pointer-events-none" />
+      {/* Top Header & Role Recognition Banner (Hidden for Super Admin to give full screen executive experience) */}
+      {dashboardSection !== 'superadmin' && (
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 sm:p-7 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-orange-100/40 via-amber-50/20 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center">
-              CRM Executive Dashboard
-            </h1>
+          <div className="relative z-10">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center">
+                CRM Executive Dashboard
+              </h1>
 
-            {canViewOpsDashboard && (
-              <div className="flex items-center p-1 bg-gray-100 rounded-2xl border border-gray-200 text-xs font-bold">
-                {isSuperAdminUser && (
+              {canViewOpsDashboard && (
+                <div className="flex items-center p-1 bg-gray-100 rounded-2xl border border-gray-200 text-xs font-bold">
+                  {isSuperAdminUser && (
+                    <button
+                      onClick={() => setDashboardSection('superadmin')}
+                      className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                        (dashboardSection as string) === 'superadmin'
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm font-black'
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      <Crown size={13} className={(dashboardSection as string) === 'superadmin' ? 'text-amber-100' : 'text-amber-500'} />
+                      Super Admin
+                    </button>
+                  )}
                   <button
-                    onClick={() => setDashboardSection('superadmin')}
-                    className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
-                      dashboardSection === 'superadmin'
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm font-black'
+                    onClick={() => setDashboardSection('crm')}
+                    className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                      dashboardSection === 'crm'
+                        ? 'bg-white text-gray-900 shadow-sm font-extrabold'
                         : 'text-gray-500 hover:text-gray-900'
                     }`}
                   >
-                    <Crown size={13} className={dashboardSection === 'superadmin' ? 'text-amber-100' : 'text-amber-500'} />
-                    Super Admin
+                    Sales & CRM
                   </button>
-                )}
-                <button
-                  onClick={() => setDashboardSection('crm')}
-                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                    dashboardSection === 'crm'
-                      ? 'bg-white text-gray-900 shadow-sm font-extrabold'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  Sales & CRM
-                </button>
-                <button
-                  onClick={() => setDashboardSection('operations')}
-                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                    dashboardSection === 'operations'
-                      ? 'bg-gradient-to-r from-be-orange to-amber-600 text-white shadow-sm font-extrabold'
-                      : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  Operations HOD
-                </button>
-              </div>
-            )}
-          </div>
-          <p className="text-sm text-gray-500 mt-2 font-medium">
-            Real-time quotation conversion metrics, daily/monthly revenue insights, target achievements, and top-selling services.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 relative z-10">
-          {/* Timeframe Filter Tabs */}
-          <div className="flex items-center p-1 bg-gray-100 rounded-2xl border border-gray-200 text-xs font-bold">
-            <button
-              onClick={() => setTimeframe('today')}
-              className={`px-3 py-1.5 rounded-xl transition-all ${timeframe === 'today' ? 'bg-white text-gray-900 shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
-                }`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setTimeframe('month')}
-              className={`px-3 py-1.5 rounded-xl transition-all ${timeframe === 'month' ? 'bg-white text-gray-900 shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
-                }`}
-            >
-              {currentMonthName}
-            </button>
-            <button
-              onClick={() => setTimeframe('all')}
-              className={`px-3 py-1.5 rounded-xl transition-all ${timeframe === 'all' ? 'bg-white text-gray-900 shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
-                }`}
-            >
-              All Time
-            </button>
+                  <button
+                    onClick={() => setDashboardSection('operations')}
+                    className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                      dashboardSection === 'operations'
+                        ? 'bg-gradient-to-r from-be-orange to-amber-600 text-white shadow-sm font-extrabold'
+                        : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                  >
+                    Operations HOD
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mt-2 font-medium">
+              Real-time quotation conversion metrics, daily/monthly revenue insights, target achievements, and top-selling services.
+            </p>
           </div>
 
-          <button
-            onClick={loadData}
-            disabled={isRefreshing}
-            title="Refresh"
-            className="flex items-center justify-center p-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
-          >
-            <RefreshCw size={15} className={`${isRefreshing ? 'animate-spin text-be-orange' : 'text-gray-500'}`} />
-          </button>
-          <button
-            onClick={() => navigate('/crm/quotations')}
-            className="flex items-center px-4 py-2.5 bg-gradient-to-r from-be-orange to-amber-600 text-white rounded-xl text-xs font-bold hover:from-orange-600 hover:to-amber-700 transition-all shadow-md shadow-orange-500/20"
-          >
-            <Send size={14} className="mr-1.5" />
-            Quotations ({rbacQuotations.length})
-          </button>
+          <div className="flex flex-wrap items-center gap-3 relative z-10">
+            {/* Timeframe Filter Tabs */}
+            <div className="flex items-center p-1 bg-gray-100 rounded-2xl border border-gray-200 text-xs font-bold">
+              <button
+                onClick={() => setTimeframe('today')}
+                className={`px-3 py-1.5 rounded-xl transition-all ${timeframe === 'today' ? 'bg-white text-gray-900 shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
+                  }`}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => setTimeframe('month')}
+                className={`px-3 py-1.5 rounded-xl transition-all ${timeframe === 'month' ? 'bg-white text-gray-900 shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
+                  }`}
+              >
+                {currentMonthName}
+              </button>
+              <button
+                onClick={() => setTimeframe('all')}
+                className={`px-3 py-1.5 rounded-xl transition-all ${timeframe === 'all' ? 'bg-white text-gray-900 shadow-sm font-extrabold' : 'text-gray-500 hover:text-gray-900'
+                  }`}
+              >
+                All Time
+              </button>
+            </div>
+
+            <button
+              onClick={loadData}
+              disabled={isRefreshing}
+              title="Refresh"
+              className="flex items-center justify-center p-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
+            >
+              <RefreshCw size={15} className={`${isRefreshing ? 'animate-spin text-be-orange' : 'text-gray-500'}`} />
+            </button>
+            <button
+              onClick={() => navigate('/crm/quotations')}
+              className="flex items-center px-4 py-2.5 bg-gradient-to-r from-be-orange to-amber-600 text-white rounded-xl text-xs font-bold hover:from-orange-600 hover:to-amber-700 transition-all shadow-md shadow-orange-500/20"
+            >
+              <Send size={14} className="mr-1.5" />
+              Quotations ({rbacQuotations.length})
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {dashboardSection === 'superadmin' ? (
-        <SuperAdminDashboardView />
+        <SuperAdminDashboardView
+          deals={deals}
+          employees={employees}
+          quotations={quotations}
+          clients={clients}
+          queries={queries}
+          isRefreshing={isRefreshing}
+          onRefresh={loadData}
+        />
       ) : dashboardSection === 'operations' ? (
         <OperationsDashboardView />
       ) : isSalesHodUser ? (
