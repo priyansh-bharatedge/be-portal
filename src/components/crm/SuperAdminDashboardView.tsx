@@ -790,7 +790,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <button
               onClick={() => setActiveDepartment('sales')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'sales' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+                activeDepartment === 'sales' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
               }`}
             >
               <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-white' : 'text-sky-400'} />
@@ -801,7 +801,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <button
               onClick={() => setActiveDepartment('operations')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'operations' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+                activeDepartment === 'operations' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
               }`}
             >
               <Layers size={14} className={activeDepartment === 'operations' ? 'text-white' : 'text-orange-400'} />
@@ -812,7 +812,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <button
               onClick={() => setActiveDepartment('others')}
               className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'others' ? 'bg-gray-950 text-white shadow-md shadow-black/15 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
+                activeDepartment === 'others' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25 font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
               }`}
             >
               <Building2 size={14} className={activeDepartment === 'others' ? 'text-white' : 'text-emerald-400'} />
@@ -842,7 +842,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             {/* + New Deal Pill Button */}
             <button
               onClick={() => navigate('/crm/deals')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gray-950 hover:bg-black text-white rounded-full text-xs font-black transition-all shadow-md shadow-black/15 cursor-pointer hover:scale-105"
+              className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full text-xs font-black transition-all shadow-md shadow-indigo-500/25 cursor-pointer hover:scale-105"
             >
               <Plus size={14} />
               <span>New Deal</span>
@@ -1141,7 +1141,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 <button
                   onClick={() => navigate('/settings')}
                   title="Dashboard Settings"
-                  className="w-8 h-8 rounded-full bg-gray-950 hover:bg-black text-white flex items-center justify-center shadow-md shadow-black/10 cursor-pointer transition-transform hover:rotate-45"
+                  className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 cursor-pointer transition-transform hover:rotate-45"
                 >
                   <Settings size={14} />
                 </button>
@@ -1258,7 +1258,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
               <button
                 onClick={() => navigate('/crm/deals')}
-                className="flex items-center px-4 py-2 bg-gray-950 hover:bg-black text-white rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-center"
+                className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-full text-xs font-bold transition-all shadow-md shadow-indigo-500/25 cursor-pointer self-start sm:self-center"
               >
                 All Deals ({activeDeals.length}) <ArrowRight size={13} className="ml-1.5" />
               </button>
@@ -1342,33 +1342,33 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             onClick={() => setActiveDepartment('sales')}
             className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
               activeDepartment === 'sales'
-                ? 'bg-gray-950 text-white shadow-lg shadow-black/20 font-black scale-105'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 font-black scale-105'
                 : 'text-gray-600 hover:text-gray-950 hover:bg-white/80'
             }`}
           >
-            <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-amber-400' : 'text-blue-500'} />
+            <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-white' : 'text-blue-500'} />
             <span>Sales</span>
           </button>
           <button
             onClick={() => setActiveDepartment('operations')}
             className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
               activeDepartment === 'operations'
-                ? 'bg-gray-950 text-white shadow-lg shadow-black/20 font-black scale-105'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 font-black scale-105'
                 : 'text-gray-600 hover:text-gray-950 hover:bg-white/80'
             }`}
           >
-            <Layers size={14} className={activeDepartment === 'operations' ? 'text-amber-400' : 'text-orange-500'} />
+            <Layers size={14} className={activeDepartment === 'operations' ? 'text-white' : 'text-orange-500'} />
             <span>Operations</span>
           </button>
           <button
             onClick={() => setActiveDepartment('others')}
             className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer ${
               activeDepartment === 'others'
-                ? 'bg-gray-950 text-white shadow-lg shadow-black/20 font-black scale-105'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/30 font-black scale-105'
                 : 'text-gray-600 hover:text-gray-950 hover:bg-white/80'
             }`}
           >
-            <Building2 size={14} className={activeDepartment === 'others' ? 'text-amber-400' : 'text-emerald-500'} />
+            <Building2 size={14} className={activeDepartment === 'others' ? 'text-white' : 'text-emerald-500'} />
             <span>Other Depts</span>
           </button>
         </div>

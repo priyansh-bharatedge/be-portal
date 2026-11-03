@@ -349,7 +349,7 @@ export const AppLayout = () => {
 
             {isSuperAdminDashboard ? (
               <div className="hidden sm:flex items-center text-xs font-bold">
-                <span className="px-2.5 py-1 rounded-full bg-slate-900 text-amber-400 text-[10px] font-black tracking-widest uppercase mr-2.5 shadow-2xs border border-amber-400/30">SUPER ADMIN</span>
+                <span className="px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black tracking-widest uppercase mr-2.5 shadow-xs shadow-amber-500/20 border border-amber-300/40">SUPER ADMIN</span>
                 <span className="text-gray-500 font-bold">CRM</span>
                 <span className="mx-2 text-gray-400">/</span>
                 <span className="text-gray-950 font-black">Executive Dashboard</span>

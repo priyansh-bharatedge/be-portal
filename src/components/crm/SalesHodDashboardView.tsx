@@ -1175,8 +1175,11 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-white/70 backdrop-blur-2xl p-5 sm:p-6 rounded-[28px] border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)]">
         <div>
           <div className="flex items-center gap-3">
-            <span className="p-3 rounded-2xl bg-gray-950 text-white shadow-md shadow-black/15 flex items-center justify-center">
-              <Compass size={20} className="text-amber-400" />
+            <span className={isSuperAdmin
+              ? "p-3 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25 flex items-center justify-center"
+              : "p-3 rounded-2xl bg-gray-950 text-white shadow-md shadow-black/15 flex items-center justify-center"
+            }>
+              <Compass size={20} className={isSuperAdmin ? "text-white" : "text-amber-400"} />
             </span>
             <div>
               <h1 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight">
@@ -1196,7 +1199,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 key={tf}
                 onClick={() => setTimeframe(tf)}
                 className={`px-4 py-2 rounded-full transition-all duration-200 cursor-pointer text-xs font-bold capitalize ${timeframe === tf
-                  ? 'bg-gray-950 text-white shadow-sm shadow-black/20 scale-[1.02]'
+                  ? (isSuperAdmin ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25 scale-[1.02]' : 'bg-gray-950 text-white shadow-sm shadow-black/20 scale-[1.02]')
                   : 'text-gray-600 hover:text-gray-950 hover:bg-white/70'
                   }`}
               >
@@ -1247,7 +1250,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           <button
             onClick={onRefresh}
             disabled={propsRefreshing || isLoading}
-            className="px-4 py-2 rounded-full bg-gray-950 hover:bg-black text-white font-bold text-xs shadow-md shadow-black/15 transition-all cursor-pointer flex items-center gap-2 hover:scale-[1.02] disabled:opacity-50"
+            className={isSuperAdmin
+              ? "px-4 py-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-500/25 transition-all cursor-pointer flex items-center gap-2 hover:scale-[1.02] disabled:opacity-50"
+              : "px-4 py-2 rounded-full bg-gray-950 hover:bg-black text-white font-bold text-xs shadow-md shadow-black/15 transition-all cursor-pointer flex items-center gap-2 hover:scale-[1.02] disabled:opacity-50"
+            }
           >
             <RefreshCw size={13} className={propsRefreshing || isLoading ? 'animate-spin text-amber-400' : ''} />
             <span>Sync Zoho</span>
@@ -2175,7 +2181,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     setDrillLevel(0);
                     setActiveInspectLevel('root');
                   }}
-                  className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${drillLevel === 0 ? 'bg-gray-950 text-white font-black shadow-xs' : 'text-gray-700 hover:text-gray-950'
+                  className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${drillLevel === 0 ? (isSuperAdmin ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black shadow-xs' : 'bg-gray-950 text-white font-black shadow-xs') : 'text-gray-700 hover:text-gray-950'
                     }`}
                   title="Click to reset BharatEdge to center"
                 >
@@ -2190,7 +2196,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                         setDrillLevel(1);
                         setActiveInspectLevel('sales');
                       }}
-                      className={`px-3 py-1 rounded-full transition-all cursor-pointer font-bold ${drillLevel === 1 ? 'bg-gray-950 text-white font-black shadow-xs' : 'text-gray-700 hover:text-gray-950'
+                      className={`px-3 py-1 rounded-full transition-all cursor-pointer font-bold ${drillLevel === 1 ? (isSuperAdmin ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black shadow-xs' : 'bg-gray-950 text-white font-black shadow-xs') : 'text-gray-700 hover:text-gray-950'
                         }`}
                     >
                       Sales
@@ -2260,7 +2266,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       setDrillLevel(4);
                       setActiveInspectLevel('tm');
                     }}
-                    className="px-4 py-1.5 rounded-full text-xs font-bold text-white bg-gray-950 hover:bg-black transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-black/15 hover:scale-[1.02]"
+                    className={isSuperAdmin
+                      ? "px-4 py-1.5 rounded-full text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-indigo-500/20 hover:scale-[1.02]"
+                      : "px-4 py-1.5 rounded-full text-xs font-bold text-white bg-gray-950 hover:bg-black transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-black/15 hover:scale-[1.02]"
+                    }
                     title="Expand all hierarchy levels"
                   >
                     <span>Expand All</span>
@@ -2760,7 +2769,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       <button
                         onClick={() => setTlViewMode('personal')}
                         className={`py-1.5 text-xs font-bold rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${tlViewMode === 'personal'
-                          ? 'bg-gray-950 text-white shadow-xs'
+                          ? (isSuperAdmin ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs' : 'bg-gray-950 text-white shadow-xs')
                           : 'text-gray-500 hover:text-gray-900'
                           }`}
                       >
@@ -2770,7 +2779,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       <button
                         onClick={() => setTlViewMode('team')}
                         className={`py-1.5 text-xs font-bold rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${tlViewMode === 'team'
-                          ? 'bg-gray-950 text-white shadow-xs'
+                          ? (isSuperAdmin ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs' : 'bg-gray-950 text-white shadow-xs')
                           : 'text-gray-500 hover:text-gray-900'
                           }`}
                       >
@@ -3462,8 +3471,11 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           {/* Header with Title and Global Search */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-5 pb-5 border-b border-gray-100">
             <div className="flex items-center gap-3">
-              <span className="p-3 rounded-2xl bg-gray-950 text-white shadow-md shadow-black/15">
-                <Users size={18} className="text-amber-400" />
+              <span className={isSuperAdmin
+                ? "p-3 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-indigo-500/25"
+                : "p-3 rounded-2xl bg-gray-950 text-white shadow-md shadow-black/15"
+              }>
+                <Users size={18} className={isSuperAdmin ? "text-white" : "text-amber-400"} />
               </span>
               <div>
                 <h3 className="text-lg font-black text-gray-950 tracking-tight flex items-center gap-2">
@@ -3529,7 +3541,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       key={tab.key}
                       onClick={() => setMatrixFilter(tab.key as any)}
                       className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${matrixFilter === tab.key
-                        ? 'bg-gray-950 text-white shadow-xs'
+                        ? (isSuperAdmin ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs' : 'bg-gray-950 text-white shadow-xs')
                         : 'text-gray-600 hover:text-gray-950 hover:bg-white/60'
                         }`}
                     >
@@ -3752,7 +3764,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => navigate('/crm/deals')}
-                    className="px-4 py-2 rounded-full text-xs font-bold text-white bg-gray-950 hover:bg-black transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    className={isSuperAdmin
+                    ? "px-4 py-2 rounded-full text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    : "px-4 py-2 rounded-full text-xs font-bold text-white bg-gray-950 hover:bg-black transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  }
                     title="Open Deals Page in new view"
                   >
                     <span>Go to Deals</span>
