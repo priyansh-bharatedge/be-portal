@@ -2157,7 +2157,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         const topPersonService = personBestServices[0] || null;
 
         return (
-          <div className="rounded-[28px] bg-white/60 backdrop-blur-2xl border border-white/80 p-5 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)] relative overflow-hidden">
+          <div className={isSuperAdmin
+    ? "rounded-[32px] bg-white/25 hover:bg-white/35 backdrop-blur-3xl border border-white/70 p-5 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] relative overflow-hidden transition-all duration-300"
+    : "rounded-[28px] bg-white/60 backdrop-blur-2xl border border-white/80 p-5 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)] relative overflow-hidden"
+  }>
+    {isSuperAdmin && (
+      <div className="absolute -top-20 -left-20 w-96 h-96 bg-gradient-to-br from-indigo-400/15 via-sky-400/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+    )}
             {/* Subtle light geometric grid */}
             <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:24px_24px] opacity-70 pointer-events-none" />
 
@@ -2730,7 +2736,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                 {/* COLUMN 5: SLEEK INSPECTOR PANEL (ALWAYS ON RIGHT SIDE) */}
                 {/* ================================================================= */}
                 <div
-                  className="absolute rounded-[26px] bg-white/85 backdrop-blur-2xl border border-white/90 shadow-[0_14px_45px_rgba(0,0,0,0.06)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5 z-20"
+                  className={isSuperAdmin
+                    ? "absolute rounded-[28px] bg-white/45 backdrop-blur-3xl border border-white/80 shadow-[0_20px_50px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5 z-20"
+                    : "absolute rounded-[26px] bg-white/85 backdrop-blur-2xl border border-white/90 shadow-[0_14px_45px_rgba(0,0,0,0.06)] p-5 overflow-y-auto flex flex-col justify-start space-y-3.5 z-20"
+                  }
                   style={{
                     right: 15,
                     top: 15,
@@ -3077,23 +3086,35 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Deal Pipeline View Stages */}
-        <div className="rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center justify-between mb-5">
+        <div className={isSuperAdmin
+          ? "rounded-[32px] bg-white/25 hover:bg-white/35 backdrop-blur-3xl border border-white/70 p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] transition-all duration-300 relative overflow-hidden"
+          : "rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-[0_4px_25px_rgba(0,0,0,0.03)]"
+        }>
+          {isSuperAdmin && (
+            <>
+              <div className="absolute -top-16 -left-16 w-64 h-64 bg-gradient-to-br from-indigo-400/20 via-purple-400/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-16 -right-16 w-64 h-64 bg-gradient-to-tl from-cyan-400/15 via-blue-400/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+            </>
+          )}
+          <div className="flex items-center justify-between mb-5 relative z-10">
             <div>
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <Layers size={18} className="text-indigo-600" />
+                <Layers size={18} className={isSuperAdmin ? "text-indigo-500" : "text-indigo-600"} />
                 Deal Pipeline View Stages
               </h3>
               <p className="text-xs text-slate-500 mt-0.5 font-medium">
                 Live deals distributed across operational workflow stages.
               </p>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+            <span className={isSuperAdmin
+              ? "px-3.5 py-1.5 rounded-full text-xs font-bold bg-white/40 backdrop-blur-xl border border-white/70 text-indigo-700 shadow-2xs"
+              : "px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100"
+            }>
               {filteredDeals.length} Deals
             </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 relative z-10">
             {stageStats.map(st => (
               <div
                 key={st.name}
@@ -3101,11 +3122,14 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   setSelectedStageModal(st);
                   setStageModalSearch('');
                 }}
-                className="p-3.5 rounded-2xl bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/80 hover:border-indigo-400 hover:shadow-md cursor-pointer flex items-center justify-between transition-all group active:scale-[0.99]"
+                className={isSuperAdmin
+                  ? "p-3.5 rounded-[22px] bg-white/35 hover:bg-white/60 backdrop-blur-xl border border-white/70 hover:border-indigo-400/50 shadow-[0_4px_16px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.9)] cursor-pointer flex items-center justify-between transition-all group active:scale-[0.99]"
+                  : "p-3.5 rounded-2xl bg-slate-50 hover:bg-indigo-50/50 border border-slate-200/80 hover:border-indigo-400 hover:shadow-md cursor-pointer flex items-center justify-between transition-all group active:scale-[0.99]"
+                }
                 title={`Click to view all ${st.count} deals in ${st.name}`}
               >
                 <div className="flex items-center gap-3">
-                  <span className={`w-3.5 h-3.5 rounded-full ${st.color} group-hover:scale-125 transition-transform shrink-0`} />
+                  <span className={`w-3.5 h-3.5 rounded-full ${st.color} group-hover:scale-125 transition-transform shrink-0 shadow-xs`} />
                   <div>
                     <h5 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
                       <span>{st.name}</span>
@@ -3123,7 +3147,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       Rec: {formatCompactRupee(st.received)}
                     </p>
                   </div>
-                  <span className="p-1 rounded-lg bg-white group-hover:bg-indigo-100 text-slate-400 group-hover:text-indigo-600 transition-all">
+                  <span className={isSuperAdmin
+                    ? "p-1.5 rounded-xl bg-white/50 backdrop-blur-md group-hover:bg-indigo-100/80 border border-white/80 text-slate-400 group-hover:text-indigo-600 transition-all shadow-2xs"
+                    : "p-1 rounded-lg bg-white group-hover:bg-indigo-100 text-slate-400 group-hover:text-indigo-600 transition-all"
+                  }>
                     <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
                   </span>
                 </div>
@@ -3133,23 +3160,35 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         </div>
 
         {/* Sales Funnel */}
-        <div className="rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)]">
-          <div className="flex items-center justify-between mb-5">
+        <div className={isSuperAdmin
+          ? "rounded-[32px] bg-white/25 hover:bg-white/35 backdrop-blur-3xl border border-white/70 p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] transition-all duration-300 relative overflow-hidden"
+          : "rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)]"
+        }>
+          {isSuperAdmin && (
+            <>
+              <div className="absolute -top-16 -right-16 w-64 h-64 bg-gradient-to-br from-cyan-400/20 via-teal-300/15 to-transparent rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-gradient-to-tr from-indigo-400/15 via-purple-400/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+            </>
+          )}
+          <div className="flex items-center justify-between mb-5 relative z-10">
             <div>
               <h3 className="text-lg font-black text-gray-950 flex items-center gap-2">
-                <BarChart3 size={18} className="text-cyan-600" />
+                <BarChart3 size={18} className={isSuperAdmin ? "text-cyan-500" : "text-cyan-600"} />
                 Executive Sales Funnel
               </h3>
               <p className="text-xs text-gray-400 mt-0.5 font-medium">
                 Conversion drop-off from initial quote to closed won delivery.
               </p>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-50/80 text-cyan-800 border border-cyan-100 shadow-2xs">
+            <span className={isSuperAdmin
+              ? "px-3.5 py-1.5 rounded-full text-xs font-bold bg-white/40 backdrop-blur-xl border border-white/70 text-cyan-800 shadow-2xs"
+              : "px-3 py-1 rounded-full text-xs font-bold bg-cyan-50/80 text-cyan-800 border border-cyan-100 shadow-2xs"
+            }>
               Conversion
             </span>
           </div>
 
-          <div className="space-y-3 pt-2">
+          <div className="space-y-3 pt-2 relative z-10">
             {[
               { stage: '1. Quotations Generated', count: Math.max(liveQuotations.length, filteredDeals.length * 2), color: 'bg-blue-500', pct: 100, deals: [] },
               { stage: '2. Deal Contracts Booked', count: filteredDeals.length, color: 'bg-indigo-500', pct: Math.round((filteredDeals.length / Math.max(1, liveQuotations.length)) * 100), deals: filteredDeals },
@@ -3172,7 +3211,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                     setStageModalSearch('');
                   }
                 }}
-                className={`space-y-1 p-1.5 rounded-xl transition-all ${fn.deals.length > 0 ? 'cursor-pointer hover:bg-white/80 group' : ''}`}
+                className={isSuperAdmin
+                  ? `space-y-1.5 p-3 rounded-[20px] bg-white/30 hover:bg-white/50 backdrop-blur-xl border border-white/70 shadow-[0_4px_16px_rgba(0,0,0,0.01),inset_0_1px_1px_rgba(255,255,255,0.9)] transition-all ${fn.deals.length > 0 ? 'cursor-pointer group' : ''}`
+                  : `space-y-1 p-1.5 rounded-xl transition-all ${fn.deals.length > 0 ? 'cursor-pointer hover:bg-white/80 group' : ''}`
+                }
                 title={fn.deals.length > 0 ? `Click to inspect ${fn.deals.length} deals in ${fn.stage}` : ''}
               >
                 <div className="flex justify-between text-xs font-bold">
@@ -3182,7 +3224,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                   </span>
                   <span className="text-gray-900 font-extrabold">{fn.count} Records ({fn.pct}%)</span>
                 </div>
-                <div className="w-full h-3 bg-gray-100/80 rounded-full overflow-hidden p-0.5 border border-white/80 shadow-inner">
+                <div className={isSuperAdmin
+                  ? "w-full h-3 bg-white/40 rounded-full overflow-hidden p-0.5 border border-white/80 shadow-inner"
+                  : "w-full h-3 bg-gray-100/80 rounded-full overflow-hidden p-0.5 border border-white/80 shadow-inner"
+                }>
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.min(100, Math.max(5, fn.pct))}%` }}
@@ -3269,7 +3314,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           };
 
           return (
-            <div className="rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)] relative overflow-hidden">
+            <div className={isSuperAdmin
+    ? "rounded-[32px] bg-white/25 hover:bg-white/35 backdrop-blur-3xl border border-white/70 p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] relative overflow-hidden transition-all duration-300"
+    : "rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)] relative overflow-hidden"
+  }>
+    {isSuperAdmin && (
+      <div className="absolute -top-16 -right-16 w-80 h-80 bg-gradient-to-br from-amber-400/15 via-orange-300/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+    )}
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-5 border-b border-slate-100">
                 <div>
@@ -3312,7 +3363,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       transition={{ duration: 0.2 }}
                       className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between group ${isTop1
                         ? 'bg-gradient-to-br from-amber-50/50 via-white to-orange-50/20 border-amber-300 shadow-md shadow-amber-500/5 ring-1 ring-amber-200/60'
-                        : 'bg-white hover:bg-slate-50/50 border-slate-200/80 hover:border-indigo-300 shadow-xs hover:shadow-md'
+                        : isSuperAdmin ? 'bg-white/35 hover:bg-white/60 backdrop-blur-xl border border-white/70 hover:border-indigo-300/60 shadow-[0_4px_16px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.9)] hover:shadow-md' : 'bg-white hover:bg-slate-50/50 border-slate-200/80 hover:border-indigo-300 shadow-xs hover:shadow-md'
                         }`}
                     >
                       <div>
@@ -3401,7 +3452,13 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         })()}
 
         {/* BDM Matrix Table (Aesthetic Modern Executive Table) */}
-        <div className="rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)]">
+        <div className={isSuperAdmin
+    ? "rounded-[32px] bg-white/25 hover:bg-white/35 backdrop-blur-3xl border border-white/70 p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.03),inset_0_1px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(255,255,255,0.3)] transition-all duration-300 relative overflow-hidden"
+    : "rounded-[28px] bg-white/70 backdrop-blur-2xl border border-white/80 p-6 sm:p-7 shadow-[0_8px_30px_rgba(0,0,0,0.025)]"
+  }>
+    {isSuperAdmin && (
+      <div className="absolute -top-16 left-1/4 w-80 h-80 bg-gradient-to-br from-indigo-400/15 via-purple-300/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+    )}
           {/* Header with Title and Global Search */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-5 pb-5 border-b border-gray-100">
             <div className="flex items-center gap-3">
@@ -3489,7 +3546,10 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
           })()}
 
           {/* Aesthetic Table */}
-          <div className="overflow-x-auto rounded-[22px] border border-white/80 bg-white/40 backdrop-blur-md shadow-2xs">
+          <div className={isSuperAdmin
+    ? "overflow-x-auto rounded-[22px] border border-white/70 bg-white/30 backdrop-blur-xl shadow-2xs relative z-10"
+    : "overflow-x-auto rounded-[22px] border border-white/80 bg-white/40 backdrop-blur-md shadow-2xs"
+  }>
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-white/70 text-gray-500 font-bold border-b border-gray-100 text-[11px] uppercase tracking-wider backdrop-blur-sm">
                 <tr>
