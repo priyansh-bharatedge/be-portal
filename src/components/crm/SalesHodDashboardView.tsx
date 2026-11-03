@@ -32,6 +32,7 @@ import {
   getDealGstAmount,
   isDealPaymentVerified
 } from '../../utils/dealSplitUtils';
+import { mapZohoRecordToEmployee } from '../../utils/employeeUtils';
 
 // ============================================================================
 // TYPES & BENCHMARKS
@@ -298,7 +299,19 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
             setLiveDeals(dealsRes.data);
             try { localStorage.setItem('be_deals', JSON.stringify(dealsRes.data)); } catch (e) { }
           }
-          if (empRes && Array.isArray(empRes.data)) setLiveEmployees(empRes.data);
+          if (empRes && Array.isArray(empRes.data)) {
+            const mapped = empRes.data.map(mapZohoRecordToEmployee);
+            setLiveEmployees(prev => {
+              const saved = localStorage.getItem('be_employees');
+              if (saved) {
+                try {
+                  const parsed = JSON.parse(saved);
+                  if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                } catch (e) {}
+              }
+              return mapped;
+            });
+          }
         } catch (err) {
           console.warn('[SalesHodDashboard] Auto-fetch error:', err);
         } finally {
@@ -580,75 +593,232 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     return { received: totalRec, booked: totalBkd, count: totalCnt, deals: dealList };
   };
 
-  // 6. BUILD SALES HIERARCHY TREE
+  // 6. BUILD SALES HIERARCHY TREE (DYNAMICALLY POPULATED FROM LIVE EMPLOYEES & BRANCHES)
   const salesTree: SalesTreeNode = useMemo(() => {
-    const branchConfigs = [
-      {
+    // Baseline known sales leadership and team rosters
+    const BASELINE_TLS: Array<{ name: string; title: string; defaultBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai'; target: number }> = [
+      { name: 'Romil Prajapati', title: 'Branch Manager (TL)', defaultBranch: 'Ahmedabad', target: 2200000 },
+      { name: 'Uday Dubey', title: 'Vice Sales Head (TL)', defaultBranch: 'Ahmedabad', target: 2000000 },
+      { name: 'Akshay Kumar Sharma', title: 'Sr. Cluster Development Manager (TL)', defaultBranch: 'Jaipur', target: TARGET_BENCHMARKS.branchJaipur },
+      { name: 'Sourav Modak', title: 'Branch Manager (TL)', defaultBranch: 'Chennai', target: 1200000 },
+      { name: 'Amarnath C & Southern Cluster', title: 'Sr. BDM Cluster (TL)', defaultBranch: 'Chennai', target: 800000 }
+    ];
+
+    const BASELINE_TMS: Array<{ name: string; defaultTl: string; defaultBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai'; target?: number }> = [
+      // Romil's default team
+      { name: 'Meet Yadav', defaultTl: 'Romil Prajapati', defaultBranch: 'Ahmedabad' },
+      { name: 'Daivik Patel', defaultTl: 'Romil Prajapati', defaultBranch: 'Ahmedabad' },
+      { name: 'Rutvik Patel', defaultTl: 'Romil Prajapati', defaultBranch: 'Ahmedabad' },
+      { name: 'Vijay Singh', defaultTl: 'Romil Prajapati', defaultBranch: 'Ahmedabad' },
+      { name: 'Ayushkumar Patel', defaultTl: 'Romil Prajapati', defaultBranch: 'Ahmedabad' },
+      { name: 'Umang Soni', defaultTl: 'Romil Prajapati', defaultBranch: 'Ahmedabad' },
+      { name: 'Nilesh Solanki', defaultTl: 'Romil Prajapati', defaultBranch: 'Ahmedabad' },
+      { name: 'Jitendra Rathore', defaultTl: 'Romil Prajapati', defaultBranch: 'Ahmedabad' },
+      { name: 'Naman Makkad', defaultTl: 'Romil Prajapati', defaultBranch: 'Ahmedabad' },
+      // Uday's default team
+      { name: 'Abhishek Harendra Singh', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      { name: 'Abhishek Prajapati', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      { name: 'Monika Rola', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      { name: 'Priyanshi Barmashe', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      { name: 'Rituraj Singh', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      { name: 'Jainam Patva', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      { name: 'Sayyam Jain', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      { name: 'Ayush Bhat', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      { name: 'Jainam Sompura', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      { name: 'Hetul Chiragbhai', defaultTl: 'Uday Dubey', defaultBranch: 'Ahmedabad' },
+      // Akshay's default team
+      { name: 'Aakash Goswami', defaultTl: 'Akshay Kumar Sharma', defaultBranch: 'Jaipur' },
+      { name: 'Arpit Sharma', defaultTl: 'Akshay Kumar Sharma', defaultBranch: 'Jaipur' },
+      { name: 'Harshita Manohar', defaultTl: 'Akshay Kumar Sharma', defaultBranch: 'Jaipur' },
+      { name: 'Monika Gurjar', defaultTl: 'Akshay Kumar Sharma', defaultBranch: 'Jaipur' },
+      { name: 'Punit Kumar Khaliya', defaultTl: 'Akshay Kumar Sharma', defaultBranch: 'Jaipur' },
+      { name: 'Akshat Mishra', defaultTl: 'Akshay Kumar Sharma', defaultBranch: 'Jaipur' },
+      { name: 'Konpal Sharma', defaultTl: 'Akshay Kumar Sharma', defaultBranch: 'Jaipur' },
+      // Sourav's default team
+      { name: 'Palak Dubey', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
+      { name: 'Pratima Sahu', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
+      { name: 'Janvi Chabhadiya', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
+      { name: 'Kalash Srivastava', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
+      { name: 'Astha Chauhan', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
+      { name: 'Drashti Bhuva', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
+      { name: 'Muliyashiya Goganbhai', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
+      { name: 'Trivedi Bhavikkumar', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
+      { name: 'Chirag Navani', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
+      // Amarnath's default team
+      { name: 'AMARNATH C', defaultTl: 'Amarnath C & Southern Cluster', defaultBranch: 'Chennai' },
+      { name: 'Vaishnavi R', defaultTl: 'Amarnath C & Southern Cluster', defaultBranch: 'Chennai' },
+      { name: 'Justin J', defaultTl: 'Amarnath C & Southern Cluster', defaultBranch: 'Chennai' },
+      { name: 'Gokul G', defaultTl: 'Amarnath C & Southern Cluster', defaultBranch: 'Chennai' }
+    ];
+
+    // Helper to extract branch ('Ahmedabad' | 'Jaipur' | 'Chennai')
+    const extractBranch = (raw: any): 'Ahmedabad' | 'Jaipur' | 'Chennai' | null => {
+      if (!raw) return null;
+      const s = String(raw).toLowerCase().trim();
+      if (s.includes('jaipur') || s.includes('rajasthan')) return 'Jaipur';
+      if (s.includes('chennai') || s.includes('tamil') || s.includes('south')) return 'Chennai';
+      if (s.includes('ahmedabad') || s.includes('gujarat')) return 'Ahmedabad';
+      return null;
+    };
+
+    // Helper to match person names robustly
+    const isSamePerson = (nameA: string, nameB: string): boolean => {
+      const cA = (nameA || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cB = (nameB || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!cA || !cB) return false;
+      if (cA === cB) return true;
+      if (cA.length > 5 && cB.length > 5 && (cA.includes(cB) || cB.includes(cA))) return true;
+      const tokA = (nameA || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+      const tokB = (nameB || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+      if (tokA.length >= 2 && tokB.length >= 2) {
+        return tokA[0] === tokB[0] && tokA[tokA.length - 1] === tokB[tokB.length - 1];
+      }
+      return false;
+    };
+
+    // Dynamic branch holders
+    const branchStructures: Record<'Ahmedabad' | 'Jaipur' | 'Chennai', {
+      id: string;
+      name: string;
+      subtitle: string;
+      target: number;
+      tls: Map<string, {
+        name: string;
+        title: string;
+        target: number;
+        tms: string[];
+      }>;
+    }> = {
+      Ahmedabad: {
         id: 'branch_ahmedabad',
         name: 'Ahmedabad Branch',
         subtitle: 'Headquarters & West Region',
         target: TARGET_BENCHMARKS.branchAhmedabad,
-        tls: [
-          {
-            name: 'Romil Prajapati',
-            title: 'Branch Manager (TL)',
-            target: 2200000,
-            tms: [
-              'Meet Yadav', 'Daivik Patel', 'Rutvik Patel', 'Vijay Singh',
-              'Ayushkumar Patel', 'Umang Soni', 'Nilesh Solanki', 'Jitendra Rathore', 'Naman Makkad'
-            ]
-          },
-          {
-            name: 'Uday Dubey',
-            title: 'Vice Sales Head (TL)',
-            target: 2000000,
-            tms: [
-              'Abhishek Harendra Singh', 'Abhishek Prajapati', 'Monika Rola',
-              'Priyanshi Barmashe', 'Rituraj Singh', 'Jainam Patva', 'Sayyam Jain',
-              'Ayush Bhat', 'Jainam Sompura', 'Hetul Chiragbhai'
-            ]
-          }
-        ]
+        tls: new Map()
       },
-      {
+      Jaipur: {
         id: 'branch_jaipur',
         name: 'Jaipur Branch',
         subtitle: 'North Region Cluster',
         target: TARGET_BENCHMARKS.branchJaipur,
-        tls: [
-          {
-            name: 'Akshay Kumar Sharma',
-            title: 'Sr. Cluster Development Manager (TL)',
-            target: TARGET_BENCHMARKS.branchJaipur,
-            tms: [
-              'Aakash Goswami', 'Arpit Sharma', 'Harshita Manohar', 'Monika Gurjar',
-              'Punit Kumar Khaliya', 'Akshat Mishra', 'Konpal Sharma'
-            ]
-          }
-        ]
+        tls: new Map()
       },
-      {
+      Chennai: {
         id: 'branch_chennai',
         name: 'Chennai Branch',
         subtitle: 'South Region Cluster',
         target: TARGET_BENCHMARKS.branchChennai,
-        tls: [
-          {
-            name: 'Sourav Modak',
-            title: 'Branch Manager (TL)',
-            target: 1200000,
-            tms: [
-              'Palak Dubey', 'Pratima Sahu', 'Janvi Chabhadiya', 'Kalash Srivastava',
-              'Astha Chauhan', 'Drashti Bhuva', 'Muliyashiya Goganbhai', 'Trivedi Bhavikkumar', 'Chirag Navani'
-            ]
-          },
-          {
-            name: 'Amarnath C & Southern Cluster',
-            title: 'Sr. BDM Cluster (TL)',
-            target: 800000,
-            tms: ['AMARNATH C', 'Vaishnavi R', 'Justin J', 'Gokul G']
-          }
-        ]
+        tls: new Map()
+      }
+    };
+
+    // 1. Map Baseline TLs, taking dynamic branch/target from liveEmployees if updated
+    BASELINE_TLS.forEach(btl => {
+      const matched = (liveEmployees || []).find(e => isSamePerson(e.name, btl.name));
+      const dynamicBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' = matched
+        ? (extractBranch(matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches) || btl.defaultBranch)
+        : btl.defaultBranch;
+      const target = matched && (matched.monthlyTarget || matched.target || matched.formData?.monthlyTarget || matched.formData?.target)
+        ? (Number(String(matched.monthlyTarget || matched.target || matched.formData?.monthlyTarget || matched.formData?.target).replace(/[^0-9]/g, '')) || btl.target)
+        : btl.target;
+      const title = matched?.role || matched?.formData?.role || btl.title;
+
+      branchStructures[dynamicBranch].tls.set(btl.name.toLowerCase(), {
+        name: btl.name,
+        title,
+        target,
+        tms: []
+      });
+    });
+
+    // 2. Discover any additional TLs in liveEmployees
+    (liveEmployees || []).forEach(emp => {
+      const name = emp.name || '';
+      if (!name || BASELINE_TLS.some(btl => isSamePerson(btl.name, name))) return;
+      const sRole = String(emp.systemRole || emp.formData?.systemRole || '').toUpperCase();
+      const jobTitle = String(emp.role || emp.formData?.role || '').toLowerCase();
+      const isTL = sRole === 'TL' || jobTitle.includes('team leader') || jobTitle.includes('(tl)');
+      const dept = String(emp.dept || emp.formData?.dept || '').toLowerCase();
+      const isSales = !dept || dept.includes('sale') || dept === 'general';
+
+      if (isTL && isSales) {
+        const dynamicBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' = extractBranch(emp.branch || emp.Branches || emp.formData?.branch || emp.formData?.Branches) || 'Ahmedabad';
+        const target = Number(String(emp.monthlyTarget || emp.target || emp.formData?.monthlyTarget || emp.formData?.target || 1200000).replace(/[^0-9]/g, '')) || 1200000;
+        branchStructures[dynamicBranch].tls.set(name.toLowerCase(), {
+          name,
+          title: emp.role || emp.formData?.role || 'Team Leader (TL)',
+          target,
+          tms: []
+        });
+      }
+    });
+
+    // 3. Map Baseline TMs, honoring dynamic branch & dynamic TL
+    BASELINE_TMS.forEach(btm => {
+      const matched = (liveEmployees || []).find(e => isSamePerson(e.name, btm.name));
+      const dynamicBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' = matched
+        ? (extractBranch(matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches) || btm.defaultBranch)
+        : btm.defaultBranch;
+      const desiredTl = matched?.teamLeaderName || matched?.Who_is_the_Team_Leader_TL || matched?.formData?.teamLeaderName || matched?.formData?.Who_is_the_Team_Leader_TL || btm.defaultTl;
+
+      const branchTls = branchStructures[dynamicBranch].tls;
+      // Try to find desired TL in this branch
+      let targetTlEntry: { name: string; title: string; target: number; tms: string[]; } | undefined = Array.from(branchTls.values()).find((t: any) => isSamePerson(t.name, desiredTl));
+      // Fallback: attach to first TL of this branch
+      if (!targetTlEntry && branchTls.size > 0) {
+        targetTlEntry = Array.from(branchTls.values())[0];
+      }
+      if (targetTlEntry && !targetTlEntry.tms.includes(btm.name)) {
+        targetTlEntry.tms.push(btm.name);
+      }
+    });
+
+    // 4. Discover any additional TMs in liveEmployees
+    (liveEmployees || []).forEach(emp => {
+      const name = emp.name || '';
+      if (!name) return;
+      if (BASELINE_TMS.some(m => isSamePerson(m.name, name))) return;
+      if (BASELINE_TLS.some(t => isSamePerson(t.name, name))) return;
+      const sRole = String(emp.systemRole || emp.formData?.systemRole || '').toUpperCase();
+      if (sRole === 'TL' || sRole === 'SUPER ADMIN' || sRole === 'HOD' || sRole === 'HR') return;
+      const dept = String(emp.dept || emp.formData?.dept || '').toLowerCase();
+      if (dept && !dept.includes('sale') && dept !== 'general') return;
+
+      const dynamicBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' = extractBranch(emp.branch || emp.Branches || emp.formData?.branch || emp.formData?.Branches) || 'Ahmedabad';
+      const desiredTl = emp.teamLeaderName || emp.Who_is_the_Team_Leader_TL || emp.formData?.teamLeaderName || emp.formData?.Who_is_the_Team_Leader_TL || '';
+      const branchTls = branchStructures[dynamicBranch].tls;
+
+      let targetTlEntry: { name: string; title: string; target: number; tms: string[]; } | undefined = Array.from(branchTls.values()).find((t: any) => isSamePerson(t.name, desiredTl));
+      if (!targetTlEntry && branchTls.size > 0) {
+        targetTlEntry = Array.from(branchTls.values())[0];
+      }
+      if (targetTlEntry && !targetTlEntry.tms.includes(name)) {
+        targetTlEntry.tms.push(name);
+      }
+    });
+
+    // Convert into branchConfigs
+    const branchConfigs = [
+      {
+        id: branchStructures.Ahmedabad.id,
+        name: branchStructures.Ahmedabad.name,
+        subtitle: branchStructures.Ahmedabad.subtitle,
+        target: branchStructures.Ahmedabad.target,
+        tls: Array.from(branchStructures.Ahmedabad.tls.values())
+      },
+      {
+        id: branchStructures.Jaipur.id,
+        name: branchStructures.Jaipur.name,
+        subtitle: branchStructures.Jaipur.subtitle,
+        target: branchStructures.Jaipur.target,
+        tls: Array.from(branchStructures.Jaipur.tls.values())
+      },
+      {
+        id: branchStructures.Chennai.id,
+        name: branchStructures.Chennai.name,
+        subtitle: branchStructures.Chennai.subtitle,
+        target: branchStructures.Chennai.target,
+        tls: Array.from(branchStructures.Chennai.tls.values())
       }
     ];
 
@@ -668,7 +838,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
 
         const tmNodes: SalesTreeNode[] = tl.tms.map(tmName => {
           const matched = matchBdmDeals(tmName, sharedClaimedSet, bc.name);
-          const tmTarget = TARGET_BENCHMARKS.tm;
+          const matchedEmp = (liveEmployees || []).find(e => isSamePerson(e.name, tmName));
+          const customTarget = matchedEmp && (matchedEmp.monthlyTarget || matchedEmp.target || matchedEmp.formData?.monthlyTarget || matchedEmp.formData?.target);
+          const tmTarget = customTarget ? (Number(String(customTarget).replace(/[^0-9]/g, '')) || TARGET_BENCHMARKS.tm) : TARGET_BENCHMARKS.tm;
           const tmShortfall = Math.max(0, tmTarget - matched.received);
 
           teamReceived += matched.received;
@@ -763,28 +935,51 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         };
       });
 
-      // Attribute unassigned direct house / corporate inbound deals to Headquarters (Ahmedabad)
-      if (bc.id === 'branch_ahmedabad') {
-        const unassignedKeys = Array.from(bdmPerformance.keys()).filter(k => !sharedClaimedSet.has(k));
-        let unassignedRec = 0;
-        let unassignedBkd = 0;
-        let unassignedCnt = 0;
-        let unassignedDeals: any[] = [];
-        unassignedKeys.forEach(k => {
-          const val = bdmPerformance.get(k);
-          if (val) {
-            unassignedRec += val.received;
-            unassignedBkd += val.booked;
-            unassignedCnt += val.count;
-            unassignedDeals = [...unassignedDeals, ...val.deals];
+      // Attribute unassigned direct house / corporate inbound deals according to deal branch, or Headquarters (Ahmedabad)
+      const unassignedKeys = Array.from(bdmPerformance.keys()).filter(k => !sharedClaimedSet.has(k));
+      let branchUnassignedRec = 0;
+      let branchUnassignedBkd = 0;
+      let branchUnassignedCnt = 0;
+      let branchUnassignedDeals: any[] = [];
+
+      unassignedKeys.forEach(k => {
+        const val = bdmPerformance.get(k);
+        if (!val) return;
+
+        const matchingDeals = val.deals.filter((d: any) => {
+          const raw = d.rawZohoDeal || d;
+          const bStr = String(raw.Branches || raw.Branch || d.branch || d.Branches || raw.City || raw.State || '').toLowerCase();
+          if (bc.id === 'branch_jaipur') {
+            return bStr.includes('jaipur') || bStr.includes('rajasthan');
+          }
+          if (bc.id === 'branch_chennai') {
+            return bStr.includes('chennai') || bStr.includes('tamil') || bStr.includes('south');
+          }
+          if (bc.id === 'branch_ahmedabad') {
+            const isJaipur = bStr.includes('jaipur') || bStr.includes('rajasthan');
+            const isChennai = bStr.includes('chennai') || bStr.includes('tamil') || bStr.includes('south');
+            return !isJaipur && !isChennai;
+          }
+          return false;
+        });
+
+        if (matchingDeals.length > 0) {
+          const rec = matchingDeals.reduce((sum: number, d: any) => sum + getDealReceivedAmount(d), 0);
+          const bkd = matchingDeals.reduce((sum: number, d: any) => sum + getDealTotalAmount(d), 0);
+          branchUnassignedRec += rec;
+          branchUnassignedBkd += bkd;
+          branchUnassignedCnt += matchingDeals.length;
+          branchUnassignedDeals = [...branchUnassignedDeals, ...matchingDeals];
+          if (matchingDeals.length === val.deals.length) {
             sharedClaimedSet.add(k);
           }
-        });
-        branchReceived += unassignedRec;
-        branchBooked += unassignedBkd;
-        branchDealsCount += unassignedCnt;
-        branchAllDeals = [...branchAllDeals, ...unassignedDeals];
-      }
+        }
+      });
+
+      branchReceived += branchUnassignedRec;
+      branchBooked += branchUnassignedBkd;
+      branchDealsCount += branchUnassignedCnt;
+      branchAllDeals = [...branchAllDeals, ...branchUnassignedDeals];
 
       const branchShortfall = Math.max(0, bc.target - branchReceived);
 
@@ -843,7 +1038,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       children: [deptNode],
       deals: filteredDeals
     };
-  }, [filteredDeals, bdmPerformance, totalReceivedAmount, totalBookedValue]);
+  }, [filteredDeals, bdmPerformance, totalReceivedAmount, totalBookedValue, liveEmployees]);
 
   // Overall Benchmarks
   const overallTarget = salesTree.target;

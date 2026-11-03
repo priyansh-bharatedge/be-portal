@@ -452,6 +452,31 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     }
   }, []);
 
+  // Listen for dynamic employee updates from HRMS
+  useEffect(() => {
+    const handleEmpUpdate = () => {
+      try {
+        const saved = localStorage.getItem('be_employees');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) setEmployees(parsed);
+        }
+      } catch (e) { }
+    };
+    window.addEventListener('be_employees_updated', handleEmpUpdate);
+    window.addEventListener('storage', handleEmpUpdate);
+    return () => {
+      window.removeEventListener('be_employees_updated', handleEmpUpdate);
+      window.removeEventListener('storage', handleEmpUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (propEmployees && propEmployees.length > 0) {
+      setEmployees(propEmployees);
+    }
+  }, [propEmployees]);
+
   // Filter deals for "Others" view based on timeframe
   const filteredDeals = useMemo(() => {
     const now = new Date();
