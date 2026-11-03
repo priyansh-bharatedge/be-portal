@@ -782,73 +782,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       {/* ========================================================================= */}
       <div className="relative z-10 rounded-[36px] bg-white/40 backdrop-blur-3xl border border-white/80 shadow-[0_20px_70px_rgba(0,0,0,0.03),inset_0_1px_2px_rgba(255,255,255,0.95)] p-5 sm:p-7 lg:p-8 space-y-7">
         
-        {/* 1. FLOATING PILL NAVIGATION TABS & QUICK CONTROLS BAR */}
-        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-2 sm:p-2.5 rounded-[28px] bg-white/75 backdrop-blur-2xl border border-white/90 shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
-          {/* Horizontal Floating Pill Capsule Tabs */}
-          <div className="inline-flex items-center gap-1.5 p-1 bg-white/80 backdrop-blur-xl border border-white/90 rounded-full shadow-2xs overflow-x-auto max-w-full">
-            {/* Sales Dashboard (First & Default) */}
-            <button
-              onClick={() => setActiveDepartment('sales')}
-              className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'sales' ? 'bg-white text-indigo-600 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-white font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/60'
-              }`}
-            >
-              <TrendingUp size={14} className={activeDepartment === 'sales' ? 'text-indigo-600' : 'text-sky-400'} />
-              <span>Sales Dashboard</span>
-            </button>
-
-            {/* Operations Dashboard */}
-            <button
-              onClick={() => setActiveDepartment('operations')}
-              className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'operations' ? 'bg-white text-orange-600 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-white font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/60'
-              }`}
-            >
-              <Layers size={14} className={activeDepartment === 'operations' ? 'text-orange-600' : 'text-orange-400'} />
-              <span>Operations Dashboard</span>
-            </button>
-
-            {/* Other Departments */}
-            <button
-              onClick={() => setActiveDepartment('others')}
-              className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all duration-300 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeDepartment === 'others' ? 'bg-white text-emerald-600 shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-white font-black scale-[1.02]' : 'text-gray-600 hover:text-gray-950 hover:bg-white/60'
-              }`}
-            >
-              <Building2 size={14} className={activeDepartment === 'others' ? 'text-emerald-600' : 'text-emerald-400'} />
-              <span>Other Departments</span>
-            </button>
-          </div>
-
-          {/* Right Controls: Quick Search, Date Pill, Sync Zoho, New Deal */}
-          <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-center">
-            {/* Frosted Glass Date Capsule */}
-            <div className="flex items-center px-4 py-2 bg-white/80 backdrop-blur-xl border border-white/90 rounded-full text-xs font-bold text-gray-800 shadow-2xs">
-              <Calendar size={13} className="mr-2 text-amber-400" />
-              <span>{todayFormatted}</span>
-            </div>
-
-            {/* Sync Zoho Floating Pill */}
-            <button
-              onClick={handleRefresh}
-              disabled={activeIsRefreshing}
-              title="Sync All Enterprise Data from Zoho CRM"
-              className="flex items-center gap-2 px-4 py-2 bg-white/80 hover:bg-white border border-white/90 text-gray-800 rounded-full text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw size={13} className={activeIsRefreshing ? 'animate-spin text-amber-400' : 'text-white/80'} />
-              <span>{activeIsRefreshing ? 'Syncing...' : 'Sync Zoho'}</span>
-            </button>
-
-            {/* + New Deal Pill Button */}
-            <button
-              onClick={() => navigate('/crm/deals')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-50/90 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-full text-xs font-black transition-all shadow-xs cursor-pointer hover:scale-105"
-            >
-              <Plus size={14} />
-              <span>New Deal</span>
-            </button>
-          </div>
-        </header>
+        
 
       {/* =================================================================== */}
       {/* 2. DYNAMIC VIEW SWITCHING (Sales First, Operations, Others) */}
