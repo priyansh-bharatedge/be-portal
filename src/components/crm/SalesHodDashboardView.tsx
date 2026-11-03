@@ -1330,193 +1330,194 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       {/* ========================================================================= */}
       {isSuperAdmin ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
-          {/* Card 1: Today's Revenue (Frosted Glass with Live Pulse) */}
-          <div className="bg-white/80 backdrop-blur-2xl rounded-[28px] p-5 sm:p-6 border border-white/90 shadow-[0_12px_36px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
-            <div>
-              <div className="flex justify-between items-center mb-3 relative z-10">
-                <span className="w-10 h-10 rounded-2xl bg-indigo-50/90 text-indigo-600 border border-indigo-100/70 shadow-2xs flex items-center justify-center shrink-0">
-                  <IndianRupee size={18} />
-                </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50/90 text-indigo-700 border border-indigo-200/60 shadow-2xs flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                  Today Live
-                </span>
-                <div className="w-7 h-7 rounded-full bg-gray-100/80 group-hover:bg-gray-200/90 text-gray-400 group-hover:text-gray-800 flex items-center justify-center transition-all shadow-2xs shrink-0">
-                  <ArrowUpRight size={13} />
-                </div>
-              </div>
-              <div className="relative z-10 mt-1">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Today's Revenue</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight mt-1">
-                  {formatRupee(todayRevenue)}
-                </h3>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100/90 font-medium relative z-10">
-              <span>Booked: <strong className="text-gray-900 font-bold">{formatCompactRupee(todayBooked)}</strong></span>
-              <span>Deals: <strong className="text-indigo-600 font-bold">{todayDeals.length}</strong></span>
-            </div>
-          </div>
-
-          {/* Card 2: Monthly Revenue (Signature Moss Green Gradient Card from Reference Image) */}
-          <div className="rounded-[28px] p-5 sm:p-6 bg-gradient-to-br from-[#293a20] via-[#202e19] to-[#141f10] text-white shadow-[0_16px_40px_rgba(20,31,16,0.35)] border border-white/15 hover:shadow-[0_22px_50px_rgba(20,31,16,0.5)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
-            {/* Atmospheric subtle radial glow */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-lime-400/20 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+          {/* Card 1: Today's Revenue (Liquid Royal Indigo & Violet Spatial Glass) */}
+          <div className="rounded-[28px] p-5 sm:p-6 bg-gradient-to-br from-[#1a1c3d] via-[#12142d] to-[#0a0b1c] text-white shadow-[0_16px_40px_rgba(26,28,61,0.4)] border border-indigo-400/30 hover:shadow-[0_22px_50px_rgba(35,39,89,0.55)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+            <div className="absolute -top-10 -right-10 w-36 h-36 bg-indigo-500/25 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
             <div className="relative z-10">
               <div className="flex justify-between items-center mb-3">
-                <span className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md text-lime-400 border border-white/15 shadow-2xs flex items-center justify-center shrink-0">
-                  <TrendingUp size={18} />
+                <span className="w-10 h-10 rounded-2xl bg-indigo-500/15 backdrop-blur-md text-indigo-300 border border-indigo-400/30 shadow-2xs flex items-center justify-center shrink-0">
+                  <IndianRupee size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/10 text-lime-300 border border-white/15 backdrop-blur-md shadow-2xs">
-                  October 2026
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/25 text-indigo-200 border border-indigo-400/40 backdrop-blur-md shadow-2xs flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                  Today Live
                 </span>
-                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all shrink-0">
+                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all shrink-0">
                   <ArrowUpRight size={13} />
                 </div>
               </div>
               <div className="mt-1">
-                <p className="text-[11px] font-bold text-white/70 uppercase tracking-wider">Monthly Revenue</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-[#bef264] tracking-tight mt-1 truncate drop-shadow-xs" title={formatRupee(monthlyRevenue)}>
+                <p className="text-[11px] font-bold text-indigo-200/70 uppercase tracking-wider">Today's Revenue</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1 drop-shadow-[0_2px_12px_rgba(129,140,248,0.3)]">
+                  {formatRupee(todayRevenue)}
+                </h3>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs text-indigo-200/70 mt-3 pt-3 border-t border-white/10 font-medium relative z-10">
+              <span>Booked: <strong className="text-white font-bold">{formatCompactRupee(todayBooked)}</strong></span>
+              <span>Deals: <strong className="text-indigo-300 font-bold">{todayDeals.length}</strong></span>
+            </div>
+          </div>
+
+          {/* Card 2: Monthly Revenue (Deep Forest Moss & Neon Lime Spatial Glass) */}
+          <div className="rounded-[28px] p-5 sm:p-6 bg-gradient-to-br from-[#1b301c] via-[#122213] to-[#09150a] text-white shadow-[0_16px_40px_rgba(27,48,28,0.4)] border border-emerald-400/30 hover:shadow-[0_22px_50px_rgba(35,66,37,0.55)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+            <div className="absolute -top-10 -right-10 w-36 h-36 bg-lime-400/25 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+            <div className="relative z-10">
+              <div className="flex justify-between items-center mb-3">
+                <span className="w-10 h-10 rounded-2xl bg-emerald-500/15 backdrop-blur-md text-lime-400 border border-emerald-400/30 shadow-2xs flex items-center justify-center shrink-0">
+                  <TrendingUp size={18} />
+                </span>
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/25 text-lime-200 border border-emerald-400/40 backdrop-blur-md shadow-2xs">
+                  October 2026
+                </span>
+                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all shrink-0">
+                  <ArrowUpRight size={13} />
+                </div>
+              </div>
+              <div className="mt-1">
+                <p className="text-[11px] font-bold text-emerald-200/70 uppercase tracking-wider">Monthly Revenue</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-[#a3e635] tracking-tight mt-1 truncate drop-shadow-[0_2px_12px_rgba(163,230,53,0.35)]" title={formatRupee(monthlyRevenue)}>
                   {formatRupee(monthlyRevenue)}
                 </h3>
               </div>
             </div>
-            <div className="flex items-center justify-between text-xs text-white/70 mt-3 pt-3 border-t border-white/10 font-medium relative z-10">
+            <div className="flex items-center justify-between text-xs text-emerald-200/70 mt-3 pt-3 border-t border-white/10 font-medium relative z-10">
               <span>Booked: <strong className="text-white font-bold">{formatCompactRupee(monthlyBooked)}</strong></span>
               <span>Deals: <strong className="text-lime-300 font-bold">{currentMonthDeals.length}</strong></span>
             </div>
           </div>
 
-          {/* Card 3: With GST Amount (Signature Warm Terracotta Gradient Card from Reference Image) */}
-          <div className="rounded-[28px] p-5 sm:p-6 bg-gradient-to-br from-[#723d2b] via-[#592d1e] to-[#3c1b11] text-white shadow-[0_16px_40px_rgba(60,27,17,0.35)] border border-white/15 hover:shadow-[0_22px_50px_rgba(60,27,17,0.5)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
-            {/* Atmospheric warm glow */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-amber-400/20 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+          {/* Card 3: With GST Amount (Warm Terracotta / Sunset Copper & Amber Spatial Glass) */}
+          <div className="rounded-[28px] p-5 sm:p-6 bg-gradient-to-br from-[#452014] via-[#30150d] to-[#1c0c07] text-white shadow-[0_16px_40px_rgba(69,32,20,0.4)] border border-amber-500/30 hover:shadow-[0_22px_50px_rgba(95,44,28,0.55)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+            <div className="absolute -top-10 -right-10 w-36 h-36 bg-amber-400/25 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
             <div className="relative z-10">
               <div className="flex justify-between items-center mb-3">
-                <span className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md text-amber-300 border border-white/15 shadow-2xs flex items-center justify-center shrink-0">
+                <span className="w-10 h-10 rounded-2xl bg-amber-500/15 backdrop-blur-md text-amber-300 border border-amber-400/30 shadow-2xs flex items-center justify-center shrink-0">
                   <ReceiptIndianRupee size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/10 text-amber-200 border border-white/15 backdrop-blur-md shadow-2xs">
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/25 text-amber-200 border border-amber-400/40 backdrop-blur-md shadow-2xs">
                   Incl. 18% GST
                 </span>
-                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all shrink-0">
+                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all shrink-0">
                   <ArrowUpRight size={13} />
                 </div>
               </div>
               <div className="mt-1">
-                <p className="text-[11px] font-bold text-white/70 uppercase tracking-wider">With GST Amount</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1 truncate" title={formatRupee(activeWithGst)}>
+                <p className="text-[11px] font-bold text-amber-200/70 uppercase tracking-wider">With GST Amount</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1 truncate drop-shadow-[0_2px_12px_rgba(251,146,60,0.3)]" title={formatRupee(activeWithGst)}>
                   {formatRupee(activeWithGst)}
                 </h3>
               </div>
             </div>
-            <div className="flex items-center justify-between text-xs text-white/70 mt-3 pt-3 border-t border-white/10 font-medium relative z-10">
+            <div className="flex items-center justify-between text-xs text-amber-200/70 mt-3 pt-3 border-t border-white/10 font-medium relative z-10">
               <span>GST Tax: <strong className="text-white font-bold">{formatCompactRupee(activeGstTax)}</strong></span>
               <span>Gross: <strong className="text-amber-200 font-bold">{formatCompactRupee(activeWithGst)}</strong></span>
             </div>
           </div>
 
-          {/* Card 4: Without GST Amount (Frosted Glass Card) */}
-          <div className="bg-white/80 backdrop-blur-2xl rounded-[28px] p-5 sm:p-6 border border-white/90 shadow-[0_12px_36px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
-            <div>
-              <div className="flex justify-between items-center mb-3 relative z-10">
-                <span className="w-10 h-10 rounded-2xl bg-blue-50/90 text-blue-600 border border-blue-100/70 shadow-2xs flex items-center justify-center shrink-0">
+          {/* Card 4: Without GST Amount (Deep Oceanic Sapphire & Cyan Ice Spatial Glass) */}
+          <div className="rounded-[28px] p-5 sm:p-6 bg-gradient-to-br from-[#102a43] via-[#0b1d30] to-[#06111c] text-white shadow-[0_16px_40px_rgba(16,42,67,0.4)] border border-cyan-400/30 hover:shadow-[0_22px_50px_rgba(22,60,95,0.55)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+            <div className="absolute -top-10 -right-10 w-36 h-36 bg-cyan-400/25 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+            <div className="relative z-10">
+              <div className="flex justify-between items-center mb-3">
+                <span className="w-10 h-10 rounded-2xl bg-cyan-500/15 backdrop-blur-md text-cyan-300 border border-cyan-400/30 shadow-2xs flex items-center justify-center shrink-0">
                   <Calculator size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50/90 text-blue-700 border border-blue-200/60 shadow-2xs">
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-500/25 text-cyan-200 border border-cyan-400/40 backdrop-blur-md shadow-2xs">
                   Excl. GST (Base)
                 </span>
-                <div className="w-7 h-7 rounded-full bg-gray-100/80 group-hover:bg-gray-200/90 text-gray-400 group-hover:text-gray-800 flex items-center justify-center transition-all shadow-2xs shrink-0">
+                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all shrink-0">
                   <ArrowUpRight size={13} />
                 </div>
               </div>
-              <div className="relative z-10 mt-1">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Without GST Amount</p>
-                <h3 className="text-2xl sm:text-3xl font-black text-blue-700 tracking-tight mt-1 truncate" title={formatRupee(activeWithoutGst)}>
+              <div className="mt-1">
+                <p className="text-[11px] font-bold text-cyan-200/70 uppercase tracking-wider">Without GST Amount</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-[#38bdf8] tracking-tight mt-1 truncate drop-shadow-[0_2px_12px_rgba(56,189,248,0.35)]" title={formatRupee(activeWithoutGst)}>
                   {formatRupee(activeWithoutGst)}
                 </h3>
               </div>
             </div>
-            <div className="flex items-center justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100/90 font-medium relative z-10">
-              <span>Net Base: <strong className="text-gray-900 font-bold">{formatCompactRupee(activeWithoutGst)}</strong></span>
-              <span>Deals: <strong className="text-blue-700 font-bold">{currentMonthDeals.length}</strong></span>
+            <div className="flex items-center justify-between text-xs text-cyan-200/70 mt-3 pt-3 border-t border-white/10 font-medium relative z-10">
+              <span>Net Base: <strong className="text-white font-bold">{formatCompactRupee(activeWithoutGst)}</strong></span>
+              <span>Deals: <strong className="text-cyan-300 font-bold">{currentMonthDeals.length}</strong></span>
             </div>
           </div>
 
-          {/* Card 5: Payment Breakdown (Frosted Glass with Dual-Tone Segmented Track) */}
-          <div className="bg-white/80 backdrop-blur-2xl rounded-[28px] p-5 sm:p-6 border border-white/90 shadow-[0_12px_36px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
-            <div>
-              <div className="flex justify-between items-center mb-3 relative z-10">
-                <span className="w-10 h-10 rounded-2xl bg-amber-50/90 text-amber-600 border border-amber-100/70 shadow-2xs flex items-center justify-center shrink-0">
+          {/* Card 5: Payment Breakdown (Midnight Obsidian / Gold & Rose Spatial Track) */}
+          <div className="rounded-[28px] p-5 sm:p-6 bg-gradient-to-br from-[#271d33] via-[#1c1425] to-[#110a17] text-white shadow-[0_16px_40px_rgba(39,29,51,0.4)] border border-fuchsia-400/30 hover:shadow-[0_22px_50px_rgba(55,41,72,0.55)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+            <div className="absolute -top-10 -right-10 w-36 h-36 bg-fuchsia-400/20 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+            <div className="relative z-10">
+              <div className="flex justify-between items-center mb-3">
+                <span className="w-10 h-10 rounded-2xl bg-fuchsia-500/15 backdrop-blur-md text-amber-300 border border-fuchsia-400/30 shadow-2xs flex items-center justify-center shrink-0">
                   <PieChartIcon size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50/90 text-amber-800 border border-amber-200/60 shadow-2xs">
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-fuchsia-500/25 text-amber-200 border border-fuchsia-400/40 backdrop-blur-md shadow-2xs">
                   Rec vs Pend
                 </span>
-                <div className="w-7 h-7 rounded-full bg-gray-100/80 group-hover:bg-gray-200/90 text-gray-400 group-hover:text-gray-800 flex items-center justify-center transition-all shadow-2xs shrink-0">
+                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all shrink-0">
                   <ArrowUpRight size={13} />
                 </div>
               </div>
-              <div className="relative z-10 mt-1">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Payment Breakdown</p>
+              <div className="mt-1">
+                <p className="text-[11px] font-bold text-fuchsia-200/70 uppercase tracking-wider">Payment Breakdown</p>
                 <div className="flex items-baseline gap-1.5 mt-1">
-                  <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight">
+                  <h3 className="text-xl sm:text-2xl font-black text-[#4ade80] drop-shadow-[0_2px_8px_rgba(74,222,128,0.35)]">
                     {formatCompactRupee(totalReceivedAmount)}
                   </h3>
-                  <span className="text-xs font-bold text-gray-300">/</span>
-                  <span className="text-sm font-bold text-rose-500">
+                  <span className="text-xs font-bold text-white/40">/</span>
+                  <span className="text-sm font-bold text-[#fb7185] drop-shadow-[0_2px_8px_rgba(251,113,133,0.3)]">
                     {formatCompactRupee(totalPendingAmount)}
                   </span>
                 </div>
-                {/* Visual Segmented Progress Track */}
-                <div className="w-full h-2.5 bg-gray-100/80 rounded-full mt-3 overflow-hidden flex p-0.5 gap-0.5 shadow-inner">
+                {/* Visual Spatial Segmented Track */}
+                <div className="w-full h-2.5 bg-black/40 rounded-full mt-2.5 overflow-hidden flex p-0.5 gap-1 border border-white/10 shadow-inner">
                   <div
                     style={{ width: `${totalBookedValue > 0 ? (totalReceivedAmount / totalBookedValue) * 100 : 50}%` }}
-                    className="bg-emerald-500 h-full rounded-full transition-all duration-500 shadow-2xs"
+                    className="bg-gradient-to-r from-emerald-500 to-green-400 h-full rounded-full shadow-[0_0_8px_rgba(74,222,128,0.5)] transition-all duration-500"
                     title="Received Ratio"
                   />
                   <div
                     style={{ width: `${totalBookedValue > 0 ? (totalPendingAmount / totalBookedValue) * 100 : 50}%` }}
-                    className="bg-rose-400/80 h-full rounded-full transition-all duration-500"
+                    className="bg-gradient-to-r from-rose-500 to-pink-500 h-full rounded-full shadow-[0_0_8px_rgba(251,113,133,0.5)] transition-all duration-500"
                     title="Pending Ratio"
                   />
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-between text-[11px] text-gray-500 mt-3 pt-3 border-t border-gray-100/90 font-medium relative z-10">
-              <span>Ratio: <strong className="text-gray-900 font-bold">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
-              <span>Total: <strong className="text-gray-900 font-bold">{formatCompactRupee(totalBookedValue)}</strong></span>
+            <div className="flex items-center justify-between text-[11px] text-fuchsia-200/70 mt-3 pt-3 border-t border-white/10 font-medium relative z-10">
+              <span>Ratio: <strong className="text-emerald-300 font-bold">{totalBookedValue > 0 ? Math.round((totalReceivedAmount / totalBookedValue) * 100) : 0}%</strong></span>
+              <span>Total: <strong className="text-white font-bold">{formatCompactRupee(totalBookedValue)}</strong></span>
             </div>
           </div>
 
-          {/* Card 6: Top High Performer (Frosted Glass Performer Spotlight) */}
-          <div className="bg-white/80 backdrop-blur-2xl rounded-[28px] p-5 sm:p-6 border border-white/90 shadow-[0_12px_36px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
-            <div>
-              <div className="flex justify-between items-center mb-3 relative z-10">
-                <span className="w-10 h-10 rounded-2xl bg-purple-50/90 text-purple-600 border border-purple-100/70 shadow-2xs flex items-center justify-center shrink-0">
+          {/* Card 6: Top High Performer (Royal Amethyst / Velvet Purple & Gold Spotlight) */}
+          <div className="rounded-[28px] p-5 sm:p-6 bg-gradient-to-br from-[#30163f] via-[#210d2c] to-[#14061c] text-white shadow-[0_16px_40px_rgba(48,22,63,0.4)] border border-purple-400/30 hover:shadow-[0_22px_50px_rgba(68,31,90,0.55)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[195px]">
+            <div className="absolute -top-10 -right-10 w-36 h-36 bg-purple-500/25 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+            <div className="relative z-10">
+              <div className="flex justify-between items-center mb-3">
+                <span className="w-10 h-10 rounded-2xl bg-purple-500/15 backdrop-blur-md text-amber-300 border border-purple-400/30 shadow-2xs flex items-center justify-center shrink-0">
                   <Trophy size={18} />
                 </span>
-                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50/90 text-purple-700 border border-purple-200/60 shadow-2xs">
+                <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-purple-500/30 to-amber-500/30 text-amber-200 border border-amber-400/40 backdrop-blur-md shadow-2xs">
                   National Leader
                 </span>
-                <div className="w-7 h-7 rounded-full bg-gray-100/80 group-hover:bg-gray-200/90 text-gray-400 group-hover:text-gray-800 flex items-center justify-center transition-all shadow-2xs shrink-0">
+                <div className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all shrink-0">
                   <ArrowUpRight size={13} />
                 </div>
               </div>
-              <div className="relative z-10 mt-1">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Top High Performer</p>
-                <h3 className="text-lg sm:text-xl font-black text-gray-950 mt-1 truncate" title={topHighPerformer?.name}>
+              <div className="mt-1">
+                <p className="text-[11px] font-bold text-purple-200/70 uppercase tracking-wider">Top High Performer</p>
+                <h3 className="text-lg sm:text-xl font-black text-white tracking-tight mt-1 truncate drop-shadow-[0_2px_12px_rgba(216,180,254,0.3)]" title={topHighPerformer?.name}>
                   {topHighPerformer ? topHighPerformer.name : 'Calculating...'}
                 </h3>
               </div>
             </div>
-            <div className="flex items-center justify-between text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100/90 font-medium relative z-10">
-              <span>Branch: <strong className="text-indigo-600 font-bold">{topHighPerformer?.branch || topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
-              <span>Rev: <strong className="text-emerald-600 font-bold">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
+            <div className="flex items-center justify-between text-xs text-purple-200/70 mt-3 pt-3 border-t border-white/10 font-medium relative z-10">
+              <span>Branch: <strong className="text-amber-200 font-bold">{topHighPerformer?.branch || topHighBranch?.name.split(' ')[0] || 'Ahmedabad'}</strong></span>
+              <span>Rev: <strong className="text-emerald-300 font-bold">{formatCompactRupee(topHighPerformer?.received || 0)}</strong></span>
             </div>
           </div>
-        </div>
-      ) : (
+        </div>) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
         {/* Card 1: Today's Revenue */}
         <div className="bg-white/70 backdrop-blur-2xl rounded-[26px] p-5 sm:p-6 border border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.05)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[185px]">
