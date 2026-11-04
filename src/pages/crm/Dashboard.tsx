@@ -542,6 +542,33 @@ export const CrmDashboard = () => {
 
       if (empsRes.status === 'fulfilled' && empsRes.value.success && Array.isArray(empsRes.value.data)) {
         const mapped = empsRes.value.data.map(mapZohoRecordToEmployee);
+        // Preserve any custom branch selection from previous localStorage
+        try {
+          const saved = localStorage.getItem('be_employees');
+          if (saved) {
+            const localEmps = JSON.parse(saved);
+            if (Array.isArray(localEmps)) {
+              mapped.forEach(mEmp => {
+                const lMatch = localEmps.find((l: any) =>
+                  (l.zohoId && mEmp.zohoId && String(l.zohoId) === String(mEmp.zohoId)) ||
+                  (l.id && mEmp.id && String(l.id).toLowerCase() === String(mEmp.id).toLowerCase()) ||
+                  (l.name && mEmp.name && l.name.toLowerCase().trim() === mEmp.name.toLowerCase().trim())
+                );
+                if (lMatch && (!mEmp.Branches || mEmp.Branches === 'Ahmedabad' || lMatch.branch !== 'Ahmedabad')) {
+                  const b = lMatch.branch || lMatch.Branches;
+                  if (b) {
+                    mEmp.branch = b;
+                    mEmp.Branches = b;
+                    if (mEmp.formData) {
+                      mEmp.formData.branch = b;
+                      mEmp.formData.Branches = b;
+                    }
+                  }
+                }
+              });
+            }
+          }
+        } catch (_) {}
         setEmployees(mapped);
         try { 
           localStorage.setItem('be_employees', JSON.stringify(mapped));

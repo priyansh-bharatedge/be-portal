@@ -284,6 +284,27 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     if (propsQuotations && propsQuotations.length > 0) setLiveQuotations(propsQuotations);
   }, [propsDeals, propsEmployees, propsQuotations]);
 
+  // Synchronize employee updates immediately when changed anywhere in portal
+  useEffect(() => {
+    const handleEmpUpdate = () => {
+      try {
+        const saved = localStorage.getItem('be_employees');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLiveEmployees(parsed);
+          }
+        }
+      } catch (e) { }
+    };
+    window.addEventListener('be_employees_updated', handleEmpUpdate);
+    window.addEventListener('storage', handleEmpUpdate);
+    return () => {
+      window.removeEventListener('be_employees_updated', handleEmpUpdate);
+      window.removeEventListener('storage', handleEmpUpdate);
+    };
+  }, []);
+
   useEffect(() => {
     const isStale = !propsDeals || propsDeals.length === 0 || propsDeals.some((d: any) => d.Cloned_Deal === undefined && d.rawZohoDeal?.Cloned_Deal === undefined);
     if (isStale) {
@@ -601,7 +622,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       { name: 'Uday Dubey', title: 'Vice Sales Head (TL)', defaultBranch: 'Ahmedabad', target: 2000000 },
       { name: 'Akshay Kumar Sharma', title: 'Sr. Cluster Development Manager (TL)', defaultBranch: 'Jaipur', target: TARGET_BENCHMARKS.branchJaipur },
       { name: 'Sourav Modak', title: 'Branch Manager (TL)', defaultBranch: 'Chennai', target: 1200000 },
-      { name: 'Amarnath C & Southern Cluster', title: 'Sr. BDM Cluster (TL)', defaultBranch: 'Chennai', target: 800000 }
+      { name: 'AMARNATH C', title: 'Sr. BDM (TL)', defaultBranch: 'Chennai', target: 800000 }
     ];
 
     const BASELINE_TMS: Array<{ name: string; defaultTl: string; defaultBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai'; target?: number }> = [
@@ -645,10 +666,9 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
       { name: 'Trivedi Bhavikkumar', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
       { name: 'Chirag Navani', defaultTl: 'Sourav Modak', defaultBranch: 'Chennai' },
       // Amarnath's default team
-      { name: 'AMARNATH C', defaultTl: 'Amarnath C & Southern Cluster', defaultBranch: 'Chennai' },
-      { name: 'Vaishnavi R', defaultTl: 'Amarnath C & Southern Cluster', defaultBranch: 'Chennai' },
-      { name: 'Justin J', defaultTl: 'Amarnath C & Southern Cluster', defaultBranch: 'Chennai' },
-      { name: 'Gokul G', defaultTl: 'Amarnath C & Southern Cluster', defaultBranch: 'Chennai' }
+      { name: 'Vaishnavi R', defaultTl: 'AMARNATH C', defaultBranch: 'Chennai' },
+      { name: 'Justin J', defaultTl: 'AMARNATH C', defaultBranch: 'Chennai' },
+      { name: 'Gokul G', defaultTl: 'AMARNATH C', defaultBranch: 'Chennai' }
     ];
 
     // Helper to extract branch ('Ahmedabad' | 'Jaipur' | 'Chennai')
@@ -715,16 +735,22 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     // 1. Map Baseline TLs, taking dynamic branch/target from liveEmployees if updated
     BASELINE_TLS.forEach(btl => {
       const matched = (liveEmployees || []).find(e => isSamePerson(e.name, btl.name));
-      const dynamicBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' = matched
-        ? (extractBranch(matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches) || btl.defaultBranch)
-        : btl.defaultBranch;
+      let dynamicBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' = btl.defaultBranch;
+      if (matched) {
+        const rawBranch = matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches;
+        const explicit = extractBranch(rawBranch);
+        if (explicit) {
+          dynamicBranch = explicit;
+        }
+      }
       const target = matched && (matched.monthlyTarget || matched.target || matched.formData?.monthlyTarget || matched.formData?.target)
         ? (Number(String(matched.monthlyTarget || matched.target || matched.formData?.monthlyTarget || matched.formData?.target).replace(/[^0-9]/g, '')) || btl.target)
         : btl.target;
       const title = matched?.role || matched?.formData?.role || btl.title;
+      const resolvedName = matched?.name || btl.name;
 
-      branchStructures[dynamicBranch].tls.set(btl.name.toLowerCase(), {
-        name: btl.name,
+      branchStructures[dynamicBranch].tls.set(resolvedName.toLowerCase(), {
+        name: resolvedName,
         title,
         target,
         tms: []
