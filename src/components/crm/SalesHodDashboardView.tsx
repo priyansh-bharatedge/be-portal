@@ -783,14 +783,23 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     BASELINE_TMS.forEach(btm => {
       const matched = (liveEmployees || []).find(e => isSamePerson(e.name, btm.name));
       let dynamicBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' = btm.defaultBranch;
+      let explicitBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' | null = null;
       if (matched) {
         const rawBranch = matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches;
-        const explicit = extractBranch(rawBranch);
-        if (explicit) {
-          dynamicBranch = explicit;
-        }
+        explicitBranch = extractBranch(rawBranch);
       }
       const desiredTl = matched?.teamLeaderName || matched?.Who_is_the_Team_Leader_TL || matched?.formData?.teamLeaderName || matched?.formData?.Who_is_the_Team_Leader_TL || btm.defaultTl;
+
+      if (explicitBranch) {
+        dynamicBranch = explicitBranch;
+      } else if (desiredTl) {
+        for (const bName of ['Ahmedabad', 'Jaipur', 'Chennai'] as const) {
+          if (Array.from(branchStructures[bName].tls.values()).some((t: any) => isSamePerson(t.name, desiredTl))) {
+            dynamicBranch = bName;
+            break;
+          }
+        }
+      }
 
       const branchTls = branchStructures[dynamicBranch].tls;
       // Try to find desired TL in this branch
@@ -893,6 +902,18 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         title: 'Vice Sales Head (TL)',
         target: 2000000,
         tms: ['Abhishek Harendra Singh', 'Abhishek Prajapati', 'Monika Rola', 'Priyanshi Barmashe', 'Rituraj Singh', 'Jainam Patva', 'Sayyam Jain', 'Ayush Bhat', 'Jainam Sompura', 'Hetul Chiragbhai']
+      });
+    } else {
+      branchStructures.Ahmedabad.tls.forEach(tl => {
+        if (tl.tms.length === 0) {
+          if (isSamePerson(tl.name, 'Sourav Modak') || isSamePerson(tl.name, 'Sourav')) {
+            tl.tms = ['Palak Dubey', 'Pratima Sahu', 'Janvi Chabhadiya', 'Kalash Srivastava', 'Astha Chauhan', 'Drashti Bhuva', 'Muliyashiya Goganbhai', 'Trivedi Bhavikkumar', 'Chirag Navani'];
+          } else if (isSamePerson(tl.name, 'Romil Prajapati')) {
+            tl.tms = ['Meet Yadav', 'Daivik Patel', 'Rutvik Patel', 'Vijay Singh', 'Ayushkumar Patel', 'Umang Soni', 'Nilesh Solanki', 'Jitendra Rathore', 'Naman Makkad'];
+          } else if (isSamePerson(tl.name, 'Uday Dubey')) {
+            tl.tms = ['Abhishek Harendra Singh', 'Abhishek Prajapati', 'Monika Rola', 'Priyanshi Barmashe', 'Rituraj Singh', 'Jainam Patva', 'Sayyam Jain', 'Ayush Bhat', 'Jainam Sompura', 'Hetul Chiragbhai'];
+          }
+        }
       });
     }
 
