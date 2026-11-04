@@ -245,7 +245,7 @@ export const CrmDashboard = () => {
       } else if (!serviceName && isValidServiceName(zDeal.Item_Name, clientName, zDeal.Account_Name?.name || zDeal.Company_name, zDeal.id)) {
         serviceName = zDeal.Item_Name.trim();
       }
-      if (!serviceName) serviceName = 'Business Advisory';
+      if (!serviceName) serviceName = '';
 
       const formatRupee = (val: number): string => {
         if (!val || isNaN(val) || val <= 0) return '₹0';

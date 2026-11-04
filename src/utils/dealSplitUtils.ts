@@ -1020,7 +1020,8 @@ export function isValidServiceName(
 
   const invalidGenerics = [
     'services', 'service', 'custom services', 'general services',
-    'new case booking', 'individual', 'client', 'company', 'n/a', 'na', 'none', 'null', 'undefined'
+    'new case booking', 'individual', 'client', 'company', 'n/a', 'na', 'none', 'null', 'undefined',
+    'business advisory'
   ];
   if (!trimmed || invalidGenerics.includes(lower)) {
     return false;

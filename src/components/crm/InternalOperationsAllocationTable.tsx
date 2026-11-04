@@ -464,11 +464,17 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
       const dealId = deal ? String(deal.id || deal.zohoId || '') : undefined;
       const data = await fetchInternalOperations({ dealId });
 
-      // If in deal mode and no records found yet, auto-generate idempotently from deal's legal subform
+      // If in deal mode and no records found yet, only generate preview if deal is at or past Operations Allocator stage
       if (mode === 'deal' && deal && data.length === 0) {
-        const genResult = generateServiceAllocationsForDeal(deal);
-        const filtered = genResult.all.filter(r => String(r.Deal_ID || '').toLowerCase() === String(deal.id || deal.zohoId || '').toLowerCase());
-        setRecords(filtered);
+        const stageLower = String(deal.stage || deal.Stage || '').toLowerCase();
+        const isAtOrPastAllocator = stageLower.includes('allocat') || stageLower.includes('execut') || stageLower.includes('qualit') || stageLower.includes('won');
+        if (isAtOrPastAllocator) {
+          const genResult = generateServiceAllocationsForDeal(deal);
+          const filtered = genResult.all.filter(r => String(r.Deal_ID || '').toLowerCase() === String(deal.id || deal.zohoId || '').toLowerCase());
+          setRecords(filtered);
+        } else {
+          setRecords([]);
+        }
       } else {
         setRecords(data);
       }

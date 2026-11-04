@@ -1435,8 +1435,10 @@ export const DealDetails = () => {
         dealAllocations = genRes.all.filter(r => {
           const dId = String(r.Deal_ID || (r.Parent_Record_Deal?.id || r.Parent_Record_Deal) || '').toLowerCase();
           const zId = String((r as any).zohoDealId || '').toLowerCase();
-          return (targetDealId && (dId === targetDealId || zId === targetDealId)) ||
+          const isMatch = (targetDealId && (dId === targetDealId || zId === targetDealId)) ||
                  (targetZohoId && (dId === targetZohoId || zId === targetZohoId));
+          const sName = String(r.Name || r.Service_Scheme || '').trim().toLowerCase();
+          return isMatch && sName !== 'business advisory' && sName !== 'services' && sName !== 'general services';
         });
       } catch (genErr) {
         console.warn('[DealDetails] Service allocation creation warning:', genErr);

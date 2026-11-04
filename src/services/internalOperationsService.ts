@@ -210,17 +210,22 @@ export function generateServiceAllocationsForDeal(
     subformRows = fd.legalData;
   } else if (Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0) {
     subformRows = raw.Subform_1;
+  } else if (Array.isArray(deal.Subform_1) && deal.Subform_1.length > 0) {
+    subformRows = deal.Subform_1;
   } else if (Array.isArray(deal.servicesData) && deal.servicesData.length > 0) {
     subformRows = deal.servicesData;
   } else if ((deal.service || deal.Service_Name) && isValidServiceName(deal.service || deal.Service_Name, clientName, companyName, dealId)) {
-    subformRows = [{
-      schema: deal.service || deal.Service_Name,
-      internalTeamType: 'Team Funding',
-      legalStatus: 'RECEIVED',
-      docTypes: 'Agreement',
-      terms1: '3 Months',
-      remark: 'Auto-generated from Deal Service'
-    }];
+    const sName = String(deal.service || deal.Service_Name).trim();
+    if (sName.toLowerCase() !== 'business advisory' && sName.toLowerCase() !== 'services') {
+      subformRows = [{
+        schema: sName,
+        internalTeamType: 'Team Funding',
+        legalStatus: 'RECEIVED',
+        docTypes: 'Agreement',
+        terms1: '3 Months',
+        remark: 'Auto-generated from Deal Service'
+      }];
+    }
   }
 
   // Deduplicate subform rows so identical service names only yield 1 child record
@@ -228,7 +233,7 @@ export function generateServiceAllocationsForDeal(
   const uniqueSubformRows = subformRows.filter((row: any) => {
     const rawName = row.schema || row.Legal_Schemas || row.Schemas || row.Service_Name || row.name || '';
     const norm = normalizeServiceName(rawName);
-    if (!norm) return true;
+    if (!norm || norm === 'businessadvisory' || norm === 'services' || norm === 'generalservices') return false;
     if (seenServiceKeys.has(norm)) return false;
     seenServiceKeys.add(norm);
     return true;
@@ -496,11 +501,6 @@ export function generateServiceAllocationsForDeal(
 
   if (created.length > 0 || updated.length > 0) {
     setStoredInternalOperations(finalRecords);
-
-    // Sync in background with backend endpoint if available
-    syncAllocationsToBackend(created.length > 0 ? created : updated).catch(e => {
-      console.warn('[Internal Operations] Background sync warning:', e);
-    });
   }
 
   return { created, updated, all: finalRecords };

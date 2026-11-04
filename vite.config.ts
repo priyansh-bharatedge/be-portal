@@ -2624,9 +2624,16 @@ function zohoApiPlugin(): Plugin {
                       console.warn('[Vite Zoho Plugin] Deal fetch warning during transition:', dErr);
                     }
 
-                    if (frontendAllocations && frontendAllocations.length > 0) {
+                    const isInvalidGenericService = (name: string) => {
+                      const s = String(name || '').trim().toLowerCase();
+                      return !s || s === 'business advisory' || s === 'services' || s === 'general services' || s === 'new case booking';
+                    };
+
+                    const validFrontendAllocations = (frontendAllocations || []).filter((a: any) => !isInvalidGenericService(a.Name || a.Service_Scheme));
+
+                    if (validFrontendAllocations.length > 0) {
                       // Map allocations passed from the frontend (which have assigned TL/TM and stages)
-                      allocPayloads = frontendAllocations.map((alloc: any, idx: number) => {
+                      allocPayloads = validFrontendAllocations.map((alloc: any, idx: number) => {
                         const sName = alloc.Name || alloc.Service_Scheme || `Service ${idx + 1}`;
                         const tType = alloc.Team_Type || alloc.Internal_Team_Type || 'Team Funding';
                         const opStage = alloc.Operation_Stage || alloc.Stage || 'Document pending from client';
@@ -2647,8 +2654,9 @@ function zohoApiPlugin(): Plugin {
                         };
                       });
                     } else if (dealSubItems.length > 0) {
-                      // Extract from Zoho Deal's Legal subform
-                      allocPayloads = dealSubItems.map((sub: any, idx: number) => {
+                      // Extract from Zoho Deal's Legal subform (filtering out generic placeholders)
+                      const validDealSubItems = dealSubItems.filter((sub: any) => !isInvalidGenericService(sub.Legal_Schemas || sub.Schemas || sub.Service_Name));
+                      allocPayloads = validDealSubItems.map((sub: any, idx: number) => {
                         const serviceName = sub.Legal_Schemas || sub.Schemas || sub.Service_Name || `Service ${idx + 1}`;
                         const teamType = sub.Internal_team_type || 'Team Funding';
                         return {
@@ -2690,6 +2698,7 @@ function zohoApiPlugin(): Plugin {
                       const toInsert: any[] = [];
                       const toUpdate: any[] = [];
                       const extraDuplicatesToDelete: string[] = [];
+                      const validNormNames = new Set(allocPayloads.map((al: any) => normServiceName(al.Name)));
 
                       allocPayloads.forEach((alloc: any) => {
                         const normAlloc = normServiceName(alloc.Name);
@@ -2704,6 +2713,15 @@ function zohoApiPlugin(): Plugin {
                           }
                         } else {
                           toInsert.push(alloc);
+                        }
+                      });
+
+                      // Any existing record in Zoho CRM for this deal that is NOT one of the incoming valid services (or has an invalid generic name) is extraneous and must be deleted
+                      existingList.forEach((ex: any) => {
+                        const normEx = normServiceName(ex.Name || ex.Service_Scheme);
+                        const rawName = String(ex.Name || ex.Service_Scheme || '');
+                        if (ex.id && (!validNormNames.has(normEx) || isInvalidGenericService(rawName))) {
+                          extraDuplicatesToDelete.push(String(ex.id));
                         }
                       });
 
