@@ -8,7 +8,7 @@ import { ROLE_DEFINITIONS } from '../../types/roles';
 import type { SystemRole } from '../../types/roles';
 import { INITIAL_EMPLOYEES } from '../../utils/initialData';
 import type { EmployeeData } from '../../utils/initialData';
-import { saveOrUpdateZohoEmployee, uploadZohoAttachment, deleteZohoEmployee, fetchZohoEmployees } from '../../services/zohoService';
+import { saveOrUpdateZohoEmployee, updateZohoEmployee, uploadZohoAttachment, deleteZohoEmployee, fetchZohoEmployees } from '../../services/zohoService';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
 import { isSubordinateOfTL, isMatchingName } from '../../utils/employeeUtils';
 
@@ -295,7 +295,7 @@ export const Employees = () => {
           const localMatch = localList.find((l: any) =>
             (l.zohoId && zEmp.zohoId && String(l.zohoId) === String(zEmp.zohoId)) ||
             (l.id && zEmp.id && String(l.id).toLowerCase() === String(zEmp.id).toLowerCase()) ||
-            (l.name && zEmp.name && l.name.toLowerCase().trim() === zEmp.name.toLowerCase().trim())
+            isMatchingName(l.name, zEmp.name)
           );
           if (localMatch) {
             const localBranch = localMatch.branch || localMatch.Branches || localMatch.formData?.branch || localMatch.formData?.Branches;
@@ -716,7 +716,14 @@ export const Employees = () => {
 
     // Sync with Zoho CRM Employee Module
     try {
-      const zohoRes = await saveOrUpdateZohoEmployee(newEmp);
+      const isExistingEdit = Boolean(editingEmployee);
+      const foundZohoId = editingEmployee?.zohoId || employees.find(e => e.zohoId && (e.id === finalEmpId || isMatchingName(e.name, fullName)))?.zohoId;
+      const finalZohoIdToUse = foundZohoId || newEmp.zohoId || (/^\d{15,}$/.test(String(finalEmpId)) ? String(finalEmpId) : undefined);
+      newEmp.zohoId = finalZohoIdToUse;
+
+      const zohoRes = isExistingEdit
+        ? await updateZohoEmployee({ ...newEmp, zohoId: finalZohoIdToUse, isEditing: true })
+        : await saveOrUpdateZohoEmployee(newEmp, isExistingEdit);
       const finalZohoId = zohoRes.zohoId || newEmp.zohoId;
 
       if (zohoRes.success && finalZohoId) {
@@ -782,7 +789,8 @@ export const Employees = () => {
         const matchIndex = employees.findIndex(emp =>
           (targetOriginalId && emp.id === targetOriginalId) ||
           (targetOriginalZohoId && emp.zohoId && emp.zohoId === targetOriginalZohoId) ||
-          (emp.id === finalEmpId)
+          (emp.id === finalEmpId) ||
+          isMatchingName(emp.name, fullName)
         );
 
         if (matchIndex !== -1) {
@@ -857,7 +865,10 @@ export const Employees = () => {
     const fallbackLast = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
     const fallbackMiddle = nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : '';
 
-    const resolvedZohoId = employee.zohoId || (/^\d{15,}$/.test(String(employee.id || '')) ? String(employee.id) : undefined);
+    const foundInList = employees.find(e =>
+      (e.zohoId && (e.id === employee.id || (e.email && e.email === employee.email) || isMatchingName(e.name, employee.name)))
+    );
+    const resolvedZohoId = employee.zohoId || foundInList?.zohoId || (/^\d{15,}$/.test(String(employee.id || '')) ? String(employee.id) : undefined);
     setEditingEmployee({ ...employee, zohoId: resolvedZohoId });
     setFormData({
       ...initialFormData,
@@ -874,11 +885,11 @@ export const Employees = () => {
       salaryEntity: (employee.salaryEntity || employee.formData?.salaryEntity || 'BSPL') as string,
       branch: (() => {
         const curBranch = employee.branch || employee.Branches || employee.formData?.branch || employee.formData?.Branches;
-        if (curBranch && curBranch !== 'Ahmedabad') return curBranch;
+        if (curBranch) return curBranch;
         const lowerClean = (employee.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         if (['akshay', 'aakash', 'arpit', 'harshita', 'monika gurjar', 'punit', 'akshat', 'konpal'].some(n => lowerClean.includes(n.replace(/[^a-z0-9]/g, '')))) return 'Jaipur';
         if (['amarnath', 'sourav', 'vaishnavi', 'justin', 'gokul', 'palak', 'pratima', 'janvi', 'kalash', 'astha', 'drashti', 'chirag'].some(n => lowerClean.includes(n.replace(/[^a-z0-9]/g, '')))) return 'Chennai';
-        return curBranch || 'Ahmedabad';
+        return 'Ahmedabad';
       })(),
       teamLeaderId: resolvedTlId,
       teamLeaderName: resolvedTlName,

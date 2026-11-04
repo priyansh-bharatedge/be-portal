@@ -705,10 +705,10 @@ export async function searchZohoEmployeeByEmail(email: string): Promise<ZohoEmpl
 /**
  * Automatically inserts or updates an employee record successfully depending on whether employee.zohoId exists.
  */
-export async function saveOrUpdateZohoEmployee(employee: any): Promise<ZohoApiResponse> {
+export async function saveOrUpdateZohoEmployee(employee: any, isEdit = false): Promise<ZohoApiResponse> {
   const resolvedZohoId = employee.zohoId || (/^\d{15,}$/.test(String(employee.id || '')) ? String(employee.id) : '') || employee.formData?.zohoId || '';
-  if (resolvedZohoId) {
-    return updateZohoEmployee({ ...employee, zohoId: resolvedZohoId });
+  if (resolvedZohoId || isEdit || employee.isEditing) {
+    return updateZohoEmployee({ ...employee, zohoId: resolvedZohoId, isEditing: true });
   }
   return insertZohoEmployee(employee);
 }

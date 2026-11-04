@@ -21,7 +21,7 @@ import {
   fetchZohoQuotations,
   fetchZohoEmployees
 } from '../../services/zohoService';
-import { mapZohoRecordToEmployee } from '../../utils/employeeUtils';
+import { mapZohoRecordToEmployee, isMatchingName } from '../../utils/employeeUtils';
 import { parseAnyDateToMs } from '../../services/zohoRbacService';
 import {
   getDealSplitBreakdown,
@@ -552,7 +552,7 @@ export const CrmDashboard = () => {
                 const lMatch = localEmps.find((l: any) =>
                   (l.zohoId && mEmp.zohoId && String(l.zohoId) === String(mEmp.zohoId)) ||
                   (l.id && mEmp.id && String(l.id).toLowerCase() === String(mEmp.id).toLowerCase()) ||
-                  (l.name && mEmp.name && l.name.toLowerCase().trim() === mEmp.name.toLowerCase().trim())
+                  (mEmp.name && l.name && (mEmp.name.toLowerCase().trim() === l.name.toLowerCase().trim() || isMatchingName(l.name, mEmp.name)))
                 );
                 if (lMatch && (!mEmp.Branches || mEmp.Branches === 'Ahmedabad' || lMatch.branch !== 'Ahmedabad')) {
                   const b = lMatch.branch || lMatch.Branches;

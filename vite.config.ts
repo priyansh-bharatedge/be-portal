@@ -4313,40 +4313,27 @@ function zohoApiPlugin(): Plugin {
             try {
               const employee = JSON.parse(body);
               const payload = buildEmployeeZohoPayload(employee);
-              const isUpdate = Boolean(payload.id || employee.zohoId || pathname === '/api/zoho/update-employee');
-              const httpMethod = isUpdate ? 'PUT' : 'POST';
+              let isUpdate = Boolean(payload.id || employee.zohoId || pathname === '/api/zoho/update-employee' || employee.isEditing);
 
               let accessToken = await getAccessToken(env);
               const moduleName = env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
               const apiBase = env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
               const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
 
-              if (isUpdate && !payload.id) {
-                const empId = payload.Employment_ID || employee.id || employee.formData?.empId;
-                const email = payload.Email || payload.Personal_Email_Address || employee.email || employee.formData?.email;
+              if (!payload.id) {
                 try {
-                  let searchCriteria = '';
-                  if (empId && email) {
-                    searchCriteria = `((Employment_ID:equals:${encodeURIComponent(empId)})or(Email:equals:${encodeURIComponent(email)}))`;
-                  } else if (empId) {
-                    searchCriteria = `(Employment_ID:equals:${encodeURIComponent(empId)})`;
-                  } else if (email) {
-                    searchCriteria = `(Email:equals:${encodeURIComponent(email)})`;
-                  }
-                  if (searchCriteria) {
-                    const searchRes = await fetch(`${apiBase}/crm/v8/${moduleName}/search?criteria=${searchCriteria}`, {
-                      headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
-                    });
-                    const searchData: any = await searchRes.json();
-                    if (searchData?.data?.[0]?.id) {
-                      payload.id = String(searchData.data[0].id);
-                      console.log('[Vite Zoho Plugin] Auto-resolved Employee ID for update:', payload.id);
-                    }
+                  const resolvedId = await resolveZohoEmployeeId(employee, accessToken, apiBase);
+                  if (resolvedId) {
+                    payload.id = resolvedId;
+                    isUpdate = true;
+                    console.log('[Vite Zoho Plugin] Auto-resolved Employee ID for update:', payload.id);
                   }
                 } catch (e) {
-                  console.warn('[Vite Zoho Plugin] Auto-lookup employee ID failed:', e);
+                  console.warn('[Vite Zoho Plugin] Auto-resolve employee ID failed:', e);
                 }
               }
+
+              const httpMethod = (isUpdate && payload.id) ? 'PUT' : (pathname === '/api/zoho/update-employee' ? 'PUT' : 'POST');
 
               console.log(`[Vite Zoho Plugin] ${isUpdate ? 'Updating' : 'Inserting'} Employee in Zoho CRM:`, payload.Name, employee.zohoId ? `(ID: ${employee.zohoId})` : '');
 
@@ -4841,14 +4828,15 @@ function zohoApiPlugin(): Plugin {
             const moduleName = env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
 
             // 1. Fetch from Employee module
-            let empRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200`, {
+            const empFields = 'id,Name,Email,Personal_Email_Address,Employment_ID,Branches,Department,Designation_Job_Title,System_Role,Total_Experience,Who_is_the_Team_Leader_TL';
+            let empRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200&fields=${empFields}`, {
               headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
             });
             let empData: any = empRes.status === 204 ? { code: 'NO_CONTENT' } : await empRes.json();
             if (empRes.status === 401 || empData?.code === 'INVALID_TOKEN') {
               cachedToken = null;
               accessToken = await getAccessToken(env);
-              empRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200`, {
+              empRes = await fetch(`${apiBase}/crm/v8/${moduleName}?per_page=200&fields=${empFields}`, {
                 headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
               });
               empData = empRes.status === 204 ? { code: 'NO_CONTENT' } : await empRes.json();

@@ -27,7 +27,7 @@ import {
 } from '../../services/zohoService';
 import { fetchInternalOperations, getStoredInternalOperations } from '../../services/internalOperationsService';
 import type { InternalOperationRecord } from '../../types/operations';
-import { mapZohoRecordToEmployee } from '../../utils/employeeUtils';
+import { mapZohoRecordToEmployee, isMatchingName } from '../../utils/employeeUtils';
 import { parseAnyDateToMs } from '../../services/zohoRbacService';
 import {
   getDealTotalAmount,
@@ -423,7 +423,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 const lMatch = localEmps.find((l: any) =>
                   (l.zohoId && mEmp.zohoId && String(l.zohoId) === String(mEmp.zohoId)) ||
                   (l.id && mEmp.id && String(l.id).toLowerCase() === String(mEmp.id).toLowerCase()) ||
-                  (l.name && mEmp.name && l.name.toLowerCase().trim() === mEmp.name.toLowerCase().trim())
+                  (mEmp.name && l.name && (mEmp.name.toLowerCase().trim() === l.name.toLowerCase().trim() || isMatchingName(l.name, mEmp.name)))
                 );
                 if (lMatch && (!mEmp.Branches || mEmp.Branches === 'Ahmedabad' || lMatch.branch !== 'Ahmedabad')) {
                   const b = lMatch.branch || lMatch.Branches;

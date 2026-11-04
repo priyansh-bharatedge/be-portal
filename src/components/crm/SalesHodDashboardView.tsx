@@ -740,17 +740,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         const rawBranch = matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches;
         const explicit = extractBranch(rawBranch);
         if (explicit) {
-          if (btl.defaultBranch === 'Ahmedabad') {
-            dynamicBranch = explicit;
-          } else {
-            // For Jaipur and Chennai, only change branch if explicit is genuinely different from default
-            // and explicitly provided in Branches or formData
-            if (explicit === 'Jaipur' || explicit === 'Chennai') {
-              dynamicBranch = explicit;
-            } else if (matched.Branches && extractBranch(matched.Branches) === explicit) {
-              dynamicBranch = explicit;
-            }
-          }
+          dynamicBranch = explicit;
         }
       }
       const target = matched && (matched.monthlyTarget || matched.target || matched.formData?.monthlyTarget || matched.formData?.target)
@@ -797,15 +787,7 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         const rawBranch = matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches;
         const explicit = extractBranch(rawBranch);
         if (explicit) {
-          if (btm.defaultBranch === 'Ahmedabad') {
-            dynamicBranch = explicit;
-          } else {
-            if (explicit === 'Jaipur' || explicit === 'Chennai') {
-              dynamicBranch = explicit;
-            } else if (matched.Branches && extractBranch(matched.Branches) === explicit) {
-              dynamicBranch = explicit;
-            }
-          }
+          dynamicBranch = explicit;
         }
       }
       const desiredTl = matched?.teamLeaderName || matched?.Who_is_the_Team_Leader_TL || matched?.formData?.teamLeaderName || matched?.formData?.Who_is_the_Team_Leader_TL || btm.defaultTl;
