@@ -142,13 +142,36 @@ export const Employees = () => {
       systemRole = 'TM';
     }
 
-    const rawBranch = z.Branches || z.Branch || z.branch || 'Ahmedabad';
     let branch = 'Ahmedabad';
-    const bLower = String(rawBranch).toLowerCase();
-    if (bLower.includes('jaipur')) branch = 'Jaipur';
-    else if (bLower.includes('chennai')) branch = 'Chennai';
-    else if (bLower.includes('ahmedabad')) branch = 'Ahmedabad';
-    else branch = String(rawBranch);
+    const rawBranch = z.Branches || z.Branch || z.branch || '';
+    if (rawBranch) {
+      const bLower = String(rawBranch).toLowerCase();
+      if (bLower.includes('jaipur')) branch = 'Jaipur';
+      else if (bLower.includes('chennai')) branch = 'Chennai';
+      else if (bLower.includes('ahmedabad')) branch = 'Ahmedabad';
+      else branch = String(rawBranch);
+    } else {
+      // If Zoho CRM record has null/empty Branches, preserve previously stored branch from local storage
+      try {
+        const saved = localStorage.getItem('be_employees');
+        if (saved) {
+          const emps = JSON.parse(saved);
+          if (Array.isArray(emps)) {
+            const zId = String(z.id || '');
+            const zEmpId = String(z.Employment_ID || '').toLowerCase();
+            const zName = String(z.Name || '').toLowerCase().trim();
+            const match = emps.find((e: any) => 
+              (zId && e.zohoId && String(e.zohoId) === zId) ||
+              (zEmpId && e.id && String(e.id).toLowerCase() === zEmpId) ||
+              (zName && e.name && String(e.name).toLowerCase().trim() === zName)
+            );
+            if (match && (match.branch || match.Branches)) {
+              branch = match.branch || match.Branches;
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     const fd = {
       empId,
@@ -256,8 +279,24 @@ export const Employees = () => {
         const seenIds = new Set<string>();
         const mergedList: EmployeeData[] = [];
 
-        // Add Zoho employees first
+        // Merge Zoho employees, preserving any custom branch assignment if local record has it
         for (const zEmp of zohoEmployees) {
+          const localMatch = localList.find((l: any) =>
+            (l.zohoId && zEmp.zohoId && String(l.zohoId) === String(zEmp.zohoId)) ||
+            (l.id && zEmp.id && String(l.id).toLowerCase() === String(zEmp.id).toLowerCase()) ||
+            (l.name && zEmp.name && l.name.toLowerCase().trim() === zEmp.name.toLowerCase().trim())
+          );
+          if (localMatch) {
+            const localBranch = localMatch.branch || localMatch.Branches || localMatch.formData?.branch || localMatch.formData?.Branches;
+            if (localBranch && (!zEmp.Branches || zEmp.Branches === 'Ahmedabad' || localBranch !== 'Ahmedabad')) {
+              zEmp.branch = localBranch;
+              zEmp.Branches = localBranch;
+              if (zEmp.formData) {
+                zEmp.formData.branch = localBranch;
+                zEmp.formData.Branches = localBranch;
+              }
+            }
+          }
           if (zEmp.zohoId) seenZohoIds.add(String(zEmp.zohoId).trim());
           if (zEmp.id) seenIds.add(String(zEmp.id).trim().toLowerCase());
           mergedList.push(zEmp);
@@ -660,7 +699,7 @@ export const Employees = () => {
         target: formData.target || formData.monthlyTarget || '',
       },
       salaryDocumentName: salaryDocumentName || (editingEmployee ? editingEmployee.salaryDocumentName : ''),
-      zohoId: editingEmployee?.zohoId,
+      zohoId: editingEmployee?.zohoId || (/^\d{15,}$/.test(String(editingEmployee?.id || '')) ? String(editingEmployee?.id) : undefined) || (/^\d{15,}$/.test(String(finalEmpId)) ? String(finalEmpId) : undefined),
       zohoStatus: editingEmployee?.zohoStatus || 'pending',
     };
 
@@ -807,7 +846,8 @@ export const Employees = () => {
     const fallbackLast = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
     const fallbackMiddle = nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : '';
 
-    setEditingEmployee(employee);
+    const resolvedZohoId = employee.zohoId || (/^\d{15,}$/.test(String(employee.id || '')) ? String(employee.id) : undefined);
+    setEditingEmployee({ ...employee, zohoId: resolvedZohoId });
     setFormData({
       ...initialFormData,
       ...(employee.formData || {}),
@@ -2407,6 +2447,23 @@ export const Employees = () => {
                       className="px-6 py-2.5 border border-gray-300 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-100 transition-colors bg-white"
                     >
                       Back
+                    </button>
+                  )}
+                  {editingEmployee && currentStep < 5 && (
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleSaveEmployee}
+                      className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-500/20 hover:shadow-lg flex items-center disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin mr-2" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        'Save Changes'
+                      )}
                     </button>
                   )}
                   {currentStep < 5 ? (

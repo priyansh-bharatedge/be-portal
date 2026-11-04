@@ -1470,8 +1470,16 @@ function buildEmployeeZohoPayload(employee: any): Record<string, any> {
     Name: fd.firstName || fullName,
   };
 
-  if (employee.zohoId) {
-    payload.id = String(employee.zohoId);
+  const resolvedZohoId = String(
+    employee.zohoId ||
+    (/^\d{15,}$/.test(String(employee.id || '')) ? employee.id : '') ||
+    employee.formData?.zohoId ||
+    (/^\d{15,}$/.test(String(employee.formData?.id || '')) ? employee.formData?.id : '') ||
+    ''
+  ).trim();
+
+  if (resolvedZohoId) {
+    payload.id = resolvedZohoId;
   }
 
   if (fd.middleName) payload.Middle_Name = fd.middleName;
@@ -4380,12 +4388,39 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
     if ((action === 'insert-employee' || action === 'update-employee') && (method === 'POST' || method === 'PUT')) {
       const employee = await getRequestBody(req);
       const payload = buildEmployeeZohoPayload(employee);
-      const isUpdate = Boolean(employee.zohoId || action === 'update-employee');
+      const isUpdate = Boolean(payload.id || employee.zohoId || action === 'update-employee');
       const httpMethod = isUpdate ? 'PUT' : 'POST';
 
       let accessToken = await getAccessToken();
       const moduleName = process.env.VITE_ZOHO_EMPLOYEE_MODULE_NAME || 'Employee';
       const crmEndpoint = `${apiBase}/crm/v8/${moduleName}`;
+
+      if (isUpdate && !payload.id) {
+        const empId = payload.Employment_ID || employee.id || employee.formData?.empId;
+        const email = payload.Email || payload.Personal_Email_Address || employee.email || employee.formData?.email;
+        try {
+          let searchCriteria = '';
+          if (empId && email) {
+            searchCriteria = `((Employment_ID:equals:${encodeURIComponent(empId)})or(Email:equals:${encodeURIComponent(email)}))`;
+          } else if (empId) {
+            searchCriteria = `(Employment_ID:equals:${encodeURIComponent(empId)})`;
+          } else if (email) {
+            searchCriteria = `(Email:equals:${encodeURIComponent(email)})`;
+          }
+          if (searchCriteria) {
+            const searchRes = await fetch(`${apiBase}/crm/v8/${moduleName}/search?criteria=${searchCriteria}`, {
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` }
+            });
+            const searchData: any = await searchRes.json();
+            if (searchData?.data?.[0]?.id) {
+              payload.id = String(searchData.data[0].id);
+              console.log('[Zoho API Handler] Auto-resolved Employee ID for update:', payload.id);
+            }
+          }
+        } catch (e) {
+          console.warn('[Zoho API Handler] Auto-lookup employee ID failed:', e);
+        }
+      }
 
       console.log(`[Zoho API Handler] ${isUpdate ? 'Updating' : 'Inserting'} Employee:`, payload.Name, employee.zohoId ? `(ID: ${employee.zohoId})` : '', 'Has Password:', Boolean(payload.Password));
 

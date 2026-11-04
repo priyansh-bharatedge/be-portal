@@ -298,13 +298,36 @@ export function mapZohoRecordToEmployee(z: any): EmployeeData {
 
   const monthlyTarget = z.Monthly_Target || z.Target || z.Sales_Target || '';
 
-  const rawBranch = z.Branches || z.Branch || z.branch || 'Ahmedabad';
   let branch = 'Ahmedabad';
-  const bLower = String(rawBranch).toLowerCase();
-  if (bLower.includes('jaipur')) branch = 'Jaipur';
-  else if (bLower.includes('chennai')) branch = 'Chennai';
-  else if (bLower.includes('ahmedabad')) branch = 'Ahmedabad';
-  else branch = String(rawBranch);
+  const rawBranch = z.Branches || z.Branch || z.branch || '';
+  if (rawBranch) {
+    const bLower = String(rawBranch).toLowerCase();
+    if (bLower.includes('jaipur')) branch = 'Jaipur';
+    else if (bLower.includes('chennai')) branch = 'Chennai';
+    else if (bLower.includes('ahmedabad')) branch = 'Ahmedabad';
+    else branch = String(rawBranch);
+  } else {
+    // If Zoho CRM record has null/empty for Branches, retain existing branch from local storage if previously set
+    try {
+      const saved = localStorage.getItem('be_employees');
+      if (saved) {
+        const emps = JSON.parse(saved);
+        if (Array.isArray(emps)) {
+          const zId = String(z.id || '');
+          const zEmpId = String(z.Employment_ID || '').toLowerCase();
+          const zName = String(z.Name || '').toLowerCase().trim();
+          const match = emps.find((e: any) => 
+            (zId && e.zohoId && String(e.zohoId) === zId) ||
+            (zEmpId && e.id && String(e.id).toLowerCase() === zEmpId) ||
+            (zName && e.name && String(e.name).toLowerCase().trim() === zName)
+          );
+          if (match && (match.branch || match.Branches)) {
+            branch = match.branch || match.Branches;
+          }
+        }
+      }
+    } catch (_) {}
+  }
 
   const fd = {
     empId,
