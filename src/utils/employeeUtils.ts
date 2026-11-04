@@ -334,7 +334,7 @@ export function mapZohoRecordToEmployee(z: any): EmployeeData {
     if (!foundInStorage) {
       const lowerClean = (fullName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const isJaipurMember = ['akshay', 'aakash', 'arpit', 'harshita', 'monika gurjar', 'punit', 'akshat', 'konpal'].some(n => lowerClean.includes(n.replace(/[^a-z0-9]/g, '')));
-      const isChennaiMember = ['amarnath', 'sourav', 'vaishnavi', 'justin', 'gokul', 'palak', 'pratima', 'janvi', 'kalash', 'astha', 'drashti', 'chirag'].some(n => lowerClean.includes(n.replace(/[^a-z0-9]/g, '')));
+      const isChennaiMember = ['amarnath', 'vaishnavi', 'justin', 'gokul', 'palak', 'pratima', 'janvi', 'kalash', 'astha', 'drashti', 'chirag'].some(n => lowerClean.includes(n.replace(/[^a-z0-9]/g, '')));
 
       if (isJaipurMember) {
         branch = 'Jaipur';

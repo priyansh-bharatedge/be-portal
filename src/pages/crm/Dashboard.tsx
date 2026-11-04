@@ -554,7 +554,7 @@ export const CrmDashboard = () => {
                   (l.id && mEmp.id && String(l.id).toLowerCase() === String(mEmp.id).toLowerCase()) ||
                   (mEmp.name && l.name && (mEmp.name.toLowerCase().trim() === l.name.toLowerCase().trim() || isMatchingName(l.name, mEmp.name)))
                 );
-                if (lMatch && (!mEmp.Branches || mEmp.Branches === 'Ahmedabad' || lMatch.branch !== 'Ahmedabad')) {
+                if (lMatch && !mEmp.Branches) {
                   const b = lMatch.branch || lMatch.Branches;
                   if (b) {
                     mEmp.branch = b;
