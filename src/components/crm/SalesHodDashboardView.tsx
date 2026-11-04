@@ -740,7 +740,17 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         const rawBranch = matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches;
         const explicit = extractBranch(rawBranch);
         if (explicit) {
-          dynamicBranch = explicit;
+          if (btl.defaultBranch === 'Ahmedabad') {
+            dynamicBranch = explicit;
+          } else {
+            // For Jaipur and Chennai, only change branch if explicit is genuinely different from default
+            // and explicitly provided in Branches or formData
+            if (explicit === 'Jaipur' || explicit === 'Chennai') {
+              dynamicBranch = explicit;
+            } else if (matched.Branches && extractBranch(matched.Branches) === explicit) {
+              dynamicBranch = explicit;
+            }
+          }
         }
       }
       const target = matched && (matched.monthlyTarget || matched.target || matched.formData?.monthlyTarget || matched.formData?.target)
@@ -782,9 +792,22 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
     // 3. Map Baseline TMs, honoring dynamic branch & dynamic TL
     BASELINE_TMS.forEach(btm => {
       const matched = (liveEmployees || []).find(e => isSamePerson(e.name, btm.name));
-      const dynamicBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' = matched
-        ? (extractBranch(matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches) || btm.defaultBranch)
-        : btm.defaultBranch;
+      let dynamicBranch: 'Ahmedabad' | 'Jaipur' | 'Chennai' = btm.defaultBranch;
+      if (matched) {
+        const rawBranch = matched.branch || matched.Branches || matched.formData?.branch || matched.formData?.Branches;
+        const explicit = extractBranch(rawBranch);
+        if (explicit) {
+          if (btm.defaultBranch === 'Ahmedabad') {
+            dynamicBranch = explicit;
+          } else {
+            if (explicit === 'Jaipur' || explicit === 'Chennai') {
+              dynamicBranch = explicit;
+            } else if (matched.Branches && extractBranch(matched.Branches) === explicit) {
+              dynamicBranch = explicit;
+            }
+          }
+        }
+      }
       const desiredTl = matched?.teamLeaderName || matched?.Who_is_the_Team_Leader_TL || matched?.formData?.teamLeaderName || matched?.formData?.Who_is_the_Team_Leader_TL || btm.defaultTl;
 
       const branchTls = branchStructures[dynamicBranch].tls;
@@ -822,6 +845,74 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
         targetTlEntry.tms.push(name);
       }
     });
+
+    // HARD GUARANTEE: Neither Ahmedabad, Jaipur, nor Chennai may EVER have 0 Team Leaders!
+    // 1. If Jaipur has 0 TLs, guarantee Akshay Kumar Sharma is present:
+    if (branchStructures.Jaipur.tls.size === 0) {
+      const akEmp = (liveEmployees || []).find(e => isSamePerson(e.name, 'Akshay Kumar Sharma') || isSamePerson(e.name, 'Akshay'));
+      const target = Number(String(akEmp?.monthlyTarget || akEmp?.target || TARGET_BENCHMARKS.branchJaipur).replace(/[^0-9]/g, '')) || TARGET_BENCHMARKS.branchJaipur;
+      branchStructures.Jaipur.tls.set('akshay kumar sharma', {
+        name: akEmp?.name || 'Akshay Kumar Sharma',
+        title: akEmp?.role || akEmp?.formData?.role || 'Sr. Cluster Development Manager (TL)',
+        target,
+        tms: ['Aakash Goswami', 'Arpit Sharma', 'Harshita Manohar', 'Monika Gurjar', 'Punit Kumar Khaliya', 'Akshat Mishra', 'Konpal Sharma']
+      });
+    } else {
+      // Ensure existing Jaipur TLs have their team members populated if empty
+      branchStructures.Jaipur.tls.forEach(tl => {
+        if (tl.tms.length === 0) {
+          tl.tms = ['Aakash Goswami', 'Arpit Sharma', 'Harshita Manohar', 'Monika Gurjar', 'Punit Kumar Khaliya', 'Akshat Mishra', 'Konpal Sharma'];
+        }
+      });
+    }
+
+    // 2. If Chennai has 0 TLs, guarantee AMARNATH C and Sourav Modak are present:
+    if (branchStructures.Chennai.tls.size === 0) {
+      const amEmp = (liveEmployees || []).find(e => isSamePerson(e.name, 'AMARNATH C') || isSamePerson(e.name, 'AMARNATH'));
+      const amTarget = Number(String(amEmp?.monthlyTarget || amEmp?.target || 800000).replace(/[^0-9]/g, '')) || 800000;
+      branchStructures.Chennai.tls.set('amarnath c', {
+        name: amEmp?.name || 'AMARNATH C',
+        title: amEmp?.role || amEmp?.formData?.role || 'Sr. BDM (TL)',
+        target: amTarget,
+        tms: ['Vaishnavi R', 'Justin J', 'Gokul G']
+      });
+
+      const smEmp = (liveEmployees || []).find(e => isSamePerson(e.name, 'Sourav Modak') || isSamePerson(e.name, 'Sourav'));
+      const smTarget = Number(String(smEmp?.monthlyTarget || smEmp?.target || 1200000).replace(/[^0-9]/g, '')) || 1200000;
+      branchStructures.Chennai.tls.set('sourav modak', {
+        name: smEmp?.name || 'Sourav Modak',
+        title: smEmp?.role || smEmp?.formData?.role || 'Branch Manager (TL)',
+        target: smTarget,
+        tms: ['Palak Dubey', 'Pratima Sahu', 'Janvi Chabhadiya', 'Kalash Srivastava', 'Astha Chauhan', 'Drashti Bhuva', 'Muliyashiya Goganbhai', 'Trivedi Bhavikkumar', 'Chirag Navani']
+      });
+    } else {
+      // Ensure existing Chennai TLs have their team members populated if empty
+      branchStructures.Chennai.tls.forEach(tl => {
+        if (tl.tms.length === 0) {
+          if (isSamePerson(tl.name, 'AMARNATH C') || isSamePerson(tl.name, 'AMARNATH')) {
+            tl.tms = ['Vaishnavi R', 'Justin J', 'Gokul G'];
+          } else {
+            tl.tms = ['Palak Dubey', 'Pratima Sahu', 'Janvi Chabhadiya', 'Kalash Srivastava', 'Astha Chauhan', 'Drashti Bhuva', 'Muliyashiya Goganbhai', 'Trivedi Bhavikkumar', 'Chirag Navani'];
+          }
+        }
+      });
+    }
+
+    // 3. If Ahmedabad has 0 TLs, guarantee Romil Prajapati and Uday Dubey are present:
+    if (branchStructures.Ahmedabad.tls.size === 0) {
+      branchStructures.Ahmedabad.tls.set('romil prajapati', {
+        name: 'Romil Prajapati',
+        title: 'Branch Manager (TL)',
+        target: 2200000,
+        tms: ['Meet Yadav', 'Daivik Patel', 'Rutvik Patel', 'Vijay Singh', 'Ayushkumar Patel', 'Umang Soni', 'Nilesh Solanki', 'Jitendra Rathore', 'Naman Makkad']
+      });
+      branchStructures.Ahmedabad.tls.set('uday dubey', {
+        name: 'Uday Dubey',
+        title: 'Vice Sales Head (TL)',
+        target: 2000000,
+        tms: ['Abhishek Harendra Singh', 'Abhishek Prajapati', 'Monika Rola', 'Priyanshi Barmashe', 'Rituraj Singh', 'Jainam Patva', 'Sayyam Jain', 'Ayush Bhat', 'Jainam Sompura', 'Hetul Chiragbhai']
+      });
+    }
 
     // Convert into branchConfigs
     const branchConfigs = [
@@ -2922,6 +3013,11 @@ export const SalesHodDashboardView: React.FC<SalesHodDashboardViewProps> = ({
                       </div>
                     );
                   })}
+                  {drillLevel >= 3 && currentTls.length === 0 && (
+                    <div className="rounded-2xl px-3 py-2 bg-white/90 border border-dashed border-amber-300 text-slate-500 text-xs text-center shadow-xs">
+                      No Team Leaders
+                    </div>
+                  )}
                 </div>
 
                 {/* ================================================================= */}

@@ -151,26 +151,37 @@ export const Employees = () => {
       else if (bLower.includes('ahmedabad')) branch = 'Ahmedabad';
       else branch = String(rawBranch);
     } else {
-      // If Zoho CRM record has null/empty Branches, preserve previously stored branch from local storage
-      try {
-        const saved = localStorage.getItem('be_employees');
-        if (saved) {
-          const emps = JSON.parse(saved);
-          if (Array.isArray(emps)) {
-            const zId = String(z.id || '');
-            const zEmpId = String(z.Employment_ID || '').toLowerCase();
-            const zName = String(z.Name || '').toLowerCase().trim();
-            const match = emps.find((e: any) => 
-              (zId && e.zohoId && String(e.zohoId) === zId) ||
-              (zEmpId && e.id && String(e.id).toLowerCase() === zEmpId) ||
-              (zName && e.name && String(e.name).toLowerCase().trim() === zName)
-            );
-            if (match && (match.branch || match.Branches)) {
-              branch = match.branch || match.Branches;
+      // 1. Check known regional assignments so baseline regional teams are never accidentally defaulted to Ahmedabad
+      const lowerClean = (fullName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isJaipurMember = ['akshay', 'aakash', 'arpit', 'harshita', 'monika gurjar', 'punit', 'akshat', 'konpal'].some(n => lowerClean.includes(n.replace(/[^a-z0-9]/g, '')));
+      const isChennaiMember = ['amarnath', 'sourav', 'vaishnavi', 'justin', 'gokul', 'palak', 'pratima', 'janvi', 'kalash', 'astha', 'drashti', 'chirag'].some(n => lowerClean.includes(n.replace(/[^a-z0-9]/g, '')));
+
+      if (isJaipurMember) {
+        branch = 'Jaipur';
+      } else if (isChennaiMember) {
+        branch = 'Chennai';
+      } else {
+        // 2. If Zoho CRM record has null/empty Branches, preserve previously stored branch from local storage
+        try {
+          const saved = localStorage.getItem('be_employees');
+          if (saved) {
+            const emps = JSON.parse(saved);
+            if (Array.isArray(emps)) {
+              const zId = String(z.id || '');
+              const zEmpId = String(z.Employment_ID || '').toLowerCase();
+              const zName = String(z.Name || '').toLowerCase().trim();
+              const match = emps.find((e: any) => 
+                (zId && e.zohoId && String(e.zohoId) === zId) ||
+                (zEmpId && e.id && String(e.id).toLowerCase() === zEmpId) ||
+                (zName && e.name && String(e.name).toLowerCase().trim() === zName)
+              );
+              if (match && (match.branch || match.Branches)) {
+                branch = match.branch || match.Branches;
+              }
             }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
     }
 
     const fd = {
@@ -861,7 +872,14 @@ export const Employees = () => {
       role: employee.role || employee.formData?.role || '',
       systemRole: sRole,
       salaryEntity: (employee.salaryEntity || employee.formData?.salaryEntity || 'BSPL') as string,
-      branch: employee.branch || employee.Branches || employee.formData?.branch || employee.formData?.Branches || 'Ahmedabad',
+      branch: (() => {
+        const curBranch = employee.branch || employee.Branches || employee.formData?.branch || employee.formData?.Branches;
+        if (curBranch && curBranch !== 'Ahmedabad') return curBranch;
+        const lowerClean = (employee.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (['akshay', 'aakash', 'arpit', 'harshita', 'monika gurjar', 'punit', 'akshat', 'konpal'].some(n => lowerClean.includes(n.replace(/[^a-z0-9]/g, '')))) return 'Jaipur';
+        if (['amarnath', 'sourav', 'vaishnavi', 'justin', 'gokul', 'palak', 'pratima', 'janvi', 'kalash', 'astha', 'drashti', 'chirag'].some(n => lowerClean.includes(n.replace(/[^a-z0-9]/g, '')))) return 'Chennai';
+        return curBranch || 'Ahmedabad';
+      })(),
       teamLeaderId: resolvedTlId,
       teamLeaderName: resolvedTlName,
       reportingManagerId: resolvedRmId,
