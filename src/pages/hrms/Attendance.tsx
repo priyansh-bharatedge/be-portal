@@ -113,7 +113,7 @@ export interface AttendanceItem {
 export const Attendance = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const { currentUser, isTM, isSuperAdmin, isHR, isTL, isHOD } = useAuth();
+  const { currentUser, isTM, isSuperAdmin, isHR, isTL, isHOD, availableUsers } = useAuth();
   const [records, setRecords] = useState<AttendanceItem[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [isAllDates, setIsAllDates] = useState(false);
@@ -720,10 +720,7 @@ export const Attendance = () => {
 
   // Export to CSV
   const handleExportCSV = (recordsToExport: AttendanceItem[], filename: string) => {
-    if (recordsToExport.length === 0) {
-      alert('No attendance records to export.');
-      return;
-    }
+    const isSingleEmployeeHistory = filename.startsWith('Attendance_History_EMP_');
 
     const headers = [
       'sr.no.',
@@ -736,35 +733,214 @@ export const Attendance = () => {
 
     const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
 
-    const rows = recordsToExport.map((r, index) => {
-      const matchedEmp = employeeMap.get(String(r.empId || '').toLowerCase());
-      const dept = r.department || matchedEmp?.department || matchedEmp?.formData?.department || 'General';
-      const checkInTime = formatAttendanceTime(r.firstIn);
+    let finalExportItems: Array<{
+      empCode: string;
+      name: string;
+      department: string;
+      checkInTime: string;
+      status: string;
+    }> = [];
 
-      let formattedStatus: string = r.status || 'Absent';
-      if (r.status === 'Late' || Number(r.lateMinutes || 0) > 15) {
-        formattedStatus = 'Late Mark';
-      } else if (r.status === 'Present') {
-        formattedStatus = 'Present';
-      } else if (r.status === 'Absent') {
-        formattedStatus = 'Absent';
-      } else if (r.status === 'Leave') {
-        formattedStatus = 'Leave';
-      } else if (r.status === 'Half Day') {
-        formattedStatus = 'Half Day';
-      } else if (r.status === 'On Duty') {
-        formattedStatus = 'On Duty';
+    if (isSingleEmployeeHistory) {
+      // Individual employee history export
+      if (recordsToExport.length === 0) {
+        alert('No attendance records to export.');
+        return;
       }
+      finalExportItems = recordsToExport.map(r => {
+        const matchedEmp = employeeMap.get(String(r.empId || '').toLowerCase());
+        const dept = r.department || matchedEmp?.department || matchedEmp?.formData?.department || 'General';
+        const checkInTime = formatAttendanceTime(r.firstIn);
 
-      return [
-        index + 1,
-        escapeCsv(r.empId),
-        escapeCsv(r.empName),
-        escapeCsv(dept),
-        escapeCsv(checkInTime),
-        escapeCsv(formattedStatus)
-      ];
-    });
+        let formattedStatus: string = r.status || 'Absent';
+        if (r.status === 'Late' || Number(r.lateMinutes || 0) > 15) {
+          formattedStatus = 'Late Mark';
+        } else if (r.status === 'Present') {
+          formattedStatus = 'Present';
+        } else if (r.status === 'Absent') {
+          formattedStatus = 'Absent';
+        } else if (r.status === 'Leave') {
+          formattedStatus = 'Leave';
+        } else if (r.status === 'Half Day') {
+          formattedStatus = 'Half Day';
+        } else if (r.status === 'On Duty') {
+          formattedStatus = 'On Duty';
+        }
+
+        return {
+          empCode: r.empId,
+          name: r.empName,
+          department: dept,
+          checkInTime,
+          status: formattedStatus
+        };
+      });
+    } else {
+      // Comprehensive Organizational Attendance Export
+      // Collect all employees from Employee module / organization directory
+      const seenOrgKeys = new Set<string>();
+      const allOrgEmployees: any[] = [];
+
+      const getEmpKey = (emp: any): string => {
+        const code = String(emp.empId || emp.Employment_ID || emp.Employee_Code || emp.formData?.employmentId || emp.formData?.employeeId || '').trim().toLowerCase();
+        const email = String(emp.email || emp.formData?.email || emp.workEmail || emp.personalEmail || '').trim().toLowerCase();
+        const name = String(emp.name || emp.fullName || emp.employeeName || '').trim().toLowerCase();
+        const zohoId = String(emp.zohoId || (emp.id && /^\d{15,}$/.test(String(emp.id)) ? emp.id : '')).trim();
+
+        if (code && code !== 'emp') return `code:${code}`;
+        if (zohoId) return `zoho:${zohoId}`;
+        if (email) return `email:${email}`;
+        if (name) return `name:${name}`;
+        return `id:${emp.id || Math.random()}`;
+      };
+
+      const addOrgEmployee = (emp: any) => {
+        if (!emp) return;
+        const name = String(emp.name || [emp.First_Name || emp.Name, emp.Middle_Name, emp.Last_Name].filter(Boolean).join(' ') || emp.fullName || '').trim();
+        if (!name || name === 'Employee' || /^\d{15,}$/.test(name)) return;
+
+        const key = getEmpKey(emp);
+        if (!seenOrgKeys.has(key)) {
+          seenOrgKeys.add(key);
+          allOrgEmployees.push(emp);
+        }
+      };
+
+      allEmployees.forEach(addOrgEmployee);
+      if (Array.isArray(availableUsers)) availableUsers.forEach(addOrgEmployee);
+      try {
+        const rawEmps = localStorage.getItem('be_employees');
+        if (rawEmps) {
+          const parsed = JSON.parse(rawEmps);
+          if (Array.isArray(parsed)) parsed.forEach(addOrgEmployee);
+        }
+      } catch (_) {}
+      try {
+        const salesRaw = localStorage.getItem('be_sales_employees');
+        if (salesRaw) {
+          const parsedSales = JSON.parse(salesRaw);
+          if (Array.isArray(parsedSales)) parsedSales.forEach(addOrgEmployee);
+        }
+      } catch (_) {}
+
+      // Track which existing attendance records have been matched
+      const matchedRecordIds = new Set<string>();
+
+      // 1. Process each organization employee
+      allOrgEmployees.forEach(emp => {
+        const eCode = String(emp.empId || emp.Employment_ID || emp.Employee_Code || emp.formData?.employmentId || emp.formData?.employeeId || '').trim().toLowerCase();
+        const eEmail = String(emp.email || emp.formData?.email || emp.workEmail || '').trim().toLowerCase();
+        const eName = String(emp.name || emp.fullName || '').trim().toLowerCase();
+        const eZohoId = String(emp.zohoId || (emp.id && /^\d{15,}$/.test(String(emp.id)) ? emp.id : '')).trim();
+
+        const att = recordsToExport.find(r => {
+          const rCode = String(r.empId || '').trim().toLowerCase();
+          const rEmail = String(r.email || '').trim().toLowerCase();
+          const rName = String(r.empName || '').trim().toLowerCase();
+          const rZohoId = String(r.zohoId || '').trim();
+
+          if (eCode && rCode && (eCode === rCode || eCode.replace(/^emp[-_]?/i, '') === rCode.replace(/^emp[-_]?/i, ''))) {
+            return true;
+          }
+          if (eZohoId && rZohoId && eZohoId === rZohoId) {
+            return true;
+          }
+          if (eEmail && rEmail && eEmail === rEmail) {
+            return true;
+          }
+          if (eName && rName && (eName === rName || isMatchingName(eName, rName))) {
+            return true;
+          }
+          return false;
+        });
+
+        const empCode = emp.empId || emp.Employment_ID || emp.Employee_Code || emp.formData?.employmentId || emp.formData?.employeeId || (emp.id && !/^\d{15,}$/.test(String(emp.id)) ? emp.id : (emp.id ? `EMP-${String(emp.id).slice(-4)}` : 'EMP'));
+        const empName = emp.name || [emp.First_Name || emp.Name, emp.Middle_Name, emp.Last_Name].filter(Boolean).join(' ') || emp.fullName || 'Employee';
+        const empDept = emp.department || emp.dept || emp.formData?.department || emp.formData?.dept || 'General';
+
+        if (att) {
+          matchedRecordIds.add(att.id);
+          let formattedStatus: string = att.status || 'Present';
+          if (att.status === 'Late' || Number(att.lateMinutes || 0) > 15) {
+            formattedStatus = 'Late Mark';
+          } else if (att.status === 'Present') {
+            formattedStatus = 'Present';
+          } else if (att.status === 'Absent') {
+            formattedStatus = 'Absent';
+          } else if (att.status === 'Leave') {
+            formattedStatus = 'Leave';
+          } else if (att.status === 'Half Day') {
+            formattedStatus = 'Half Day';
+          } else if (att.status === 'On Duty') {
+            formattedStatus = 'On Duty';
+          }
+
+          finalExportItems.push({
+            empCode: att.empId || empCode,
+            name: att.empName || empName,
+            department: att.department || empDept,
+            checkInTime: formatAttendanceTime(att.firstIn),
+            status: formattedStatus
+          });
+        } else {
+          // Employee has no attendance entry for this period -> Mark Absent
+          finalExportItems.push({
+            empCode,
+            name: empName,
+            department: empDept,
+            checkInTime: '--',
+            status: 'Absent'
+          });
+        }
+      });
+
+      // 2. Include any attendance record that wasn't matched to an org employee
+      recordsToExport.forEach(r => {
+        if (!matchedRecordIds.has(r.id)) {
+          const matchedEmp = employeeMap.get(String(r.empId || '').toLowerCase());
+          const dept = r.department || matchedEmp?.department || matchedEmp?.formData?.department || 'General';
+          let formattedStatus: string = r.status || 'Present';
+          if (r.status === 'Late' || Number(r.lateMinutes || 0) > 15) {
+            formattedStatus = 'Late Mark';
+          } else if (r.status === 'Present') {
+            formattedStatus = 'Present';
+          } else if (r.status === 'Absent') {
+            formattedStatus = 'Absent';
+          } else if (r.status === 'Leave') {
+            formattedStatus = 'Leave';
+          } else if (r.status === 'Half Day') {
+            formattedStatus = 'Half Day';
+          } else if (r.status === 'On Duty') {
+            formattedStatus = 'On Duty';
+          }
+
+          finalExportItems.push({
+            empCode: r.empId,
+            name: r.empName,
+            department: dept,
+            checkInTime: formatAttendanceTime(r.firstIn),
+            status: formattedStatus
+          });
+        }
+      });
+
+      // Sort alphabetically by employee name for clean presentation
+      finalExportItems.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    if (finalExportItems.length === 0) {
+      alert('No employee records found to export.');
+      return;
+    }
+
+    const rows = finalExportItems.map((item, index) => [
+      index + 1,
+      escapeCsv(item.empCode),
+      escapeCsv(item.name),
+      escapeCsv(item.department),
+      escapeCsv(item.checkInTime),
+      escapeCsv(item.status)
+    ]);
 
     const csvContent = '\uFEFF' + [headers.map(escapeCsv).join(','), ...rows.map(e => e.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
