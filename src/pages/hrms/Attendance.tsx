@@ -40,6 +40,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import {
   fetchZohoAttendance,
+  fetchZohoEmployees,
   saveOrUpdateZohoAttendance,
   deleteZohoAttendance,
   formatAttendanceTime,
@@ -48,7 +49,7 @@ import {
   type ZohoAttendanceRecord,
   type ZohoAttendancePayload
 } from '../../services/zohoService';
-import { isSubordinateOfTL, isMatchingName } from '../../utils/employeeUtils';
+import { isSubordinateOfTL, isMatchingName, normalizeName } from '../../utils/employeeUtils';
 
 
 // ── Safe localStorage helper ─────────────────────────────────────────────────
@@ -150,26 +151,97 @@ export const Attendance = () => {
   const isFullAdmin = isSuperAdmin || isHR;
   const isTeamLead = !isFullAdmin && (isTL || currentUser.role === 'TL');
 
-  // Employee list from local storage
+  // Employee list merged from local storage and active user context
   const allEmployees = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+
+    const add = (emp: any) => {
+      if (!emp) return;
+      const name = String(emp.name || [emp.First_Name || emp.Name, emp.Middle_Name, emp.Last_Name].filter(Boolean).join(' ') || emp.fullName || '').trim();
+      if (!name || name === 'Employee' || /^\d{15,}$/.test(name)) return;
+      const key = name.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push(emp);
+      }
+    };
+
     try {
       const emps = localStorage.getItem('be_employees');
-      return emps ? JSON.parse(emps) : [];
-    } catch {
-      return [];
-    }
-  }, []);
+      if (emps) {
+        const parsed = JSON.parse(emps);
+        if (Array.isArray(parsed)) parsed.forEach(add);
+      }
+    } catch {}
 
-  // Employee lookup map for fast name & dept resolution
+    try {
+      const sales = localStorage.getItem('be_sales_employees');
+      if (sales) {
+        const parsed = JSON.parse(sales);
+        if (Array.isArray(parsed)) parsed.forEach(add);
+      }
+    } catch {}
+
+    if (Array.isArray(availableUsers)) {
+      availableUsers.forEach(add);
+    }
+
+    return list;
+  }, [availableUsers]);
+
+  // Employee lookup map for fast name & dept resolution with suffix and code indexing
   const employeeMap = useMemo(() => {
     const map = new Map<string, any>();
     allEmployees.forEach((emp: any) => {
-      if (emp.id) map.set(String(emp.id).toLowerCase(), emp);
-      if (emp.empId) map.set(String(emp.empId).toLowerCase(), emp);
-      if (emp.Employment_ID) map.set(String(emp.Employment_ID).toLowerCase(), emp);
-      if (emp.Employee_Code) map.set(String(emp.Employee_Code).toLowerCase(), emp);
-      if (emp.formData?.employmentId) map.set(String(emp.formData.employmentId).toLowerCase(), emp);
-      if (emp.formData?.employeeId) map.set(String(emp.formData.employeeId).toLowerCase(), emp);
+      const rawId = String(emp.id || '').toLowerCase();
+      const rawZohoId = String(emp.zohoId || '').toLowerCase();
+      const rawEmpId = String(emp.empId || '').toLowerCase();
+      const rawEmploymentId = String(emp.Employment_ID || '').toLowerCase();
+      const rawCode = String(emp.Employee_Code || '').toLowerCase();
+      const formEmpId = String(emp.formData?.employmentId || '').toLowerCase();
+      const formCode = String(emp.formData?.employeeId || '').toLowerCase();
+
+      if (rawId) map.set(rawId, emp);
+      if (rawZohoId) map.set(rawZohoId, emp);
+      if (rawEmpId) map.set(rawEmpId, emp);
+      if (rawEmploymentId) map.set(rawEmploymentId, emp);
+      if (rawCode) map.set(rawCode, emp);
+      if (formEmpId) map.set(formEmpId, emp);
+      if (formCode) map.set(formCode, emp);
+
+      // Cleaned / prefix-stripped codes
+      const effectiveCode = (emp.Employment_ID || emp.empId || emp.Employee_Code || emp.formData?.employmentId || '').trim();
+      const cleanCode = effectiveCode.replace(/^emp[-_]?/i, '').toLowerCase();
+      if (cleanCode) {
+        map.set(cleanCode, emp);
+        const digits = cleanCode.replace(/\D/g, '');
+        if (digits) map.set(digits, emp);
+      }
+
+      // Suffixes:
+      // 1. Suffix of 15+ digit Zoho CRM ID (e.g. 1078476000025516267 -> 6267, 267)
+      if (/^\d{15,}$/.test(rawId)) {
+        map.set(rawId.slice(-4), emp);
+        map.set(rawId.slice(-3), emp);
+      }
+      // 2. Suffix of 4-digit clean code (e.g. 6267 -> 267)
+      if (cleanCode && cleanCode.length === 4) {
+        map.set(cleanCode.slice(-3), emp);
+      }
+
+      // Names
+      const fullName = String(emp.name || [emp.First_Name || emp.Name, emp.Middle_Name, emp.Last_Name].filter(Boolean).join(' ') || emp.fullName || '').trim();
+      if (fullName) {
+        map.set(fullName.toLowerCase(), emp);
+        map.set(normalizeName(fullName), emp);
+      }
+
+      // Email
+      const email = String(emp.email || emp.formData?.email || emp.workEmail || '').trim().toLowerCase();
+      if (email) {
+        map.set(email, emp);
+      }
     });
     return map;
   }, [allEmployees]);
@@ -191,14 +263,45 @@ export const Attendance = () => {
   };
 
   const normalizeRecord = (item: any): AttendanceItem => {
-    const empCode = String(item.Employee_Code || item.empId || (item.Name ? item.Name.split(' - ')[0] : 'EMP')).trim();
+    const rawEmpCode = String(item.Employee_Code || item.empId || (item.Name ? item.Name.split(' - ')[0] : '')).trim();
     const attDate = String(item.Attendance_Date || item.date || (item.Name && item.Name.includes(' - ') ? item.Name.split(' - ')[1] : new Date().toISOString().split('T')[0])).trim();
-    const name = item.Name || item.name || `${empCode} - ${attDate}`;
+    const lookupId = item.Employee && typeof item.Employee === 'object' && item.Employee.id ? String(item.Employee.id).trim() : '';
+    const lookupName = item.Employee && typeof item.Employee === 'object' && item.Employee.name ? String(item.Employee.name).trim() : '';
     
-    // Resolve employee name from employeeMap or item
-    const matchedEmp = employeeMap.get(empCode.toLowerCase());
-    const empName = matchedEmp?.name || (item.Employee && item.Employee.name) || item.empName || `Employee ${empCode}`;
-    const department = matchedEmp?.department || matchedEmp?.formData?.department || item.department || '';
+    // Resolve employee through high-priority waterfall:
+    let matchedEmp = (lookupId ? employeeMap.get(lookupId.toLowerCase()) : null)
+      || (rawEmpCode ? employeeMap.get(rawEmpCode.toLowerCase()) : null)
+      || (rawEmpCode ? employeeMap.get(rawEmpCode.replace(/^emp[-_]?/i, '').toLowerCase()) : null)
+      || (rawEmpCode ? employeeMap.get(rawEmpCode.replace(/\D/g, '')) : null)
+      || (lookupName ? employeeMap.get(lookupName.toLowerCase()) : null)
+      || (lookupName ? employeeMap.get(normalizeName(lookupName)) : null)
+      || (item.Email ? employeeMap.get(String(item.Email).toLowerCase().trim()) : null);
+
+    // If still not matched, check suffix across all employees if rawEmpCode >= 3 digits
+    if (!matchedEmp && rawEmpCode && rawEmpCode.length >= 3) {
+      const codeDigits = rawEmpCode.replace(/\D/g, '');
+      if (codeDigits) {
+        matchedEmp = allEmployees.find((e: any) => {
+          const eId = String(e.id || '');
+          const eCode = String(e.empId || e.Employment_ID || e.Employee_Code || '').replace(/\D/g, '');
+          return (eId && eId.endsWith(codeDigits)) || (eCode && eCode.endsWith(codeDigits));
+        });
+      }
+    }
+
+    // If still not matched by code, check if lookupName partially matches any employee
+    if (!matchedEmp && lookupName) {
+      matchedEmp = allEmployees.find((e: any) => {
+        const n = String(e.name || [e.First_Name || e.Name, e.Middle_Name, e.Last_Name].filter(Boolean).join(' ')).trim();
+        return isMatchingName(n, lookupName);
+      });
+    }
+
+    const resolvedCode = matchedEmp?.empId || matchedEmp?.Employment_ID || matchedEmp?.Employee_Code || rawEmpCode || 'EMP';
+    const empCode = /^\d{15,}$/.test(resolvedCode) ? `EMP-${resolvedCode.slice(-4)}` : resolvedCode;
+    const name = item.Name || item.name || `${empCode} - ${attDate}`;
+    const empName = matchedEmp?.name || (matchedEmp ? [matchedEmp.First_Name || matchedEmp.Name, matchedEmp.Middle_Name, matchedEmp.Last_Name].filter(Boolean).join(' ') : '') || lookupName || item.empName || `Employee ${empCode}`;
+    const department = matchedEmp?.department || matchedEmp?.dept || matchedEmp?.formData?.department || item.department || '';
     const email = matchedEmp?.email || matchedEmp?.formData?.email || item.Email || item.email || '';
     
     let status: AttendanceItem['status'] = 'Present';
@@ -310,6 +413,21 @@ export const Attendance = () => {
     }
     // Fetch live Zoho attendance on initial load
     handleFetchAttendance(false, true);
+
+    // Ensure employee directory is cached locally if missing
+    const empsJson = localStorage.getItem('be_employees');
+    let empCount = 0;
+    try {
+      if (empsJson) empCount = JSON.parse(empsJson).length;
+    } catch {}
+    if (empCount <= 2) {
+      fetchZohoEmployees().then(res => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          localStorage.setItem('be_employees', JSON.stringify(res.data));
+          window.dispatchEvent(new Event('be_employees_updated'));
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -765,7 +883,10 @@ export const Attendance = () => {
         if (existing.empCode && newItem.empCode) {
           const c1 = existing.empCode.toLowerCase().replace(/^emp[-_]?/i, '').trim();
           const c2 = newItem.empCode.toLowerCase().replace(/^emp[-_]?/i, '').trim();
-          if (c1 && c2 && c1 === c2) return true;
+          if (c1 && c2) {
+            if (c1 === c2) return true;
+            if (c1.length >= 3 && c2.length >= 3 && (c1.endsWith(c2) || c2.endsWith(c1))) return true;
+          }
         }
 
         // 2. Match by email
@@ -802,7 +923,12 @@ export const Attendance = () => {
           }
         }
       } else {
-        finalExportItems.push(newItem);
+        // Only push new item if it is a real employee (don't push unmapped "Employee 303" if status is Absent or name is generic)
+        if (newItem.name && !newItem.name.startsWith('Employee ') && newItem.name !== 'Employee') {
+          finalExportItems.push(newItem);
+        } else if (newItem.status !== 'Absent' && newItem.checkInTime !== '--') {
+          finalExportItems.push(newItem);
+        }
       }
     };
 
@@ -892,8 +1018,13 @@ export const Attendance = () => {
 
       // 3. Overlay attendance punch records from recordsToExport (only updates matching person or adds if completely new)
       recordsToExport.forEach(r => {
-        const matchedEmp = employeeMap.get(String(r.empId || '').toLowerCase());
-        const dept = r.department || matchedEmp?.department || matchedEmp?.formData?.department || 'General';
+        const rawCode = String(r.empId || '').toLowerCase().trim();
+        const matchedEmp = employeeMap.get(rawCode)
+          || (r.email ? employeeMap.get(r.email.toLowerCase().trim()) : null)
+          || (r.empName ? employeeMap.get(r.empName.toLowerCase().trim()) : null)
+          || (r.empName ? employeeMap.get(normalizeName(r.empName)) : null);
+
+        const dept = r.department || matchedEmp?.department || matchedEmp?.dept || matchedEmp?.formData?.department || 'General';
         const checkInTime = formatAttendanceTime(r.firstIn);
 
         let formattedStatus: string = r.status || 'Present';
@@ -911,9 +1042,12 @@ export const Attendance = () => {
           formattedStatus = 'On Duty';
         }
 
+        const resolvedCode = cleanEmployeeCode(matchedEmp, r.empId);
+        const resolvedName = (matchedEmp?.name && !matchedEmp.name.startsWith('Employee ')) ? matchedEmp.name : r.empName;
+
         upsertItem({
-          empCode: cleanEmployeeCode(matchedEmp, r.empId),
-          name: r.empName || matchedEmp?.name || 'Employee',
+          empCode: resolvedCode,
+          name: resolvedName || 'Employee',
           department: dept,
           checkInTime,
           status: formattedStatus,
