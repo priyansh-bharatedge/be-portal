@@ -3803,13 +3803,13 @@ function zohoApiPlugin(): Plugin {
                 if (dealId) {
                   // Deal-specific query: search by Parent_Record_Deal
                   const dealCrit = `((Parent_Record_Deal:equals:${numericDealId || dealId})and${OCTOBER_2026_CRITERIA})`;
-                  let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(dealCrit)}&fields=${internalOpsFieldsParam}&per_page=200`, {
+                  let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(dealCrit)}&per_page=200`, {
                     headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                   });
                   if (crmRes.status === 401) {
                     cachedToken = null;
                     accessToken = await getAccessToken(env);
-                    crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(dealCrit)}&fields=${internalOpsFieldsParam}&per_page=200`, {
+                    crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(dealCrit)}&per_page=200`, {
                       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                     });
                   }
@@ -3818,13 +3818,13 @@ function zohoApiPlugin(): Plugin {
                     rawList = crmData.data || [];
                   } else {
                     // Fallback to general search
-                    let fbRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
+                    let fbRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&per_page=200`, {
                       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                     });
                     if (fbRes.status === 401) {
                       cachedToken = null;
                       accessToken = await getAccessToken(env);
-                      fbRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
+                      fbRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&per_page=200`, {
                         headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                       });
                     }
@@ -3844,27 +3844,15 @@ function zohoApiPlugin(): Plugin {
                   let page = 1;
                   const maxPages = 5;
                   while (page <= maxPages) {
-                    let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&page=${page}&per_page=200`, {
+                    let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&page=${page}&per_page=200`, {
                       headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                     });
                     if (crmRes.status === 401) {
                       cachedToken = null;
                       accessToken = await getAccessToken(env);
-                      crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&page=${page}&per_page=200`, {
+                      crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&page=${page}&per_page=200`, {
                         headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                       });
-                    }
-                    if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
-                      crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&page=${page}&per_page=200`, {
-                        headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
-                      });
-                      if (crmRes.status === 401) {
-                        cachedToken = null;
-                        accessToken = await getAccessToken(env);
-                        crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&page=${page}&per_page=200`, {
-                          headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
-                        });
-                      }
                     }
                     if (crmRes && crmRes.status === 200) {
                       const crmData: any = await crmRes.json();
