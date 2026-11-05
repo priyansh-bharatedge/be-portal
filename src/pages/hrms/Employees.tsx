@@ -433,11 +433,11 @@ export const Employees = () => {
     window.dispatchEvent(new Event('be_employees_updated'));
   };
 
-  // Helper lists for dropdowns
-  const availableTeamLeaders = employees.filter(e => {
-    if (e.systemRole === 'HOD' || e.systemRole === 'HR' || e.systemRole === 'Super Admin') return false;
-    return e.systemRole === 'TL';
-  });
+  // Helper lists for dropdowns (includes Team Leaders and HODs who act as Team Leaders)
+  const availableTeamLeaders = [
+    ...employees.filter(e => e.systemRole === 'TL'),
+    ...employees.filter(e => e.systemRole === 'HOD')
+  ];
   const availableManagersAndHODs = employees.filter(e => e.systemRole === 'HOD' || e.systemRole === 'Super Admin' || e.systemRole === 'HR');
   const availableSuperAdmins = employees.filter(e => e.systemRole === 'Super Admin');
 
@@ -475,7 +475,7 @@ export const Employees = () => {
 
     if (role === 'TM') {
       // Find a default TL in same department if available
-      const sameDeptTL = availableTeamLeaders.find(tl => tl.dept === formData.dept) || availableTeamLeaders[0];
+      const sameDeptTL = availableTeamLeaders.find(tl => tl.dept === formData.dept && tl.systemRole === 'TL') || availableTeamLeaders.find(tl => tl.dept === formData.dept) || availableTeamLeaders[0];
       if (sameDeptTL) {
         autoTeamLeaderId = sameDeptTL.id;
         autoTeamLeaderName = `${sameDeptTL.name} (${sameDeptTL.systemRole || 'TL'})`;
@@ -829,11 +829,37 @@ export const Employees = () => {
     if (sRole === 'TM') {
       // For TM: TL and RM must be the exact same person
       if (resolvedTlId) {
+        const matchedTl = employees.find(e => e.id === resolvedTlId || e.zohoId === resolvedTlId || e.formData?.empId === resolvedTlId || (resolvedTlName && isMatchingName(e.name, resolvedTlName)));
+        if (matchedTl) {
+          resolvedTlId = matchedTl.id;
+          if (!resolvedTlName) {
+            resolvedTlName = `${matchedTl.name} (${matchedTl.systemRole || 'TL'})`;
+          }
+        }
         resolvedRmId = resolvedTlId;
         resolvedRmName = resolvedTlName;
       } else if (resolvedRmId) {
-        resolvedTlId = resolvedRmId;
-        resolvedTlName = resolvedRmName;
+        const matchedRm = employees.find(e => e.id === resolvedRmId || e.zohoId === resolvedRmId || e.formData?.empId === resolvedRmId || (resolvedRmName && isMatchingName(e.name, resolvedRmName)));
+        if (matchedRm) {
+          resolvedRmId = matchedRm.id;
+          resolvedTlId = matchedRm.id;
+          if (!resolvedRmName) {
+            resolvedRmName = `${matchedRm.name} (${matchedRm.systemRole || 'TL'})`;
+          }
+          resolvedTlName = resolvedRmName;
+        } else {
+          resolvedTlId = resolvedRmId;
+          resolvedTlName = resolvedRmName;
+        }
+      } else if (resolvedTlName || resolvedRmName) {
+        const lookupName = resolvedTlName || resolvedRmName;
+        const matchedByName = employees.find(e => isMatchingName(e.name, lookupName) || (e.id && lookupName.includes(e.id)));
+        if (matchedByName) {
+          resolvedTlId = matchedByName.id;
+          resolvedRmId = matchedByName.id;
+          resolvedTlName = `${matchedByName.name} (${matchedByName.systemRole || 'TL'})`;
+          resolvedRmName = resolvedTlName;
+        }
       }
     } else if (isTL || isHodOrHr) {
       if (!resolvedRmId) {
@@ -1190,7 +1216,7 @@ export const Employees = () => {
           {can('create_employee') ? (
             <button
               onClick={() => {
-                const sameDeptTL = availableTeamLeaders.find(tl => tl.dept === 'Sales') || availableTeamLeaders[0];
+                const sameDeptTL = availableTeamLeaders.find(tl => tl.dept === 'Sales' && tl.systemRole === 'TL') || availableTeamLeaders.find(tl => tl.dept === 'Sales') || availableTeamLeaders[0];
                 const initialTlId = sameDeptTL ? sameDeptTL.id : '';
                 const initialTlName = sameDeptTL ? `${sameDeptTL.name} (${sameDeptTL.systemRole || 'TL'})` : '';
                 setFormData({
@@ -1896,7 +1922,7 @@ export const Employees = () => {
                                 {availableTeamLeaders.length > 0 ? (
                                   availableTeamLeaders.map((tl) => (
                                     <option key={tl.id} value={tl.id}>
-                                      {tl.name} ({tl.id}) - {tl.dept} (TL)
+                                      {tl.name} ({tl.id}) - {tl.dept} ({tl.systemRole === 'HOD' ? 'HOD' : 'TL'})
                                     </option>
                                   ))
                                 ) : (
