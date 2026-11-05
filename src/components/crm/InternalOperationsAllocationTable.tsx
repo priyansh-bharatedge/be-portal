@@ -1152,12 +1152,12 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                       {mode === 'global' && (
                         <td className="px-4 py-3.5 align-middle">
                           <div
-                            onClick={() => navigate(`/crm/deals/${item.Deal_ID}`)}
-                            className="cursor-pointer group"
+                            onClick={() => item.Deal_ID && navigate(`/crm/deals/${item.Deal_ID}`)}
+                            className={item.Deal_ID ? "cursor-pointer group" : ""}
                           >
                             <span className="font-bold text-xs text-gray-900 group-hover:text-be-orange flex items-center gap-1">
-                              {item.Deal_Name || `Deal #${item.Deal_ID}`}
-                              <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 text-be-orange transition-opacity" />
+                              {item.Deal_Name || (item.Deal_ID ? `Deal #${item.Deal_ID}` : 'Direct Service')}
+                              {item.Deal_ID && <ExternalLink size={12} className="opacity-0 group-hover:opacity-100 text-be-orange transition-opacity" />}
                             </span>
                             {item.Client_Name && (
                               <span className="text-[11px] text-gray-500 block truncate max-w-[180px]">

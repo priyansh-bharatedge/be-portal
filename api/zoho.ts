@@ -4023,51 +4023,98 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
             const resId = await resolveZohoDealId(dealId, accessToken, apiBase);
             if (resId) numericDealId = resId;
           }
-          let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
-            headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
-          });
-          if (crmRes.status === 401) {
-            cachedToken = null;
-            accessToken = await getAccessToken();
-            crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
-              headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
-            });
-          }
-          if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
-            crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
+
+          let rawList: any[] = [];
+
+          if (dealId) {
+            // Deal-specific query: search by Parent_Record_Deal
+            const dealCrit = `((Parent_Record_Deal:equals:${numericDealId || dealId})and${OCTOBER_2026_CRITERIA})`;
+            let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(dealCrit)}&fields=${internalOpsFieldsParam}&per_page=200`, {
               headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
             });
             if (crmRes.status === 401) {
               cachedToken = null;
               accessToken = await getAccessToken();
-              crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&per_page=200`, {
+              crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(dealCrit)}&fields=${internalOpsFieldsParam}&per_page=200`, {
                 headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
               });
             }
-          }
-          if (crmRes && crmRes.status === 200) {
-            const crmData: any = await crmRes.json();
-            let rawList = crmData.data || [];
-            if (dealId) {
-              const targetDId = String(numericDealId || dealId).trim().toLowerCase();
-              rawList = rawList.filter((r: any) => {
-                const parentId = String(r.Parent_Record_Deal?.id || '').trim().toLowerCase();
-                return parentId === targetDId;
+            if (crmRes && crmRes.status === 200) {
+              const crmData: any = await crmRes.json();
+              rawList = crmData.data || [];
+            } else {
+              // Fallback to general search
+              let fbRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
+                headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
               });
+              if (fbRes.status === 401) {
+                cachedToken = null;
+                accessToken = await getAccessToken();
+                fbRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&per_page=200`, {
+                  headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                });
+              }
+              if (fbRes && fbRes.status === 200) {
+                const crmData: any = await fbRes.json();
+                rawList = crmData.data || [];
+              }
             }
-            // Dual-layer defense: strictly filter for October 2026 or later
+            const targetDId = String(numericDealId || dealId).trim().toLowerCase();
             rawList = rawList.filter((r: any) => {
-              if (!r) return false;
-              const ct = r.Created_Time || r.created_time || r.CreatedTime;
-              if (!ct) return true;
-              const createdMs = new Date(ct).getTime();
-              return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : true;
+              const parentId = String(r.Parent_Record_Deal?.id || '').trim().toLowerCase();
+              return parentId === targetDId;
             });
-            const normalized = rawList.map(normalizeZohoOperationRecord);
-            return sendJson(res, 200, { success: true, data: normalized });
-          } else if (crmRes && crmRes.status === 204) {
-            return sendJson(res, 200, { success: true, data: [] });
+          } else {
+            // Global Workspace Mode: Paginate pages to ensure all assigned records
+            // across October and November (e.g. Sujal and team records on pages 2 & 3) are retrieved
+            let page = 1;
+            const maxPages = 5;
+            while (page <= maxPages) {
+              let crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&page=${page}&per_page=200`, {
+                headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+              });
+              if (crmRes.status === 401) {
+                cachedToken = null;
+                accessToken = await getAccessToken();
+                crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}/search?criteria=${encodeURIComponent(OCTOBER_2026_CRITERIA)}&fields=${internalOpsFieldsParam}&page=${page}&per_page=200`, {
+                  headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                });
+              }
+              if (!crmRes.ok && (crmRes.status === 400 || crmRes.status === 404)) {
+                crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&page=${page}&per_page=200`, {
+                  headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                });
+                if (crmRes.status === 401) {
+                  cachedToken = null;
+                  accessToken = await getAccessToken();
+                  crmRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=${internalOpsFieldsParam}&page=${page}&per_page=200`, {
+                    headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
+                  });
+                }
+              }
+              if (crmRes && crmRes.status === 200) {
+                const crmData: any = await crmRes.json();
+                const pageData = crmData.data || [];
+                if (pageData.length === 0) break;
+                rawList.push(...pageData);
+                if (!crmData.info?.more_records) break;
+                page++;
+              } else {
+                break;
+              }
+            }
           }
+
+          // Dual-layer defense: strictly filter for October 2026 or later
+          rawList = rawList.filter((r: any) => {
+            if (!r) return false;
+            const ct = r.Created_Time || r.created_time || r.CreatedTime;
+            if (!ct) return true;
+            const createdMs = new Date(ct).getTime();
+            return !isNaN(createdMs) ? createdMs >= OCTOBER_2026_START_MS : true;
+          });
+          const normalized = rawList.map(normalizeZohoOperationRecord);
+          return sendJson(res, 200, { success: true, data: normalized });
         } catch (_) {}
         return sendJson(res, 200, { success: true, data: [] });
       }
