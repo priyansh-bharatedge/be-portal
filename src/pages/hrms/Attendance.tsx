@@ -726,47 +726,56 @@ export const Attendance = () => {
     }
 
     const headers = [
-      'Attendance Key',
-      'Date',
-      'Employee Code',
-      'Employee Name',
-      'Mark Attendance Status',
-      'Punch Status',
-      'First In (Punch In)',
-      'Last Out (Punch Out)',
-      'Total Working Minutes',
-      'Total Hours Formatted',
-      'Late Minutes',
-      'Early Out Minutes',
-      'Punches Log',
-      'Record ID'
+      'sr.no.',
+      'employee code',
+      'Name',
+      'Department',
+      'check in time',
+      'status'
     ];
 
-    const rows = recordsToExport.map(r => [
-      `"${r.name}"`,
-      `"${r.date}"`,
-      `"${r.empId}"`,
-      `"${r.empName}"`,
-      `"${r.status}"`,
-      `"${r.punchStatus}"`,
-      `"${formatAttendanceTime(r.firstIn)}"`,
-      `"${formatAttendanceTime(r.lastOut)}"`,
-      r.totalMinutes,
-      `"${formatAttendanceDuration(r.totalMinutes)}"`,
-      r.lateMinutes,
-      r.earlyOutMinutes,
-      `"${(r.punches || '').replace(/"/g, '""')}"`,
-      `"${r.zohoId || ''}"`
-    ]);
+    const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const rows = recordsToExport.map((r, index) => {
+      const matchedEmp = employeeMap.get(String(r.empId || '').toLowerCase());
+      const dept = r.department || matchedEmp?.department || matchedEmp?.formData?.department || 'General';
+      const checkInTime = formatAttendanceTime(r.firstIn);
+
+      let formattedStatus: string = r.status || 'Absent';
+      if (r.status === 'Late' || Number(r.lateMinutes || 0) > 15) {
+        formattedStatus = 'Late Mark';
+      } else if (r.status === 'Present') {
+        formattedStatus = 'Present';
+      } else if (r.status === 'Absent') {
+        formattedStatus = 'Absent';
+      } else if (r.status === 'Leave') {
+        formattedStatus = 'Leave';
+      } else if (r.status === 'Half Day') {
+        formattedStatus = 'Half Day';
+      } else if (r.status === 'On Duty') {
+        formattedStatus = 'On Duty';
+      }
+
+      return [
+        index + 1,
+        escapeCsv(r.empId),
+        escapeCsv(r.empName),
+        escapeCsv(dept),
+        escapeCsv(checkInTime),
+        escapeCsv(formattedStatus)
+      ];
+    });
+
+    const csvContent = '\uFEFF' + [headers.map(escapeCsv).join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Status Styling Badges
