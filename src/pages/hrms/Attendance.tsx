@@ -733,13 +733,78 @@ export const Attendance = () => {
 
     const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
 
-    let finalExportItems: Array<{
+    const cleanEmployeeCode = (emp: any, fallback?: string): string => {
+      const raw = emp?.empId || emp?.Employment_ID || emp?.Employee_Code || emp?.formData?.employmentId || emp?.formData?.employeeId || fallback || emp?.id || '';
+      const str = String(raw).trim();
+      if (!str) return 'EMP';
+      if (/^\d{15,}$/.test(str)) {
+        return `EMP-${str.slice(-4)}`;
+      }
+      return str;
+    };
+
+    const finalExportItems: Array<{
       empCode: string;
       name: string;
       department: string;
       checkInTime: string;
       status: string;
+      email?: string;
     }> = [];
+
+    const upsertItem = (newItem: {
+      empCode: string;
+      name: string;
+      department: string;
+      checkInTime: string;
+      status: string;
+      email?: string;
+    }) => {
+      const existingIndex = finalExportItems.findIndex(existing => {
+        // 1. Match by employee code (if both are valid codes)
+        if (existing.empCode && newItem.empCode) {
+          const c1 = existing.empCode.toLowerCase().replace(/^emp[-_]?/i, '').trim();
+          const c2 = newItem.empCode.toLowerCase().replace(/^emp[-_]?/i, '').trim();
+          if (c1 && c2 && c1 === c2) return true;
+        }
+
+        // 2. Match by email
+        if (existing.email && newItem.email && existing.email.toLowerCase().trim() === newItem.email.toLowerCase().trim()) {
+          return true;
+        }
+
+        // 3. Match by name
+        if (existing.name && newItem.name) {
+          const n1 = existing.name.toLowerCase().trim();
+          const n2 = newItem.name.toLowerCase().trim();
+          if (n1 === n2 || isMatchingName(n1, n2)) {
+            return true;
+          }
+        }
+
+        return false;
+      });
+
+      if (existingIndex >= 0) {
+        const existing = finalExportItems[existingIndex];
+        // If existing is Absent, but new item has actual punch / presence data, upgrade it!
+        if (existing.status === 'Absent' && newItem.status !== 'Absent') {
+          finalExportItems[existingIndex] = {
+            ...existing,
+            ...newItem,
+            // Preserve the better employee code if existing had a clean short code
+            empCode: (!existing.empCode.startsWith('EMP-') && newItem.empCode.startsWith('EMP-')) ? existing.empCode : (newItem.empCode || existing.empCode)
+          };
+        } else if (existing.checkInTime === '--' && newItem.checkInTime !== '--') {
+          finalExportItems[existingIndex].checkInTime = newItem.checkInTime;
+          if (newItem.status !== 'Absent') {
+            finalExportItems[existingIndex].status = newItem.status;
+          }
+        }
+      } else {
+        finalExportItems.push(newItem);
+      }
+    };
 
     if (isSingleEmployeeHistory) {
       // Individual employee history export
@@ -747,7 +812,7 @@ export const Attendance = () => {
         alert('No attendance records to export.');
         return;
       }
-      finalExportItems = recordsToExport.map(r => {
+      recordsToExport.forEach(r => {
         const matchedEmp = employeeMap.get(String(r.empId || '').toLowerCase());
         const dept = r.department || matchedEmp?.department || matchedEmp?.formData?.department || 'General';
         const checkInTime = formatAttendanceTime(r.firstIn);
@@ -767,161 +832,93 @@ export const Attendance = () => {
           formattedStatus = 'On Duty';
         }
 
-        return {
-          empCode: r.empId,
+        finalExportItems.push({
+          empCode: cleanEmployeeCode(matchedEmp, r.empId),
           name: r.empName,
           department: dept,
           checkInTime,
           status: formattedStatus
-        };
+        });
       });
     } else {
       // Comprehensive Organizational Attendance Export
-      // Collect all employees from Employee module / organization directory
-      const seenOrgKeys = new Set<string>();
-      const allOrgEmployees: any[] = [];
+      // 1. Gather all active organization employees uniquely
+      const orgEmployeesList: any[] = [];
+      const seenRawNames = new Set<string>();
 
-      const getEmpKey = (emp: any): string => {
-        const code = String(emp.empId || emp.Employment_ID || emp.Employee_Code || emp.formData?.employmentId || emp.formData?.employeeId || '').trim().toLowerCase();
-        const email = String(emp.email || emp.formData?.email || emp.workEmail || emp.personalEmail || '').trim().toLowerCase();
-        const name = String(emp.name || emp.fullName || emp.employeeName || '').trim().toLowerCase();
-        const zohoId = String(emp.zohoId || (emp.id && /^\d{15,}$/.test(String(emp.id)) ? emp.id : '')).trim();
-
-        if (code && code !== 'emp') return `code:${code}`;
-        if (zohoId) return `zoho:${zohoId}`;
-        if (email) return `email:${email}`;
-        if (name) return `name:${name}`;
-        return `id:${emp.id || Math.random()}`;
-      };
-
-      const addOrgEmployee = (emp: any) => {
+      const addRaw = (emp: any) => {
         if (!emp) return;
         const name = String(emp.name || [emp.First_Name || emp.Name, emp.Middle_Name, emp.Last_Name].filter(Boolean).join(' ') || emp.fullName || '').trim();
         if (!name || name === 'Employee' || /^\d{15,}$/.test(name)) return;
-
-        const key = getEmpKey(emp);
-        if (!seenOrgKeys.has(key)) {
-          seenOrgKeys.add(key);
-          allOrgEmployees.push(emp);
+        const key = name.toLowerCase();
+        if (!seenRawNames.has(key)) {
+          seenRawNames.add(key);
+          orgEmployeesList.push(emp);
         }
       };
 
-      allEmployees.forEach(addOrgEmployee);
-      if (Array.isArray(availableUsers)) availableUsers.forEach(addOrgEmployee);
+      allEmployees.forEach(addRaw);
       try {
         const rawEmps = localStorage.getItem('be_employees');
         if (rawEmps) {
           const parsed = JSON.parse(rawEmps);
-          if (Array.isArray(parsed)) parsed.forEach(addOrgEmployee);
+          if (Array.isArray(parsed)) parsed.forEach(addRaw);
         }
       } catch (_) {}
       try {
         const salesRaw = localStorage.getItem('be_sales_employees');
         if (salesRaw) {
           const parsedSales = JSON.parse(salesRaw);
-          if (Array.isArray(parsedSales)) parsedSales.forEach(addOrgEmployee);
+          if (Array.isArray(parsedSales)) parsedSales.forEach(addRaw);
         }
       } catch (_) {}
 
-      // Track which existing attendance records have been matched
-      const matchedRecordIds = new Set<string>();
-
-      // 1. Process each organization employee
-      allOrgEmployees.forEach(emp => {
-        const eCode = String(emp.empId || emp.Employment_ID || emp.Employee_Code || emp.formData?.employmentId || emp.formData?.employeeId || '').trim().toLowerCase();
-        const eEmail = String(emp.email || emp.formData?.email || emp.workEmail || '').trim().toLowerCase();
-        const eName = String(emp.name || emp.fullName || '').trim().toLowerCase();
-        const eZohoId = String(emp.zohoId || (emp.id && /^\d{15,}$/.test(String(emp.id)) ? emp.id : '')).trim();
-
-        const att = recordsToExport.find(r => {
-          const rCode = String(r.empId || '').trim().toLowerCase();
-          const rEmail = String(r.email || '').trim().toLowerCase();
-          const rName = String(r.empName || '').trim().toLowerCase();
-          const rZohoId = String(r.zohoId || '').trim();
-
-          if (eCode && rCode && (eCode === rCode || eCode.replace(/^emp[-_]?/i, '') === rCode.replace(/^emp[-_]?/i, ''))) {
-            return true;
-          }
-          if (eZohoId && rZohoId && eZohoId === rZohoId) {
-            return true;
-          }
-          if (eEmail && rEmail && eEmail === rEmail) {
-            return true;
-          }
-          if (eName && rName && (eName === rName || isMatchingName(eName, rName))) {
-            return true;
-          }
-          return false;
-        });
-
-        const empCode = emp.empId || emp.Employment_ID || emp.Employee_Code || emp.formData?.employmentId || emp.formData?.employeeId || (emp.id && !/^\d{15,}$/.test(String(emp.id)) ? emp.id : (emp.id ? `EMP-${String(emp.id).slice(-4)}` : 'EMP'));
+      // 2. Initialize all employees with default Absent status
+      orgEmployeesList.forEach(emp => {
+        const empCode = cleanEmployeeCode(emp);
         const empName = emp.name || [emp.First_Name || emp.Name, emp.Middle_Name, emp.Last_Name].filter(Boolean).join(' ') || emp.fullName || 'Employee';
         const empDept = emp.department || emp.dept || emp.formData?.department || emp.formData?.dept || 'General';
+        const empEmail = emp.email || emp.formData?.email || emp.workEmail || '';
 
-        if (att) {
-          matchedRecordIds.add(att.id);
-          let formattedStatus: string = att.status || 'Present';
-          if (att.status === 'Late' || Number(att.lateMinutes || 0) > 15) {
-            formattedStatus = 'Late Mark';
-          } else if (att.status === 'Present') {
-            formattedStatus = 'Present';
-          } else if (att.status === 'Absent') {
-            formattedStatus = 'Absent';
-          } else if (att.status === 'Leave') {
-            formattedStatus = 'Leave';
-          } else if (att.status === 'Half Day') {
-            formattedStatus = 'Half Day';
-          } else if (att.status === 'On Duty') {
-            formattedStatus = 'On Duty';
-          }
-
-          finalExportItems.push({
-            empCode: att.empId || empCode,
-            name: att.empName || empName,
-            department: att.department || empDept,
-            checkInTime: formatAttendanceTime(att.firstIn),
-            status: formattedStatus
-          });
-        } else {
-          // Employee has no attendance entry for this period -> Mark Absent
-          finalExportItems.push({
-            empCode,
-            name: empName,
-            department: empDept,
-            checkInTime: '--',
-            status: 'Absent'
-          });
-        }
+        upsertItem({
+          empCode,
+          name: empName,
+          department: empDept,
+          checkInTime: '--',
+          status: 'Absent',
+          email: empEmail
+        });
       });
 
-      // 2. Include any attendance record that wasn't matched to an org employee
+      // 3. Overlay attendance punch records from recordsToExport (only updates matching person or adds if completely new)
       recordsToExport.forEach(r => {
-        if (!matchedRecordIds.has(r.id)) {
-          const matchedEmp = employeeMap.get(String(r.empId || '').toLowerCase());
-          const dept = r.department || matchedEmp?.department || matchedEmp?.formData?.department || 'General';
-          let formattedStatus: string = r.status || 'Present';
-          if (r.status === 'Late' || Number(r.lateMinutes || 0) > 15) {
-            formattedStatus = 'Late Mark';
-          } else if (r.status === 'Present') {
-            formattedStatus = 'Present';
-          } else if (r.status === 'Absent') {
-            formattedStatus = 'Absent';
-          } else if (r.status === 'Leave') {
-            formattedStatus = 'Leave';
-          } else if (r.status === 'Half Day') {
-            formattedStatus = 'Half Day';
-          } else if (r.status === 'On Duty') {
-            formattedStatus = 'On Duty';
-          }
+        const matchedEmp = employeeMap.get(String(r.empId || '').toLowerCase());
+        const dept = r.department || matchedEmp?.department || matchedEmp?.formData?.department || 'General';
+        const checkInTime = formatAttendanceTime(r.firstIn);
 
-          finalExportItems.push({
-            empCode: r.empId,
-            name: r.empName,
-            department: dept,
-            checkInTime: formatAttendanceTime(r.firstIn),
-            status: formattedStatus
-          });
+        let formattedStatus: string = r.status || 'Present';
+        if (r.status === 'Late' || Number(r.lateMinutes || 0) > 15) {
+          formattedStatus = 'Late Mark';
+        } else if (r.status === 'Present') {
+          formattedStatus = 'Present';
+        } else if (r.status === 'Absent') {
+          formattedStatus = 'Absent';
+        } else if (r.status === 'Leave') {
+          formattedStatus = 'Leave';
+        } else if (r.status === 'Half Day') {
+          formattedStatus = 'Half Day';
+        } else if (r.status === 'On Duty') {
+          formattedStatus = 'On Duty';
         }
+
+        upsertItem({
+          empCode: cleanEmployeeCode(matchedEmp, r.empId),
+          name: r.empName || matchedEmp?.name || 'Employee',
+          department: dept,
+          checkInTime,
+          status: formattedStatus,
+          email: r.email || matchedEmp?.email
+        });
       });
 
       // Sort alphabetically by employee name for clean presentation
