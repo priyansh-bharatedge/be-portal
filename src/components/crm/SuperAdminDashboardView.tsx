@@ -858,7 +858,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       {/* VIEW 2: OPERATIONS DASHBOARD (Full 4-Wings Delivery Hub) */}
       {activeDepartment === 'operations' && (
         <div className="transition-all duration-300">
-          <OperationsDashboardView />
+          <OperationsDashboardView isSuperAdminView={true} />
         </div>
       )}
 

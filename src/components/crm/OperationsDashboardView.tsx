@@ -10,6 +10,7 @@ import { getOperationStagesForTeamType } from '../../types/operations';
 import { getStoredInternalOperations, fetchInternalOperations } from '../../services/internalOperationsService';
 import { parseAnyDateToMs } from '../../services/zohoRbacService';
 import { useAuth } from '../../context/AuthContext';
+import { SuperAdminOperationsView } from './SuperAdminOperationsView';
 
 // ============================================================================
 // CONSTANTS & MAPPINGS
@@ -395,8 +396,13 @@ function isDateMatching(
 // MAIN COMPONENT
 // ============================================================================
 
-export const OperationsDashboardView: React.FC = () => {
-  const { currentUser, isSuperAdmin, isOperationsHOD, isLegalHOD } = useAuth();
+export interface OperationsDashboardViewProps {
+  isSuperAdminView?: boolean;
+}
+
+export const OperationsDashboardView: React.FC<OperationsDashboardViewProps> = ({ isSuperAdminView }) => {
+  const { currentUser, isSuperAdmin: isSuperAdminAuth, isOperationsHOD, isLegalHOD } = useAuth();
+  const isSuperAdmin = isSuperAdminView !== undefined ? isSuperAdminView : Boolean(isSuperAdminAuth);
 
   // 1. Top-Level UI Controls State
   const [viewType, setViewType] = useState<DashboardViewType>('Group Homepage');
@@ -999,6 +1005,72 @@ export const OperationsDashboardView: React.FC = () => {
   const indDistinctSubmitters = useMemo(() => new Set(sectionApplications.map(a => a.submitterName)).size, [sectionApplications]);
   const indDistinctSections = useMemo(() => new Set(sectionApplications.map(a => a.sectionName)).size, [sectionApplications]);
   const indDistinctTLs = useMemo(() => new Set(sectionApplications.map(a => a.tlName)).size, [sectionApplications]);
+
+  // --------------------------------------------------------------------------
+  // SUPERADMIN EXCLUSIVE AESTHETIC DASHBOARD
+  // If user is SuperAdmin (or isSuperAdminView is requested), render the exclusive
+  // aesthetic, high-tech, classy executive Operations Command Deck.
+  // --------------------------------------------------------------------------
+  if (isSuperAdmin) {
+    return (
+      <SuperAdminOperationsView
+        viewType={viewType}
+        setViewType={setViewType}
+        teamType={teamType}
+        setTeamType={setTeamType}
+        isLoading={isLoading}
+        lastRefreshed={lastRefreshed}
+        loadData={loadData}
+        allRecords={records}
+        totalTeamRecords={totalTeamRecords}
+        pendingCasesCount={pendingCasesCount}
+        distinctTLsCount={distinctTLsCount}
+        distinctTMsCount={distinctTMsCount}
+        comp1Data={comp1Data}
+        comp1DateFilter={comp1DateFilter}
+        setComp1DateFilter={setComp1DateFilter}
+        comp2Data={comp2Data}
+        comp2DateFilter={comp2DateFilter}
+        setComp2DateFilter={setComp2DateFilter}
+        comp3Data={comp3Data}
+        comp4Data={comp4Data}
+        comp5Data={comp5Data}
+        comp6Data={comp6Data}
+        comp7Data={comp7Data}
+        comp7DateFilter={comp7DateFilter}
+        setComp7DateFilter={setComp7DateFilter}
+        comp8Data={comp8Data}
+        comp8DateFilter={comp8DateFilter}
+        setComp8DateFilter={setComp8DateFilter}
+        comp8SearchQuery={comp8SearchQuery}
+        setComp8SearchQuery={setComp8SearchQuery}
+        comp8MonthDisplayName={comp8MonthDisplayName}
+        indTotalApps={indTotalApps}
+        indDistinctSubmitters={indDistinctSubmitters}
+        indDistinctSections={indDistinctSections}
+        indDistinctTLs={indDistinctTLs}
+        indComp1Data={indComp1Data}
+        indComp1DateFilter={indComp1DateFilter}
+        setIndComp1DateFilter={setIndComp1DateFilter}
+        indComp1Search={indComp1Search}
+        setIndComp1Search={setIndComp1Search}
+        indComp2Data={indComp2Data}
+        indComp2Mode={indComp2Mode}
+        setIndComp2Mode={setIndComp2Mode}
+        indComp2DateFilter={indComp2DateFilter}
+        setIndComp2DateFilter={setIndComp2DateFilter}
+        indComp2Search={indComp2Search}
+        setIndComp2Search={setIndComp2Search}
+        indComp3Data={indComp3Data}
+        indComp3Mode={indComp3Mode}
+        setIndComp3Mode={setIndComp3Mode}
+        indComp3DateFilter={indComp3DateFilter}
+        setIndComp3DateFilter={setIndComp3DateFilter}
+        indComp3Search={indComp3Search}
+        setIndComp3Search={setIndComp3Search}
+      />
+    );
+  }
 
   // --------------------------------------------------------------------------
   // RENDER: INDIVIDUAL HOMEPAGE DASHBOARD (Full Implementation)
