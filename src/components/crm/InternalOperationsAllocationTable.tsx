@@ -56,6 +56,7 @@ export interface NormalizedStaff {
   zohoId?: string;
   isTL: boolean;
   isTM: boolean;
+  isHOD?: boolean;
 }
 
 /**
@@ -168,19 +169,36 @@ export function normalizeStaffRecord(e: any): NormalizedStaff {
   const roleLower = rawRole.toLowerCase();
   const desigLower = rawDesig.toLowerCase();
 
-  const isAdminOrHOD = (
+  const isSuperAdmin = (
     e.systemRole === 'Super Admin' ||
-    e.systemRole === 'HOD' ||
-    e.systemRole === 'HR' ||
     e.System_Role === 'Super Admin' ||
-    e.System_Role === 'HOD' ||
-    e.System_Role === 'HR' ||
     roleLower === 'super admin' ||
-    roleLower === 'hod' ||
-    roleLower === 'hr' ||
     roleLower.includes('super admin') ||
-    roleLower.includes('managing director') ||
+    e.email?.toLowerCase() === 'admin@bharat-edge.com' ||
+    e.email?.toLowerCase() === 'superadmin@be.com'
+  );
+
+  const isHOD = !isSuperAdmin && Boolean(
+    e.isHOD === true ||
+    e.systemRole === 'HOD' ||
+    e.System_Role === 'HOD' ||
+    e.role === 'HOD' ||
+    e.role === 'Admin (HOD)' ||
+    roleLower === 'hod' ||
+    roleLower.includes('hod') ||
+    roleLower.includes('head of department') ||
     desigLower.includes('head of department') ||
+    desigLower.includes('hod') ||
+    (desigLower.includes('head') && !desigLower.includes('team lead') && !desigLower.includes('tl'))
+  );
+
+  const isAdminOrHOD = (
+    isSuperAdmin ||
+    isHOD ||
+    e.systemRole === 'HR' ||
+    e.System_Role === 'HR' ||
+    roleLower === 'hr' ||
+    roleLower.includes('managing director') ||
     desigLower.includes('managing director')
   );
 
@@ -195,19 +213,20 @@ export function normalizeStaffRecord(e: any): NormalizedStaff {
   );
 
   const isTM = !isAdminOrHOD && !isTL;
-  const displayRole = isTL ? 'TL' : (isTM ? 'TM' : rawRole);
+  const displayRole = isHOD ? 'HOD' : (isTL ? 'TL' : (isTM ? 'TM' : rawRole));
 
   return {
     id: id || name,
     name,
     role: displayRole,
-    systemRole: isTL ? 'TL' : (isTM ? 'TM' : rawRole),
+    systemRole: isHOD ? 'HOD' : (isTL ? 'TL' : (isTM ? 'TM' : rawRole)),
     dept,
     email,
     empId,
     zohoId: zohoRecordId || undefined,
     isTL,
-    isTM
+    isTM,
+    isHOD
   };
 }
 
@@ -403,6 +422,12 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
             if (!existing.email && norm.email) existing.email = norm.email;
             if ((!existing.id || existing.id === existing.name) && norm.id) existing.id = norm.id;
             if (!existing.dept && norm.dept) existing.dept = norm.dept;
+            if (norm.isHOD) {
+              existing.isHOD = true;
+              existing.role = 'HOD';
+              existing.systemRole = 'HOD';
+            }
+            if (norm.isTL && !existing.isHOD) existing.isTL = true;
           } else {
             merged.push(norm);
           }
@@ -437,6 +462,46 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     return allExistingEmployees.filter(u => u.isTL);
   }, [allExistingEmployees]);
 
+  // 1b. HODs list (for Digital Marketing and supervisory roles)
+  const allHODs = useMemo(() => {
+    return allExistingEmployees.filter(u => Boolean(
+      u.isHOD || 
+      u.systemRole === 'HOD' || 
+      u.role === 'HOD' || 
+      u.role === 'Admin (HOD)' || 
+      u.role?.toLowerCase().includes('hod')
+    ));
+  }, [allExistingEmployees]);
+
+  // Helper to determine if a record belongs to Digital Marketing
+  const isDigitalMarketingRecord = (rec?: InternalOperationRecord | null): boolean => {
+    if (!rec) return false;
+    const tt = String(rec.Team_Type || rec.Internal_Team_Type || '').toLowerCase();
+    return tt.includes('digital') || tt.includes('marketing');
+  };
+
+  // Helper to get TL options for a specific record (or team type)
+  const getTlOptionsForRecord = (rec?: InternalOperationRecord | null): NormalizedStaff[] => {
+    if (!isDigitalMarketingRecord(rec)) {
+      return allTeamLeaders;
+    }
+    const combined: NormalizedStaff[] = [...allTeamLeaders];
+    allHODs.forEach(hod => {
+      const exists = combined.some(c => 
+        (c.id && hod.id && c.id.toLowerCase() === hod.id.toLowerCase()) ||
+        c.name.toLowerCase() === hod.name.toLowerCase() ||
+        isMatchingName(c.name, hod.name)
+      );
+      if (!exists) {
+        combined.push({
+          ...hod,
+          isHOD: true
+        });
+      }
+    });
+    return combined.sort((a, b) => a.name.localeCompare(b.name));
+  };
+
   // 2. Strictly Team Members (TM) list — ONLY Team Members
   const allTeamMembers = useMemo(() => {
     return allExistingEmployees.filter(u => u.isTM);
@@ -445,7 +510,11 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
   // Helper to resolve currently selected ID by ID or Name (handles fuzzy/middle-name match)
   const resolveSelectedId = (targetId?: string, targetName?: string): string => {
     if (targetId) {
-      const foundById = allExistingEmployees.find(u => u.id.toLowerCase() === targetId.toLowerCase());
+      const foundById = allExistingEmployees.find(u => 
+        u.id.toLowerCase() === targetId.toLowerCase() ||
+        (u.zohoId && u.zohoId.toLowerCase() === targetId.toLowerCase()) ||
+        (u.empId && u.empId.toLowerCase() === targetId.toLowerCase())
+      );
       if (foundById) return foundById.id;
     }
     if (targetName) {
@@ -1218,9 +1287,9 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                               className="px-2.5 py-1.5 bg-amber-50/40 hover:bg-white focus:bg-white border border-amber-200 hover:border-amber-300 focus:border-amber-500 rounded-lg text-xs font-semibold text-gray-800 outline-none transition-all cursor-pointer w-full max-w-[210px]"
                             >
                               <option value="">Select Team Leader (TL)...</option>
-                              {allTeamLeaders.map(tl => (
+                              {getTlOptionsForRecord(item).map(tl => (
                                 <option key={`tl_${tl.id}`} value={tl.id}>
-                                  {tl.name} ({tl.dept} - TL)
+                                  {tl.name} ({tl.dept} - {tl.isHOD ? 'HOD' : 'TL'})
                                 </option>
                               ))}
                             </select>
@@ -1412,9 +1481,9 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                   className="w-full px-3 py-2.5 bg-white border border-gray-200 hover:border-gray-300 focus:border-orange-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all cursor-pointer"
                 >
                   <option value="">Select Team Leader (TL)...</option>
-                  {allTeamLeaders.map(tl => (
+                  {getTlOptionsForRecord(assigningRecord).map(tl => (
                     <option key={`modal_tl_${tl.id}`} value={tl.id}>
-                      {tl.name} ({tl.dept} - TL)
+                      {tl.name} ({tl.dept} - {tl.isHOD ? 'HOD' : 'TL'})
                     </option>
                   ))}
                 </select>
@@ -1491,6 +1560,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
           allStaff={allExistingEmployees}
           allTeamLeaders={allTeamLeaders}
           allTeamMembers={allTeamMembers}
+          allHODs={allHODs}
           canManage={canManageAllocations || hasSupervisoryOversight}
           canAssignTM={canAssignTM}
           canDelete={canDeleteAllocations}

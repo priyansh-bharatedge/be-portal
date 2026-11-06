@@ -468,6 +468,7 @@ interface InternalOperationDetailModalProps {
   allStaff?: NormalizedStaff[];
   allTeamLeaders?: NormalizedStaff[];
   allTeamMembers?: NormalizedStaff[];
+  allHODs?: NormalizedStaff[];
   canManage?: boolean;
   canAssignTM?: boolean;
   canDelete?: boolean;
@@ -481,6 +482,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   allStaff = [],
   allTeamLeaders = [],
   allTeamMembers = [],
+  allHODs = [],
   canManage = false,
   canAssignTM = false,
   canDelete = false
@@ -608,12 +610,110 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
     return operationsStaff.filter(s => !s.isTL);
   }, [operationsStaff]);
 
-  const [selectedTlId, setSelectedTlId] = useState<string>(
-    record.Team_Leader?.id || record.Team_Leader_TL?.id || (typeof record.Team_Leader_TL === 'string' ? record.Team_Leader_TL : '') || record.Team_Leader_ID || ''
-  );
-  const [selectedTmId, setSelectedTmId] = useState<string>(
-    record.Team_Member?.id || record.Team_Member_TM?.id || (typeof record.Team_Member_TM === 'string' ? record.Team_Member_TM : '') || record.Team_Member_ID || ''
-  );
+  // Helper to resolve user ID by ID, empId, zohoId, or Name
+  const resolveTlId = (targetId?: string, targetName?: string): string => {
+    if (targetId) {
+      const foundById = allStaff.find(u => 
+        u.id.toLowerCase() === targetId.toLowerCase() ||
+        (u.zohoId && u.zohoId.toLowerCase() === targetId.toLowerCase()) ||
+        (u.empId && u.empId.toLowerCase() === targetId.toLowerCase())
+      );
+      if (foundById) return foundById.id;
+    }
+    if (targetName) {
+      const exact = allStaff.find(u => u.name.toLowerCase() === targetName.toLowerCase());
+      if (exact) return exact.id;
+      const fuzzy = allStaff.find(u => isMatchingName(u.name, targetName));
+      if (fuzzy) return fuzzy.id;
+    }
+    return targetId || '';
+  };
+
+  const resolveTmId = (targetId?: string, targetName?: string): string => {
+    if (targetId) {
+      const foundById = allStaff.find(u => 
+        u.id.toLowerCase() === targetId.toLowerCase() ||
+        (u.zohoId && u.zohoId.toLowerCase() === targetId.toLowerCase()) ||
+        (u.empId && u.empId.toLowerCase() === targetId.toLowerCase())
+      );
+      if (foundById) return foundById.id;
+    }
+    if (targetName) {
+      const exact = allStaff.find(u => u.name.toLowerCase() === targetName.toLowerCase());
+      if (exact) return exact.id;
+      const fuzzy = allStaff.find(u => isMatchingName(u.name, targetName));
+      if (fuzzy) return fuzzy.id;
+    }
+    return targetId || '';
+  };
+
+  // Whether current record / active team is Digital Marketing
+  const isDigitalMarketing = useMemo(() => {
+    const raw = String(teamType || record.Team_Type || record.Internal_Team_Type || '').trim().toLowerCase();
+    return raw.includes('digital') || raw.includes('marketing');
+  }, [teamType, record.Team_Type, record.Internal_Team_Type]);
+
+  // Available TL Options: if Digital Marketing, include HODs as well
+  const tlOptions = useMemo(() => {
+    if (!isDigitalMarketing) {
+      return allTeamLeaders;
+    }
+
+    const hodList = allHODs.length > 0
+      ? allHODs
+      : allStaff.filter(s =>
+          Boolean(
+            s.isHOD ||
+            s.systemRole === 'HOD' ||
+            s.role === 'HOD' ||
+            s.role === 'Admin (HOD)' ||
+            s.role?.toLowerCase().includes('hod') ||
+            s.role?.toLowerCase().includes('head of department')
+          )
+        );
+
+    const combined: NormalizedStaff[] = [...allTeamLeaders];
+
+    hodList.forEach(hod => {
+      const alreadyExists = combined.some(c =>
+        (c.id && hod.id && c.id.toLowerCase() === hod.id.toLowerCase()) ||
+        c.name.toLowerCase() === hod.name.toLowerCase() ||
+        isMatchingName(c.name, hod.name)
+      );
+
+      if (!alreadyExists) {
+        combined.push({
+          ...hod,
+          isHOD: true
+        });
+      }
+    });
+
+    return combined.sort((a, b) => a.name.localeCompare(b.name));
+  }, [allTeamLeaders, allHODs, allStaff, isDigitalMarketing]);
+
+  const [selectedTlId, setSelectedTlId] = useState<string>(() => {
+    const rawId = record.Team_Leader?.id || record.Team_Leader_TL?.id || (typeof record.Team_Leader_TL === 'string' ? record.Team_Leader_TL : '') || record.Team_Leader_ID || '';
+    const rawName = record.Team_Leader?.name || record.Team_Leader_TL?.name || record.Team_Leader_Name || '';
+    return resolveTlId(rawId, rawName);
+  });
+
+  const [selectedTmId, setSelectedTmId] = useState<string>(() => {
+    const rawId = record.Team_Member?.id || record.Team_Member_TM?.id || (typeof record.Team_Member_TM === 'string' ? record.Team_Member_TM : '') || record.Team_Member_ID || '';
+    const rawName = record.Team_Member?.name || record.Team_Member_TM?.name || record.Team_Member_Name || '';
+    return resolveTmId(rawId, rawName);
+  });
+
+  useEffect(() => {
+    if (allStaff.length > 0 && (!selectedTlId || !allStaff.some(u => u.id === selectedTlId))) {
+      const rawId = record.Team_Leader?.id || record.Team_Leader_TL?.id || (typeof record.Team_Leader_TL === 'string' ? record.Team_Leader_TL : '') || record.Team_Leader_ID || '';
+      const rawName = record.Team_Leader?.name || record.Team_Leader_TL?.name || record.Team_Leader_Name || '';
+      const resolved = resolveTlId(rawId, rawName);
+      if (resolved && resolved !== selectedTlId) {
+        setSelectedTlId(resolved);
+      }
+    }
+  }, [allStaff]);
 
   // Dynamic Sections State Store
   const [sections, setSections] = useState<Record<string, any>>(() => {
@@ -1128,21 +1228,21 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
   const handleSave = async () => {
     setSaving(true);
     try {
-      const tlUser = (selectedTlId ? (allStaff.find(u => 
+      const tlUser = selectedTlId ? (allStaff.find(u => 
         u.id === selectedTlId || 
         (u.zohoId && u.zohoId === selectedTlId) ||
         (u.empId && u.empId === selectedTlId) ||
         u.name.toLowerCase() === selectedTlId.toLowerCase() ||
         isMatchingName(u.name, selectedTlId)
-      ) || (record.Team_Leader?.id === selectedTlId ? record.Team_Leader : null)) : null) || (record.Team_Leader || null);
+      ) || (record.Team_Leader?.id === selectedTlId ? record.Team_Leader : { id: selectedTlId, name: record.Team_Leader_Name || selectedTlId })) : null;
 
-      const tmUser = (selectedTmId ? (allStaff.find(u => 
+      const tmUser = selectedTmId ? (allStaff.find(u => 
         u.id === selectedTmId || 
         (u.zohoId && u.zohoId === selectedTmId) ||
         (u.empId && u.empId === selectedTmId) ||
         u.name.toLowerCase() === selectedTmId.toLowerCase() ||
         isMatchingName(u.name, selectedTmId)
-      ) || (record.Team_Member?.id === selectedTmId ? record.Team_Member : null)) : null) || (record.Team_Member || null);
+      ) || (record.Team_Member?.id === selectedTmId ? record.Team_Member : { id: selectedTmId, name: record.Team_Member_Name || selectedTmId })) : null;
 
       const isFullyAllocated = Boolean(tlUser && tmUser);
       const isPartiallyAllocated = Boolean(tlUser || tmUser);
@@ -2296,7 +2396,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                     Team Leader (TL)
                   </span>
-                  {record.Team_Leader?.name && (
+                  {(selectedTlId || record.Team_Leader?.name || record.Team_Leader_Name) && (
                     <span className="text-[10px] text-amber-700 font-semibold">Assigned</span>
                   )}
                 </label>
@@ -2307,9 +2407,9 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     className="w-full px-3 py-2 bg-white border border-amber-200 hover:border-amber-300 focus:border-amber-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all cursor-pointer shadow-2xs"
                   >
                     <option value="">Select Team Leader (TL)...</option>
-                    {allTeamLeaders.map((tl) => (
+                    {tlOptions.map((tl) => (
                       <option key={`modal_tl_${tl.id}`} value={tl.id}>
-                        {tl.name} ({tl.dept} - TL)
+                        {tl.name} ({tl.dept || 'Operations'} - {tl.isHOD ? 'HOD' : 'TL'})
                       </option>
                     ))}
                   </select>
