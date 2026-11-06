@@ -342,22 +342,43 @@ export const Attendance = () => {
     };
   };
 
-  const handleFetchAttendance = async (showNotification = true, forceAll = true) => {
+  const handleFetchAttendance = async (showNotification = true, forceAll = true, targetDate?: string) => {
     setIsFetchingZoho(true);
     try {
-      const res = await fetchZohoAttendance({ fetch_all: forceAll });
+      const activeDate = targetDate || (!isAllDates ? selectedDate : undefined);
 
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        const fetchedItems: AttendanceItem[] = res.data.map(normalizeRecord);
+      // Fetch date-specific records (guarantees all 66+ records for the active date)
+      // along with general records
+      const promises: [Promise<any>, Promise<any>?] = [
+        activeDate ? fetchZohoAttendance({ date: activeDate, fetch_all: true }) : Promise.resolve(null),
+        forceAll ? fetchZohoAttendance({ fetch_all: true }) : Promise.resolve(null)
+      ];
+
+      const [dateRes, generalRes] = await Promise.all(promises);
+
+      const allFetchedData: any[] = [];
+      if (generalRes?.success && Array.isArray(generalRes.data)) {
+        allFetchedData.push(...generalRes.data);
+      }
+      if (dateRes?.success && Array.isArray(dateRes.data)) {
+        allFetchedData.push(...dateRes.data);
+      }
+
+      if (allFetchedData.length > 0) {
+        const fetchedItems: AttendanceItem[] = allFetchedData.map(normalizeRecord);
 
         setRecords(prev => {
           const keyMap = new Map<string, AttendanceItem>();
           prev.forEach(item => {
-            const key = `${item.empId}_${item.date}`;
+            const key = (item.empId && item.empId !== 'EMP')
+              ? `${item.empId}_${item.date}`
+              : (item.zohoId || item.id || `${item.empId}_${item.date}_${item.empName}`);
             keyMap.set(key, item);
           });
           fetchedItems.forEach(item => {
-            const key = `${item.empId}_${item.date}`;
+            const key = (item.empId && item.empId !== 'EMP')
+              ? `${item.empId}_${item.date}`
+              : (item.zohoId || item.id || `${item.empId}_${item.date}_${item.empName}`);
             keyMap.set(key, item);
           });
 
@@ -376,17 +397,20 @@ export const Attendance = () => {
         }
 
         if (showNotification) {
+          const activeDateCount = dateRes?.data?.length || 0;
           setToast({
             type: 'success',
-            message: `Synced ${res.data.length} Attendance Records`,
-            submessage: `Found records across ${uniqueDates.length} dates (Latest: ${uniqueDates[0] || 'N/A'})`
+            message: `Synced Attendance Records`,
+            submessage: activeDate && activeDateCount > 0
+              ? `Found ${activeDateCount} records for ${activeDate}`
+              : `Found records across ${uniqueDates.length} dates (Latest: ${uniqueDates[0] || 'N/A'})`
           });
         }
       } else if (showNotification) {
         setToast({
           type: 'info',
           message: 'No Attendance Records Found',
-          submessage: res.message || 'No attendance records returned from database'
+          submessage: (dateRes?.message || generalRes?.message) || 'No attendance records returned from database'
         });
       }
     } catch (e: any) {
@@ -404,15 +428,17 @@ export const Attendance = () => {
 
   useEffect(() => {
     const localData = loadLocalAttendance();
+    let initialDate = selectedDate;
     if (localData.length > 0) {
       setRecords(localData);
       const uniqueDates = [...new Set(localData.map(r => r.date).filter(Boolean))].sort().reverse();
       if (uniqueDates.length > 0) {
+        initialDate = uniqueDates[0];
         setSelectedDate(uniqueDates[0]);
       }
     }
-    // Fetch live Zoho attendance on initial load
-    handleFetchAttendance(false, true);
+    // Fetch live Zoho attendance on initial load for initial active date and general records
+    handleFetchAttendance(false, true, initialDate);
 
     // Ensure employee directory is cached locally if missing
     const empsJson = localStorage.getItem('be_employees');
@@ -429,6 +455,47 @@ export const Attendance = () => {
       }).catch(() => {});
     }
   }, []);
+
+  // Fetch full records for selected date whenever selectedDate changes
+  useEffect(() => {
+    if (!selectedDate || isAllDates) return;
+    let isCancelled = false;
+
+    const fetchSelectedDateAttendance = async () => {
+      try {
+        const res = await fetchZohoAttendance({ date: selectedDate });
+        if (!isCancelled && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const fetchedItems: AttendanceItem[] = res.data.map(normalizeRecord);
+          setRecords(prev => {
+            const keyMap = new Map<string, AttendanceItem>();
+            prev.forEach(item => {
+              const key = (item.empId && item.empId !== 'EMP')
+                ? `${item.empId}_${item.date}`
+                : (item.zohoId || item.id || `${item.empId}_${item.date}_${item.empName}`);
+              keyMap.set(key, item);
+            });
+            fetchedItems.forEach(item => {
+              const key = (item.empId && item.empId !== 'EMP')
+                ? `${item.empId}_${item.date}`
+                : (item.zohoId || item.id || `${item.empId}_${item.date}_${item.empName}`);
+              keyMap.set(key, item);
+            });
+            const merged = Array.from(keyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+            saveAttendanceSafely(merged);
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.warn('[Attendance] Failed to fetch date attendance for', selectedDate, err);
+      }
+    };
+
+    fetchSelectedDateAttendance();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedDate, isAllDates]);
 
   useEffect(() => {
     if (toast) {
@@ -1219,7 +1286,7 @@ export const Attendance = () => {
 
           {/* Zoho Sync Button */}
           <button
-            onClick={() => handleFetchAttendance(true, true)}
+            onClick={() => handleFetchAttendance(true, true, selectedDate)}
             disabled={isFetchingZoho}
             className="w-10 h-10 border border-orange-200 bg-orange-50/70 hover:bg-orange-100 text-orange-950 rounded-xl flex items-center justify-center shadow-sm transition-all disabled:opacity-60 shrink-0"
             title="Refresh & Sync"
@@ -1633,7 +1700,7 @@ export const Attendance = () => {
                         </p>
                         <div className="mt-4 flex items-center space-x-3">
                           <button
-                            onClick={() => handleFetchAttendance(true, true)}
+                            onClick={() => handleFetchAttendance(true, true, selectedDate)}
                             className="px-4 py-2 border border-orange-200 bg-orange-50 text-be-orange rounded-xl text-xs font-bold shadow-xs hover:bg-orange-100 transition-colors"
                           >
                             Sync from Zoho CRM

@@ -5494,14 +5494,17 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         criteriaParts.push(`(Modified_Time:greater_equal:${modifiedSince})`);
       }
 
+      const sortBy = urlObj.searchParams.get('sort_by') || 'id';
+      const sortOrder = urlObj.searchParams.get('sort_order') || 'desc';
+
       let baseEndpoint: string;
       if (criteriaParts.length > 1) {
         const combined = criteriaParts.reduce((acc, curr) => `(${acc}and${curr})`);
-        baseEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(combined)}&fields=${attFields}`;
+        baseEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(combined)}&fields=${attFields}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
       } else if (criteriaParts.length === 1) {
-        baseEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteriaParts[0])}&fields=${attFields}`;
+        baseEndpoint = `${apiBase}/crm/v8/${moduleName}/search?criteria=${encodeURIComponent(criteriaParts[0])}&fields=${attFields}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
       } else {
-        baseEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}`;
+        baseEndpoint = `${apiBase}/crm/v8/${moduleName}?fields=${attFields}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
       }
 
       if (fetchAll) {
