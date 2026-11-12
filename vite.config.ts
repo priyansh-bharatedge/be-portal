@@ -29,8 +29,8 @@ function zohoApiPlugin(): Plugin {
     const clientId = e.VITE_ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
     const clientSecret = e.VITE_ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
     let refreshToken = e.VITE_ZOHO_REFRESH_TOKEN || '';
-    if (!refreshToken || refreshToken.includes('bdf58bb945')) {
-      refreshToken = '1000.b141fe7e5414313d6b2ba2744c90c4fe.dc33224ff49bf2843512fbe58dce982c';
+    if (!refreshToken || refreshToken.includes('bdf58bb945') || refreshToken.includes('b141fe7e')) {
+      refreshToken = '1000.3e0ddc29ef25c80e54d40d3c220ce6d9.d874981c4495b4c25f8e3f594cf18413';
     }
 
     const now = Date.now();
@@ -85,8 +85,8 @@ function zohoApiPlugin(): Plugin {
     const clientId = e.VITE_ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
     const clientSecret = e.VITE_ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
     let refreshToken = e.VITE_ZOHO_WORKDRIVE_REFRESH_TOKEN || e.VITE_ZOHO_REFRESH_TOKEN || '';
-    if (!refreshToken || refreshToken.includes('bdf58bb945')) {
-      refreshToken = '1000.b141fe7e5414313d6b2ba2744c90c4fe.dc33224ff49bf2843512fbe58dce982c';
+    if (!refreshToken || refreshToken.includes('bdf58bb945') || refreshToken.includes('b141fe7e')) {
+      refreshToken = '1000.3e0ddc29ef25c80e54d40d3c220ce6d9.d874981c4495b4c25f8e3f594cf18413';
     }
 
     const now = Date.now();
@@ -7144,7 +7144,7 @@ function zohoApiPlugin(): Plugin {
             const crmAttachmentEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments`;
 
             // If WorkDrive folder is configured, upload to Zoho WorkDrive and attach URL to CRM record
-            const workdriveFolderId = env.VITE_ZOHO_WORKDRIVE_FOLDER_ID;
+            const workdriveFolderId = env.VITE_ZOHO_WORKDRIVE_FOLDER_ID || '20pmq2dc477e8e8144483a518d51e40b4b23c';
             if (workdriveFolderId) {
               try {
                 let workdriveToken = await getWorkDriveAccessToken(env);
@@ -7452,11 +7452,79 @@ function zohoApiPlugin(): Plugin {
             }
 
             if (fileIds.length === 0) {
+              // Fallback: If CRM file storage is exceeded or /crm/v8/files fails, upload to Zoho WorkDrive and attach URL to record!
+              try {
+                let workdriveToken = await getWorkDriveAccessToken(env);
+                const workdriveBase = domain === 'com' ? 'https://workdrive.zoho.com/api/v1' : 'https://workdrive.zoho.in/api/v1';
+                const folderId = env.VITE_ZOHO_WORKDRIVE_FOLDER_ID || '20pmq2dc477e8e8144483a518d51e40b4b23c';
+
+                const permalinks: string[] = [];
+                for (const file of files) {
+                  const wdForm = new FormData();
+                  wdForm.append('content', file, file.name);
+                  wdForm.append('filename', file.name);
+                  wdForm.append('parent_id', folderId);
+
+                  let wdRes = await fetch(`${workdriveBase}/upload`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Zoho-oauthtoken ${workdriveToken}`,
+                      'Accept': 'application/vnd.api+json',
+                    },
+                    body: wdForm,
+                  });
+                  let wdData: any = await wdRes.json().catch(() => null);
+
+                  if (wdRes.status === 401) {
+                    cachedWorkDriveToken = null;
+                    workdriveToken = await getWorkDriveAccessToken(env);
+                    wdRes = await fetch(`${workdriveBase}/upload`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Zoho-oauthtoken ${workdriveToken}`,
+                        'Accept': 'application/vnd.api+json',
+                      },
+                      body: wdForm,
+                    });
+                    wdData = await wdRes.json().catch(() => null);
+                  }
+
+                  const fItem = Array.isArray(wdData?.data) ? wdData.data[0] : wdData?.data;
+                  const fId = fItem?.id;
+                  const link = fItem?.attributes?.Permalink || fItem?.attributes?.permalink || (fId ? `https://workdrive.zoho.${domain}/file/${fId}` : '');
+                  if (link) permalinks.push(link);
+
+                  if (link && recordId) {
+                    const crmAttachForm = new FormData();
+                    crmAttachForm.append('attachmentUrl', link);
+                    crmAttachForm.append('title', file.name);
+                    await fetch(`${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                      body: crmAttachForm,
+                    }).catch(() => null);
+                  }
+                }
+
+                if (permalinks.length > 0) {
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({
+                    success: true,
+                    message: `Image(s) uploaded to Zoho WorkDrive and linked to ${moduleName} #${recordId}`,
+                    permalink: permalinks[0],
+                    permalinks,
+                  }));
+                }
+              } catch (wdFallbackErr) {
+                console.warn('[Vite Zoho Plugin] WorkDrive fallback upload failed:', wdFallbackErr);
+              }
+
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json');
               return res.end(JSON.stringify({
                 success: false,
-                message: 'Failed to upload image file(s) to Zoho File System',
+                message: 'Failed to upload image file(s) to Zoho File System or WorkDrive',
               }));
             }
 

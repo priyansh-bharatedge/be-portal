@@ -1,28 +1,49 @@
 import http from 'http';
-import { URL } from 'url';
+import { URL, fileURLToPath } from 'url';
 import fs from 'fs';
 import path from 'path';
 import zohoHandler from './api/zoho.ts';
 import sendOtpHandler from './api/send-otp.ts';
 import dealsHandler from './api/deals.ts';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Load .env if present
-if (fs.existsSync('.env')) {
-  try {
-    const envContent = fs.readFileSync('.env', 'utf-8');
-    envContent.split('\n').forEach(line => {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
-        const [key, ...vals] = trimmed.split('=');
-        const val = vals.join('=').trim().replace(/^["']|["']$/g, '');
-        if (key) {
-          process.env[key.trim()] = val;
+const possibleEnvPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(__dirname, '.env'),
+  '/root/be-portal/.env',
+  '/root/.env'
+];
+
+for (const envPath of possibleEnvPaths) {
+  if (fs.existsSync(envPath)) {
+    try {
+      const envContent = fs.readFileSync(envPath, 'utf-8');
+      envContent.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+          const [key, ...vals] = trimmed.split('=');
+          const val = vals.join('=').trim().replace(/^["']|["']$/g, '');
+          if (key && !process.env[key.trim()]) {
+            process.env[key.trim()] = val;
+          }
         }
-      }
-    });
-  } catch (e) {
-    console.warn('Could not read .env file', e);
+      });
+      break;
+    } catch (e) {
+      console.warn(`Could not read .env file at ${envPath}`, e);
+    }
   }
+}
+
+// Ensure default WorkDrive & CRM credentials exist even if .env is missing or outdated
+if (!process.env.VITE_ZOHO_REFRESH_TOKEN || process.env.VITE_ZOHO_REFRESH_TOKEN.includes('bdf58bb945') || process.env.VITE_ZOHO_REFRESH_TOKEN.includes('b141fe7e')) {
+  process.env.VITE_ZOHO_REFRESH_TOKEN = '1000.3e0ddc29ef25c80e54d40d3c220ce6d9.d874981c4495b4c25f8e3f594cf18413';
+}
+if (!process.env.VITE_ZOHO_WORKDRIVE_FOLDER_ID) {
+  process.env.VITE_ZOHO_WORKDRIVE_FOLDER_ID = '20pmq2dc477e8e8144483a518d51e40b4b23c';
 }
 
 const PORT = process.env.PORT || 5000;

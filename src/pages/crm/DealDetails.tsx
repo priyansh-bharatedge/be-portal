@@ -17,6 +17,7 @@ import {
   getZohoAttachmentDownloadUrl, 
   downloadZohoAttachment, 
   uploadZohoAttachmentToDeal,
+  uploadToZohoWorkDrive,
   uploadZohoDealPhoto,
   uploadZohoDealImageField,
   getZohoFieldAttachmentUrl,
@@ -2191,14 +2192,22 @@ export const DealDetails = () => {
       const docId = `${deal?.id || id || 'deal'}_${file.name}`;
       await saveDocument(docId, file);
 
-      // 2. Upload to Zoho CRM if zohoId is available
+      // 2. Upload to Zoho WorkDrive if zohoId is available
       if (targetZohoId) {
-        const res = await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
+        const customDocName = `Doc_${targetZohoId}_${file.name}`;
+        const res = await uploadToZohoWorkDrive(file, customDocName, targetZohoId);
         if (res.success) {
-          setUploadToast({ type: 'success', message: `"${file.name}" uploaded to Zoho CRM successfully!` });
+          setUploadToast({ type: 'success', message: `"${file.name}" uploaded to Zoho WorkDrive successfully!` });
           await loadAttachments(targetZohoId);
         } else {
-          setUploadToast({ type: 'error', message: res.message || 'Saved locally, but Zoho upload failed.' });
+          // Fallback to standard attachment route if WorkDrive fails
+          const fallbackRes = await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
+          if (fallbackRes.success) {
+            setUploadToast({ type: 'success', message: `"${file.name}" uploaded to Zoho successfully!` });
+            await loadAttachments(targetZohoId);
+          } else {
+            setUploadToast({ type: 'error', message: res.message || fallbackRes.message || 'Saved locally, but Zoho upload failed.' });
+          }
         }
       } else {
         setUploadToast({ type: 'success', message: `"${file.name}" saved locally!` });
@@ -2366,23 +2375,17 @@ export const DealDetails = () => {
             console.warn(`IndexedDB save error for ${slot.tabName}:`, dbErr);
           }
           if (targetZohoId) {
-            // 1. Upload to standard Deal Attachments list
+            // 1. Upload screenshot directly to Zoho WorkDrive and link as deal attachment
+            const customName = `Payment_Screenshot_${targetZohoId}_${slot.tabName}_${file.name}`;
             try {
-              const attRes = await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
-              if (!attRes.success) {
-                console.warn(`Zoho deal attachment warning for ${slot.tabName}:`, attRes.message);
+              const wdRes = await uploadToZohoWorkDrive(file, customName, targetZohoId);
+              if (!wdRes.success) {
+                console.warn(`Zoho WorkDrive screenshot upload warning for ${slot.tabName}:`, wdRes.message);
+                // Fallback to attachment endpoint
+                await uploadZohoAttachmentToDeal(targetZohoId, file, file.name).catch(() => null);
               }
             } catch (attErr) {
               console.warn(`Zoho deal attachment error for ${slot.tabName}:`, attErr);
-            }
-            // 2. Also update custom Image field
-            try {
-              const imgRes = await uploadZohoDealImageField(targetZohoId, file, slot.screenshotField, file.name);
-              if (!imgRes.success) {
-                console.warn(`Zoho deal image field upload failed for ${slot.tabName} (${slot.screenshotField}):`, imgRes.message);
-              }
-            } catch (fErr) {
-              console.warn(`Zoho deal image field error for ${slot.tabName}:`, fErr);
             }
           }
         }
