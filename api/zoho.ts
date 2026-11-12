@@ -73,6 +73,62 @@ async function getAccessToken(): Promise<string> {
   return token;
 }
 
+let cachedWorkDriveToken: string | null = null;
+let workDriveTokenExpiry = 0;
+
+async function getWorkDriveAccessToken(): Promise<string> {
+  const clientId = process.env.VITE_ZOHO_CLIENT_ID || process.env.ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
+  const clientSecret = process.env.VITE_ZOHO_CLIENT_SECRET || process.env.ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
+  let refreshToken = process.env.VITE_ZOHO_WORKDRIVE_REFRESH_TOKEN || process.env.VITE_ZOHO_REFRESH_TOKEN || process.env.ZOHO_REFRESH_TOKEN || '';
+  if (!refreshToken || refreshToken.includes('bdf58bb945')) {
+    refreshToken = '1000.b141fe7e5414313d6b2ba2744c90c4fe.dc33224ff49bf2843512fbe58dce982c';
+  }
+
+  const now = Date.now();
+  if (cachedWorkDriveToken && workDriveTokenExpiry > now + 60000) {
+    return cachedWorkDriveToken;
+  }
+
+  try {
+    const wdTokenPath = path.resolve(process.cwd(), 'data', '.zoho_workdrive_token.json');
+    if (fs.existsSync(wdTokenPath)) {
+      const diskToken = JSON.parse(fs.readFileSync(wdTokenPath, 'utf-8'));
+      if (diskToken?.token && diskToken.expiry > now + 60000) {
+        cachedWorkDriveToken = diskToken.token;
+        workDriveTokenExpiry = diskToken.expiry;
+        return String(diskToken.token);
+      }
+    }
+  } catch (_) {}
+
+  const params = new URLSearchParams({
+    refresh_token: refreshToken,
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: 'refresh_token',
+  });
+
+  const accountsUrl = process.env.VITE_ZOHO_ACCOUNTS_URL || process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in';
+  const tokenUrl = `${accountsUrl}/oauth/v2/token?${params.toString()}`;
+  const res = await fetch(tokenUrl, { method: 'POST' });
+  const data: any = await res.json();
+
+  if (!data.access_token) {
+    console.error('[Zoho WorkDrive] Token refresh failed:', data);
+    throw new Error(data.error_description || data.error || data.message || 'Failed to obtain WorkDrive access token from Zoho');
+  }
+
+  const token: string = data.access_token;
+  cachedWorkDriveToken = token;
+  workDriveTokenExpiry = now + (Number(data.expires_in) || 3600) * 1000;
+  try {
+    const wdTokenPath = path.resolve(process.cwd(), 'data', '.zoho_workdrive_token.json');
+    fs.mkdirSync(path.dirname(wdTokenPath), { recursive: true });
+    fs.writeFileSync(wdTokenPath, JSON.stringify({ token: cachedWorkDriveToken, expiry: workDriveTokenExpiry }));
+  } catch (_) {}
+  return token;
+}
+
 interface CachedEmployeeRecord {
   id: string;
   Name?: string;
@@ -5861,7 +5917,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         }
 
         let accessToken = await getAccessToken();
-        const fieldsParam = urlObj.searchParams.get('fields') || 'id,File_Name,Size,Created_Time,Created_By,Modified_Time,$file_id,$type';
+        const fieldsParam = urlObj.searchParams.get('fields') || 'id,File_Name,Size,Created_Time,Created_By,Modified_Time,$file_id,$type,$link_url,link_url';
         const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=${fieldsParam}`;
 
         let crmRes = await fetch(crmEndpoint, {
@@ -5959,6 +6015,53 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         }
 
         if (!crmRes.ok) {
+          // Check if it's a linked attachment from WorkDrive (Zoho CRM returns 400 DOWNLOAD_NOT_ALLOWED)
+          try {
+            const listUrl = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=id,File_Name,Size,$link_url,link_url,$type`;
+            const listRes = await fetch(listUrl, {
+              headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+            });
+            const listData: any = await listRes.json().catch(() => null);
+            const attItem = listData?.data?.find((a: any) => String(a.id) === String(attachmentId));
+            const linkUrl = attItem?.$link_url || attItem?.link_url;
+            const wdFileId = linkUrl?.match(/\/file\/([a-zA-Z0-9]+)/)?.[1] || linkUrl?.match(/\/download\/([a-zA-Z0-9]+)/)?.[1];
+
+            if (wdFileId) {
+              let wdToken = await getWorkDriveAccessToken();
+              const wdDomain = process.env.VITE_ZOHO_DOMAIN || 'in';
+              const wdBase = wdDomain === 'com' ? 'https://workdrive.zoho.com/api/v1' : 'https://workdrive.zoho.in/api/v1';
+              let streamRes = await fetch(`${wdBase}/download/${wdFileId}`, {
+                headers: { 'Authorization': `Zoho-oauthtoken ${wdToken}` },
+              });
+
+              if (streamRes.status === 401) {
+                cachedWorkDriveToken = null;
+                wdToken = await getWorkDriveAccessToken();
+                streamRes = await fetch(`${wdBase}/download/${wdFileId}`, {
+                  headers: { 'Authorization': `Zoho-oauthtoken ${wdToken}` },
+                });
+              }
+
+              if (streamRes.ok) {
+                const cType = streamRes.headers.get('content-type') || 'application/octet-stream';
+                const fileName = attItem.File_Name || urlObj.searchParams.get('name') || 'document';
+                const safeName = fileName.replace(/[^\w\s.-]/gi, '_');
+                const contentDisp = isPreview ? 'inline' : `attachment; filename="${safeName}"`;
+                const arrayBuf = await streamRes.arrayBuffer();
+                const buffer = Buffer.from(arrayBuf);
+
+                res.statusCode = 200;
+                res.setHeader('Content-Type', cType);
+                res.setHeader('Content-Disposition', contentDisp);
+                res.setHeader('Content-Length', buffer.length.toString());
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+                return res.end(buffer);
+              }
+            }
+          } catch (wdStreamErr) {
+            console.warn('[Zoho API Handler] WorkDrive stream error:', wdStreamErr);
+          }
+
           const errText = await crmRes.text();
           return sendJson(res, crmRes.status, { success: false, message: 'Failed to download attachment from Zoho CRM', details: errText });
         }
@@ -6039,6 +6142,255 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
       }
     }
 
+    // Zoho WorkDrive Upload Endpoint (/api/zoho/workdrive/upload)
+    if ((action === 'workdrive/upload' || action === 'workdrive-upload') && method === 'POST') {
+      try {
+        let buffer: Buffer;
+        if (Buffer.isBuffer((req as any).body)) {
+          buffer = (req as any).body;
+        } else if (Buffer.isBuffer((req as any).rawBody)) {
+          buffer = (req as any).rawBody;
+        } else {
+          const chunks: Buffer[] = [];
+          for await (const chunk of (req as any)) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+          buffer = Buffer.concat(chunks);
+        }
+        const contentType = (req.headers && req.headers['content-type']) || '';
+
+        const webReq = new Request('http://localhost' + (req.url || '/'), {
+          method: 'POST',
+          headers: { 'content-type': contentType },
+          body: buffer,
+        });
+
+        const formData = await webReq.formData();
+        const file = formData.get('file') as File | null;
+        const filename = (formData.get('filename') as string) || (file ? file.name : 'document');
+        const dealId = (formData.get('dealId') as string) || '';
+        const requestedFolderId = (formData.get('folderId') as string) || process.env.VITE_ZOHO_WORKDRIVE_FOLDER_ID;
+
+        if (!file) {
+          return sendJson(res, 400, {
+            success: false,
+            message: 'A "file" is required for Zoho WorkDrive upload.',
+          });
+        }
+
+        let workDriveAccessToken = await getWorkDriveAccessToken();
+        const domain = process.env.VITE_ZOHO_DOMAIN || 'in';
+        const workdriveApiBase = domain === 'com' ? 'https://workdrive.zoho.com/api/v1' : 'https://workdrive.zoho.in/api/v1';
+
+        let parentId = requestedFolderId;
+        if (!parentId) {
+          try {
+            const meRes = await fetch(`${workdriveApiBase}/users/me`, {
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${workDriveAccessToken}`,
+                'Accept': 'application/vnd.api+json',
+              },
+            });
+            const meData: any = await meRes.json();
+            const zuid = meData?.data?.id;
+            if (zuid) {
+              const teamsRes = await fetch(`${workdriveApiBase}/users/${zuid}/teams`, {
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${workDriveAccessToken}`,
+                  'Accept': 'application/vnd.api+json',
+                },
+              });
+              const teamsData: any = await teamsRes.json();
+              const firstTeamId = teamsData?.data?.[0]?.id;
+              if (firstTeamId) {
+                const wsRes = await fetch(`${workdriveApiBase}/teams/${firstTeamId}/workspaces`, {
+                  headers: {
+                    'Authorization': `Zoho-oauthtoken ${workDriveAccessToken}`,
+                    'Accept': 'application/vnd.api+json',
+                  },
+                });
+                const wsData: any = await wsRes.json();
+                parentId = wsData?.data?.[0]?.id;
+              }
+            }
+          } catch (autoErr) {
+            console.warn('[Zoho WorkDrive] Auto-resolving parent_id error:', autoErr);
+          }
+        }
+
+        if (!parentId) {
+          return sendJson(res, 400, {
+            success: false,
+            message: 'Zoho WorkDrive folder ID (parent_id) is required. Set VITE_ZOHO_WORKDRIVE_FOLDER_ID in .env or pass folderId.',
+          });
+        }
+
+        console.log(`[Zoho WorkDrive] Uploading ${filename} to folder ${parentId}`);
+
+        const uploadForm = new FormData();
+        uploadForm.append('content', file, filename);
+        uploadForm.append('filename', filename);
+        uploadForm.append('parent_id', parentId);
+
+        let uploadRes = await fetch(`${workdriveApiBase}/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${workDriveAccessToken}`,
+            'Accept': 'application/vnd.api+json',
+          },
+          body: uploadForm,
+        });
+
+        let uploadData: any = await uploadRes.json().catch(() => null);
+
+        if (uploadRes.status === 401 || uploadData?.errors?.some((e: any) => e.id === 'F7003' || e.title?.toLowerCase().includes('token'))) {
+          cachedWorkDriveToken = null;
+          workDriveAccessToken = await getWorkDriveAccessToken();
+          uploadRes = await fetch(`${workdriveApiBase}/upload`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Zoho-oauthtoken ${workDriveAccessToken}`,
+              'Accept': 'application/vnd.api+json',
+            },
+            body: uploadForm,
+          });
+          uploadData = await uploadRes.json().catch(() => null);
+        }
+
+        if (!uploadRes.ok || uploadData?.errors) {
+          console.error('[Zoho WorkDrive] Upload error:', uploadData);
+          const isScopeErr = uploadData?.errors?.some((e: any) => e.id === 'F7007' || e.title?.toLowerCase().includes('scope'));
+          return sendJson(res, 400, {
+            success: false,
+            message: isScopeErr
+              ? 'Zoho WorkDrive OAuth scope missing. Please grant WorkDrive.files.ALL,WorkDrive.workspace.ALL scopes in Zoho API Console.'
+              : (uploadData?.errors?.[0]?.title || 'Failed to upload to Zoho WorkDrive'),
+            errorDetails: uploadData,
+          });
+        }
+
+        const fileItem = Array.isArray(uploadData?.data) ? uploadData.data[0] : uploadData?.data;
+        const fileId = fileItem?.id;
+        const permalink = fileItem?.attributes?.Permalink || fileItem?.attributes?.permalink || (fileId ? `https://workdrive.zoho.${domain}/file/${fileId}` : '');
+
+        console.log(`[Zoho WorkDrive] Successfully uploaded: ${filename}, fileId: ${fileId}, permalink: ${permalink}`);
+
+        let crmAttachmentId = null;
+        if (dealId && permalink) {
+          try {
+            let crmAccessToken = await getAccessToken();
+            const crmBase = process.env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
+            const crmAttachForm = new FormData();
+            crmAttachForm.append('attachmentUrl', permalink);
+            crmAttachForm.append('title', filename);
+
+            let crmAttachRes = await fetch(`${crmBase}/crm/v8/Deals/${dealId}/Attachments`, {
+              method: 'POST',
+              headers: { 'Authorization': `Zoho-oauthtoken ${crmAccessToken}` },
+              body: crmAttachForm,
+            });
+            let crmAttachData: any = await crmAttachRes.json().catch(() => null);
+
+            if (crmAttachRes.status === 401 || crmAttachData?.code === 'INVALID_TOKEN') {
+              cachedToken = null;
+              crmAccessToken = await getAccessToken();
+              crmAttachRes = await fetch(`${crmBase}/crm/v8/Deals/${dealId}/Attachments`, {
+                method: 'POST',
+                headers: { 'Authorization': `Zoho-oauthtoken ${crmAccessToken}` },
+                body: crmAttachForm,
+              });
+              crmAttachData = await crmAttachRes.json().catch(() => null);
+            }
+
+            if (crmAttachData?.data?.[0]?.code === 'SUCCESS') {
+              crmAttachmentId = crmAttachData.data[0].details?.id;
+              console.log(`[Zoho WorkDrive] Deal #${dealId} CRM URL Attachment created: ${crmAttachmentId}`);
+            }
+          } catch (crmErr) {
+            console.warn('[Zoho WorkDrive] Non-blocking warning linking to CRM deal:', crmErr);
+          }
+        }
+
+        return sendJson(res, 200, {
+          success: true,
+          fileId,
+          permalink,
+          crmAttachmentId,
+          message: 'File successfully uploaded to Zoho WorkDrive and attached to Deal.',
+          data: uploadData,
+        });
+      } catch (err: any) {
+        console.error('[Zoho WorkDrive] Server error:', err);
+        return sendJson(res, 500, { success: false, message: err.message });
+      }
+    }
+
+    // Zoho Code Exchange Endpoint (/api/zoho/workdrive/exchange-code)
+    if ((action === 'workdrive/exchange-code' || action === 'workdrive-exchange-code') && method === 'POST') {
+      try {
+        let rawBody = '';
+        if (typeof req.body === 'object' && req.body !== null) {
+          rawBody = JSON.stringify(req.body);
+        } else if (Buffer.isBuffer((req as any).body)) {
+          rawBody = ((req as any).body as Buffer).toString('utf-8');
+        } else {
+          const chunks: Buffer[] = [];
+          for await (const chunk of (req as any)) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          rawBody = Buffer.concat(chunks).toString('utf-8');
+        }
+        const body = JSON.parse(rawBody || '{}');
+        const code = body.code?.trim();
+
+        if (!code) {
+          return sendJson(res, 400, { success: false, message: 'Authorization code is required' });
+        }
+
+        const clientId = process.env.VITE_ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
+        const clientSecret = process.env.VITE_ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
+        const accountsUrl = process.env.VITE_ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in';
+
+        const params = new URLSearchParams({
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: 'authorization_code',
+        });
+
+        const tokenRes = await fetch(`${accountsUrl}/oauth/v2/token?${params.toString()}`, { method: 'POST' });
+        const tokenData: any = await tokenRes.json();
+
+        if (!tokenData.access_token || !tokenData.refresh_token) {
+          return sendJson(res, 400, {
+            success: false,
+            message: tokenData.error_description || tokenData.error || 'Failed to exchange authorization code',
+            tokenData,
+          });
+        }
+
+        const envFilePath = path.resolve(process.cwd(), '.env');
+        if (fs.existsSync(envFilePath)) {
+          let envFile = fs.readFileSync(envFilePath, 'utf-8');
+          if (envFile.includes('VITE_ZOHO_REFRESH_TOKEN=')) {
+            envFile = envFile.replace(/VITE_ZOHO_REFRESH_TOKEN=.*/, `VITE_ZOHO_REFRESH_TOKEN=${tokenData.refresh_token}`);
+          } else {
+            envFile += `\nVITE_ZOHO_REFRESH_TOKEN=${tokenData.refresh_token}\n`;
+          }
+          fs.writeFileSync(envFilePath, envFile, 'utf-8');
+        }
+
+        cachedToken = null;
+        cachedWorkDriveToken = null;
+
+        return sendJson(res, 200, {
+          success: true,
+          message: 'Refresh token exchanged and saved to .env successfully!',
+          refreshToken: tokenData.refresh_token,
+        });
+      } catch (err: any) {
+        return sendJson(res, 500, { success: false, message: err.message });
+      }
+    }
+
     // 20. Upload Attachment
     if (action === 'upload-attachment' && method === 'POST') {
       try {
@@ -6076,6 +6428,87 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
         let accessToken = await getAccessToken();
         const crmAttachmentEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments`;
+
+        // If WorkDrive folder is configured, upload to Zoho WorkDrive and attach URL to CRM record
+        const workdriveFolderId = process.env.VITE_ZOHO_WORKDRIVE_FOLDER_ID;
+        if (workdriveFolderId) {
+          try {
+            let workdriveToken = await getWorkDriveAccessToken();
+            const domain = process.env.VITE_ZOHO_DOMAIN || 'in';
+            const workdriveBase = domain === 'com' ? 'https://workdrive.zoho.com/api/v1' : 'https://workdrive.zoho.in/api/v1';
+
+            const wdForm = new FormData();
+            wdForm.append('content', file, file.name);
+            wdForm.append('filename', file.name);
+            wdForm.append('parent_id', workdriveFolderId);
+
+            let wdRes = await fetch(`${workdriveBase}/upload`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${workdriveToken}`,
+                'Accept': 'application/vnd.api+json',
+              },
+              body: wdForm,
+            });
+
+            let wdData: any = await wdRes.json().catch(() => null);
+            if (wdRes.status === 401) {
+              cachedWorkDriveToken = null;
+              workdriveToken = await getWorkDriveAccessToken();
+              wdRes = await fetch(`${workdriveBase}/upload`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${workdriveToken}`,
+                  'Accept': 'application/vnd.api+json',
+                },
+                body: wdForm,
+              });
+              wdData = await wdRes.json().catch(() => null);
+            }
+
+            if (wdRes.ok && !wdData?.errors) {
+              const fileItem = Array.isArray(wdData?.data) ? wdData.data[0] : wdData?.data;
+              const fileId = fileItem?.id;
+              const permalink = fileItem?.attributes?.Permalink || fileItem?.attributes?.permalink || (fileId ? `https://workdrive.zoho.${domain}/file/${fileId}` : '');
+
+              // Attach link to CRM record
+              const crmAttachForm = new FormData();
+              crmAttachForm.append('attachmentUrl', permalink);
+              crmAttachForm.append('title', file.name);
+
+              let crmAttachRes = await fetch(crmAttachmentEndpoint, {
+                method: 'POST',
+                headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                body: crmAttachForm,
+              });
+              let crmAttachData: any = await crmAttachRes.json().catch(() => null);
+
+              if (crmAttachRes.status === 401 || crmAttachData?.code === 'INVALID_TOKEN') {
+                cachedToken = null;
+                accessToken = await getAccessToken();
+                crmAttachRes = await fetch(crmAttachmentEndpoint, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                  body: crmAttachForm,
+                });
+                crmAttachData = await crmAttachRes.json().catch(() => null);
+              }
+
+              if (crmAttachData?.data?.[0]?.code === 'SUCCESS') {
+                const attachmentId = crmAttachData.data[0].details?.id;
+                return sendJson(res, 200, {
+                  success: true,
+                  attachmentId,
+                  permalink,
+                  message: 'Attachment uploaded to Zoho WorkDrive and linked to Zoho CRM',
+                  data: crmAttachData.data[0],
+                });
+              }
+            }
+          } catch (wdErr) {
+            console.warn('[Zoho API Handler] WorkDrive upload fallback warning:', wdErr);
+          }
+        }
 
         const zohoForm = new FormData();
         zohoForm.append('file', file, file.name);

@@ -2366,6 +2366,16 @@ export const DealDetails = () => {
             console.warn(`IndexedDB save error for ${slot.tabName}:`, dbErr);
           }
           if (targetZohoId) {
+            // 1. Upload to standard Deal Attachments list
+            try {
+              const attRes = await uploadZohoAttachmentToDeal(targetZohoId, file, file.name);
+              if (!attRes.success) {
+                console.warn(`Zoho deal attachment warning for ${slot.tabName}:`, attRes.message);
+              }
+            } catch (attErr) {
+              console.warn(`Zoho deal attachment error for ${slot.tabName}:`, attErr);
+            }
+            // 2. Also update custom Image field
             try {
               const imgRes = await uploadZohoDealImageField(targetZohoId, file, slot.screenshotField, file.name);
               if (!imgRes.success) {
@@ -4037,7 +4047,7 @@ export const DealDetails = () => {
                   const uploadDate = att.Created_Time ? new Date(att.Created_Time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
                   const uploader = att.Created_By?.name || 'CRM';
                   const targetZohoId = deal?.zohoId || (id && /^\d+$/.test(id) ? id : '');
-                  const directUrl = targetZohoId ? getZohoAttachmentDownloadUrl('Deals', targetZohoId, att.id, false) : '#';
+                  const directUrl = att.$link_url || att.link_url || (targetZohoId ? getZohoAttachmentDownloadUrl('Deals', targetZohoId, att.id, false) : '#');
 
                   return (
                     <div 
@@ -4072,8 +4082,13 @@ export const DealDetails = () => {
                           <span className="truncate max-w-[90px] text-gray-500">{uploader}</span>
                         </div>
                         <div className="mt-1 flex items-center gap-1">
-                          <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200/60">
-                            <Cloud size={10} className="mr-1" /> Cloud
+                          <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            att.$link_url || att.link_url || att.$type === 'Link URL'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                          }`}>
+                            <Cloud size={10} className="mr-1" />
+                            {att.$link_url || att.link_url || att.$type === 'Link URL' ? 'WorkDrive' : 'Cloud'}
                           </span>
                         </div>
                       </div>

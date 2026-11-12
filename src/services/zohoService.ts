@@ -349,6 +349,84 @@ export async function uploadZohoAttachmentToDeal(
 }
 
 /**
+ * Uploads a document or screenshot to Zoho WorkDrive using the Zoho WorkDrive REST API,
+ * and automatically links the WorkDrive permalink to the Deal in Zoho CRM via URL Attachment.
+ *
+ * @param file - The File or Blob to upload
+ * @param fileName - Desired file name (e.g. 'Payment_Screenshot_DL-1234.png')
+ * @param dealId - Optional Zoho CRM Deal record ID (to attach permalink in Zoho CRM)
+ * @param folderId - Optional WorkDrive folder ID (overrides VITE_ZOHO_WORKDRIVE_FOLDER_ID)
+ */
+export async function uploadToZohoWorkDrive(
+  file: File | Blob,
+  fileName: string,
+  dealId?: string,
+  folderId?: string
+): Promise<{
+  success: boolean;
+  fileId?: string;
+  permalink?: string;
+  crmAttachmentId?: string;
+  message?: string;
+  errorDetails?: any;
+}> {
+  try {
+    const formData = new FormData();
+    const resolvedName = fileName || (file instanceof File ? file.name : 'document');
+    formData.append('file', file, resolvedName);
+    formData.append('filename', resolvedName);
+    if (dealId) formData.append('dealId', dealId);
+    if (folderId) formData.append('folderId', folderId);
+
+    const response = await fetch('/api/zoho/workdrive/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await safeParseResponse(response);
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        fileId: data.fileId,
+        permalink: data.permalink,
+        crmAttachmentId: data.crmAttachmentId,
+        message: data.message || 'File uploaded to Zoho WorkDrive successfully',
+      };
+    } else {
+      return {
+        success: false,
+        message: data.message || 'Failed to upload file to Zoho WorkDrive',
+        errorDetails: data.errorDetails || data,
+      };
+    }
+  } catch (error: any) {
+    console.error('[Zoho WorkDrive] Client exception uploading file:', error);
+    return {
+      success: false,
+      message: error?.message || 'Network error communicating with Zoho WorkDrive',
+      errorDetails: error,
+    };
+  }
+}
+
+/**
+ * Exchanges a Zoho OAuth Self Client authorization code for a Refresh Token
+ * and saves it into the backend configuration.
+ */
+export async function exchangeZohoGrantCode(code: string): Promise<{ success: boolean; message: string; refreshToken?: string }> {
+  try {
+    const response = await fetch('/api/zoho/workdrive/exchange-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    return await response.json();
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+}
+
+/**
  * Uploads an image/photo to a Zoho CRM record using the Upload Record Image API (v8).
  * Documentation: https://www.zoho.com/crm/developer/docs/api/v8/upload-image.html
  * Endpoint: POST https://www.zohoapis.com/crm/v8/{module}/{recordId}/photo

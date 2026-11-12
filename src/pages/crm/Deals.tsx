@@ -12,6 +12,7 @@ import {
   fetchZohoDealById,
   enrichDealFromZohoRecord,
   uploadZohoAttachment,
+  uploadToZohoWorkDrive,
   uploadZohoDealImageField,
   saveOrUpdateZohoCompany,
   saveOrUpdateZohoClient,
@@ -2403,34 +2404,74 @@ export const Deals = () => {
           dealData.zohoStatus = 'synced';
           dealData.zohoSyncedAt = new Date().toISOString();
 
-          // Upload attached payment screenshot(s) to Zoho CRM Deal Image Upload field: Deal_payment_screenshot
+          // Upload attached payment screenshot(s) and documents to Zoho WorkDrive via REST API
           const screenshotsToUpload = paymentScreenshotFiles.length > 0
             ? paymentScreenshotFiles
             : (paymentScreenshotFile ? [paymentScreenshotFile] : []);
 
+          let attachmentWarning = '';
+
           if (screenshotsToUpload.length > 0) {
-            try {
-              await uploadZohoDealImageField(finalZohoId, screenshotsToUpload, 'Deal_payment_screenshot');
-            } catch (attErr) {
-              console.warn('[Zoho CRM] Deal_payment_screenshot upload failed:', attErr);
+            for (let idx = 0; idx < screenshotsToUpload.length; idx++) {
+              const ssFile = screenshotsToUpload[idx];
+              const customName = `Payment_Screenshot_${finalZohoId}_${idx + 1}_${ssFile.name}`;
+              try {
+                const wdRes = await uploadToZohoWorkDrive(ssFile, customName, finalZohoId);
+                if (!wdRes.success) {
+                  console.warn('[Zoho WorkDrive] Payment screenshot upload warning:', wdRes);
+                  if (!attachmentWarning) attachmentWarning = wdRes.message || 'Payment screenshot upload failed';
+                } else if (wdRes.permalink) {
+                  dealData.paymentScreenshotUrl = wdRes.permalink;
+                }
+              } catch (attErr: any) {
+                console.warn('[Zoho WorkDrive] Payment screenshot upload exception:', attErr);
+                if (!attachmentWarning) attachmentWarning = attErr?.message || 'Screenshot upload error';
+              }
             }
           }
+
           for (const docFile of documents) {
             try {
-              await uploadZohoAttachment(finalZohoId, docFile, docFile.name, 'Deals');
-            } catch (attErr) {
-              console.warn('[Zoho CRM] Document attachment failed:', attErr);
+              const customDocName = `Doc_${finalZohoId}_${docFile.name}`;
+              const wdRes = await uploadToZohoWorkDrive(docFile, customDocName, finalZohoId);
+              if (!wdRes.success) {
+                console.warn('[Zoho WorkDrive] Document attachment failed:', wdRes);
+                if (!attachmentWarning) {
+                  attachmentWarning = wdRes.message || 'Document upload failed';
+                }
+              } else if (wdRes.permalink) {
+                const existingIdx = docsToSave.findIndex(d => d.name === docFile.name);
+                if (existingIdx >= 0) {
+                  docsToSave[existingIdx].url = wdRes.permalink;
+                  docsToSave[existingIdx].workdriveUrl = wdRes.permalink;
+                } else {
+                  docsToSave.push({
+                    id: wdRes.fileId || docFile.name,
+                    name: docFile.name,
+                    size: docFile.size,
+                    type: docFile.type,
+                    url: wdRes.permalink,
+                    workdriveUrl: wdRes.permalink,
+                  });
+                }
+              }
+            } catch (attErr: any) {
+              console.warn('[Zoho WorkDrive] Document attachment exception:', attErr);
+              if (!attachmentWarning) {
+                attachmentWarning = attErr?.message || 'Document upload failed';
+              }
             }
           }
 
           const syncSummary = [
             `Deal #${finalZohoId}`,
             companyZohoId ? `Company #${companyZohoId}` : null,
-            clientZohoId ? `Client #${clientZohoId}` : null
+            clientZohoId ? `Client #${clientZohoId}` : null,
+            attachmentWarning ? `⚠️ Attachments: ${attachmentWarning}` : null
           ].filter(Boolean).join(' • ');
 
           setToast({
-            type: 'success',
+            type: attachmentWarning ? 'info' : 'success',
             message: isEditing ? 'Deal Updated Successfully!' : 'Deal, Client & Company Saved Successfully!',
             submessage: syncSummary
           });
