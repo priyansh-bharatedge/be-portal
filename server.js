@@ -15,7 +15,7 @@ if (fs.existsSync('.env')) {
       if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
         const [key, ...vals] = trimmed.split('=');
         const val = vals.join('=').trim().replace(/^["']|["']$/g, '');
-        if (key && !process.env[key.trim()]) {
+        if (key) {
           process.env[key.trim()] = val;
         }
       }
