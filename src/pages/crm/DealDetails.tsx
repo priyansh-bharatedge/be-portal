@@ -322,6 +322,7 @@ export const DealDetails = () => {
     id: string;
     name: string;
     url: string;
+    thumbUrl?: string;
     size?: string;
   }[]>([]);
 
@@ -338,7 +339,7 @@ export const DealDetails = () => {
         ? rawFieldScreenshots
         : (rawFieldScreenshots && typeof rawFieldScreenshots === 'object' ? [rawFieldScreenshots] : []);
 
-      const list: { id: string; name: string; url: string; size?: string }[] = [];
+      const list: { id: string; name: string; url: string; thumbUrl?: string; size?: string }[] = [];
       const seenNames = new Set<string>();
       const targetZohoId = String(deal.zohoId || (id && /^\d+$/.test(id) ? id : '') || '');
 
@@ -409,12 +410,16 @@ export const DealDetails = () => {
           const isImg = att.isImage || /\.(png|jpe?g|webp|gif)$/i.test(fn);
           if (isImg && fn && !seenNames.has(fn.toLowerCase())) {
             const attId = att.id || att.attachmentId || '';
-            const url = att.downloadUrl || getZohoAttachmentDownloadUrl('Deals', targetZohoId, attId, true);
+            const linkUrl = att.$link_url || att.link_url || '';
+            const wdFileId = att.wdFileId || linkUrl?.match(/\/file\/([a-zA-Z0-9]+)/)?.[1] || linkUrl?.match(/\/download\/([a-zA-Z0-9]+)/)?.[1];
+            const url = att.previewUrl || getZohoAttachmentDownloadUrl('Deals', targetZohoId, attId, true, { wdFileId, linkUrl, name: fn });
+            const thumbUrl = att.thumbUrl || getZohoAttachmentDownloadUrl('Deals', targetZohoId, attId, true, { wdFileId, linkUrl, name: fn, thumb: true });
             list.push({
               id: String(attId || Math.random()),
               name: fn,
               url,
-              size: att.sizeText || '',
+              thumbUrl,
+              size: att.sizeText || (att.Size && Number(att.Size) > 0 ? (Number(att.Size) < 1024 * 1024 ? `${(Number(att.Size) / 1024).toFixed(1)} KB` : `${(Number(att.Size) / (1024 * 1024)).toFixed(2)} MB`) : ''),
             });
             seenNames.add(fn.toLowerCase());
           }
@@ -2126,8 +2131,10 @@ export const DealDetails = () => {
     const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext);
     const sizeNum = Number(att.Size) || 0;
     const sizeText = sizeNum > 0 ? (sizeNum < 1024 * 1024 ? `${(sizeNum / 1024).toFixed(1)} KB` : `${(sizeNum / (1024 * 1024)).toFixed(2)} MB`) : '';
-    const downloadUrl = getZohoAttachmentDownloadUrl('Deals', targetZohoId, att.id, false);
-    const previewUrl = getZohoAttachmentDownloadUrl('Deals', targetZohoId, att.id, true);
+    const linkUrl = att.$link_url || att.link_url || '';
+    const wdFileId = att.wdFileId || linkUrl?.match(/\/file\/([a-zA-Z0-9]+)/)?.[1] || linkUrl?.match(/\/download\/([a-zA-Z0-9]+)/)?.[1];
+    const downloadUrl = att.downloadUrl || getZohoAttachmentDownloadUrl('Deals', targetZohoId, att.id, false, { wdFileId, linkUrl, name: fileName });
+    const previewUrl = att.previewUrl || getZohoAttachmentDownloadUrl('Deals', targetZohoId, att.id, true, { wdFileId, linkUrl, name: fileName });
 
     if (isPdf || isImage) {
       setPreviewDoc({
@@ -2140,7 +2147,7 @@ export const DealDetails = () => {
         isZoho: true,
       });
     } else {
-      downloadZohoAttachment('Deals', targetZohoId, att.id, fileName);
+      downloadZohoAttachment('Deals', targetZohoId, att.id, fileName, { wdFileId, linkUrl });
     }
   };
 
@@ -2176,7 +2183,9 @@ export const DealDetails = () => {
     if (e) e.stopPropagation();
     const targetZohoId = deal?.zohoId || (id && /^\d+$/.test(id) ? id : null);
     if (!targetZohoId) return;
-    downloadZohoAttachment('Deals', targetZohoId, att.id, att.File_Name || 'document');
+    const linkUrl = att.$link_url || att.link_url || '';
+    const wdFileId = att.wdFileId || linkUrl?.match(/\/file\/([a-zA-Z0-9]+)/)?.[1] || linkUrl?.match(/\/download\/([a-zA-Z0-9]+)/)?.[1];
+    downloadZohoAttachment('Deals', targetZohoId, att.id, att.File_Name || 'document', { wdFileId, linkUrl });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4549,10 +4558,16 @@ export const DealDetails = () => {
                         title={`Click to view: ${ps.name}`}
                       >
                         <img
-                          src={ps.url}
+                          src={ps.thumbUrl || ps.url}
                           alt={ps.name}
                           className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
                           loading="lazy"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (ps.thumbUrl && target.src.includes('thumb=true')) {
+                              target.src = ps.url;
+                            }
+                          }}
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white">
                           <Eye size={13} className="drop-shadow" />

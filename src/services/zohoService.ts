@@ -277,14 +277,20 @@ export function getZohoAttachmentDownloadUrl(
   module: string = 'Deals',
   recordId: string,
   attachmentId: string,
-  preview: boolean = false
+  preview: boolean = false,
+  extraParams?: { linkUrl?: string; wdFileId?: string; name?: string; thumb?: boolean }
 ): string {
-  const qs = new URLSearchParams({
+  const params: Record<string, string> = {
     module,
     recordId,
     attachmentId,
     preview: preview ? 'true' : 'false',
-  }).toString();
+  };
+  if (extraParams?.wdFileId) params.wdFileId = extraParams.wdFileId;
+  if (extraParams?.linkUrl) params.linkUrl = extraParams.linkUrl;
+  if (extraParams?.name) params.name = extraParams.name;
+  if (extraParams?.thumb) params.thumb = 'true';
+  const qs = new URLSearchParams(params).toString();
   return `/api/zoho/download-attachment?${qs}`;
 }
 
@@ -295,10 +301,11 @@ export async function downloadZohoAttachment(
   module: string = 'Deals',
   recordId: string,
   attachmentId: string,
-  fileName: string = 'document'
+  fileName: string = 'document',
+  extraParams?: { linkUrl?: string; wdFileId?: string }
 ): Promise<void> {
   try {
-    const url = getZohoAttachmentDownloadUrl(module, recordId, attachmentId, false);
+    const url = getZohoAttachmentDownloadUrl(module, recordId, attachmentId, false, { ...extraParams, name: fileName });
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to download file (HTTP ${response.status})`);
@@ -331,7 +338,7 @@ export async function downloadZohoAttachment(
         return;
       }
     } catch (_) {}
-    const url = getZohoAttachmentDownloadUrl(module, recordId, attachmentId, false);
+    const url = getZohoAttachmentDownloadUrl(module, recordId, attachmentId, false, { ...extraParams, name: fileName });
     window.open(url, '_blank');
   }
 }

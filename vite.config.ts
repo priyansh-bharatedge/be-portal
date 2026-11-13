@@ -6585,11 +6585,12 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const domain = env.VITE_ZOHO_DOMAIN || 'in';
             const apiBase = env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
-            const fieldsParam = urlObj.searchParams.get('fields') || 'id,File_Name,Size,Created_Time,Created_By,Modified_Time,$file_id,$type,$link_url,link_url';
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=${fieldsParam}`;
 
             console.log(`[Vite Zoho Plugin] Fetching attachments for ${moduleName} ID: ${recordId}`);
 
+            // In Zoho CRM v8, $link_url and $type are omitted for WorkDrive linked attachments.
+            // We first query CRM v2 which reliably returns $link_url, $type, and all metadata.
+            let crmEndpoint = `${apiBase}/crm/v2/${moduleName}/${recordId}/Attachments`;
             let crmRes = await fetch(crmEndpoint, {
               method: 'GET',
               headers: {
@@ -6597,17 +6598,29 @@ function zohoApiPlugin(): Plugin {
               },
             });
 
+            if (crmRes.status === 401) {
+              cachedToken = null;
+              accessToken = await getAccessToken(env);
+              crmRes = await fetch(crmEndpoint, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                },
+              });
+            }
+
             if (crmRes.status === 204) {
               res.setHeader('Content-Type', 'application/json');
               return res.end(JSON.stringify({ success: true, data: [] }));
             }
 
-            let crmData: any = await crmRes.json();
+            let crmData: any = await crmRes.json().catch(() => null);
 
-            if (crmRes.status === 401 || crmData.code === 'INVALID_TOKEN') {
-              cachedToken = null;
-              accessToken = await getAccessToken(env);
-              crmRes = await fetch(crmEndpoint, {
+            // If v2 returns 404 or fails, fallback to v8 with fieldsParam
+            if (!crmRes.ok || !crmData?.data) {
+              const fieldsParam = urlObj.searchParams.get('fields') || 'id,File_Name,Size,Created_Time,Created_By,Modified_Time,$file_id,$type,$link_url,link_url';
+              const v8Endpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=${fieldsParam}`;
+              crmRes = await fetch(v8Endpoint, {
                 method: 'GET',
                 headers: {
                   'Authorization': `Zoho-oauthtoken ${accessToken}`,
@@ -6617,17 +6630,39 @@ function zohoApiPlugin(): Plugin {
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({ success: true, data: [] }));
               }
-              crmData = await crmRes.json();
+              crmData = await crmRes.json().catch(() => null);
             }
 
             res.setHeader('Content-Type', 'application/json');
-            if (crmData.data) {
+            if (crmData?.data) {
+              const normalized = crmData.data.map((item: any) => {
+                const linkUrl = item.$link_url || item.link_url || item.attachment_url || '';
+                const wdFileId = linkUrl?.match(/\/file\/([a-zA-Z0-9]+)/)?.[1] || linkUrl?.match(/\/download\/([a-zA-Z0-9]+)/)?.[1] || '';
+                const type = item.$type || item.type || (linkUrl ? 'Link URL' : 'Attachment');
+                const fileName = item.File_Name || item.name || 'document';
+                const downloadUrl = `/api/zoho/download-attachment?module=${encodeURIComponent(moduleName)}&recordId=${encodeURIComponent(recordId)}&attachmentId=${encodeURIComponent(item.id)}&preview=false${wdFileId ? `&wdFileId=${encodeURIComponent(wdFileId)}` : ''}&name=${encodeURIComponent(fileName)}`;
+                const previewUrl = `/api/zoho/download-attachment?module=${encodeURIComponent(moduleName)}&recordId=${encodeURIComponent(recordId)}&attachmentId=${encodeURIComponent(item.id)}&preview=true${wdFileId ? `&wdFileId=${encodeURIComponent(wdFileId)}` : ''}&name=${encodeURIComponent(fileName)}`;
+                const thumbUrl = `/api/zoho/download-attachment?module=${encodeURIComponent(moduleName)}&recordId=${encodeURIComponent(recordId)}&attachmentId=${encodeURIComponent(item.id)}&preview=true&thumb=true${wdFileId ? `&wdFileId=${encodeURIComponent(wdFileId)}` : ''}&name=${encodeURIComponent(fileName)}`;
+
+                return {
+                  ...item,
+                  link_url: linkUrl,
+                  $link_url: linkUrl,
+                  wdFileId,
+                  type,
+                  $type: type,
+                  downloadUrl,
+                  previewUrl,
+                  thumbUrl,
+                };
+              });
+
               return res.end(JSON.stringify({
                 success: true,
-                data: crmData.data,
+                data: normalized,
                 info: crmData.info,
               }));
-            } else if (crmData.code === 'NO_CONTENT' || crmData.code === 'RECORD_NOT_FOUND') {
+            } else if (crmData?.code === 'NO_CONTENT' || crmData?.code === 'RECORD_NOT_FOUND') {
               return res.end(JSON.stringify({
                 success: true,
                 data: [],
@@ -6636,7 +6671,7 @@ function zohoApiPlugin(): Plugin {
               res.statusCode = 400;
               return res.end(JSON.stringify({
                 success: false,
-                message: crmData.message || 'Failed to fetch attachments from Zoho CRM',
+                message: crmData?.message || 'Failed to fetch attachments from Zoho CRM',
                 errorDetails: crmData,
               }));
             }
@@ -6656,8 +6691,107 @@ function zohoApiPlugin(): Plugin {
             const attachmentId = urlObj.searchParams.get('attachmentId') || urlObj.searchParams.get('attId') || '';
             const moduleName = urlObj.searchParams.get('module') || 'Deals';
             const isPreview = urlObj.searchParams.get('preview') === 'true';
+            const isThumb = urlObj.searchParams.get('thumb') === 'true';
+            let wdFileId = urlObj.searchParams.get('wdFileId') || urlObj.searchParams.get('fileId') || '';
+            const linkUrlParam = urlObj.searchParams.get('linkUrl') || '';
+            const reqFileName = urlObj.searchParams.get('name') || '';
 
-            if (!recordId || !attachmentId) {
+            if (!wdFileId && linkUrlParam) {
+              wdFileId = linkUrlParam.match(/\/file\/([a-zA-Z0-9]+)/)?.[1] || linkUrlParam.match(/\/download\/([a-zA-Z0-9]+)/)?.[1] || '';
+            }
+
+            const streamWorkDriveFile = async (fileId: string, filenameFallback?: string): Promise<boolean> => {
+              try {
+                let wdToken = await getWorkDriveAccessToken(env);
+                const wdDomain = env.VITE_ZOHO_DOMAIN || 'in';
+                const wdBase = wdDomain === 'com' ? 'https://workdrive.zoho.com/api/v1' : 'https://workdrive.zoho.in/api/v1';
+                const thumbBase = wdDomain === 'com' ? 'https://previewengine-accl.zoho.com' : 'https://previewengine-accl.zoho.in';
+
+                let streamRes: Response | null = null;
+
+                // If thumbnail requested, try previewengine thumbnail first
+                if (isThumb) {
+                  try {
+                    const thumbRes = await fetch(`${thumbBase}/thumbnail/WD/${fileId}`, {
+                      headers: { 'Authorization': `Zoho-oauthtoken ${wdToken}` },
+                    });
+                    if (thumbRes.ok) {
+                      streamRes = thumbRes;
+                    }
+                  } catch (_) {}
+                }
+
+                // Stream full file if not thumbnail or thumbnail failed
+                if (!streamRes || !streamRes.ok) {
+                  streamRes = await fetch(`${wdBase}/download/${fileId}`, {
+                    headers: { 'Authorization': `Zoho-oauthtoken ${wdToken}` },
+                  });
+
+                  if (streamRes.status === 401) {
+                    cachedWorkDriveToken = null;
+                    wdToken = await getWorkDriveAccessToken(env);
+                    streamRes = await fetch(`${wdBase}/download/${fileId}`, {
+                      headers: { 'Authorization': `Zoho-oauthtoken ${wdToken}` },
+                    });
+                  }
+
+                  // Fallback: check file metadata for download_url or thumbnail_url
+                  if (!streamRes.ok) {
+                    const metaRes = await fetch(`${wdBase}/files/${fileId}`, {
+                      headers: { 'Authorization': `Zoho-oauthtoken ${wdToken}` },
+                    });
+                    const metaData: any = await metaRes.json().catch(() => null);
+                    const directDl = metaData?.data?.attributes?.download_url;
+                    const thumbUrl = metaData?.data?.attributes?.thumbnail_url;
+                    const targetUrl = (isThumb && thumbUrl) ? thumbUrl : directDl;
+                    if (targetUrl) {
+                      streamRes = await fetch(targetUrl, {
+                        headers: { 'Authorization': `Zoho-oauthtoken ${wdToken}` },
+                      });
+                    }
+                  }
+                }
+
+                if (streamRes && streamRes.ok) {
+                  let cType = streamRes.headers.get('content-type') || '';
+                  const resolvedName = filenameFallback || reqFileName || 'document';
+                  const ext = resolvedName.split('.').pop()?.toLowerCase() || '';
+
+                  if (!cType || cType === 'application/octet-stream') {
+                    if (ext === 'png') cType = 'image/png';
+                    else if (ext === 'jpg' || ext === 'jpeg') cType = 'image/jpeg';
+                    else if (ext === 'webp') cType = 'image/webp';
+                    else if (ext === 'gif') cType = 'image/gif';
+                    else if (ext === 'svg') cType = 'image/svg+xml';
+                    else if (ext === 'pdf') cType = 'application/pdf';
+                  }
+
+                  const safeName = resolvedName.replace(/[^\w\s.-]/gi, '_');
+                  const contentDisp = isPreview ? 'inline' : `attachment; filename="${safeName}"`;
+                  const arrayBuf = await streamRes.arrayBuffer();
+                  const buffer = Buffer.from(arrayBuf);
+
+                  res.statusCode = 200;
+                  res.setHeader('Content-Type', cType || 'application/octet-stream');
+                  res.setHeader('Content-Disposition', contentDisp);
+                  res.setHeader('Content-Length', buffer.length.toString());
+                  res.setHeader('Cache-Control', 'public, max-age=86400');
+                  res.end(buffer);
+                  return true;
+                }
+              } catch (streamErr) {
+                console.warn('[Vite Zoho Plugin] Error streaming WorkDrive file:', streamErr);
+              }
+              return false;
+            };
+
+            // 1. If wdFileId is provided directly, stream from WorkDrive immediately
+            if (wdFileId) {
+              const success = await streamWorkDriveFile(wdFileId, reqFileName);
+              if (success) return;
+            }
+
+            if (!recordId && !attachmentId && !wdFileId) {
               res.statusCode = 400;
               res.setHeader('Content-Type', 'application/json');
               return res.end(JSON.stringify({ success: false, message: 'Both "recordId" and "attachmentId" are required' }));
@@ -6666,30 +6800,76 @@ function zohoApiPlugin(): Plugin {
             let accessToken = await getAccessToken(env);
             const domain = env.VITE_ZOHO_DOMAIN || 'in';
             const apiBase = env.VITE_ZOHO_API_URL || (domain === 'com' ? 'https://www.zohoapis.com' : 'https://www.zohoapis.in');
-            const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments/${attachmentId}`;
 
             console.log(`[Vite Zoho Plugin] Downloading attachment ${attachmentId} from ${moduleName} ${recordId}`);
 
-            let crmRes = await fetch(crmEndpoint, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Zoho-oauthtoken ${accessToken}`,
-              },
-            });
-
-            if (crmRes.status === 401) {
-              cachedToken = null;
-              accessToken = await getAccessToken(env);
+            // 2. Try standard Zoho CRM Attachment download
+            let crmRes: Response | null = null;
+            if (recordId && attachmentId) {
+              const crmEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments/${attachmentId}`;
               crmRes = await fetch(crmEndpoint, {
                 method: 'GET',
                 headers: {
                   'Authorization': `Zoho-oauthtoken ${accessToken}`,
                 },
               });
+
+              if (crmRes.status === 401) {
+                cachedToken = null;
+                accessToken = await getAccessToken(env);
+                crmRes = await fetch(crmEndpoint, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Zoho-oauthtoken ${accessToken}`,
+                  },
+                });
+              }
             }
 
-            // If Attachments endpoint returned 404 or 400, fallback to field attachments or files API
-            if (!crmRes.ok && (crmRes.status === 404 || crmRes.status === 400)) {
+            // 3. If standard CRM download failed (e.g., 400 DOWNLOAD_NOT_ALLOWED for WorkDrive link attachment), resolve the link URL via v2 Attachments list
+            if (!crmRes || !crmRes.ok) {
+              try {
+                // Zoho CRM v2 returns $link_url and $type for all linked WorkDrive attachments!
+                const listUrlV2 = `${apiBase}/crm/v2/${moduleName}/${recordId}/Attachments`;
+                let listRes = await fetch(listUrlV2, {
+                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                });
+
+                if (listRes.status === 401) {
+                  cachedToken = null;
+                  accessToken = await getAccessToken(env);
+                  listRes = await fetch(listUrlV2, {
+                    headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                  });
+                }
+
+                let listData: any = await listRes.json().catch(() => null);
+                let attItem = listData?.data?.find((a: any) => String(a.id) === String(attachmentId));
+
+                // Fallback to v8 if v2 didn't find the item
+                if (!attItem) {
+                  const listUrlV8 = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=id,File_Name,Size,$link_url,link_url,$type`;
+                  const listResV8 = await fetch(listUrlV8, {
+                    headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+                  });
+                  const listDataV8: any = await listResV8.json().catch(() => null);
+                  attItem = listDataV8?.data?.find((a: any) => String(a.id) === String(attachmentId));
+                }
+
+                const linkUrl = attItem?.$link_url || attItem?.link_url || attItem?.url || '';
+                const resolvedWdId = linkUrl?.match(/\/file\/([a-zA-Z0-9]+)/)?.[1] || linkUrl?.match(/\/download\/([a-zA-Z0-9]+)/)?.[1];
+
+                if (resolvedWdId) {
+                  const success = await streamWorkDriveFile(resolvedWdId, attItem?.File_Name || reqFileName);
+                  if (success) return;
+                }
+              } catch (v2Err) {
+                console.warn('[Vite Zoho Plugin] Error resolving WorkDrive attachment from list:', v2Err);
+              }
+            }
+
+            // 4. Fallback: try field attachments or files API if not a WorkDrive link
+            if (crmRes && !crmRes.ok && (crmRes.status === 404 || crmRes.status === 400)) {
               const fieldEndpoint = `${apiBase}/crm/v8/${moduleName}/${recordId}/actions/download_fields_attachment?fields_attachment_id=${attachmentId}`;
               const fieldRes = await fetch(fieldEndpoint, {
                 method: 'GET',
@@ -6709,74 +6889,26 @@ function zohoApiPlugin(): Plugin {
               }
             }
 
-            if (!crmRes.ok) {
-              // Check if it's a linked attachment from WorkDrive (Zoho CRM returns 400 DOWNLOAD_NOT_ALLOWED)
-              try {
-                const listUrl = `${apiBase}/crm/v8/${moduleName}/${recordId}/Attachments?fields=id,File_Name,Size,$link_url,link_url,$type`;
-                const listRes = await fetch(listUrl, {
-                  headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
-                });
-                const listData: any = await listRes.json().catch(() => null);
-                const attItem = listData?.data?.find((a: any) => String(a.id) === String(attachmentId));
-                const linkUrl = attItem?.$link_url || attItem?.link_url;
-                const wdFileId = linkUrl?.match(/\/file\/([a-zA-Z0-9]+)/)?.[1] || linkUrl?.match(/\/download\/([a-zA-Z0-9]+)/)?.[1];
+            // 5. If we have a successful CRM response, stream it
+            if (crmRes && crmRes.ok) {
+              const cType = crmRes.headers.get('content-type') || 'application/octet-stream';
+              const cDisp = crmRes.headers.get('content-disposition');
+              const finalDisp = isPreview ? 'inline' : (cDisp || 'attachment');
+              const arrayBuf = await crmRes.arrayBuffer();
+              const buffer = Buffer.from(arrayBuf);
 
-                if (wdFileId) {
-                  let wdToken = await getWorkDriveAccessToken(env);
-                  const wdDomain = env.VITE_ZOHO_DOMAIN || 'in';
-                  const wdBase = wdDomain === 'com' ? 'https://workdrive.zoho.com/api/v1' : 'https://workdrive.zoho.in/api/v1';
-                  let streamRes = await fetch(`${wdBase}/download/${wdFileId}`, {
-                    headers: { 'Authorization': `Zoho-oauthtoken ${wdToken}` },
-                  });
-
-                  if (streamRes.status === 401) {
-                    cachedWorkDriveToken = null;
-                    wdToken = await getWorkDriveAccessToken(env);
-                    streamRes = await fetch(`${wdBase}/download/${wdFileId}`, {
-                      headers: { 'Authorization': `Zoho-oauthtoken ${wdToken}` },
-                    });
-                  }
-
-                  if (streamRes.ok) {
-                    const cType = streamRes.headers.get('content-type') || 'application/octet-stream';
-                    const fileName = attItem.File_Name || urlObj.searchParams.get('name') || 'document';
-                    const safeName = fileName.replace(/[^\w\s.-]/gi, '_');
-                    const contentDisp = isPreview ? 'inline' : `attachment; filename="${safeName}"`;
-                    const arrayBuf = await streamRes.arrayBuffer();
-                    const buffer = Buffer.from(arrayBuf);
-
-                    res.statusCode = 200;
-                    res.setHeader('Content-Type', cType);
-                    res.setHeader('Content-Disposition', contentDisp);
-                    res.setHeader('Content-Length', buffer.length.toString());
-                    res.setHeader('Cache-Control', 'public, max-age=3600');
-                    return res.end(buffer);
-                  }
-                }
-              } catch (wdStreamErr) {
-                console.warn('[Vite Zoho Plugin] WorkDrive stream error:', wdStreamErr);
-              }
-
-              const errText = await crmRes.text();
-              res.statusCode = crmRes.status;
-              res.setHeader('Content-Type', 'application/json');
-              return res.end(JSON.stringify({ success: false, message: 'Failed to download attachment from Zoho CRM', details: errText }));
+              res.statusCode = 200;
+              res.setHeader('Content-Type', cType);
+              res.setHeader('Content-Disposition', finalDisp);
+              res.setHeader('Content-Length', buffer.length.toString());
+              res.setHeader('Cache-Control', 'public, max-age=86400');
+              return res.end(buffer);
             }
 
-            const arrayBuf = await crmRes.arrayBuffer();
-            const buffer = Buffer.from(arrayBuf);
-            const contentType = crmRes.headers.get('content-type') || 'application/octet-stream';
-            const customName = urlObj.searchParams.get('name') || '';
-            const safeName = (customName || `attachment-${attachmentId}`).replace(/[^\w\s.-]/gi, '_');
-            const contentDisp = isPreview ? 'inline' : (customName ? `attachment; filename="${safeName}"` : (crmRes.headers.get('content-disposition') || `attachment; filename="${safeName}"`));
-
-            res.statusCode = 200;
-            res.setHeader('Content-Type', contentType);
-            res.setHeader('Content-Disposition', contentDisp);
-            res.setHeader('Content-Length', buffer.length.toString());
-            res.setHeader('Cache-Control', 'public, max-age=3600');
-
-            return res.end(buffer);
+            const errText = crmRes ? await crmRes.text().catch(() => '') : 'Attachment not found';
+            res.statusCode = crmRes ? crmRes.status : 404;
+            res.setHeader('Content-Type', 'application/json');
+            return res.end(JSON.stringify({ success: false, message: 'Failed to download attachment from Zoho CRM', details: errText }));
           } catch (err: any) {
             console.error('[Vite Zoho Plugin] Download attachment server error:', err);
             res.statusCode = 500;
