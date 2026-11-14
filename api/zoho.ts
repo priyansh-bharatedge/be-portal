@@ -24,7 +24,7 @@ const DEFAULT_REFRESH_TOKEN = '1000.3e0ddc29ef25c80e54d40d3c220ce6d9.d874981c449
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
-async function getAccessToken(): Promise<string> {
+async function getAccessToken(forceRefresh = false): Promise<string> {
   const clientId = process.env.VITE_ZOHO_CLIENT_ID || process.env.ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
   const clientSecret = process.env.VITE_ZOHO_CLIENT_SECRET || process.env.ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
   let refreshToken = process.env.VITE_ZOHO_REFRESH_TOKEN || process.env.ZOHO_REFRESH_TOKEN || '';
@@ -33,21 +33,29 @@ async function getAccessToken(): Promise<string> {
   }
 
   const now = Date.now();
-  if (cachedToken && tokenExpiry > now + 60000) {
+  if (!forceRefresh && cachedToken && tokenExpiry > now + 60000) {
     return cachedToken;
   }
 
-  try {
-    const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
-    if (fs.existsSync(tokenPath)) {
-      const diskToken = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
-      if (diskToken?.token && diskToken.expiry > now + 60000 && diskToken.refreshToken === refreshToken) {
-        cachedToken = diskToken.token;
-        tokenExpiry = diskToken.expiry;
-        return String(diskToken.token);
+  const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
+  if (!forceRefresh) {
+    try {
+      if (fs.existsSync(tokenPath)) {
+        const diskToken = JSON.parse(fs.readFileSync(tokenPath, 'utf-8'));
+        if (diskToken?.token && diskToken.expiry > now + 60000 && diskToken.refreshToken === refreshToken) {
+          cachedToken = diskToken.token;
+          tokenExpiry = diskToken.expiry;
+          return String(diskToken.token);
+        }
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  } else {
+    try {
+      if (fs.existsSync(tokenPath)) {
+        fs.unlinkSync(tokenPath);
+      }
+    } catch (_) {}
+  }
 
   const params = new URLSearchParams({
     refresh_token: refreshToken,
@@ -69,7 +77,6 @@ async function getAccessToken(): Promise<string> {
   cachedToken = token;
   tokenExpiry = now + (Number(data.expires_in) || 3600) * 1000;
   try {
-    const tokenPath = path.resolve(process.cwd(), 'data', '.zoho_token.json');
     fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
     fs.writeFileSync(tokenPath, JSON.stringify({ token: cachedToken, expiry: tokenExpiry, refreshToken }));
   } catch (_) {}
@@ -79,30 +86,38 @@ async function getAccessToken(): Promise<string> {
 let cachedWorkDriveToken: string | null = null;
 let workDriveTokenExpiry = 0;
 
-async function getWorkDriveAccessToken(): Promise<string> {
+async function getWorkDriveAccessToken(forceRefresh = false): Promise<string> {
   const clientId = process.env.VITE_ZOHO_CLIENT_ID || process.env.ZOHO_CLIENT_ID || '1000.ENHQL8XIKM7Q7AO7PGPY1EUICG80QF';
   const clientSecret = process.env.VITE_ZOHO_CLIENT_SECRET || process.env.ZOHO_CLIENT_SECRET || 'c5659d87156496be12bea1489a7a2f4500c7241131';
-  let refreshToken = process.env.VITE_ZOHO_WORKDRIVE_REFRESH_TOKEN || process.env.VITE_ZOHO_REFRESH_TOKEN || process.env.ZOHO_REFRESH_TOKEN || '';
+  let refreshToken = process.env.VITE_ZOHO_REFRESH_TOKEN || process.env.ZOHO_REFRESH_TOKEN || process.env.VITE_ZOHO_WORKDRIVE_REFRESH_TOKEN || '';
   if (!refreshToken || refreshToken.includes('bdf58bb945') || refreshToken.includes('b141fe7e')) {
     refreshToken = DEFAULT_REFRESH_TOKEN;
   }
 
   const now = Date.now();
-  if (cachedWorkDriveToken && workDriveTokenExpiry > now + 60000) {
+  if (!forceRefresh && cachedWorkDriveToken && workDriveTokenExpiry > now + 60000) {
     return cachedWorkDriveToken;
   }
 
-  try {
-    const wdTokenPath = path.resolve(process.cwd(), 'data', '.zoho_workdrive_token.json');
-    if (fs.existsSync(wdTokenPath)) {
-      const diskToken = JSON.parse(fs.readFileSync(wdTokenPath, 'utf-8'));
-      if (diskToken?.token && diskToken.expiry > now + 60000 && diskToken.refreshToken === refreshToken) {
-        cachedWorkDriveToken = diskToken.token;
-        workDriveTokenExpiry = diskToken.expiry;
-        return String(diskToken.token);
+  const wdTokenPath = path.resolve(process.cwd(), 'data', '.zoho_workdrive_token.json');
+  if (!forceRefresh) {
+    try {
+      if (fs.existsSync(wdTokenPath)) {
+        const diskToken = JSON.parse(fs.readFileSync(wdTokenPath, 'utf-8'));
+        if (diskToken?.token && diskToken.expiry > now + 60000 && diskToken.refreshToken === refreshToken) {
+          cachedWorkDriveToken = diskToken.token;
+          workDriveTokenExpiry = diskToken.expiry;
+          return String(diskToken.token);
+        }
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  } else {
+    try {
+      if (fs.existsSync(wdTokenPath)) {
+        fs.unlinkSync(wdTokenPath);
+      }
+    } catch (_) {}
+  }
 
   const params = new URLSearchParams({
     refresh_token: refreshToken,
@@ -125,7 +140,6 @@ async function getWorkDriveAccessToken(): Promise<string> {
   cachedWorkDriveToken = token;
   workDriveTokenExpiry = now + (Number(data.expires_in) || 3600) * 1000;
   try {
-    const wdTokenPath = path.resolve(process.cwd(), 'data', '.zoho_workdrive_token.json');
     fs.mkdirSync(path.dirname(wdTokenPath), { recursive: true });
     fs.writeFileSync(wdTokenPath, JSON.stringify({ token: cachedWorkDriveToken, expiry: workDriveTokenExpiry, refreshToken }));
   } catch (_) {}
@@ -6313,8 +6327,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         }
 
         let workDriveAccessToken = await getWorkDriveAccessToken();
-        const domain = process.env.VITE_ZOHO_DOMAIN || 'in';
-        const workdriveApiBase = domain === 'com' ? 'https://workdrive.zoho.com/api/v1' : 'https://workdrive.zoho.in/api/v1';
+        const accountsUrl = process.env.VITE_ZOHO_ACCOUNTS_URL || process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in';
+        let domain = (process.env.VITE_ZOHO_DOMAIN || (accountsUrl.includes('.in') ? 'in' : 'com')).toLowerCase();
+        let workdriveApiBase = domain === 'com' ? 'https://workdrive.zoho.com/api/v1' : 'https://workdrive.zoho.in/api/v1';
 
         let parentId = requestedFolderId || DEFAULT_WORKDRIVE_FOLDER_ID;
         if (!parentId) {
@@ -6361,34 +6376,50 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
         console.log(`[Zoho WorkDrive] Uploading ${filename} to folder ${parentId}`);
 
-        const uploadForm = new FormData();
-        uploadForm.append('content', file, filename);
-        uploadForm.append('filename', filename);
-        uploadForm.append('parent_id', parentId);
+        const executeUpload = async (apiBase: string, token: string) => {
+          const uploadForm = new FormData();
+          uploadForm.append('content', file, filename);
+          uploadForm.append('filename', filename);
+          uploadForm.append('parent_id', parentId);
 
-        let uploadRes = await fetch(`${workdriveApiBase}/upload`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Zoho-oauthtoken ${workDriveAccessToken}`,
-            'Accept': 'application/vnd.api+json',
-          },
-          body: uploadForm,
-        });
-
-        let uploadData: any = await uploadRes.json().catch(() => null);
-
-        if (uploadRes.status === 401 || uploadData?.errors?.some((e: any) => e.id === 'F7003' || e.title?.toLowerCase().includes('token'))) {
-          cachedWorkDriveToken = null;
-          workDriveAccessToken = await getWorkDriveAccessToken();
-          uploadRes = await fetch(`${workdriveApiBase}/upload`, {
+          return await fetch(`${apiBase}/upload`, {
             method: 'POST',
             headers: {
-              'Authorization': `Zoho-oauthtoken ${workDriveAccessToken}`,
+              'Authorization': `Zoho-oauthtoken ${token}`,
               'Accept': 'application/vnd.api+json',
             },
             body: uploadForm,
           });
+        };
+
+        const isAuthError = (status: number, data: any) =>
+          status === 401 || data?.errors?.some((e: any) => e.id === 'F7003' || e.title?.toLowerCase().includes('token') || e.title?.toLowerCase().includes('oauth'));
+
+        let uploadRes = await executeUpload(workdriveApiBase, workDriveAccessToken);
+        let uploadData: any = await uploadRes.json().catch(() => null);
+
+        if (isAuthError(uploadRes.status, uploadData)) {
+          console.warn('[Zoho WorkDrive] Token invalid on upload, force refreshing token from Zoho Accounts...');
+          cachedWorkDriveToken = null;
+          workDriveAccessToken = await getWorkDriveAccessToken(true);
+
+          uploadRes = await executeUpload(workdriveApiBase, workDriveAccessToken);
           uploadData = await uploadRes.json().catch(() => null);
+
+          // If still auth error, try alternate domain (.in vs .com)
+          if (isAuthError(uploadRes.status, uploadData)) {
+            const altDomain = domain === 'in' ? 'com' : 'in';
+            const altBase = altDomain === 'com' ? 'https://workdrive.zoho.com/api/v1' : 'https://workdrive.zoho.in/api/v1';
+            console.warn(`[Zoho WorkDrive] Retrying upload with alternate domain: ${altBase}`);
+            const altRes = await executeUpload(altBase, workDriveAccessToken);
+            const altData: any = await altRes.json().catch(() => null);
+            if (altRes.ok && !altData?.errors) {
+              uploadRes = altRes;
+              uploadData = altData;
+              domain = altDomain;
+              workdriveApiBase = altBase;
+            }
+          }
         }
 
         if (!uploadRes.ok || uploadData?.errors) {
@@ -6586,9 +6617,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
             });
 
             let wdData: any = await wdRes.json().catch(() => null);
-            if (wdRes.status === 401) {
+            if (wdRes.status === 401 || wdData?.errors?.some((e: any) => e.id === 'F7003' || e.title?.toLowerCase().includes('token'))) {
               cachedWorkDriveToken = null;
-              workdriveToken = await getWorkDriveAccessToken();
+              workdriveToken = await getWorkDriveAccessToken(true);
               wdRes = await fetch(`${workdriveBase}/upload`, {
                 method: 'POST',
                 headers: {
@@ -6858,9 +6889,9 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
               });
               let wdData: any = await wdRes.json().catch(() => null);
 
-              if (wdRes.status === 401) {
+              if (wdRes.status === 401 || wdData?.errors?.some((e: any) => e.id === 'F7003' || e.title?.toLowerCase().includes('token'))) {
                 cachedWorkDriveToken = null;
-                workdriveToken = await getWorkDriveAccessToken();
+                workdriveToken = await getWorkDriveAccessToken(true);
                 wdRes = await fetch(`${workdriveBase}/upload`, {
                   method: 'POST',
                   headers: {

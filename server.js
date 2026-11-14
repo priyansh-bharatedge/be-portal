@@ -26,7 +26,7 @@ for (const envPath of possibleEnvPaths) {
         if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
           const [key, ...vals] = trimmed.split('=');
           const val = vals.join('=').trim().replace(/^["']|["']$/g, '');
-          if (key && !process.env[key.trim()]) {
+          if (key) {
             process.env[key.trim()] = val;
           }
         }
@@ -42,6 +42,9 @@ for (const envPath of possibleEnvPaths) {
 if (!process.env.VITE_ZOHO_REFRESH_TOKEN || process.env.VITE_ZOHO_REFRESH_TOKEN.includes('bdf58bb945') || process.env.VITE_ZOHO_REFRESH_TOKEN.includes('b141fe7e')) {
   process.env.VITE_ZOHO_REFRESH_TOKEN = '1000.3e0ddc29ef25c80e54d40d3c220ce6d9.d874981c4495b4c25f8e3f594cf18413';
 }
+process.env.VITE_ZOHO_DOMAIN = 'in';
+process.env.VITE_ZOHO_ACCOUNTS_URL = process.env.VITE_ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in';
+process.env.VITE_ZOHO_API_URL = process.env.VITE_ZOHO_API_URL || 'https://www.zohoapis.in';
 if (!process.env.VITE_ZOHO_WORKDRIVE_FOLDER_ID) {
   process.env.VITE_ZOHO_WORKDRIVE_FOLDER_ID = '20pmq2dc477e8e8144483a518d51e40b4b23c';
 }
