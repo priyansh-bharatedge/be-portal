@@ -33,7 +33,7 @@ import { buildZohoRbacCriteria, getAllEmployeesList, filterRecordsByRbac } from 
 import { isSubordinateOfTL, isMatchingName, mapZohoRecordToEmployee } from '../../utils/employeeUtils';
 import { Pagination } from '../../components/ui/Pagination';
 import { DeleteConfirmModal } from '../../components/ui/DeleteConfirmModal';
-import { ALL_SERVICES } from '../../utils/servicesList';
+import { ALL_SERVICES, matchServiceName } from '../../utils/servicesList';
 import { generateServiceAllocationsForDeal, getStoredInternalOperations } from '../../services/internalOperationsService';
 import {
   getDealSplitBreakdown,
@@ -4670,7 +4670,7 @@ export const Deals = () => {
                                               />
                                             </div>
                                             <span className="text-[10px] text-gray-400 font-bold shrink-0 px-1.5 py-0.5 bg-gray-100 rounded" title="Total Available Services">
-                                              {allServices.filter(srv => srv.toLowerCase().includes(serviceSearchQuery.toLowerCase())).length}
+                                              {allServices.filter(srv => matchServiceName(srv, serviceSearchQuery)).length}
                                             </span>
                                           </div>
                                           <div
@@ -4682,7 +4682,7 @@ export const Deals = () => {
                                             }}
                                             className="p-1 max-h-60 overflow-y-auto"
                                           >
-                                            {allServices.filter(srv => srv.toLowerCase().includes(serviceSearchQuery.toLowerCase())).map(srv => (
+                                            {allServices.filter(srv => matchServiceName(srv, serviceSearchQuery)).map(srv => (
                                               <div
                                                 key={srv}
                                                 className={`px-3 py-2 text-sm rounded-md cursor-pointer transition-colors ${service.name === srv ? 'bg-orange-50 text-be-orange font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
@@ -4694,7 +4694,7 @@ export const Deals = () => {
                                                 {srv}
                                               </div>
                                             ))}
-                                            {allServices.filter(srv => srv.toLowerCase().includes(serviceSearchQuery.toLowerCase())).length === 0 && (
+                                            {allServices.filter(srv => matchServiceName(srv, serviceSearchQuery)).length === 0 && (
                                               <div className="px-3 py-3 text-sm text-gray-500 text-center">No services found</div>
                                             )}
                                           </div>

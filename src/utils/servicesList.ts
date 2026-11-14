@@ -81,6 +81,7 @@ export const ALL_SERVICES: string[] = [
   'IMPACT CATALYST FUND 4.0',
   'INCORPORATION DOCUMENT DOWNLOAD',
   'Industry Change In MOA And AOA',
+  'Industry Change In MOA & AOA',
   'INVESTOR DECK',
   'INVOICE',
   'ISO CERTIFICATE',
@@ -98,6 +99,7 @@ export const ALL_SERVICES: string[] = [
   'NAIF',
   'NAME CHANGE IN STARTUP INDIA CERTIFICATE',
   'Name Change In Pan Card',
+  'Name Change In Pancard',
   'NBFC',
   'NEEDS SCHEME',
   'NGO DARPAN',
@@ -137,3 +139,32 @@ export const ALL_SERVICES: string[] = [
   'WORDMARK',
   'ZED CERTIFICATE'
 ];
+
+/**
+ * Fuzzy/normalized matcher for service search in dropdowns.
+ * Handles variations like "pancard" vs "pan card", "moa aoa" vs "moa and aoa",
+ * and token-based multi-word searches in any word order.
+ */
+export function matchServiceName(service: string, query: string): boolean {
+  if (!query) return true;
+  const sLower = service.toLowerCase();
+  const qLower = query.toLowerCase().trim();
+  if (sLower.includes(qLower)) return true;
+
+  // Normalized without spaces and symbols (e.g. "pancard" matches "Pan Card", "moa & aoa" matches "MOA And AOA")
+  const sClean = sLower.replace(/[^a-z0-9]/g, '');
+  const qClean = qLower.replace(/[^a-z0-9]/g, '');
+  if (sClean && qClean && (sClean.includes(qClean) || qClean.includes(sClean))) return true;
+
+  // Multi-token match (all words in query present in service)
+  const tokens = qLower.split(/\s+/).filter(Boolean);
+  if (tokens.length > 1) {
+    const allTokensMatch = tokens.every(token => {
+      const tClean = token.replace(/[^a-z0-9]/g, '');
+      return sLower.includes(token) || (tClean && sClean.includes(tClean));
+    });
+    if (allTokensMatch) return true;
+  }
+
+  return false;
+}
