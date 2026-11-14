@@ -502,23 +502,14 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     return combined.sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  // 2. Team Members (TM) list — Includes Team Members AND Team Leaders
+  // 2. Team Members (TM) list — Team Members (TM) + Team Leaders (TL) of Operation department
   const allTeamMembers = useMemo(() => {
-    const combined: NormalizedStaff[] = allExistingEmployees.filter(u => u.isTM);
-    allExistingEmployees.filter(u => u.isTL).forEach(tl => {
-      const exists = combined.some(c => 
-        (c.id && tl.id && c.id.toLowerCase() === tl.id.toLowerCase()) ||
-        c.name.toLowerCase() === tl.name.toLowerCase() ||
-        isMatchingName(c.name, tl.name)
-      );
-      if (!exists) {
-        combined.push({
-          ...tl,
-          isTL: true
-        });
-      }
+    return allExistingEmployees.filter(u => {
+      if (u.isTM) return true;
+      const deptLower = (u.dept || '').toLowerCase();
+      const isOps = deptLower.includes('operat');
+      return Boolean(u.isTL && isOps);
     });
-    return combined.sort((a, b) => a.name.localeCompare(b.name));
   }, [allExistingEmployees]);
 
   // Helper to resolve currently selected ID by ID or Name (handles fuzzy/middle-name match)
@@ -1335,7 +1326,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                               <option value="">Select Team Member (TM)...</option>
                               {allTeamMembers.map(tm => (
                                 <option key={`tm_${tm.id}`} value={tm.id}>
-                                  {tm.name} ({tm.dept || 'Operations'} - {tm.isTL ? 'TL' : 'TM'})
+                                  {tm.name} ({tm.dept} - {tm.isTL ? 'TL' : 'TM'})
                                 </option>
                               ))}
                             </select>
@@ -1518,7 +1509,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                   <option value="">Select Team Member (TM)...</option>
                   {allTeamMembers.map(tm => (
                     <option key={`modal_tm_${tm.id}`} value={tm.id}>
-                      {tm.name} ({tm.dept || 'Operations'} - {tm.isTL ? 'TL' : 'TM'})
+                      {tm.name} ({tm.dept} - {tm.isTL ? 'TL' : 'TM'})
                     </option>
                   ))}
                 </select>

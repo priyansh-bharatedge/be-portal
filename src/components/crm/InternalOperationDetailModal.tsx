@@ -517,6 +517,12 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
     return getOperationStagesForTeamType(teamType);
   }, [teamType]);
 
+  // Resolved Team Members (including Operation department TLs)
+  const resolvedTeamMembers = useMemo(() => {
+    if (allTeamMembers && allTeamMembers.length > 0) return allTeamMembers;
+    return allStaff.filter(u => u.isTM || (u.isTL && (u.dept || '').toLowerCase().includes('operat')));
+  }, [allTeamMembers, allStaff]);
+
   // Common Fields State (Phase 2)
   const [stage, setStage] = useState<OperationStage>(() => {
     const rawStage = (record.Operation_Stage || record.Stage) as OperationStage;
@@ -692,25 +698,6 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
     return combined.sort((a, b) => a.name.localeCompare(b.name));
   }, [allTeamLeaders, allHODs, allStaff, isDigitalMarketing]);
 
-  // Available TM Options: Includes all Team Members AND Team Leaders
-  const tmOptions = useMemo(() => {
-    const combined: NormalizedStaff[] = [...allTeamMembers];
-    allTeamLeaders.forEach(tl => {
-      const alreadyExists = combined.some(c =>
-        (c.id && tl.id && c.id.toLowerCase() === tl.id.toLowerCase()) ||
-        c.name.toLowerCase() === tl.name.toLowerCase() ||
-        isMatchingName(c.name, tl.name)
-      );
-      if (!alreadyExists) {
-        combined.push({
-          ...tl,
-          isTL: true,
-        });
-      }
-    });
-    return combined.sort((a, b) => a.name.localeCompare(b.name));
-  }, [allTeamMembers, allTeamLeaders]);
-
   const [selectedTlId, setSelectedTlId] = useState<string>(() => {
     const rawId = record.Team_Leader?.id || record.Team_Leader_TL?.id || (typeof record.Team_Leader_TL === 'string' ? record.Team_Leader_TL : '') || record.Team_Leader_ID || '';
     const rawName = record.Team_Leader?.name || record.Team_Leader_TL?.name || record.Team_Leader_Name || '';
@@ -730,17 +717,6 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
       const resolved = resolveTlId(rawId, rawName);
       if (resolved && resolved !== selectedTlId) {
         setSelectedTlId(resolved);
-      }
-    }
-  }, [allStaff]);
-
-  useEffect(() => {
-    if (allStaff.length > 0 && (!selectedTmId || !allStaff.some(u => u.id === selectedTmId))) {
-      const rawId = record.Team_Member?.id || record.Team_Member_TM?.id || (typeof record.Team_Member_TM === 'string' ? record.Team_Member_TM : '') || record.Team_Member_ID || '';
-      const rawName = record.Team_Member?.name || record.Team_Member_TM?.name || record.Team_Member_Name || '';
-      const resolved = resolveTmId(rawId, rawName);
-      if (resolved && resolved !== selectedTmId) {
-        setSelectedTmId(resolved);
       }
     }
   }, [allStaff]);
@@ -2471,9 +2447,9 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     className="w-full px-3 py-2 bg-white border border-emerald-200 hover:border-emerald-300 focus:border-emerald-500 rounded-xl text-xs font-semibold text-gray-900 outline-none transition-all cursor-pointer shadow-2xs"
                   >
                     <option value="">Select Team Member (TM)...</option>
-                    {tmOptions.map((tm) => (
+                    {resolvedTeamMembers.map((tm) => (
                       <option key={`modal_tm_${tm.id}`} value={tm.id}>
-                        {tm.name} ({tm.dept || 'Operations'} - {tm.isTL ? 'TL' : 'TM'})
+                        {tm.name} ({tm.dept} - {tm.isTL ? 'TL' : 'TM'})
                       </option>
                     ))}
                   </select>
