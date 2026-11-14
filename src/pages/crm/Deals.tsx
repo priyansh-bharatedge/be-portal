@@ -924,8 +924,31 @@ export const Deals = () => {
       });
 
       let services: DealService[] = [];
-      if (Array.isArray(deal.servicesData) && deal.servicesData.length > 0) {
-        services = deal.servicesData.map((s: any) => {
+      const rawSubform1 = Array.isArray(rawZ.Subform_1) && rawZ.Subform_1.length > 0 ? rawZ.Subform_1 : [];
+      const rawServicesData = Array.isArray(deal.servicesData) && deal.servicesData.length > 0 ? deal.servicesData : [];
+
+      if (rawSubform1.length > 0 && rawSubform1.length >= rawServicesData.length) {
+        services = rawSubform1.map((sf: any, i: number) => {
+          const agreementAmount = Number(sf.Agreement_amount || sf.totalAmount || sf.Total || 0);
+          const withoutGst = Number(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? (agreementAmount / 1.18).toFixed(2) : 0));
+          const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
+          return {
+            id: String(sf.id || i + 1),
+            name: sf.Schemas || sf.Schema || sf.Service_Name || 'Service',
+            totalAmount: String(totalAmt || ''),
+            baseAmount: String(withoutGst || ''),
+            notes: sf.notes || sf.remarks || sf.Remark || '',
+            remarks: sf.remarks || sf.notes || sf.Remark || '',
+            amountAfterDisbursement: sf.amount_if_you_have_kindly_put_0 !== undefined && sf.amount_if_you_have_kindly_put_0 !== null
+              ? String(sf.amount_if_you_have_kindly_put_0)
+              : (sf.Amount_After_disbursement !== undefined && sf.Amount_After_disbursement !== null
+                ? String(sf.Amount_After_disbursement)
+                : (sf.amountAfterDisbursement !== undefined && sf.amountAfterDisbursement !== null ? String(sf.amountAfterDisbursement) : '')),
+            successFees: sf.Success_fees ? String(sf.Success_fees) : (sf.successFees ? String(sf.successFees) : ''),
+          };
+        });
+      } else if (rawServicesData.length > 0) {
+        services = rawServicesData.map((s: any) => {
           const t = s.totalAmount !== undefined 
             ? String(s.totalAmount) 
             : (s.baseAmount ? String(Number((Number(s.baseAmount) * 1.18).toFixed(2))) : '');
@@ -947,8 +970,8 @@ export const Deals = () => {
             successFees: s.successFees || s.Success_fees || '',
           };
         });
-      } else if (Array.isArray(rawZ.Subform_1) && rawZ.Subform_1.length > 0) {
-        services = rawZ.Subform_1.map((sf: any, i: number) => {
+      } else if (rawSubform1.length > 0) {
+        services = rawSubform1.map((sf: any, i: number) => {
           const agreementAmount = Number(sf.Agreement_amount || sf.totalAmount || sf.Total || 0);
           const withoutGst = Number(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? (agreementAmount / 1.18).toFixed(2) : 0));
           const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
@@ -982,6 +1005,37 @@ export const Deals = () => {
         }];
       }
       setDealServices(services);
+
+      // Asynchronously fetch fresh live deal data from Zoho to guarantee all Subform_1 rows are loaded
+      if (dealIdentifier) {
+        fetchZohoDealById(dealIdentifier).then(res => {
+          if (res.success && res.data) {
+            const freshZ = res.data;
+            if (Array.isArray(freshZ.Subform_1) && freshZ.Subform_1.length > 0) {
+              const freshServices: DealService[] = freshZ.Subform_1.map((sf: any, i: number) => {
+                const agreementAmount = Number(sf.Agreement_amount || sf.totalAmount || sf.Total || 0);
+                const withoutGst = Number(sf.Without_GST || sf.baseAmount || sf.Base || (agreementAmount > 0 ? (agreementAmount / 1.18).toFixed(2) : 0));
+                const totalAmt = agreementAmount || (withoutGst > 0 ? Number((withoutGst * 1.18).toFixed(2)) : 0);
+                return {
+                  id: String(sf.id || i + 1),
+                  name: sf.Schemas || sf.Schema || sf.Service_Name || 'Service',
+                  totalAmount: String(totalAmt || ''),
+                  baseAmount: String(withoutGst || ''),
+                  notes: sf.notes || sf.remarks || sf.Remark || '',
+                  remarks: sf.remarks || sf.notes || sf.Remark || '',
+                  amountAfterDisbursement: sf.amount_if_you_have_kindly_put_0 !== undefined && sf.amount_if_you_have_kindly_put_0 !== null
+                    ? String(sf.amount_if_you_have_kindly_put_0)
+                    : (sf.Amount_After_disbursement !== undefined && sf.Amount_After_disbursement !== null
+                      ? String(sf.Amount_After_disbursement)
+                      : (sf.amountAfterDisbursement !== undefined && sf.amountAfterDisbursement !== null ? String(sf.amountAfterDisbursement) : '')),
+                  successFees: sf.Success_fees ? String(sf.Success_fees) : (sf.successFees ? String(sf.successFees) : ''),
+                };
+              });
+              setDealServices(freshServices);
+            }
+          }
+        }).catch(err => console.warn('[Deals] Could not refresh subform services from Zoho:', err));
+      }
 
       const rec = (deal.totals?.amountReceived !== undefined && deal.totals?.amountReceived !== null && String(deal.totals.amountReceived) !== '')
         ? String(deal.totals.amountReceived)
@@ -1365,14 +1419,17 @@ export const Deals = () => {
       let subformReceived = 0;
       let subformPending = 0;
       const seenSubformsInDeal = new Set<string>();
-      const uniqueSubform1 = Array.isArray(zDeal.Subform_1)
-        ? zDeal.Subform_1.filter((sf: any) => {
-            const rowId = sf.id ? String(sf.id).trim() : '';
-            if (rowId && seenSubformsInDeal.has(rowId)) return false;
-            if (rowId) seenSubformsInDeal.add(rowId);
-            return true;
-          })
-        : [];
+      const subform1Source = (Array.isArray(zDeal.Subform_1) && zDeal.Subform_1.length > 0)
+        ? zDeal.Subform_1
+        : (existingIdx >= 0 && Array.isArray(updatedDeals[existingIdx]?.rawZohoDeal?.Subform_1) && updatedDeals[existingIdx].rawZohoDeal.Subform_1.length > 0
+            ? updatedDeals[existingIdx].rawZohoDeal.Subform_1
+            : []);
+      const uniqueSubform1 = subform1Source.filter((sf: any) => {
+        const rowId = sf.id ? String(sf.id).trim() : '';
+        if (rowId && seenSubformsInDeal.has(rowId)) return false;
+        if (rowId) seenSubformsInDeal.add(rowId);
+        return true;
+      });
 
       if (uniqueSubform1.length > 0) {
         uniqueSubform1.forEach((sf: any) => {
@@ -1827,7 +1884,13 @@ export const Deals = () => {
         rawAmount: totalAmountNum,
         rawReceived: receivedAmountNum,
         rawPending: pendingAmountNum,
-        rawZohoDeal: zDeal,
+        rawZohoDeal: existingIdx >= 0 && updatedDeals[existingIdx]?.rawZohoDeal
+          ? {
+              ...updatedDeals[existingIdx].rawZohoDeal,
+              ...zDeal,
+              Subform_1: uniqueSubform1.length > 0 ? uniqueSubform1 : updatedDeals[existingIdx]?.rawZohoDeal?.Subform_1,
+            }
+          : { ...zDeal, Subform_1: uniqueSubform1.length > 0 ? uniqueSubform1 : zDeal.Subform_1 },
       };
 
       if (existingIdx >= 0) {
@@ -2501,7 +2564,19 @@ export const Deals = () => {
         newDealsList = deals.map((d: any) => {
           if (d.id === editingDealId || (d.zohoId && String(d.zohoId) === String(editingDealId))) {
             return {
+              ...d,
               ...dealData,
+              rawZohoDeal: {
+                ...(d.rawZohoDeal || {}),
+                ...(dealData.rawZohoDeal || {}),
+                Subform_1: dealData.servicesData?.map((s: any, idx: number) => ({
+                  ...(d.rawZohoDeal?.Subform_1?.[idx] || {}),
+                  Schemas: s.name,
+                  Agreement_amount: Number(s.totalAmount) || 0,
+                  Without_GST: Number(s.baseAmount) || 0,
+                }))
+              },
+              servicesData: dealData.servicesData,
               status: d.status,
               owner: d.owner,
               date: d.date,
