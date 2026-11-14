@@ -1367,9 +1367,9 @@ export const Deals = () => {
       const seenSubformsInDeal = new Set<string>();
       const uniqueSubform1 = Array.isArray(zDeal.Subform_1)
         ? zDeal.Subform_1.filter((sf: any) => {
-            const nameKey = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || 'website development').trim().toLowerCase();
-            if (seenSubformsInDeal.has(nameKey)) return false;
-            seenSubformsInDeal.add(nameKey);
+            const rowId = sf.id ? String(sf.id).trim() : '';
+            if (rowId && seenSubformsInDeal.has(rowId)) return false;
+            if (rowId) seenSubformsInDeal.add(rowId);
             return true;
           })
         : [];
@@ -1465,10 +1465,10 @@ export const Deals = () => {
       // 4. Legal Subform (Parsed first to allow fallback service schema detection)
       const seenLegalRows = new Set<string>();
       const dedupedRawLegal = Array.isArray(zDeal.Legal)
-        ? zDeal.Legal.filter((lg: any, i: number) => {
-            const sKey = (lg.Legal_Schemas || lg.Schemas || `row_${i}`).trim().toLowerCase();
-            if (seenLegalRows.has(sKey)) return false;
-            seenLegalRows.add(sKey);
+        ? zDeal.Legal.filter((lg: any) => {
+            const rowId = lg.id ? String(lg.id).trim() : '';
+            if (rowId && seenLegalRows.has(rowId)) return false;
+            if (rowId) seenLegalRows.add(rowId);
             return true;
           })
         : [];

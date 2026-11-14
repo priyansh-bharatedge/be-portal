@@ -860,12 +860,12 @@ function zohoApiPlugin(): Plugin {
         const existingSubform = Array.isArray(existing.Subform_1) ? existing.Subform_1 : [];
         const usedIds = new Set<string>();
 
-        // Ensure payload.Subform_1 contains strictly at most 1 item per unique service schema
-        const seenPayloadSchemas = new Set<string>();
+        // Preserve all service rows, only deduplicate if identical row ID is encountered
+        const seenPayloadRowIds = new Set<string>();
         payload.Subform_1 = payload.Subform_1.filter((item: any) => {
-          const sKey = (item.Schemas || item.Schema || item.name || 'Website Development').trim().toLowerCase();
-          if (seenPayloadSchemas.has(sKey)) return false;
-          seenPayloadSchemas.add(sKey);
+          const rowId = item.id ? String(item.id).trim() : '';
+          if (rowId && seenPayloadRowIds.has(rowId)) return false;
+          if (rowId) seenPayloadRowIds.add(rowId);
           return true;
         });
 
@@ -905,21 +905,6 @@ function zohoApiPlugin(): Plugin {
             });
           }
         }
-      } else if (!payload.Subform_1 && Array.isArray(existing.Subform_1) && existing.Subform_1.length > 1) {
-        // If payload did not specify Subform_1, but existingSubform in Zoho CRM has duplicate rows, clean duplicates
-        const seenSf = new Set<string>();
-        const toDelete: any[] = [];
-        for (const ex of existing.Subform_1) {
-          const sKey = (ex.Schemas || ex.Schema || '').trim().toLowerCase();
-          if (sKey && seenSf.has(sKey) && ex.id) {
-            toDelete.push({ id: String(ex.id), _delete: null });
-          } else if (sKey) {
-            seenSf.add(sKey);
-          }
-        }
-        if (toDelete.length > 0) {
-          payload.Subform_1 = toDelete;
-        }
       }
 
       // 2. Reconcile Legal Subform
@@ -927,12 +912,12 @@ function zohoApiPlugin(): Plugin {
         const existingLegal = Array.isArray(existing.Legal) ? existing.Legal : [];
         const usedLegalIds = new Set<string>();
 
-        // Ensure payload.Legal contains strictly at most 1 item per unique legal schema
-        const seenPayloadLegal = new Set<string>();
+        // Preserve all legal rows, only deduplicate if identical row ID is encountered
+        const seenPayloadLegalIds = new Set<string>();
         payload.Legal = payload.Legal.filter((item: any) => {
-          const lKey = (item.Legal_Schemas || item.schema || item.Schemas || 'General Services').trim().toLowerCase();
-          if (seenPayloadLegal.has(lKey)) return false;
-          seenPayloadLegal.add(lKey);
+          const rowId = item.id ? String(item.id).trim() : '';
+          if (rowId && seenPayloadLegalIds.has(rowId)) return false;
+          if (rowId) seenPayloadLegalIds.add(rowId);
           return true;
         });
 
@@ -971,21 +956,6 @@ function zohoApiPlugin(): Plugin {
               _delete: null,
             });
           }
-        }
-      } else if (!payload.Legal && Array.isArray(existing.Legal) && existing.Legal.length > 1) {
-        // If payload did not specify Legal, but existingLegal in Zoho CRM has duplicate rows, clean duplicates
-        const seenLg = new Set<string>();
-        const toDelete: any[] = [];
-        for (const ex of existing.Legal) {
-          const lKey = (ex.Legal_Schemas || ex.Schemas || '').trim().toLowerCase();
-          if (lKey && seenLg.has(lKey) && ex.id) {
-            toDelete.push({ id: String(ex.id), _delete: null });
-          } else if (lKey) {
-            seenLg.add(lKey);
-          }
-        }
-        if (toDelete.length > 0) {
-          payload.Legal = toDelete;
         }
       }
     } catch (err) {
@@ -1141,17 +1111,17 @@ function zohoApiPlugin(): Plugin {
 
     // Services Overview & Subform_1 (API Name: Subform_1)
     if (Array.isArray(servicesData) && servicesData.length > 0) {
-      const seenSvc = new Set<string>();
-      const deduplicatedServices = servicesData.filter((s: any) => {
-        const nameKey = (s.name || s.Schemas || s.Service_Name || deal.service || fd.service || 'Website Development').trim().toLowerCase();
-        if (seenSvc.has(nameKey)) return false;
-        seenSvc.add(nameKey);
+      const seenSvcIds = new Set<string>();
+      const validServices = servicesData.filter((s: any) => {
+        const rowId = s.id ? String(s.id).trim() : '';
+        if (rowId && seenSvcIds.has(rowId)) return false;
+        if (rowId) seenSvcIds.add(rowId);
         return true;
       });
 
-      payload.Service_Count = deduplicatedServices.length;
-      payload.Service_Name = deduplicatedServices.length === 1 ? (deduplicatedServices[0].name || deduplicatedServices[0].Schemas) : `${deduplicatedServices.length} Services`;
-      payload.Subform_1 = deduplicatedServices.map((svc: any, idx: number) => {
+      payload.Service_Count = validServices.length;
+      payload.Service_Name = validServices.length === 1 ? (validServices[0].name || validServices[0].Schemas) : `${validServices.length} Services`;
+      payload.Subform_1 = validServices.map((svc: any, idx: number) => {
         const itemTotalFromSvc = Number(svc.totalAmount) || 0;
         const itemBase = itemTotalFromSvc > 0 
           ? to2Dec(itemTotalFromSvc / 1.18) 
@@ -1164,7 +1134,7 @@ function zohoApiPlugin(): Plugin {
         let itemReceived = 0;
         if (grandTotalNum > 0) {
           itemReceived = to2Dec((itemTotal / grandTotalNum) * amountReceivedNum);
-        } else if (deduplicatedServices.length === 1) {
+        } else if (validServices.length === 1) {
           itemReceived = amountReceivedNum;
         }
         const itemPending = to2Dec(Math.max(0, itemTotal - itemReceived));
@@ -1217,15 +1187,15 @@ function zohoApiPlugin(): Plugin {
     // Legal Subform (API Name: Legal)
     const rawLegalData = deal.legalData || deal.rawZohoDeal?.Legal || deal.Legal || fd.legalData || fd.Legal;
     if (Array.isArray(rawLegalData) && rawLegalData.length > 0) {
-      const seenLegal = new Set<string>();
-      const deduplicatedLegal = rawLegalData.filter((lg: any, idx: number) => {
-        const schemaKey = (lg.Legal_Schemas || lg.schema || lg.Schemas || payload.Subform_1?.[idx]?.Schemas || 'General Services').trim().toLowerCase();
-        if (seenLegal.has(schemaKey)) return false;
-        seenLegal.add(schemaKey);
+      const seenLegalIds = new Set<string>();
+      const validLegal = rawLegalData.filter((lg: any) => {
+        const rowId = lg.id ? String(lg.id).trim() : '';
+        if (rowId && seenLegalIds.has(rowId)) return false;
+        if (rowId) seenLegalIds.add(rowId);
         return true;
       });
 
-      payload.Legal = deduplicatedLegal.map((lg: any, idx: number) => ({
+      payload.Legal = validLegal.map((lg: any, idx: number) => ({
         ...(lg.id && /^\d{15,}$/.test(String(lg.id)) ? { id: String(lg.id) } : {}),
         Legal_Schemas: lg.Legal_Schemas || lg.schema || lg.Schemas || (payload.Subform_1?.[idx]?.Schemas) || 'General Services',
         Internal_team_type: lg.Internal_team_type || lg.internalTeamType || '',

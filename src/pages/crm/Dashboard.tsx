@@ -265,13 +265,12 @@ export const CrmDashboard = () => {
       let subformTotal = 0;
       let subformReceived = 0;
       let subformPending = 0;
-      const seenDashSubforms = new Set<string>();
+      const seenDashSubformIds = new Set<string>();
       const uniqueDashSubforms = Array.isArray(zDeal.Subform_1)
         ? zDeal.Subform_1.filter((sf: any) => {
-            const nameKey = (sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || '').trim().toLowerCase();
-            if (!nameKey) return true;
-            if (seenDashSubforms.has(nameKey)) return false;
-            seenDashSubforms.add(nameKey);
+            const rowId = sf.id ? String(sf.id).trim() : '';
+            if (rowId && seenDashSubformIds.has(rowId)) return false;
+            if (rowId) seenDashSubformIds.add(rowId);
             return true;
           })
         : [];

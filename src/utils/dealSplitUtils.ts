@@ -126,11 +126,11 @@ export const getDealVerifiedReceivedAmount = (d: any): number => {
 
 const deduplicateSubforms = (list: any[]): any[] => {
   if (!Array.isArray(list) || list.length === 0) return [];
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
   return list.filter((item: any) => {
-    const key = (item.Schemas || item.Schema || item.Service_Name || item.Service || item.Business_plan_selected || item.name || 'service').trim().toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
+    const rowId = item.id ? String(item.id).trim() : '';
+    if (rowId && seenIds.has(rowId)) return false;
+    if (rowId) seenIds.add(rowId);
     return true;
   });
 };

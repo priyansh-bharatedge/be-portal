@@ -598,11 +598,11 @@ export const DealDetails = () => {
         ? raw.Subform_1
         : (Array.isArray(deal.servicesData) && deal.servicesData.length > 0 ? deal.servicesData : []);
 
-      const seenSvc = new Set<string>();
+      const seenSvcIds = new Set<string>();
       const servicesList = rawServicesList.filter((s: any) => {
-        const key = (s.Schemas || s.Schema || s.name || s.Service_Name || deal.service || 'Website Development').trim().toLowerCase();
-        if (seenSvc.has(key)) return false;
-        seenSvc.add(key);
+        const rowId = s.id ? String(s.id).trim() : '';
+        if (rowId && seenSvcIds.has(rowId)) return false;
+        if (rowId) seenSvcIds.add(rowId);
         return true;
       });
 
@@ -1798,13 +1798,11 @@ export const DealDetails = () => {
   let servicesSumPending = 0;
 
   if (Array.isArray(raw.Subform_1) && raw.Subform_1.length > 0) {
-    const seenSubforms = new Set<string>();
+    const seenSubformIds = new Set<string>();
     const uniqueSubforms = raw.Subform_1.filter((sf: any) => {
-      const rawKey = formatZohoValue(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || sf.Product_Name || sf.Service_Scheme || sf.Service_scheme || sf.Services || sf.Name || sf.name || sf.Legal_Schemas || '');
-      const nameKey = rawKey.trim().toLowerCase();
-      if (!nameKey) return true;
-      if (seenSubforms.has(nameKey)) return false;
-      seenSubforms.add(nameKey);
+      const rowId = sf.id ? String(sf.id).trim() : '';
+      if (rowId && seenSubformIds.has(rowId)) return false;
+      if (rowId) seenSubformIds.add(rowId);
       return true;
     });
 
@@ -1842,13 +1840,13 @@ export const DealDetails = () => {
       };
     });
   } else if (rawServices.length > 0 && rawServices.some((s: any) => isValidServiceName(s.name || s.Schemas || s.Service_Name, clientName, companyName, deal.id))) {
-    const seenSvc = new Set<string>();
+    const seenSvcIds = new Set<string>();
     const uniqueServices = rawServices.filter((s: any) => {
       const sName = s.name || s.Schemas || s.Service_Name || '';
       if (!isValidServiceName(sName, clientName, companyName, deal.id)) return false;
-      const nameKey = sName.trim().toLowerCase();
-      if (seenSvc.has(nameKey)) return false;
-      seenSvc.add(nameKey);
+      const rowId = s.id ? String(s.id).trim() : '';
+      if (rowId && seenSvcIds.has(rowId)) return false;
+      if (rowId) seenSvcIds.add(rowId);
       return true;
     });
 

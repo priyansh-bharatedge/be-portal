@@ -1888,13 +1888,11 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
   let subformPending = 0;
 
   if (Array.isArray(rawZoho.Subform_1) && rawZoho.Subform_1.length > 0) {
-    const seenSubforms = new Set<string>();
+    const seenSubformIds = new Set<string>();
     const uniqueRawSubform = rawZoho.Subform_1.filter((sf: any) => {
-      const sRaw = extractZohoName(sf.Schemas || sf.Schema || sf.Service_Name || sf.Service || sf.Business_plan_selected || sf.Item_Name || sf.Product_Name || sf.Service_Scheme || sf.Service_scheme || sf.Services || sf.Name || sf.name || sf.Legal_Schemas || 'Service');
-      const sName = sRaw.trim().toLowerCase();
-      if (!sName || sName === 'service') return true;
-      if (seenSubforms.has(sName)) return false;
-      seenSubforms.add(sName);
+      const rowId = sf.id ? String(sf.id).trim() : '';
+      if (rowId && seenSubformIds.has(rowId)) return false;
+      if (rowId) seenSubformIds.add(rowId);
       return true;
     });
 
@@ -1938,12 +1936,13 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
     existingDeal.servicesData.length > 0 &&
     existingDeal.servicesData.some((s: any) => isValidServiceName(s.name, resolvedClient, resolvedCompany, existingDeal?.id))
   ) {
-    const seenSvc = new Set<string>();
+    const seenSvcIds = new Set<string>();
     servicesSubform = existingDeal.servicesData.filter((s: any) => {
-      const sName = (s.name || s.Schemas || s.Service_Name || '').trim().toLowerCase();
+      const sName = (s.name || s.Schemas || s.Service_Name || '').trim();
       if (!sName || !isValidServiceName(s.name, resolvedClient, resolvedCompany, existingDeal?.id)) return false;
-      if (seenSvc.has(sName)) return false;
-      seenSvc.add(sName);
+      const rowId = s.id ? String(s.id).trim() : '';
+      if (rowId && seenSvcIds.has(rowId)) return false;
+      if (rowId) seenSvcIds.add(rowId);
       return true;
     });
     servicesSubform.forEach((sf: any) => {
@@ -1957,12 +1956,13 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       subformPending += p;
     });
   } else if (Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0 && rawZoho.Legal.some((lg: any) => isValidServiceName(lg.Legal_Schemas || lg.Schemas, resolvedClient, resolvedCompany, existingDeal?.id))) {
-    const seenSvc = new Set<string>();
+    const seenLegalIds = new Set<string>();
     const validLegal = rawZoho.Legal.filter((lg: any) => {
-      const sName = (lg.Legal_Schemas || lg.Schemas || '').trim().toLowerCase();
+      const sName = (lg.Legal_Schemas || lg.Schemas || '').trim();
       if (!sName || !isValidServiceName(sName, resolvedClient, resolvedCompany, existingDeal?.id)) return false;
-      if (seenSvc.has(sName)) return false;
-      seenSvc.add(sName);
+      const rowId = lg.id ? String(lg.id).trim() : '';
+      if (rowId && seenLegalIds.has(rowId)) return false;
+      if (rowId) seenLegalIds.add(rowId);
       return true;
     });
     servicesSubform = validLegal.map((lg: any, i: number) => ({
@@ -2382,11 +2382,11 @@ export function enrichDealFromZohoRecord(rawZoho: any, existingDeal?: any): any 
       const rawList = Array.isArray(rawZoho.Legal) && rawZoho.Legal.length > 0
         ? rawZoho.Legal
         : (Array.isArray(existingDeal?.legalData) && existingDeal.legalData.length > 0 ? existingDeal.legalData : []);
-      const seenLegal = new Set<string>();
-      const uniqueLegal = rawList.filter((lg: any, idx: number) => {
-        const schemaKey = (lg.Legal_Schemas || lg.Schemas || lg.schema || servicesSubform[idx]?.name || 'service').trim().toLowerCase();
-        if (seenLegal.has(schemaKey)) return false;
-        seenLegal.add(schemaKey);
+      const seenLegalIds = new Set<string>();
+      const uniqueLegal = rawList.filter((lg: any) => {
+        const rowId = lg.id ? String(lg.id).trim() : '';
+        if (rowId && seenLegalIds.has(rowId)) return false;
+        if (rowId) seenLegalIds.add(rowId);
         return true;
       });
       return uniqueLegal.map((lg: any, i: number) => ({

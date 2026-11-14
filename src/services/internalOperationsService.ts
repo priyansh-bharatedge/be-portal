@@ -228,14 +228,15 @@ export function generateServiceAllocationsForDeal(
     }
   }
 
-  // Deduplicate subform rows so identical service names only yield 1 child record
-  const seenServiceKeys = new Set<string>();
+  // Preserve all subform rows for services, only deduplicate if identical row ID is encountered
+  const seenRowIds = new Set<string>();
   const uniqueSubformRows = subformRows.filter((row: any) => {
     const rawName = row.schema || row.Legal_Schemas || row.Schemas || row.Service_Name || row.name || '';
     const norm = normalizeServiceName(rawName);
     if (!norm || norm === 'businessadvisory' || norm === 'services' || norm === 'generalservices') return false;
-    if (seenServiceKeys.has(norm)) return false;
-    seenServiceKeys.add(norm);
+    const rowId = row.id ? String(row.id).trim() : '';
+    if (rowId && seenRowIds.has(rowId)) return false;
+    if (rowId) seenRowIds.add(rowId);
     return true;
   });
 
