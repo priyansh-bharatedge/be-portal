@@ -502,9 +502,23 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     return combined.sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  // 2. Strictly Team Members (TM) list — ONLY Team Members
+  // 2. Team Members (TM) list — Includes Team Members AND Team Leaders
   const allTeamMembers = useMemo(() => {
-    return allExistingEmployees.filter(u => u.isTM);
+    const combined: NormalizedStaff[] = allExistingEmployees.filter(u => u.isTM);
+    allExistingEmployees.filter(u => u.isTL).forEach(tl => {
+      const exists = combined.some(c => 
+        (c.id && tl.id && c.id.toLowerCase() === tl.id.toLowerCase()) ||
+        c.name.toLowerCase() === tl.name.toLowerCase() ||
+        isMatchingName(c.name, tl.name)
+      );
+      if (!exists) {
+        combined.push({
+          ...tl,
+          isTL: true
+        });
+      }
+    });
+    return combined.sort((a, b) => a.name.localeCompare(b.name));
   }, [allExistingEmployees]);
 
   // Helper to resolve currently selected ID by ID or Name (handles fuzzy/middle-name match)
@@ -1321,7 +1335,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                               <option value="">Select Team Member (TM)...</option>
                               {allTeamMembers.map(tm => (
                                 <option key={`tm_${tm.id}`} value={tm.id}>
-                                  {tm.name} ({tm.dept} - TM)
+                                  {tm.name} ({tm.dept || 'Operations'} - {tm.isTL ? 'TL' : 'TM'})
                                 </option>
                               ))}
                             </select>
@@ -1504,7 +1518,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                   <option value="">Select Team Member (TM)...</option>
                   {allTeamMembers.map(tm => (
                     <option key={`modal_tm_${tm.id}`} value={tm.id}>
-                      {tm.name} ({tm.dept} - TM)
+                      {tm.name} ({tm.dept || 'Operations'} - {tm.isTL ? 'TL' : 'TM'})
                     </option>
                   ))}
                 </select>
