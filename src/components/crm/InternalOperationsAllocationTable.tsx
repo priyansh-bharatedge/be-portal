@@ -507,9 +507,9 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     return allExistingEmployees.filter(u => {
       if (u.isTM) return true;
       const deptLower = (u.dept || '').toLowerCase();
-      const isOps = deptLower.includes('operat');
+      const isOps = deptLower.includes('operat') || deptLower.includes('ops') || !u.dept;
       return Boolean(u.isTL && isOps);
-    });
+    }).sort((a, b) => a.name.localeCompare(b.name));
   }, [allExistingEmployees]);
 
   // Helper to resolve currently selected ID by ID or Name (handles fuzzy/middle-name match)
@@ -1326,7 +1326,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                               <option value="">Select Team Member (TM)...</option>
                               {allTeamMembers.map(tm => (
                                 <option key={`tm_${tm.id}`} value={tm.id}>
-                                  {tm.name} ({tm.dept} - {tm.isTL ? 'TL' : 'TM'})
+                                  {tm.name} ({tm.dept || 'Operations'} - {tm.isTL ? 'TL' : 'TM'})
                                 </option>
                               ))}
                             </select>
@@ -1509,7 +1509,7 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                   <option value="">Select Team Member (TM)...</option>
                   {allTeamMembers.map(tm => (
                     <option key={`modal_tm_${tm.id}`} value={tm.id}>
-                      {tm.name} ({tm.dept} - {tm.isTL ? 'TL' : 'TM'})
+                      {tm.name} ({tm.dept || 'Operations'} - {tm.isTL ? 'TL' : 'TM'})
                     </option>
                   ))}
                 </select>

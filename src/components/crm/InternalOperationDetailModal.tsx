@@ -519,8 +519,14 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
 
   // Resolved Team Members (including Operation department TLs)
   const resolvedTeamMembers = useMemo(() => {
-    if (allTeamMembers && allTeamMembers.length > 0) return allTeamMembers;
-    return allStaff.filter(u => u.isTM || (u.isTL && (u.dept || '').toLowerCase().includes('operat')));
+    const sourcePool = (allStaff && allStaff.length > 0) ? allStaff : (allTeamMembers || []);
+    const filtered = sourcePool.filter(u => {
+      if (u.isTM) return true;
+      const deptLower = (u.dept || '').toLowerCase();
+      const isOps = deptLower.includes('operat') || deptLower.includes('ops') || !u.dept;
+      return Boolean(u.isTL && isOps);
+    });
+    return filtered.sort((a, b) => a.name.localeCompare(b.name));
   }, [allTeamMembers, allStaff]);
 
   // Common Fields State (Phase 2)
@@ -2449,7 +2455,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
                     <option value="">Select Team Member (TM)...</option>
                     {resolvedTeamMembers.map((tm) => (
                       <option key={`modal_tm_${tm.id}`} value={tm.id}>
-                        {tm.name} ({tm.dept} - {tm.isTL ? 'TL' : 'TM'})
+                        {tm.name} ({tm.dept || 'Operations'} - {tm.isTL ? 'TL' : 'TM'})
                       </option>
                     ))}
                   </select>
