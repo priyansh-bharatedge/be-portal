@@ -81,11 +81,13 @@ export function resolveAccessibleEmployeeIds(
   const userEmail = (user.email || '').trim().toLowerCase();
 
   const dept = (user.department || '').trim().toLowerCase();
+  const desig = (user.designation || '').trim().toLowerCase();
   const isAccounts = dept.includes('account') || dept.includes('finance');
   const isLegal = dept.includes('legal');
+  const isQuality = dept.includes('quality') || desig.includes('quality') || (role as any) === 'Quality';
 
-  // 1. Super Admin, Head of Department (HOD), Accounts, & Legal Department have full organizational visibility across all modules
-  if (role === 'Super Admin' || role === 'HOD' || isAccounts || isLegal || userEmail === 'superadmin@be.com' || userEmail === 'md@bharat-edge.com') {
+  // 1. Super Admin, Head of Department (HOD), Accounts, Legal & Quality Department have full organizational visibility across all modules
+  if (role === 'Super Admin' || role === 'HOD' || isAccounts || isLegal || isQuality || (role as any) === 'Quality' || userEmail === 'superadmin@be.com' || userEmail === 'md@bharat-edge.com') {
     return { employeeIds: [], zohoIds: [], isAll: true };
   }
 
@@ -374,13 +376,15 @@ export function buildZohoRbacCriteria(
   const config = ZOHO_MODULE_LOOKUP_MAP[moduleName];
 
   const userDept = (user?.department || '').trim().toLowerCase();
+  const userDesig = (user?.designation || '').trim().toLowerCase();
   const isAccounts = userDept.includes('account') || userDept.includes('finance');
   const isLegal = userDept.includes('legal');
+  const isQuality = userDept.includes('quality') || userDesig.includes('quality') || (user?.role as any) === 'Quality';
   const isDeals = moduleName === 'Deals' || moduleName === 'Deal';
   const isCrm = isCrmModuleName(moduleName);
   const crmOctoberCrit = isDeals ? OCTOBER_2026_DEALS_CRITERIA : OCTOBER_2026_CRITERIA;
 
-  // Exempt modules and full-visibility roles (Super Admin, HOD, HR, Accounts, Legal) have no role filters
+  // Exempt modules and full-visibility roles (Super Admin, HOD, HR, Accounts, Legal, Quality) have no role filters
   if (
     config?.isLookupExempt || 
     !user || 
@@ -389,6 +393,7 @@ export function buildZohoRbacCriteria(
     user.role === 'HR' ||
     isAccounts ||
     isLegal ||
+    isQuality ||
     user.email === 'superadmin@be.com' || 
     user.email === 'md@bharat-edge.com'
   ) {
@@ -547,8 +552,10 @@ export function filterRecordsByRbac<T = any>(
   }
 
   const userDept = (user?.department || '').trim().toLowerCase();
+  const userDesig = (user?.designation || '').trim().toLowerCase();
   const isAccounts = userDept.includes('account') || userDept.includes('finance');
   const isLegal = userDept.includes('legal');
+  const isQuality = userDept.includes('quality') || userDesig.includes('quality') || (user?.role as any) === 'Quality';
 
   if (
     !user || 
@@ -557,6 +564,7 @@ export function filterRecordsByRbac<T = any>(
     user.role === 'HR' ||
     isAccounts ||
     isLegal ||
+    isQuality ||
     user.email === 'superadmin@be.com' ||
     user.email === 'md@bharat-edge.com' ||
     user.email === 'hrmshr@be.com'
@@ -830,7 +838,8 @@ export function filterRecordsByRbac<T = any>(
       const isSuperAdmin = user.role === 'Super Admin' || user.email === 'superadmin@be.com' || user.email === 'md@bharat-edge.com';
       const isOpsHOD = user.role === 'HOD' && (userDept.includes('operat') || !userDept.includes('legal'));
       const isLegalHOD = user.role === 'HOD' && userDept.includes('legal');
-      if (isSuperAdmin || isOpsHOD || isLegalHOD) return true;
+      const isQualityDept = userDept.includes('quality') || (user.designation || '').toLowerCase().includes('quality') || (user.role as any) === 'Quality';
+      if (isSuperAdmin || isOpsHOD || isLegalHOD || isQualityDept) return true;
 
       // TL check: Assigned as TL (checks Team_Leader_TL, Team_Leader lookup object, ID, or Name)
       const tl = rec.Team_Leader_TL || rec.Team_Leader;

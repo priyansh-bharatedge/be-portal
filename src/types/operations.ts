@@ -12,6 +12,7 @@ export interface InternalOperationRecord {
   Name?: string; // Service Name field in Zoho CRM (Single Line)
   Team_Type?: string; // Team Type field in Zoho CRM (Pick List)
   Operation_Stage?: string; // Operation Stage field in Zoho CRM (Pick List)
+  Stages?: string; // Stages field in Zoho CRM (API Name: Stages, e.g. "Quality")
 
   // Mapped from Legal Details Subform
   Service_Scheme: string; // e.g. "CGSS", "Website Development", "MSME"

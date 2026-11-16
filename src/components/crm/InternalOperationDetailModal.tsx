@@ -1720,6 +1720,7 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         Team_Type: teamType,
         Stage: stage,
         Operation_Stage: stage,
+        Stages: record.Stages || ((stage === 'Quality' || record.Stage === 'Quality') ? 'Quality' : undefined),
         Name: record.Service_Scheme || record.Name || '',
         Service_Scheme: record.Service_Scheme || record.Name || '',
         Parent_Record_Deal: record.Parent_Record_Deal || (record.Deal_ID ? (/^\d{15,}$/.test(String(record.Deal_ID)) ? { id: String(record.Deal_ID), name: record.Deal_Name } : record.Deal_ID) : undefined),
@@ -2056,6 +2057,34 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
     }
   };
 
+  const isQualityStage = Boolean(
+    (record.Stages && record.Stages.trim().toLowerCase() === 'quality') ||
+    (stage && String(stage).trim().toLowerCase() === 'quality') ||
+    (record.Stage && String(record.Stage).trim().toLowerCase() === 'quality')
+  );
+
+  const handleSendToQualityModal = async () => {
+    setStage('Quality' as any);
+    setSaving(true);
+    try {
+      const updatedRecord: InternalOperationRecord = {
+        ...record,
+        Stages: 'Quality',
+        Stage: 'Quality' as any,
+        Operation_Stage: 'Quality',
+        Modified_Time: new Date().toISOString()
+      };
+      await saveInternalOperation(updatedRecord);
+      if (onSaved) onSaved(updatedRecord);
+      setToast({ type: 'success', text: `"${record.Service_Scheme || 'File'}" sent to Quality stage successfully!` });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err: any) {
+      setToast({ type: 'error', text: err?.message || 'Failed to send file to Quality' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Team Type Badge Color & Icon
   const teamTypeBadge = useMemo(() => {
     switch (teamType) {
@@ -2110,6 +2139,23 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
           </div>
 
           <div className="flex items-center gap-2">
+            {isQualityStage ? (
+              <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                <CheckCircle2 size={13} className="text-emerald-600" />
+                <span>Quality Stage</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSendToQualityModal}
+                disabled={saving}
+                className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Send this file to Quality Department"
+              >
+                <ShieldCheck size={13} className="text-white" />
+                <span>Send to Quality</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSave}
@@ -3951,6 +3997,23 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
             >
               Close
             </button>
+            {isQualityStage ? (
+              <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                <CheckCircle2 size={13} className="text-emerald-600" />
+                <span>Quality Stage</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSendToQualityModal}
+                disabled={saving || isDeleting}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Send this file to Quality Department"
+              >
+                <ShieldCheck size={13} className="text-white" />
+                <span>Send to Quality</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSave}

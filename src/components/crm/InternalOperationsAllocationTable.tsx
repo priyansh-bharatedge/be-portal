@@ -7,6 +7,7 @@ import {
   getStoredInternalOperations,
   fetchInternalOperations,
   saveInternalOperation,
+  sendInternalOperationToQuality,
   deleteInternalOperation,
   assignStaffToOperation,
   generateServiceAllocationsForDeal,
@@ -279,12 +280,22 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
   // Child Record Detail Modal State
   const [selectedRecordForDetails, setSelectedRecordForDetails] = useState<InternalOperationRecord | null>(null);
 
+  // File filter options: "all files" | "inprogress file" | "completed files"
+  const [fileFilter, setFileFilter] = useState<'all' | 'inprogress' | 'completed'>('all');
+
+  // Quality Department Check: Full organizational visibility across all modules
+  const isQualityDept = Boolean(
+    currentUser?.department?.toLowerCase().includes('quality') ||
+    currentUser?.designation?.toLowerCase().includes('quality') ||
+    (currentUser as any)?.role === 'Quality'
+  );
+
   // Permission Checks:
   // - Operations HOD & Super Admin have full management & assignment rights.
-  // - Legal HOD has supervisory oversight (view & audit status and assigned staff).
+  // - Legal HOD & Quality have supervisory oversight (view & audit status and assigned staff).
   // - Legal HOD, Operations HOD & Super Admin have allocation deletion rights.
   const canManageAllocations = Boolean(isSuperAdmin || isOperationsHOD || (isHOD && !isLegal && !isSalesDeptUser));
-  const hasSupervisoryOversight = Boolean(isLegalHOD || isLegal);
+  const hasSupervisoryOversight = Boolean(isLegalHOD || isLegal || isQualityDept);
   const isTeamLeader = Boolean(
     isTL || 
     currentUser?.role === 'TL' || 
@@ -299,15 +310,17 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
   // Team Leaders (TL) can assign Team Members (TM)
   const canAssignTM = Boolean(canManageAllocations || isTeamLeader);
   const canDeleteAllocations = Boolean(isSuperAdmin || isOperationsHOD || isLegalHOD || hasSupervisoryOversight || canManageAllocations);
-  const isIndividualContributor = !canManageAllocations && !hasSupervisoryOversight;
+  const isIndividualContributor = !canManageAllocations && !hasSupervisoryOversight && !isQualityDept;
   // Team Member (TM): Individual contributor who is not an Admin, HOD, or Team Leader
   const isTeamMember = Boolean(
-    currentUser?.role === 'TM' ||
-    (currentUser as any)?.systemRole === 'TM' ||
-    isTM ||
-    (!canManageAllocations && !hasSupervisoryOversight && !isTeamLeader)
+    !isQualityDept && (
+      currentUser?.role === 'TM' ||
+      (currentUser as any)?.systemRole === 'TM' ||
+      isTM ||
+      (!canManageAllocations && !hasSupervisoryOversight && !isTeamLeader)
+    )
   );
-  const [onlyAssignedToMe, setOnlyAssignedToMe] = useState<boolean>(isIndividualContributor);
+  const [onlyAssignedToMe, setOnlyAssignedToMe] = useState<boolean>(isIndividualContributor && !isQualityDept);
 
   // Deletion Modal State
   const [recordToDelete, setRecordToDelete] = useState<InternalOperationRecord | null>(null);
@@ -761,6 +774,8 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
       const updatedRecord: InternalOperationRecord = {
         ...record,
         Stage: newStage,
+        Operation_Stage: newStage,
+        ...(newStage === 'Quality' ? { Stages: 'Quality' } : {}),
         Modified_Time: new Date().toISOString()
       };
       await saveInternalOperation(updatedRecord);
@@ -777,17 +792,71 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
     }
   };
 
-  // Filtered Records based on search, team type, stage, assigned-to-me, and allocation status
+  // Helper to check if a record is in Quality stage
+  const isRecordInQuality = (r: InternalOperationRecord): boolean => {
+    return Boolean(
+      (r.Stages && r.Stages.trim().toLowerCase() === 'quality') ||
+      (r.Stage && String(r.Stage).trim().toLowerCase() === 'quality') ||
+      (r.Operation_Stage && String(r.Operation_Stage).trim().toLowerCase() === 'quality')
+    );
+  };
+
+  // Send file to Quality Department (updates Stages = "Quality" in Zoho CRM & local state)
+  const handleSendToQuality = async (record: InternalOperationRecord) => {
+    setSyncingId(record.id);
+    try {
+      const updatedRecord: InternalOperationRecord = {
+        ...record,
+        Stages: 'Quality',
+        Stage: 'Quality' as any,
+        Operation_Stage: 'Quality',
+        Modified_Time: new Date().toISOString()
+      };
+      await saveInternalOperation(updatedRecord);
+      setRecords(prev => prev.map(r => r.id === record.id ? updatedRecord : r));
+      setToastMessage({
+        type: 'success',
+        text: `"${record.Service_Scheme || record.Name || 'File'}" sent to Quality stage successfully!`
+      });
+    } catch (e: any) {
+      setToastMessage({ type: 'error', text: e?.message || 'Failed to send file to Quality' });
+    } finally {
+      setSyncingId(null);
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
+  // Three option counts: "all files", "inprogress file", "completed files"
+  const { allFilesCount, inprogressFilesCount, completedFilesCount } = useMemo(() => {
+    const base = records.filter(r => {
+      if (isQualityDept || canManageAllocations || hasSupervisoryOversight) return true;
+      if (isTeamMember) return checkRecordAssignedToUser(r, currentUser);
+      if (onlyAssignedToMe) return checkRecordAssignedToUser(r, currentUser);
+      return true;
+    });
+
+    const completed = base.filter(isRecordInQuality).length;
+    const inprogress = base.filter(r => !isRecordInQuality(r)).length;
+    return {
+      allFilesCount: base.length,
+      inprogressFilesCount: inprogress,
+      completedFilesCount: completed
+    };
+  }, [records, isQualityDept, canManageAllocations, hasSupervisoryOversight, isTeamMember, onlyAssignedToMe, currentUser]);
+
+  // Filtered Records based on search, team type, stage, assigned-to-me, allocation status, and file filter
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
       // 1. Strict Team Member isolation: Team Members must ONLY see child records assigned to them
-      if (isTeamMember) {
-        if (!checkRecordAssignedToUser(r, currentUser)) {
-          return false;
-        }
-      } else if (onlyAssignedToMe) {
-        if (!checkRecordAssignedToUser(r, currentUser)) {
-          return false;
+      if (!isQualityDept) {
+        if (isTeamMember) {
+          if (!checkRecordAssignedToUser(r, currentUser)) {
+            return false;
+          }
+        } else if (onlyAssignedToMe) {
+          if (!checkRecordAssignedToUser(r, currentUser)) {
+            return false;
+          }
         }
       }
 
@@ -835,9 +904,18 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
         }
       }
 
+      // 6. Three-option file filter: "all files" | "inprogress file" | "completed files"
+      const inQuality = isRecordInQuality(r);
+      if (fileFilter === 'inprogress' && inQuality) {
+        return false;
+      }
+      if (fileFilter === 'completed' && !inQuality) {
+        return false;
+      }
+
       return true;
     });
-  }, [records, searchTerm, selectedTeamType, selectedStage, selectedStatus, onlyAssignedToMe, currentUser, isTeamMember]);
+  }, [records, searchTerm, selectedTeamType, selectedStage, selectedStatus, onlyAssignedToMe, currentUser, isTeamMember, fileFilter, isQualityDept]);
 
   // Statistics (Role-aware: computes both Department totals and Individual Contributor personal metrics)
   const stats = useMemo(() => {
@@ -1038,9 +1116,65 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
           </div>
         )}
 
+        {/* Three View Options: "All Files", "Inprogress Files", "Completed Files" */}
+        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setFileFilter('all')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              fileFilter === 'all'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+            }`}
+          >
+            <span>All Files</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              fileFilter === 'all' ? 'bg-white/25 text-white' : 'bg-white text-gray-700 border border-gray-200'
+            }`}>
+              {allFilesCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFileFilter('inprogress')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              fileFilter === 'inprogress'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+            }`}
+          >
+            <Clock size={13} className={fileFilter === 'inprogress' ? 'text-white' : 'text-amber-600'} />
+            <span>Inprogress Files</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              fileFilter === 'inprogress' ? 'bg-white/25 text-white' : 'bg-white text-amber-800 border border-amber-200'
+            }`}>
+              {inprogressFilesCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFileFilter('completed')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+              fileFilter === 'completed'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+            }`}
+          >
+            <CheckCircle2 size={13} className={fileFilter === 'completed' ? 'text-white' : 'text-emerald-600'} />
+            <span>Completed Files</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              fileFilter === 'completed' ? 'bg-white/25 text-white' : 'bg-white text-emerald-800 border border-emerald-200'
+            }`}>
+              {completedFilesCount}
+            </span>
+          </button>
+        </div>
+
         {/* Filter Controls (Global Mode) */}
         {mode === 'global' && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-gray-100">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-3 pt-3 border-t border-gray-100">
             <div className="relative w-full sm:w-72">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -1383,6 +1517,32 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                       {/* 7. Action Column */}
                       <td className="px-4 py-3.5 align-middle text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Send to Quality button or Quality badge */}
+                          {isRecordInQuality(item) ? (
+                            <span
+                              className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 shadow-2xs"
+                              title="File completed and sent to Quality Department"
+                            >
+                              <CheckCircle2 size={13} className="text-emerald-600" />
+                              <span>Quality</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSendToQuality(item)}
+                              disabled={isSyncing}
+                              className="px-2.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 cursor-pointer shadow-2xs disabled:opacity-50"
+                              title="Send to Quality Department"
+                            >
+                              {isSyncing ? (
+                                <Loader2 size={13} className="animate-spin text-white" />
+                              ) : (
+                                <ShieldCheck size={13} className="text-white" />
+                              )}
+                              <span>Send to Quality</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => setSelectedRecordForDetails(item)}

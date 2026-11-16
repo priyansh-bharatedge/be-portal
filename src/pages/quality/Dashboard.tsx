@@ -1,12 +1,85 @@
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ShieldAlert, AlertCircle, CheckCircle2, Clock, 
-  TrendingDown, TrendingUp, Download, Filter, ArrowUpRight 
+  TrendingDown, TrendingUp, Download, Filter, ArrowUpRight,
+  ShieldCheck, Layers, FolderOpen, Search, Users, ExternalLink, RefreshCw
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import type { InternalOperationRecord } from '../../types/operations';
+import { fetchInternalOperations, getStoredInternalOperations } from '../../services/internalOperationsService';
+import { InternalOperationDetailModal } from '../../components/crm/InternalOperationDetailModal';
+import { getAllEmployeesList } from '../../services/zohoRbacService';
 
 export const QualityDashboard = () => {
   const navigate = useNavigate();
+
+  // Operations Data state for Quality Department
+  const [opsRecords, setOpsRecords] = useState<InternalOperationRecord[]>([]);
+  const [opsLoading, setOpsLoading] = useState<boolean>(true);
+  const [opsSearch, setOpsSearch] = useState<string>('');
+  const [opsFilter, setOpsFilter] = useState<'all' | 'quality' | 'inprogress'>('all');
+  const [selectedOpRecord, setSelectedOpRecord] = useState<InternalOperationRecord | null>(null);
+  const [allStaff, setAllStaff] = useState<any[]>(() => getAllEmployeesList());
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadOps = async () => {
+      setOpsLoading(true);
+      try {
+        const data = await fetchInternalOperations();
+        if (isMounted) setOpsRecords(data);
+      } catch (err) {
+        if (isMounted) setOpsRecords(getStoredInternalOperations());
+      } finally {
+        if (isMounted) setOpsLoading(false);
+      }
+    };
+    loadOps();
+
+    const handleOpsUpdate = () => {
+      setOpsRecords(getStoredInternalOperations());
+    };
+    window.addEventListener('be_internal_operations_updated', handleOpsUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('be_internal_operations_updated', handleOpsUpdate);
+    };
+  }, []);
+
+  const isOpInQuality = (r: InternalOperationRecord) => Boolean(
+    (r.Stages && r.Stages.trim().toLowerCase() === 'quality') ||
+    (r.Stage && String(r.Stage).trim().toLowerCase() === 'quality') ||
+    (r.Operation_Stage && String(r.Operation_Stage).trim().toLowerCase() === 'quality')
+  );
+
+  const opsCounts = useMemo(() => {
+    const total = opsRecords.length;
+    const inQuality = opsRecords.filter(isOpInQuality).length;
+    const inProgress = total - inQuality;
+    const deals = new Set(opsRecords.map(r => r.Deal_ID).filter(Boolean)).size;
+    return { total, inQuality, inProgress, deals };
+  }, [opsRecords]);
+
+  const filteredOpsRecords = useMemo(() => {
+    return opsRecords.filter(r => {
+      const inQuality = isOpInQuality(r);
+      if (opsFilter === 'quality' && !inQuality) return false;
+      if (opsFilter === 'inprogress' && inQuality) return false;
+
+      if (opsSearch.trim()) {
+        const q = opsSearch.toLowerCase();
+        const sMatch = (r.Service_Scheme || r.Name || '').toLowerCase().includes(q);
+        const dMatch = (r.Deal_Name || '').toLowerCase().includes(q);
+        const cMatch = (r.Client_Name || '').toLowerCase().includes(q);
+        const tMatch = (r.Internal_Team_Type || r.Team_Type || '').toLowerCase().includes(q);
+        const tlMatch = (r.Team_Leader?.name || r.Team_Leader_TL?.name || r.Team_Leader_Name || '').toLowerCase().includes(q);
+        const tmMatch = (r.Team_Member?.name || r.Team_Member_TM?.name || r.Team_Member_Name || '').toLowerCase().includes(q);
+        if (!sMatch && !dMatch && !cMatch && !tMatch && !tlMatch && !tmMatch) return false;
+      }
+      return true;
+    });
+  }, [opsRecords, opsFilter, opsSearch]);
 
   const stats = [
     { title: 'Total Queries', value: '84', icon: <ShieldAlert size={24} />, trend: '+4', isUp: false, color: 'text-gray-600', bg: 'bg-gray-100', path: '/quality/queries' },
@@ -172,6 +245,222 @@ export const QualityDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Operations Department Files & Review Section (All Data for Quality Department) */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-orange-100 flex items-center justify-center text-be-orange font-bold">
+              <ShieldCheck size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-bold text-gray-900">Operations Files & Quality Review</h2>
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                  All Data Access
+                </span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {opsCounts.inQuality} in Quality
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Full organizational visibility over all Internal Operations files and child records submitted for quality audit.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/crm/internal-operations')}
+              className="px-3.5 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <ExternalLink size={14} />
+              <span>Internal Operations Module</span>
+            </button>
+          </div>
+        </div>
+
+        {/* View Options Tabs & Search Bar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+            <button
+              type="button"
+              onClick={() => setOpsFilter('all')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+                opsFilter === 'all'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              <span>All Files</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                opsFilter === 'all' ? 'bg-white/25 text-white' : 'bg-white text-gray-700 border border-gray-200'
+              }`}>
+                {opsCounts.total}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setOpsFilter('quality')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+                opsFilter === 'quality'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              <CheckCircle2 size={13} className={opsFilter === 'quality' ? 'text-white' : 'text-emerald-600'} />
+              <span>Completed in Quality</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                opsFilter === 'quality' ? 'bg-white/25 text-white' : 'bg-white text-emerald-800 border border-emerald-200'
+              }`}>
+                {opsCounts.inQuality}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setOpsFilter('inprogress')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-xs ${
+                opsFilter === 'inprogress'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              <Clock size={13} className={opsFilter === 'inprogress' ? 'text-white' : 'text-amber-600'} />
+              <span>Inprogress Files</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                opsFilter === 'inprogress' ? 'bg-white/25 text-white' : 'bg-white text-amber-800 border border-amber-200'
+              }`}>
+                {opsCounts.inProgress}
+              </span>
+            </button>
+          </div>
+
+          <div className="relative w-full sm:w-72">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search service, deal, client..."
+              value={opsSearch}
+              onChange={(e) => setOpsSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 bg-gray-50 hover:bg-white focus:bg-white border border-gray-200 focus:border-orange-500 rounded-xl text-xs font-medium outline-none transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Operations Files Table */}
+        <div className="border border-gray-100 rounded-xl overflow-hidden">
+          {opsLoading ? (
+            <div className="p-8 text-center text-gray-500">
+              <RefreshCw size={24} className="animate-spin text-be-orange mx-auto mb-2" />
+              <p className="text-xs font-bold">Loading operations data...</p>
+            </div>
+          ) : filteredOpsRecords.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <p className="text-xs font-bold">No operations files match the current criteria.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left whitespace-nowrap">
+                <thead className="bg-gray-50/80 text-gray-600 font-bold uppercase tracking-wider border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-3">Service / Scheme</th>
+                    <th className="px-4 py-3">Team</th>
+                    <th className="px-4 py-3">Parent Deal</th>
+                    <th className="px-4 py-3">Client</th>
+                    <th className="px-4 py-3">Stage / Quality Status</th>
+                    <th className="px-4 py-3">Assigned Staff</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-gray-800">
+                  {filteredOpsRecords.map((item, idx) => {
+                    const inQuality = isOpInQuality(item);
+                    return (
+                      <tr key={item.id || idx} className="hover:bg-orange-50/15 transition-colors">
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOpRecord(item)}
+                            className="font-bold text-gray-900 hover:text-be-orange transition-colors text-left cursor-pointer"
+                          >
+                            {item.Service_Scheme || item.Name || 'Service Allocation'}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-0.5 rounded-md font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px]">
+                            {item.Internal_Team_Type || item.Team_Type || 'Operations'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-gray-700">
+                          {item.Deal_Name || (item.Deal_ID ? `Deal #${item.Deal_ID}` : '-')}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {item.Client_Name || '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {inQuality ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <CheckCircle2 size={12} className="text-emerald-600" />
+                              Quality Stage
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              <Clock size={12} className="text-amber-600" />
+                              {item.Stage || item.Operation_Stage || 'In Progress'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          <div>
+                            {item.Team_Leader?.name || item.Team_Leader_TL?.name || item.Team_Leader_Name ? (
+                              <span className="font-medium text-[11px] text-amber-900 block">TL: {item.Team_Leader?.name || item.Team_Leader_TL?.name || item.Team_Leader_Name}</span>
+                            ) : null}
+                            {item.Team_Member?.name || item.Team_Member_TM?.name || item.Team_Member_Name ? (
+                              <span className="font-medium text-[11px] text-emerald-900 block">TM: {item.Team_Member?.name || item.Team_Member_TM?.name || item.Team_Member_Name}</span>
+                            ) : null}
+                            {(!item.Team_Leader?.name && !item.Team_Member?.name) && <span className="text-gray-400 italic">Unassigned</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOpRecord(item)}
+                            className="px-3 py-1.5 bg-orange-50 hover:bg-be-orange hover:text-white text-be-orange border border-orange-200 hover:border-orange-500 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <FolderOpen size={13} />
+                            <span>Review Details</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Internal Operation Detail Modal for Quality Review */}
+      {selectedOpRecord && (
+        <InternalOperationDetailModal
+          record={selectedOpRecord}
+          onClose={() => setSelectedOpRecord(null)}
+          onSaved={(updated) => {
+            setOpsRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
+            setSelectedOpRecord(updated);
+          }}
+          allStaff={allStaff}
+          allTeamLeaders={[]}
+          allTeamMembers={[]}
+          allHODs={[]}
+          canManage={true}
+          canAssignTM={true}
+          canDelete={false}
+        />
+      )}
     </div>
   );
 };

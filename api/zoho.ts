@@ -3520,6 +3520,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           Name: serviceName || 'Service Allocation',
           Team_Type: teamType || 'Team Funding',
           Operation_Stage: opStage || 'Document pending from client',
+          ...(r.Stages ? { Stages: r.Stages } : (opStage === 'Quality' || r.Stage === 'Quality' ? { Stages: 'Quality' } : {})),
           ...(isTlNumeric ? {
             Team_Leader_TL: { id: effectiveTlId }
           } : {}),
@@ -3966,6 +3967,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           Team_Type: teamType || r.Team_Type,
           Stage: opStage || r.Stage,
           Operation_Stage: opStage || r.Operation_Stage,
+          Stages: r.Stages || storedEntry?.Stages || (r.Stage === 'Quality' || opStage === 'Quality' ? 'Quality' : undefined),
           Team_Leader: tlUser || r.Team_Leader || null,
           Team_Leader_ID: tlId || r.Team_Leader_ID || '',
           Team_Leader_Name: tlName || r.Team_Leader_Name || '',
@@ -4055,7 +4057,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         'Director_ITR_Company_ITR_name', 'Director_ITR_Company_ITR_status', 'Director_ITR_Company_ITR_File_Upload',
         'DPR_Pitch_deck_creation_name', 'DPR_Pitch_deck_creation_File_Upload',
         'ADT_1_File_Upload', 'INC_20_A_File_Upload',
-        'After_Allocation_Workflow', 'CA_CS_1', 'CA_CS_2', 'Tag'
+        'After_Allocation_Workflow', 'CA_CS_1', 'CA_CS_2', 'Stages'
       ].join(',');
 
       if (method === 'GET') {

@@ -96,6 +96,7 @@ export function deduplicateInternalOperations(records: InternalOperationRecord[]
         Team_Member_Name: pickTm?.name || preferred.Team_Member_Name || secondary.Team_Member_Name || '',
         Stage: preferred.Stage || secondary.Stage,
         Operation_Stage: preferred.Operation_Stage || secondary.Operation_Stage,
+        Stages: preferred.Stages || secondary.Stages || ((preferred.Stage === 'Quality' || secondary.Stage === 'Quality') ? 'Quality' : undefined),
         CA_CS1: preferred.CA_CS1 || secondary.CA_CS1,
         CA_CS2: preferred.CA_CS2 || secondary.CA_CS2,
         sectionsData: { ...(secondary.sectionsData || {}), ...(preferred.sectionsData || {}) }
@@ -313,6 +314,7 @@ export function generateServiceAllocationsForDeal(
         Subform_Row_ID: subformRowId,
         Stage: existingRecord.Stage || getOperationStagesForTeamType(rawTeamType)[0] || 'Document pending from client',
         Operation_Stage: existingRecord.Operation_Stage || existingRecord.Stage || getOperationStagesForTeamType(rawTeamType)[0] || 'Document pending from client',
+        Stages: existingRecord.Stages || ((existingRecord.Stage === 'Quality' || existingRecord.Operation_Stage === 'Quality') ? 'Quality' : undefined),
         Doc_collection_name: existingRecord.Doc_collection_name || '',
         Doc_collection_Date: existingRecord.Doc_collection_Date || '',
         Doc_collection_status: existingRecord.Doc_collection_status || '',
@@ -404,6 +406,7 @@ export function generateServiceAllocationsForDeal(
         Subform_Row_ID: subformRowId,
         Stage: getOperationStagesForTeamType(rawTeamType)[0] || 'Document pending from client',
         Operation_Stage: getOperationStagesForTeamType(rawTeamType)[0] || 'Document pending from client',
+        Stages: '',
         CA_CS1: '',
         CA_CS2: '',
         After_Allocation: 'No',
@@ -915,6 +918,7 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
     Team_Type: teamType || r.Team_Type,
     Stage: (opStage || r.Stage) as any,
     Operation_Stage: opStage || r.Operation_Stage,
+    Stages: r.Stages || ((opStage === 'Quality' || r.Stage === 'Quality') ? 'Quality' : undefined),
     Team_Leader: tlUser || r.Team_Leader || null,
     Team_Leader_ID: tlId || r.Team_Leader_ID || '',
     Team_Leader_Name: tlName || r.Team_Leader_Name || '',
@@ -1222,6 +1226,7 @@ export async function saveInternalOperation(record: InternalOperationRecord): Pr
     Internal_Team_Type: teamType,
     Operation_Stage: opStage,
     Stage: opStage as any,
+    Stages: record.Stages || ((opStage === 'Quality' || record.Stage === 'Quality') ? 'Quality' : undefined),
     Team_Leader_TL: record.Team_Leader_TL || (tlId ? (/^\d{15,}$/.test(String(tlId)) ? { id: String(tlId), name: record.Team_Leader_Name } : tlId) : null),
     Team_Member_TM: record.Team_Member_TM || (tmId ? (/^\d{15,}$/.test(String(tmId)) ? { id: String(tmId), name: record.Team_Member_Name } : tmId) : null),
     After_Allocation: afterAllocation as 'Yes' | 'No',
@@ -1368,6 +1373,32 @@ export async function saveInternalOperation(record: InternalOperationRecord): Pr
       data: updatedRecord
     };
   }
+}
+
+/**
+ * Sends an Internal Operation record to the Quality department stage
+ * Sets Stages = 'Quality', Stage = 'Quality', Operation_Stage = 'Quality' in both local state and Zoho CRM
+ */
+export async function sendInternalOperationToQuality(
+  recordOrId: string | InternalOperationRecord
+): Promise<ZohoApiResponse> {
+  const all = getStoredInternalOperations();
+  const id = typeof recordOrId === 'string' ? recordOrId : recordOrId.id;
+  const target = all.find(r => r.id === id) || (typeof recordOrId === 'object' ? recordOrId : null);
+
+  if (!target) {
+    return { success: false, message: 'Internal Operations record not found' };
+  }
+
+  const updated: InternalOperationRecord = {
+    ...target,
+    Stages: 'Quality',
+    Stage: 'Quality' as any,
+    Operation_Stage: 'Quality',
+    Modified_Time: new Date().toISOString()
+  };
+
+  return await saveInternalOperation(updated);
 }
 
 /**
