@@ -1966,9 +1966,9 @@ export const Deals = () => {
         const octFilteredRaw = rawList.filter((d: any) => {
           const raw = d.rawZohoDeal || d;
           const ct = d.Booking_Date || raw.Booking_Date || d.Payment_Date || raw.Payment_Date || d.Closing_Date || d.Created_Time || raw.Created_Time || d.date;
-          if (!ct) return false;
+          if (!ct) return true;
           const ms = new Date(ct).getTime();
-          return !isNaN(ms) ? ms >= octStart : false;
+          return !isNaN(ms) ? ms >= octStart : true;
         });
         
         let existingDeals: any[] = [];
