@@ -75,7 +75,13 @@ export const QualityDashboard = () => {
         const tMatch = (r.Internal_Team_Type || r.Team_Type || '').toLowerCase().includes(q);
         const tlMatch = (r.Team_Leader?.name || r.Team_Leader_TL?.name || r.Team_Leader_Name || '').toLowerCase().includes(q);
         const tmMatch = (r.Team_Member?.name || r.Team_Member_TM?.name || r.Team_Member_Name || '').toLowerCase().includes(q);
-        if (!sMatch && !dMatch && !cMatch && !tMatch && !tlMatch && !tmMatch) return false;
+        const ca1Raw: any = r.CA_CS1 || r.CA_CS_1;
+        const ca2Raw: any = r.CA_CS2 || r.CA_CS_2;
+        const ca1Val = (typeof ca1Raw === 'object' && ca1Raw) ? (ca1Raw.name || ca1Raw.lookup_label || '') : (ca1Raw || '');
+        const ca2Val = (typeof ca2Raw === 'object' && ca2Raw) ? (ca2Raw.name || ca2Raw.lookup_label || '') : (ca2Raw || '');
+        const ca1Match = String(ca1Val).toLowerCase().includes(q);
+        const ca2Match = String(ca2Val).toLowerCase().includes(q);
+        if (!sMatch && !dMatch && !cMatch && !tMatch && !tlMatch && !tmMatch && !ca1Match && !ca2Match) return false;
       }
       return true;
     });
@@ -420,7 +426,13 @@ export const QualityDashboard = () => {
                             {item.Team_Member?.name || item.Team_Member_TM?.name || item.Team_Member_Name ? (
                               <span className="font-medium text-[11px] text-emerald-900 block">TM: {item.Team_Member?.name || item.Team_Member_TM?.name || item.Team_Member_Name}</span>
                             ) : null}
-                            {(!item.Team_Leader?.name && !item.Team_Member?.name) && <span className="text-gray-400 italic">Unassigned</span>}
+                            {(item.CA_CS1 || item.CA_CS_1 || item.CA_CS2 || item.CA_CS_2) ? (
+                              <span className="font-medium text-[11px] text-purple-900 block">CA/CS: {[
+                                (typeof (item.CA_CS1 || item.CA_CS_1) === 'object' && (item.CA_CS1 || item.CA_CS_1)) ? ((item.CA_CS1 || item.CA_CS_1) as any).name : (item.CA_CS1 || item.CA_CS_1),
+                                (typeof (item.CA_CS2 || item.CA_CS_2) === 'object' && (item.CA_CS2 || item.CA_CS_2)) ? ((item.CA_CS2 || item.CA_CS_2) as any).name : (item.CA_CS2 || item.CA_CS_2)
+                              ].filter(Boolean).join(' • ')}</span>
+                            ) : null}
+                            {(!item.Team_Leader?.name && !item.Team_Member?.name && !item.CA_CS1 && !item.CA_CS_1 && !item.CA_CS2 && !item.CA_CS_2) && <span className="text-gray-400 italic">Unassigned</span>}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right">

@@ -550,8 +550,12 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
     if (rawStage) return rawStage;
     return initialStages[0] || 'Doc collection';
   });
-  const [caCs1, setCaCs1] = useState<string>(record.CA_CS1 || '');
-  const [caCs2, setCaCs2] = useState<string>(record.CA_CS2 || '');
+  const [caCs1, setCaCs1] = useState<string>(
+    record.CA_CS1 || (typeof record.CA_CS_1 === 'object' ? record.CA_CS_1?.name : record.CA_CS_1) || ''
+  );
+  const [caCs2, setCaCs2] = useState<string>(
+    record.CA_CS2 || (typeof record.CA_CS_2 === 'object' ? record.CA_CS_2?.name : record.CA_CS_2) || ''
+  );
   const [isCustomCaCs1, setIsCustomCaCs1] = useState<boolean>(false);
   const [isCustomCaCs2, setIsCustomCaCs2] = useState<boolean>(false);
   const [localEmployees, setLocalEmployees] = useState<NormalizedStaff[]>([]);
@@ -1714,6 +1718,26 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
           ? fallbackDprInc.files
           : (record.DPR_Pitch_deck_creation_File_Upload || []);
 
+      const staffList = (allStaff && allStaff.length > 0) ? allStaff : localEmployees;
+      
+      const cleanCaCs1 = caCs1.replace(/\s*\([^)]*\)\s*$/, '').trim();
+      const cacs1User = staffList.find(s => 
+        s.name.toLowerCase() === caCs1.toLowerCase() || 
+        s.name.toLowerCase() === cleanCaCs1.toLowerCase() || 
+        s.id === caCs1
+      );
+      const cacs1Id = cacs1User?.id || (/^\d{15,}$/.test(caCs1) ? caCs1 : '');
+      const cacs1Obj = cacs1Id ? { id: cacs1Id, name: cacs1User?.name || cleanCaCs1 || caCs1 } : null;
+
+      const cleanCaCs2 = caCs2.replace(/\s*\([^)]*\)\s*$/, '').trim();
+      const cacs2User = staffList.find(s => 
+        s.name.toLowerCase() === caCs2.toLowerCase() || 
+        s.name.toLowerCase() === cleanCaCs2.toLowerCase() || 
+        s.id === caCs2
+      );
+      const cacs2Id = cacs2User?.id || (/^\d{15,}$/.test(caCs2) ? caCs2 : '');
+      const cacs2Obj = cacs2Id ? { id: cacs2Id, name: cacs2User?.name || cleanCaCs2 || caCs2 } : null;
+
       const updatedRecord: InternalOperationRecord = {
         ...record,
         Internal_Team_Type: teamType,
@@ -1724,8 +1748,12 @@ export const InternalOperationDetailModal: React.FC<InternalOperationDetailModal
         Name: record.Service_Scheme || record.Name || '',
         Service_Scheme: record.Service_Scheme || record.Name || '',
         Parent_Record_Deal: record.Parent_Record_Deal || (record.Deal_ID ? (/^\d{15,}$/.test(String(record.Deal_ID)) ? { id: String(record.Deal_ID), name: record.Deal_Name } : record.Deal_ID) : undefined),
-        CA_CS1: caCs1,
-        CA_CS2: caCs2,
+        CA_CS1: cacs1User?.name || cleanCaCs1 || caCs1,
+        CA_CS2: cacs2User?.name || cleanCaCs2 || caCs2,
+        CA_CS_1: cacs1Obj || (cleanCaCs1 || caCs1),
+        CA_CS_2: cacs2Obj || (cleanCaCs2 || caCs2),
+        CA_CS1_ID: cacs1Id,
+        CA_CS2_ID: cacs2Id,
         After_Allocation: afterAllocation,
         After_Allocation_Workflow: afterAllocation,
         Company_Type: companyType,

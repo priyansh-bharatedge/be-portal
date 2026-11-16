@@ -26,8 +26,12 @@ export interface InternalOperationRecord {
 
   // Common Fields & Role Assignment (Phase 2)
   Stage?: OperationStage;
-  CA_CS1?: string;
-  CA_CS2?: string;
+  CA_CS1?: string | any;
+  CA_CS2?: string | any;
+  CA_CS_1?: string | any;
+  CA_CS_2?: string | any;
+  CA_CS1_ID?: string;
+  CA_CS2_ID?: string;
   After_Allocation?: 'Yes' | 'No';
   After_Allocation_Workflow?: 'Yes' | 'No' | string;
   Company_Type?: CompanyType;

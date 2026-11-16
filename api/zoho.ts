@@ -2934,8 +2934,16 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
                   Operation_Stage: opStage,
                   ...(/^\d{15,}$/.test(String(tlId).trim()) ? { Team_Leader_TL: { id: String(tlId).trim() } } : {}),
                   ...(/^\d{15,}$/.test(String(tmId).trim()) ? { Team_Member_TM: { id: String(tmId).trim() } } : {}),
-                  ...(alloc.CA_CS1 || alloc.CA_CS_1 ? { CA_CS_1: alloc.CA_CS_1 || alloc.CA_CS1 } : {}),
-                  ...(alloc.CA_CS2 || alloc.CA_CS_2 ? { CA_CS_2: alloc.CA_CS_2 || alloc.CA_CS2 } : {}),
+                  ...((() => {
+                    const res: any = {};
+                    const ca1 = alloc.CA_CS1 || alloc.CA_CS_1;
+                    const ca2 = alloc.CA_CS2 || alloc.CA_CS_2;
+                    const ca1Id = (typeof ca1 === 'object' && ca1?.id) ? String(ca1.id).trim() : (alloc.CA_CS1_ID || (typeof ca1 === 'string' && /^\d{15,}$/.test(ca1) ? ca1 : ''));
+                    const ca2Id = (typeof ca2 === 'object' && ca2?.id) ? String(ca2.id).trim() : (alloc.CA_CS2_ID || (typeof ca2 === 'string' && /^\d{15,}$/.test(ca2) ? ca2 : ''));
+                    if (ca1Id && /^\d{15,}$/.test(ca1Id)) res.CA_CS_1 = { id: ca1Id };
+                    if (ca2Id && /^\d{15,}$/.test(ca2Id)) res.CA_CS_2 = { id: ca2Id };
+                    return res;
+                  })()),
                   ...(alloc.Company_Type ? { Company_Type: alloc.Company_Type } : {}),
                   ...(alloc.After_Allocation_Workflow || alloc.After_Allocation ? { After_Allocation_Workflow: alloc.After_Allocation_Workflow || alloc.After_Allocation } : {}),
                 };
@@ -3524,14 +3532,61 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           ...(isTlNumeric ? {
             Team_Leader_TL: { id: effectiveTlId }
           } : {}),
-          // Tag TM in Zoho CRM so it is visible in Zoho CRM without throwing 400 INVALID_DATA
-          ...(tmName ? { Tag: [{ name: `TM: ${tmName}` }] } : {}),
+          // Tag TM and CA/CS in Zoho CRM so it is visible in Zoho CRM without throwing 400 INVALID_DATA
+          ...((() => {
+            const tags: Array<{ name: string }> = [];
+            if (tmName) tags.push({ name: `TM: ${tmName}` });
+            const ca1Str = typeof (r.CA_CS1 || r.CA_CS_1) === 'object' ? (r.CA_CS1?.name || r.CA_CS_1?.name) : (r.CA_CS1 || r.CA_CS_1);
+            const ca2Str = typeof (r.CA_CS2 || r.CA_CS_2) === 'object' ? (r.CA_CS2?.name || r.CA_CS_2?.name) : (r.CA_CS2 || r.CA_CS_2);
+            if (ca1Str) tags.push({ name: `CA/CS 1: ${ca1Str}` });
+            if (ca2Str) tags.push({ name: `CA/CS 2: ${ca2Str}` });
+            return tags.length > 0 ? { Tag: tags } : {};
+          })()),
           // Only send Team_Member_TM if it points to a Deal (Zoho CRM module schema constraint)
           ...(isTmNumeric && /^\d{15,}$/.test(String(dealId || '')) && effectiveTmId === String(dealId) ? {
             Team_Member_TM: { id: effectiveTmId }
           } : {}),
-          ...(r.CA_CS1 || r.CA_CS_1 ? { CA_CS_1: r.CA_CS_1 || r.CA_CS1 } : {}),
-          ...(r.CA_CS2 || r.CA_CS_2 ? { CA_CS_2: r.CA_CS_2 || r.CA_CS2 } : {}),
+          // CA_CS_1 and CA_CS_2 in Zoho CRM are Employee lookups (bigint ID)
+          ...((() => {
+            const res: any = {};
+            const rawCa1 = r.CA_CS_1 || r.CA_CS1;
+            const rawCa2 = r.CA_CS_2 || r.CA_CS2;
+
+            let ca1Id = (typeof rawCa1 === 'object' && rawCa1?.id) ? String(rawCa1.id).trim() : (r.CA_CS1_ID || '');
+            let ca1Name = (typeof rawCa1 === 'object' && rawCa1?.name) ? String(rawCa1.name).trim() : (typeof rawCa1 === 'string' ? rawCa1.trim() : '');
+            
+            let ca2Id = (typeof rawCa2 === 'object' && rawCa2?.id) ? String(rawCa2.id).trim() : (r.CA_CS2_ID || '');
+            let ca2Name = (typeof rawCa2 === 'object' && rawCa2?.name) ? String(rawCa2.name).trim() : (typeof rawCa2 === 'string' ? rawCa2.trim() : '');
+
+            // If ca1Id is not 15+ digits, try to resolve from cachedEmployeeList
+            if ((!ca1Id || !/^\d{15,}$/.test(ca1Id)) && ca1Name && cachedEmployeeList) {
+              const clean1 = ca1Name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+              const found = cachedEmployeeList.find(e => matchesEmployeeQuery(e, clean1) || matchesEmployeeQuery(e, ca1Name));
+              if (found?.id && /^\d{15,}$/.test(String(found.id))) {
+                ca1Id = String(found.id);
+                if (!ca1Name) ca1Name = found.Name || '';
+              }
+            }
+
+            // If ca2Id is not 15+ digits, try to resolve from cachedEmployeeList
+            if ((!ca2Id || !/^\d{15,}$/.test(ca2Id)) && ca2Name && cachedEmployeeList) {
+              const clean2 = ca2Name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+              const found = cachedEmployeeList.find(e => matchesEmployeeQuery(e, clean2) || matchesEmployeeQuery(e, ca2Name));
+              if (found?.id && /^\d{15,}$/.test(String(found.id))) {
+                ca2Id = String(found.id);
+                if (!ca2Name) ca2Name = found.Name || '';
+              }
+            }
+
+            if (ca1Id && /^\d{15,}$/.test(ca1Id)) {
+              res.CA_CS_1 = { id: ca1Id };
+            }
+            if (ca2Id && /^\d{15,}$/.test(ca2Id)) {
+              res.CA_CS_2 = { id: ca2Id };
+            }
+
+            return res;
+          })()),
           ...(r.After_Allocation_Workflow ? { After_Allocation_Workflow: r.After_Allocation_Workflow } : (r.After_Allocation ? { After_Allocation_Workflow: r.After_Allocation } : (r.sectionsData?.afterAllocation ? { After_Allocation_Workflow: r.sectionsData.afterAllocation } : {}))),
           ...(r.Company_Type ? { Company_Type: r.Company_Type } : {}),
           ...(r.Allocation_Status ? { Allocation_Status: r.Allocation_Status } : {}),
@@ -3956,6 +4011,34 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         const tmId = tmUser?.id || '';
         const tmName = tmUser?.name || '';
 
+        // Extract CA/CS 1 and CA/CS 2
+        let ca1Tag = '';
+        let ca2Tag = '';
+        if (Array.isArray(r.Tag)) {
+          const ca1Obj = r.Tag.find((t: any) => t?.name && String(t.name).startsWith('CA/CS 1: '));
+          if (ca1Obj) {
+            ca1Tag = ca1Obj.name.replace(/^CA\/CS 1:\s*/, '').trim();
+          }
+          const ca2Obj = r.Tag.find((t: any) => t?.name && String(t.name).startsWith('CA/CS 2: '));
+          if (ca2Obj) {
+            ca2Tag = ca2Obj.name.replace(/^CA\/CS 2:\s*/, '').trim();
+          }
+        }
+
+        const rawCa1 = r.CA_CS_1 || r.CA_CS1;
+        const rawCa1Id = (typeof rawCa1 === 'object' && rawCa1?.id) ? String(rawCa1.id).trim() : (typeof rawCa1 === 'string' && /^\d{15,}$/.test(rawCa1) ? rawCa1 : '');
+        const rawCa1Name = (typeof rawCa1 === 'object' && rawCa1?.name) ? String(rawCa1.name).trim() : (typeof rawCa1 === 'string' && !/^\d{15,}$/.test(rawCa1) ? rawCa1.trim() : '');
+        const ca1Stored = storedEntry?.CA_CS1 || storedEntry?.CA_CS_1 || '';
+        const ca1Name = rawCa1Name || (typeof ca1Stored === 'string' ? ca1Stored : (ca1Stored?.name || '')) || ca1Tag || '';
+        const ca1Id = rawCa1Id || (typeof ca1Stored === 'object' ? ca1Stored?.id : (storedEntry?.CA_CS1_ID || '')) || '';
+
+        const rawCa2 = r.CA_CS_2 || r.CA_CS2;
+        const rawCa2Id = (typeof rawCa2 === 'object' && rawCa2?.id) ? String(rawCa2.id).trim() : (typeof rawCa2 === 'string' && /^\d{15,}$/.test(rawCa2) ? rawCa2 : '');
+        const rawCa2Name = (typeof rawCa2 === 'object' && rawCa2?.name) ? String(rawCa2.name).trim() : (typeof rawCa2 === 'string' && !/^\d{15,}$/.test(rawCa2) ? rawCa2.trim() : '');
+        const ca2Stored = storedEntry?.CA_CS2 || storedEntry?.CA_CS_2 || '';
+        const ca2Name = rawCa2Name || (typeof ca2Stored === 'string' ? ca2Stored : (ca2Stored?.name || '')) || ca2Tag || '';
+        const ca2Id = rawCa2Id || (typeof ca2Stored === 'object' ? ca2Stored?.id : (storedEntry?.CA_CS2_ID || '')) || '';
+
         return {
           ...r,
           Deal_ID: dealId || r.Deal_ID,
@@ -3976,6 +4059,12 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
           Team_Member_ID: tmId || r.Team_Member_ID || '',
           Team_Member_Name: tmName || r.Team_Member_Name || '',
           Team_Member_TM: r.Team_Member_TM || (tmId ? { id: tmId, name: tmName } : (tmName ? { id: '', name: tmName } : null)),
+          CA_CS1: ca1Name,
+          CA_CS2: ca2Name,
+          CA_CS_1: (rawCa1 && typeof rawCa1 === 'object') ? rawCa1 : (ca1Id ? { id: ca1Id, name: ca1Name } : ca1Name),
+          CA_CS_2: (rawCa2 && typeof rawCa2 === 'object') ? rawCa2 : (ca2Id ? { id: ca2Id, name: ca2Name } : ca2Name),
+          CA_CS1_ID: ca1Id,
+          CA_CS2_ID: ca2Id,
           After_Allocation: afterAllocation,
           After_Allocation_Workflow: afterAllocation,
           Doc_collection_name: docName,

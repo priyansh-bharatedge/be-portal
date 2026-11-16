@@ -857,6 +857,24 @@ export function filterRecordsByRbac<T = any>(
       if (tmId && idSet.has(tmId)) return true;
       if (tmName && isAccessiblePerson(tmName)) return true;
 
+      // CA/CS 1 check: Assigned as CA/CS 1 (as same as TL and TM)
+      const ca1 = rec.CA_CS_1 || rec.CA_CS1;
+      if (ca1 && isAccessiblePerson(ca1)) return true;
+      const ca1Id = String(rec.CA_CS_1?.id || rec.CA_CS1_ID || (typeof ca1 === 'string' && /^\d{15,}$/.test(ca1) ? ca1 : '') || '').toLowerCase();
+      const ca1Name = String(rec.CA_CS_1?.name || (typeof ca1 === 'string' ? ca1 : '') || rec.CA_CS1 || '').toLowerCase();
+      const cleanCa1Name = ca1Name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+      if (ca1Id && idSet.has(ca1Id)) return true;
+      if (ca1Name && (isAccessiblePerson(ca1Name) || (cleanCa1Name && isAccessiblePerson(cleanCa1Name)))) return true;
+
+      // CA/CS 2 check: Assigned as CA/CS 2 (as same as TL and TM)
+      const ca2 = rec.CA_CS_2 || rec.CA_CS2;
+      if (ca2 && isAccessiblePerson(ca2)) return true;
+      const ca2Id = String(rec.CA_CS_2?.id || rec.CA_CS2_ID || (typeof ca2 === 'string' && /^\d{15,}$/.test(ca2) ? ca2 : '') || '').toLowerCase();
+      const ca2Name = String(rec.CA_CS_2?.name || (typeof ca2 === 'string' ? ca2 : '') || rec.CA_CS2 || '').toLowerCase();
+      const cleanCa2Name = ca2Name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+      if (ca2Id && idSet.has(ca2Id)) return true;
+      if (ca2Name && (isAccessiblePerson(ca2Name) || (cleanCa2Name && isAccessiblePerson(cleanCa2Name)))) return true;
+
       return false;
     }
 

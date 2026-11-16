@@ -126,7 +126,21 @@ export function checkRecordAssignedToUser(record: any, user: any): boolean {
   const tmName = tmObj?.name || record.Team_Member_Name || '';
   if (checkUserMatchesStaff(user, tmObj, tmId, tmName)) return true;
 
-  // 3. Fallback check for any direct assigned staff or Owner/Assigned_To
+  // 3. Check CA/CS 1 assignment (as same as TL and TM)
+  const cacs1Obj = record.CA_CS_1 || record.CA_CS1;
+  const cacs1Id = (typeof cacs1Obj === 'object' && cacs1Obj?.id) ? cacs1Obj.id : (record.CA_CS1_ID || (typeof cacs1Obj === 'string' && /^\d{15,}$/.test(cacs1Obj) ? cacs1Obj : ''));
+  const cacs1Name = (typeof cacs1Obj === 'object' ? (cacs1Obj?.name || cacs1Obj?.lookup_label || '') : (typeof cacs1Obj === 'string' ? cacs1Obj : '')) || record.CA_CS1 || '';
+  const cleanCacs1Name = cacs1Name ? String(cacs1Name).replace(/\s*\([^)]*\)\s*$/, '').trim() : '';
+  if (checkUserMatchesStaff(user, cacs1Obj, cacs1Id, cacs1Name) || (cleanCacs1Name && checkUserMatchesStaff(user, null, undefined, cleanCacs1Name))) return true;
+
+  // 4. Check CA/CS 2 assignment (as same as TL and TM)
+  const cacs2Obj = record.CA_CS_2 || record.CA_CS2;
+  const cacs2Id = (typeof cacs2Obj === 'object' && cacs2Obj?.id) ? cacs2Obj.id : (record.CA_CS2_ID || (typeof cacs2Obj === 'string' && /^\d{15,}$/.test(cacs2Obj) ? cacs2Obj : ''));
+  const cacs2Name = (typeof cacs2Obj === 'object' ? (cacs2Obj?.name || cacs2Obj?.lookup_label || '') : (typeof cacs2Obj === 'string' ? cacs2Obj : '')) || record.CA_CS2 || '';
+  const cleanCacs2Name = cacs2Name ? String(cacs2Name).replace(/\s*\([^)]*\)\s*$/, '').trim() : '';
+  if (checkUserMatchesStaff(user, cacs2Obj, cacs2Id, cacs2Name) || (cleanCacs2Name && checkUserMatchesStaff(user, null, undefined, cleanCacs2Name))) return true;
+
+  // 5. Fallback check for any direct assigned staff or Owner/Assigned_To
   const assignedObj = record.Assigned_To || record.assignedTo || record.Owner || record.Owner_ID;
   const assignedId = assignedObj?.id || (typeof assignedObj === 'string' ? assignedObj : '');
   const assignedName = assignedObj?.name || (typeof assignedObj === 'string' ? assignedObj : '');
@@ -136,14 +150,28 @@ export function checkRecordAssignedToUser(record: any, user: any): boolean {
 }
 
 /**
- * Checks whether an InternalOperationRecord is specifically assigned to a user as a Team Member (TM).
+ * Checks whether an InternalOperationRecord is specifically assigned to a user as a Team Member (TM) or CA/CS.
  */
 export function checkRecordAssignedToTM(record: any, user: any): boolean {
   if (!user || !record) return false;
   const tmObj = record.Team_Member_TM || record.Team_Member;
   const tmId = tmObj?.id || record.Team_Member_ID || (typeof tmObj === 'string' ? tmObj : '');
   const tmName = tmObj?.name || record.Team_Member_Name || '';
-  return checkUserMatchesStaff(user, tmObj, tmId, tmName);
+  if (checkUserMatchesStaff(user, tmObj, tmId, tmName)) return true;
+
+  const cacs1Obj = record.CA_CS_1 || record.CA_CS1;
+  const cacs1Id = (typeof cacs1Obj === 'object' && cacs1Obj?.id) ? cacs1Obj.id : (record.CA_CS1_ID || (typeof cacs1Obj === 'string' && /^\d{15,}$/.test(cacs1Obj) ? cacs1Obj : ''));
+  const cacs1Name = (typeof cacs1Obj === 'object' ? (cacs1Obj?.name || cacs1Obj?.lookup_label || '') : (typeof cacs1Obj === 'string' ? cacs1Obj : '')) || record.CA_CS1 || '';
+  const cleanCacs1Name = cacs1Name ? String(cacs1Name).replace(/\s*\([^)]*\)\s*$/, '').trim() : '';
+  if (checkUserMatchesStaff(user, cacs1Obj, cacs1Id, cacs1Name) || (cleanCacs1Name && checkUserMatchesStaff(user, null, undefined, cleanCacs1Name))) return true;
+
+  const cacs2Obj = record.CA_CS_2 || record.CA_CS2;
+  const cacs2Id = (typeof cacs2Obj === 'object' && cacs2Obj?.id) ? cacs2Obj.id : (record.CA_CS2_ID || (typeof cacs2Obj === 'string' && /^\d{15,}$/.test(cacs2Obj) ? cacs2Obj : ''));
+  const cacs2Name = (typeof cacs2Obj === 'object' ? (cacs2Obj?.name || cacs2Obj?.lookup_label || '') : (typeof cacs2Obj === 'string' ? cacs2Obj : '')) || record.CA_CS2 || '';
+  const cleanCacs2Name = cacs2Name ? String(cacs2Name).replace(/\s*\([^)]*\)\s*$/, '').trim() : '';
+  if (checkUserMatchesStaff(user, cacs2Obj, cacs2Id, cacs2Name) || (cleanCacs2Name && checkUserMatchesStaff(user, null, undefined, cleanCacs2Name))) return true;
+
+  return false;
 }
 
 export function normalizeStaffRecord(e: any): NormalizedStaff {
@@ -870,8 +898,12 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
         const tlMatch = (r.Team_Leader?.name || r.Team_Leader_TL?.name || r.Team_Leader_Name || '').toLowerCase().includes(q);
         const tmMatch = (r.Team_Member?.name || r.Team_Member_TM?.name || r.Team_Member_Name || '').toLowerCase().includes(q);
         const stgMatch = (r.Stage || 'Doc collection').toLowerCase().includes(q);
-        const ca1Match = (r.CA_CS1 || '').toLowerCase().includes(q);
-        const ca2Match = (r.CA_CS2 || '').toLowerCase().includes(q);
+        const ca1Raw: any = r.CA_CS1 || r.CA_CS_1;
+        const ca2Raw: any = r.CA_CS2 || r.CA_CS_2;
+        const ca1Val = (typeof ca1Raw === 'object' && ca1Raw) ? (ca1Raw.name || ca1Raw.lookup_label || '') : (ca1Raw || '');
+        const ca2Val = (typeof ca2Raw === 'object' && ca2Raw) ? (ca2Raw.name || ca2Raw.lookup_label || '') : (ca2Raw || '');
+        const ca1Match = String(ca1Val).toLowerCase().includes(q);
+        const ca2Match = String(ca2Val).toLowerCase().includes(q);
         if (!sMatch && !dMatch && !cMatch && !tMatch && !tlMatch && !tmMatch && !stgMatch && !ca1Match && !ca2Match) {
           return false;
         }
@@ -1496,9 +1528,12 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
                               </span>
                             )}
                           </div>
-                          {(item.CA_CS1 || item.CA_CS2) && (
+                          {((item.CA_CS1 || item.CA_CS_1) || (item.CA_CS2 || item.CA_CS_2)) && (
                             <div className="text-[10px] font-semibold text-purple-700 bg-purple-50 rounded px-1.5 py-0.5 inline-block border border-purple-200">
-                              CA/CS: {[item.CA_CS1, item.CA_CS2].filter(Boolean).join(' • ')}
+                              CA/CS: {[
+                                (typeof (item.CA_CS1 || item.CA_CS_1) === 'object' && (item.CA_CS1 || item.CA_CS_1)) ? ((item.CA_CS1 || item.CA_CS_1) as any).name : (item.CA_CS1 || item.CA_CS_1),
+                                (typeof (item.CA_CS2 || item.CA_CS_2) === 'object' && (item.CA_CS2 || item.CA_CS_2)) ? ((item.CA_CS2 || item.CA_CS_2) as any).name : (item.CA_CS2 || item.CA_CS_2)
+                              ].filter(Boolean).join(' • ')}
                             </div>
                           )}
                           {(item.Types_of_Legal_Documents || item.Agreement_Terms) && (

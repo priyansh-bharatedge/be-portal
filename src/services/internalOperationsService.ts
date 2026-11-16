@@ -97,8 +97,10 @@ export function deduplicateInternalOperations(records: InternalOperationRecord[]
         Stage: preferred.Stage || secondary.Stage,
         Operation_Stage: preferred.Operation_Stage || secondary.Operation_Stage,
         Stages: preferred.Stages || secondary.Stages || ((preferred.Stage === 'Quality' || secondary.Stage === 'Quality') ? 'Quality' : undefined),
-        CA_CS1: preferred.CA_CS1 || secondary.CA_CS1,
-        CA_CS2: preferred.CA_CS2 || secondary.CA_CS2,
+        CA_CS1: preferred.CA_CS1 || preferred.CA_CS_1 || secondary.CA_CS1 || secondary.CA_CS_1 || '',
+        CA_CS2: preferred.CA_CS2 || preferred.CA_CS_2 || secondary.CA_CS2 || secondary.CA_CS_2 || '',
+        CA_CS_1: preferred.CA_CS_1 || preferred.CA_CS1 || secondary.CA_CS_1 || secondary.CA_CS1 || '',
+        CA_CS_2: preferred.CA_CS_2 || preferred.CA_CS2 || secondary.CA_CS_2 || secondary.CA_CS2 || '',
         sectionsData: { ...(secondary.sectionsData || {}), ...(preferred.sectionsData || {}) }
       };
       map.set(key, merged);
@@ -927,6 +929,12 @@ export function normalizeInternalOperationFromZoho(r: any): InternalOperationRec
     Team_Member_ID: tmUser?.id || (!isDealName(r.Team_Member_Name) ? r.Team_Member_ID : '') || '',
     Team_Member_Name: tmUser?.name || (!isDealName(r.Team_Member_Name) ? r.Team_Member_Name : '') || '',
     Team_Member_TM: tmUser ? { id: tmUser.id, name: tmUser.name } : null,
+    CA_CS1: (typeof (r.CA_CS1 || r.CA_CS_1) === 'object' ? (r.CA_CS1?.name || r.CA_CS_1?.name || '') : (r.CA_CS1 || r.CA_CS_1 || '')) || '',
+    CA_CS2: (typeof (r.CA_CS2 || r.CA_CS_2) === 'object' ? (r.CA_CS2?.name || r.CA_CS_2?.name || '') : (r.CA_CS2 || r.CA_CS_2 || '')) || '',
+    CA_CS_1: r.CA_CS_1 || r.CA_CS1 || '',
+    CA_CS_2: r.CA_CS_2 || r.CA_CS2 || '',
+    CA_CS1_ID: (typeof (r.CA_CS_1 || r.CA_CS1) === 'object' ? (r.CA_CS_1?.id || r.CA_CS1?.id || '') : (r.CA_CS1_ID || '')) || '',
+    CA_CS2_ID: (typeof (r.CA_CS_2 || r.CA_CS2) === 'object' ? (r.CA_CS_2?.id || r.CA_CS2?.id || '') : (r.CA_CS2_ID || '')) || '',
     After_Allocation: afterAllocation,
     After_Allocation_Workflow: afterAllocation,
     Doc_collection_name: docName,
@@ -1229,6 +1237,12 @@ export async function saveInternalOperation(record: InternalOperationRecord): Pr
     Stages: record.Stages || ((opStage === 'Quality' || record.Stage === 'Quality') ? 'Quality' : undefined),
     Team_Leader_TL: record.Team_Leader_TL || (tlId ? (/^\d{15,}$/.test(String(tlId)) ? { id: String(tlId), name: record.Team_Leader_Name } : tlId) : null),
     Team_Member_TM: record.Team_Member_TM || (tmId ? (/^\d{15,}$/.test(String(tmId)) ? { id: String(tmId), name: record.Team_Member_Name } : tmId) : null),
+    CA_CS1: record.CA_CS1 || record.CA_CS_1 || '',
+    CA_CS2: record.CA_CS2 || record.CA_CS_2 || '',
+    CA_CS_1: record.CA_CS_1 || record.CA_CS1 || '',
+    CA_CS_2: record.CA_CS_2 || record.CA_CS2 || '',
+    CA_CS1_ID: record.CA_CS1_ID || '',
+    CA_CS2_ID: record.CA_CS2_ID || '',
     After_Allocation: afterAllocation as 'Yes' | 'No',
     After_Allocation_Workflow: afterAllocation,
     Doc_collection_name: docName,
@@ -1415,8 +1429,9 @@ export async function assignStaffToOperation(
   if (!record) return null;
 
   const nowIso = new Date().toISOString();
-  const isFullyAllocated = Boolean(tl?.id && tm?.id);
-  const isPartiallyAllocated = Boolean(tl?.id || tm?.id);
+  const hasCaCs = Boolean(record.CA_CS1 || record.CA_CS_1 || record.CA_CS2 || record.CA_CS_2);
+  const isFullyAllocated = Boolean((tl?.id && tm?.id) || (tl?.id && hasCaCs) || (tm?.id && hasCaCs));
+  const isPartiallyAllocated = Boolean(tl?.id || tm?.id || hasCaCs);
 
   let resolvedTlId = tl?.id || '';
   if (resolvedTlId && !/^\d{15,}$/.test(resolvedTlId)) {
