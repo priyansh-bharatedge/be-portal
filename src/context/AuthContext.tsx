@@ -43,6 +43,7 @@ interface AuthContextType {
   isTM: boolean;
   isAccounts: boolean;
   isLegal: boolean;
+  isQuality: boolean;
   isSales: boolean;
   isOperations: boolean;
   isOperationsHOD: boolean;
@@ -995,11 +996,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAccounts = deptLower.includes('account') || deptLower.includes('finance') || desigLower.includes('account') || desigLower.includes('finance') || (currentUser.email || '').toLowerCase().includes('vrunda');
   const isLegal = deptLower.includes('legal') || desigLower.includes('legal');
   const isOperations = deptLower.includes('operat') || desigLower.includes('operat') || deptLower.includes('allocat') || deptLower.includes('execut');
+  const isQuality = Boolean(
+    deptLower.includes('quality') || 
+    desigLower.includes('quality') || 
+    (currentUser.role as any) === 'Quality' || 
+    (currentUser as any)?.systemRole === 'Quality'
+  );
   const isSales = !isSuperAdmin && (
     deptLower.includes('sale') || 
     deptLower.includes('bdm') || 
     deptLower.includes('business dev') || 
-    (!isAccounts && !isLegal && !isHR && !isOperations)
+    (!isAccounts && !isLegal && !isHR && !isOperations && !isQuality)
   );
   const isOperationsHOD = isSuperAdmin || (isHOD && (isOperations || (!isLegal && !isAccounts && !isSales)));
   const isLegalHOD = isSuperAdmin || (isLegal && (isHOD || desigLower.includes('hod') || desigLower.includes('head') || currentUser.role === 'HOD'));
@@ -1028,7 +1035,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       case 'manage_policies':
         return isSuperAdmin || isHR;
       case 'manage_all_deals':
-        return isSuperAdmin || isHOD || isTL || isAccounts || isLegal;
+        return isSuperAdmin || isHOD || isTL || isAccounts || isLegal || isQuality;
       case 'verify_deal_payment':
         return isSuperAdmin || isAccounts;
       default:
@@ -1117,6 +1124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isTM,
         isAccounts,
         isLegal,
+        isQuality,
         isSales,
         isOperations,
         isOperationsHOD,

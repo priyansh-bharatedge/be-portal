@@ -129,14 +129,14 @@ export const Deals = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, isSuperAdmin, isHR, isHOD, isTL, isAccounts, isLegal, isSales, isOperationsHOD, isLegalHOD, availableUsers, filterRecords } = useAuth();
-  const isUserTL = !isSuperAdmin && !isHR && !isHOD && !isAccounts && !isLegal && Boolean(
+  const { currentUser, isSuperAdmin, isHR, isHOD, isTL, isAccounts, isLegal, isQuality, isSales, isOperationsHOD, isLegalHOD, availableUsers, filterRecords } = useAuth();
+  const isUserTL = !isSuperAdmin && !isHR && !isHOD && !isAccounts && !isLegal && !isQuality && Boolean(
     isTL ||
     currentUser?.role === 'TL' ||
     (currentUser as any)?.systemRole === 'TL'
   );
 
-  const isSalesScoped = !isSuperAdmin && !isHOD && !isHR && !isAccounts && !isLegal && Boolean(
+  const isSalesScoped = !isSuperAdmin && !isHOD && !isHR && !isAccounts && !isLegal && !isQuality && Boolean(
     isUserTL || currentUser?.role === 'TL' || currentUser?.role === 'TM' || (currentUser as any)?.systemRole === 'TL' || (currentUser as any)?.systemRole === 'TM' || isSales
   );
 
@@ -1946,8 +1946,8 @@ export const Deals = () => {
           }
         }
 
-        // Apply RBAC criteria for role-scoped visibility (never apply to Accounts, Legal, Super Admin, or HOD)
-        if (currentUser && currentUser.role !== 'Super Admin' && currentUser.role !== 'HOD' && currentUser.role !== 'HR' && !isAccounts && !isLegal && currentUser.email !== 'superadmin@be.com' && currentUser.email !== 'md@bharat-edge.com') {
+        // Apply RBAC criteria for role-scoped visibility (never apply to Accounts, Legal, Quality, Super Admin, or HOD)
+        if (currentUser && currentUser.role !== 'Super Admin' && currentUser.role !== 'HOD' && currentUser.role !== 'HR' && !isAccounts && !isLegal && !isQuality && currentUser.email !== 'superadmin@be.com' && currentUser.email !== 'md@bharat-edge.com') {
           const { criteria, isUnfiltered } = buildZohoRbacCriteria('Deals', currentUser, currentEmployeesList);
           if (!isUnfiltered && criteria) {
             queryParams.set('criteria', criteria);
@@ -2102,7 +2102,7 @@ export const Deals = () => {
     // Filter deals based on activeTab, quickFilter, statusFilter and searchQuery to get active page slice
     const filtered = deals.filter(deal => {
       const isQueueTab = activeTab === 'Account Queue' || activeTab === 'Account Verified' || activeTab === 'Remaining Payments' || activeTab === 'Legal Queue' || activeTab === 'Received';
-      if (isUserTL && !isQueueTab) {
+      if (isUserTL && !isQueueTab && !isQuality) {
         if (activeTab === 'My Team Deals') {
           if (!isDealOwnedBySubordinate(deal, currentUser, effectiveEmployees)) return false;
         } else {
@@ -3488,7 +3488,7 @@ export const Deals = () => {
       // - "All Deals" and other personal tabs: shows ONLY TL's own deals (not team members')
       // - Queue tabs (Account Queue, Account Verified, Remaining Payments, Legal Queue, Received) are department-wide and never filtered by TL ownership
       const isQueueTab = activeTab === 'Account Queue' || activeTab === 'Account Verified' || activeTab === 'Remaining Payments' || activeTab === 'Legal Queue' || activeTab === 'Received';
-      if (isUserTL && !isQueueTab) {
+      if (isUserTL && !isQueueTab && !isQuality) {
         if (activeTab === 'My Team Deals') {
           if (!isDealOwnedBySubordinate(deal, currentUser, effectiveEmployees)) return false;
         } else {
@@ -3646,7 +3646,7 @@ export const Deals = () => {
             }
           ] : []),
 
-          ...(((!isAccounts && !isLegal) || isSuperAdmin) ? [
+          ...(((!isAccounts && !isLegal) || isSuperAdmin || isQuality) ? [
             { id: 'Manual Deals', label: 'Manual Deals', count: null },
             { id: 'From Quotations', label: 'From Quotations', count: null },
             { id: 'Partner BDM Deals', label: 'Partner BDM Deals', count: null }
