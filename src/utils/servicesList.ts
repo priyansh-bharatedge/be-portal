@@ -4,6 +4,7 @@ export const ALL_SERVICES: string[] = [
   '2 SHARE CERTIFICATE',
   '80G',
   'AABCS',
+  'ACT GRANT 2.0',
   'ADDITIONAL SERVICE',
   'ADDRESS CHANGE IN COI',
   'ADT 3',
