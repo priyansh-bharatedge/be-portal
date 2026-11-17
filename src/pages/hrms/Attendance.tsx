@@ -246,22 +246,6 @@ export const Attendance = () => {
     return map;
   }, [allEmployees]);
 
-  // Load from local storage and sync with Zoho
-  const loadLocalAttendance = (): AttendanceItem[] => {
-    try {
-      const saved = localStorage.getItem('be_attendance');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.map(normalizeRecord);
-        }
-      }
-    } catch (e) {
-      console.error('Error reading local attendance:', e);
-    }
-    return [];
-  };
-
   const normalizeRecord = (item: any): AttendanceItem => {
     const rawEmpCode = String(item.Employee_Code || item.empId || (item.Name ? item.Name.split(' - ')[0] : '')).trim();
     const attDate = String(item.Attendance_Date || item.date || (item.Name && item.Name.includes(' - ') ? item.Name.split(' - ')[1] : new Date().toISOString().split('T')[0])).trim();
@@ -342,6 +326,111 @@ export const Attendance = () => {
     };
   };
 
+  const getAttendanceKey = (item: AttendanceItem): string => {
+    const code = (item.empId || '').toLowerCase().replace(/^emp[-_]?/i, '').trim();
+    if (code && code !== 'emp') {
+      return `${code}_${item.date}`;
+    }
+    const email = (item.email || '').toLowerCase().trim();
+    if (email) {
+      return `${email}_${item.date}`;
+    }
+    return item.zohoId || item.id || `${item.empId}_${item.date}_${item.empName}`;
+  };
+
+  const mergeAttendanceItems = (existing: AttendanceItem | undefined, incoming: AttendanceItem): AttendanceItem => {
+    if (!existing) return incoming;
+
+    // Prefer whichever record has punch out / complete status / working minutes
+    const hasBetterOut = (!existing.lastOut && incoming.lastOut) ||
+      (existing.lastOut && incoming.lastOut && incoming.lastOut > existing.lastOut) ||
+      (Number(incoming.totalMinutes || 0) > Number(existing.totalMinutes || 0)) ||
+      (Number(incoming.punchCount || 0) > Number(existing.punchCount || 0));
+
+    const primary = hasBetterOut ? incoming : existing;
+    const secondary = hasBetterOut ? existing : incoming;
+
+    // Earliest firstIn
+    let earliestFirstIn = primary.firstIn || secondary.firstIn;
+    if (existing.firstIn && incoming.firstIn) {
+      earliestFirstIn = existing.firstIn < incoming.firstIn ? existing.firstIn : incoming.firstIn;
+    }
+
+    // Latest lastOut
+    let latestLastOut = primary.lastOut || secondary.lastOut;
+    if (existing.lastOut && incoming.lastOut) {
+      latestLastOut = existing.lastOut > incoming.lastOut ? existing.lastOut : incoming.lastOut;
+    }
+
+    // Punches log: keep the longer / more complete string
+    const punches = (incoming.punches && incoming.punches.length > (existing.punches || '').length)
+      ? incoming.punches
+      : (existing.punches || incoming.punches || '');
+
+    // Total minutes with calculation fallback if missing
+    let totalMinutes = Math.max(Number(existing.totalMinutes || 0), Number(incoming.totalMinutes || 0));
+    if (totalMinutes <= 0 && earliestFirstIn && latestLastOut) {
+      try {
+        const t1 = new Date(earliestFirstIn).getTime();
+        const t2 = new Date(latestLastOut).getTime();
+        if (!isNaN(t1) && !isNaN(t2) && t2 > t1) {
+          totalMinutes = Math.round((t2 - t1) / 60000);
+        }
+      } catch (_) {}
+    }
+
+    // Punch count
+    const punchCount = Math.max(Number(existing.punchCount || 0), Number(incoming.punchCount || 0), latestLastOut ? 2 : 1);
+
+    // Punch status
+    const punchStatus = (primary.punchStatus === 'Complete' || secondary.punchStatus === 'Complete' || latestLastOut || punchCount >= 2)
+      ? 'Complete'
+      : (primary.punchStatus || secondary.punchStatus || 'Single Punch');
+
+    // Status (Present / Late / Absent)
+    let status = primary.status;
+    if (primary.status === 'Absent' && secondary.status !== 'Absent') {
+      status = secondary.status;
+    } else if (secondary.status === 'Late' && primary.status === 'Present' && (primary.lateMinutes || 0) <= 0) {
+      status = 'Late';
+    }
+
+    return {
+      ...secondary,
+      ...primary,
+      firstIn: earliestFirstIn,
+      lastOut: latestLastOut,
+      totalMinutes,
+      punchCount,
+      punchStatus,
+      punches,
+      status,
+      raw: primary.raw || secondary.raw
+    };
+  };
+
+  // Load from local storage and sync with Zoho
+  const loadLocalAttendance = (): AttendanceItem[] => {
+    try {
+      const saved = localStorage.getItem('be_attendance');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const map = new Map<string, AttendanceItem>();
+          parsed.forEach((item: any) => {
+            const norm = normalizeRecord(item);
+            const key = getAttendanceKey(norm);
+            map.set(key, mergeAttendanceItems(map.get(key), norm));
+          });
+          return Array.from(map.values());
+        }
+      }
+    } catch (e) {
+      console.error('Error reading local attendance:', e);
+    }
+    return [];
+  };
+
   const handleFetchAttendance = async (showNotification = true, forceAll = true, targetDate?: string) => {
     setIsFetchingZoho(true);
     try {
@@ -370,16 +459,12 @@ export const Attendance = () => {
         setRecords(prev => {
           const keyMap = new Map<string, AttendanceItem>();
           prev.forEach(item => {
-            const key = (item.empId && item.empId !== 'EMP')
-              ? `${item.empId}_${item.date}`
-              : (item.zohoId || item.id || `${item.empId}_${item.date}_${item.empName}`);
-            keyMap.set(key, item);
+            const key = getAttendanceKey(item);
+            keyMap.set(key, mergeAttendanceItems(keyMap.get(key), item));
           });
           fetchedItems.forEach(item => {
-            const key = (item.empId && item.empId !== 'EMP')
-              ? `${item.empId}_${item.date}`
-              : (item.zohoId || item.id || `${item.empId}_${item.date}_${item.empName}`);
-            keyMap.set(key, item);
+            const key = getAttendanceKey(item);
+            keyMap.set(key, mergeAttendanceItems(keyMap.get(key), item));
           });
 
           const merged = Array.from(keyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
@@ -469,16 +554,12 @@ export const Attendance = () => {
           setRecords(prev => {
             const keyMap = new Map<string, AttendanceItem>();
             prev.forEach(item => {
-              const key = (item.empId && item.empId !== 'EMP')
-                ? `${item.empId}_${item.date}`
-                : (item.zohoId || item.id || `${item.empId}_${item.date}_${item.empName}`);
-              keyMap.set(key, item);
+              const key = getAttendanceKey(item);
+              keyMap.set(key, mergeAttendanceItems(keyMap.get(key), item));
             });
             fetchedItems.forEach(item => {
-              const key = (item.empId && item.empId !== 'EMP')
-                ? `${item.empId}_${item.date}`
-                : (item.zohoId || item.id || `${item.empId}_${item.date}_${item.empName}`);
-              keyMap.set(key, item);
+              const key = getAttendanceKey(item);
+              keyMap.set(key, mergeAttendanceItems(keyMap.get(key), item));
             });
             const merged = Array.from(keyMap.values()).sort((a, b) => b.date.localeCompare(a.date));
             saveAttendanceSafely(merged);
@@ -1658,7 +1739,9 @@ export const Attendance = () => {
                       <span className="font-bold text-gray-900 bg-gray-100/80 px-2 py-1 rounded-lg">
                         {record.totalMinutes > 0
                           ? formatAttendanceDuration(record.totalMinutes)
-                          : '--'}
+                          : (record.firstIn && record.lastOut)
+                            ? formatAttendanceDuration(Math.max(0, Math.round((new Date(record.lastOut).getTime() - new Date(record.firstIn).getTime()) / 60000)))
+                            : '--'}
                       </span>
                       {record.totalMinutes > 0 && (
                         <span className="text-[10px] text-gray-400 block mt-0.5 font-mono">
@@ -2025,6 +2108,10 @@ export const Attendance = () => {
                                 <span>
                                   {formatAttendanceDuration(rec.totalMinutes)}
                                   <span className="text-[10px] text-gray-400 block font-normal font-mono">({rec.totalMinutes}m)</span>
+                                </span>
+                              ) : (rec.firstIn && rec.lastOut) ? (
+                                <span>
+                                  {formatAttendanceDuration(Math.max(0, Math.round((new Date(rec.lastOut).getTime() - new Date(rec.firstIn).getTime()) / 60000)))}
                                 </span>
                               ) : (
                                 '--'
