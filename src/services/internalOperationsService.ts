@@ -31,14 +31,60 @@ export function normalizeServiceName(name: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
+function mergeTwoRecords(r1: InternalOperationRecord, r2: InternalOperationRecord): InternalOperationRecord {
+  const isR1Zoho = /^\d{15,}$/.test(String(r1.id));
+  const isR2Zoho = /^\d{15,}$/.test(String(r2.id));
+  const preferred = isR2Zoho && !isR1Zoho ? r2 : r1;
+  const secondary = preferred === r2 ? r1 : r2;
+
+  const isRealStaff = (s: any) => {
+    if (!s || (!s.name && !s.id)) return false;
+    const n = String(s.name || '');
+    if (n.includes('(DL-') || n.includes(' - FORM') || n.includes('PRIVATE LIMITED') || n.includes('PVT LTD') || n.includes('LLP')) return false;
+    return true;
+  };
+
+  const pickTl = isRealStaff(preferred.Team_Leader) ? preferred.Team_Leader : (isRealStaff(secondary.Team_Leader) ? secondary.Team_Leader : (preferred.Team_Leader || secondary.Team_Leader));
+  const pickTm = isRealStaff(preferred.Team_Member) ? preferred.Team_Member : (isRealStaff(secondary.Team_Member) ? secondary.Team_Member : (preferred.Team_Member || secondary.Team_Member));
+  const pickTlTL = isRealStaff(preferred.Team_Leader_TL) ? preferred.Team_Leader_TL : (isRealStaff(secondary.Team_Leader_TL) ? secondary.Team_Leader_TL : (pickTl ? { id: pickTl.id, name: pickTl.name } : null));
+  const pickTmTM = isRealStaff(preferred.Team_Member_TM) ? preferred.Team_Member_TM : (isRealStaff(secondary.Team_Member_TM) ? secondary.Team_Member_TM : (pickTm ? { id: pickTm.id, name: pickTm.name } : null));
+
+  return {
+    ...secondary,
+    ...preferred,
+    id: preferred.id,
+    Name: preferred.Name || preferred.Service_Scheme || secondary.Name || secondary.Service_Scheme || '',
+    Service_Scheme: preferred.Service_Scheme || preferred.Name || secondary.Service_Scheme || secondary.Name || '',
+    Subform_Row_ID: preferred.Subform_Row_ID || secondary.Subform_Row_ID || '',
+    Team_Leader: pickTl,
+    Team_Member: pickTm,
+    Team_Leader_TL: pickTlTL,
+    Team_Member_TM: pickTmTM,
+    Team_Leader_ID: pickTl?.id || preferred.Team_Leader_ID || secondary.Team_Leader_ID || '',
+    Team_Leader_Name: pickTl?.name || preferred.Team_Leader_Name || secondary.Team_Leader_Name || '',
+    Team_Member_ID: pickTm?.id || preferred.Team_Member_ID || secondary.Team_Member_ID || '',
+    Team_Member_Name: pickTm?.name || preferred.Team_Member_Name || secondary.Team_Member_Name || '',
+    Stage: preferred.Stage || secondary.Stage,
+    Operation_Stage: preferred.Operation_Stage || secondary.Operation_Stage,
+    Stages: preferred.Stages || secondary.Stages || ((preferred.Stage === 'Quality' || secondary.Stage === 'Quality') ? 'Quality' : undefined),
+    CA_CS1: preferred.CA_CS1 || preferred.CA_CS_1 || secondary.CA_CS1 || secondary.CA_CS_1 || '',
+    CA_CS2: preferred.CA_CS2 || preferred.CA_CS_2 || secondary.CA_CS2 || secondary.CA_CS_2 || '',
+    CA_CS_1: preferred.CA_CS_1 || preferred.CA_CS1 || secondary.CA_CS_1 || secondary.CA_CS1 || '',
+    CA_CS_2: preferred.CA_CS_2 || preferred.CA_CS2 || secondary.CA_CS_2 || secondary.CA_CS2 || '',
+    sectionsData: { ...(secondary.sectionsData || {}), ...(preferred.sectionsData || {}) }
+  };
+}
+
 /**
  * Robustly deduplicates Internal Operations records by Deal ID and normalized Service Name.
- * If multiple records exist for the same service under the same deal, merges them into
- * a single record, prioritizing real numeric Zoho IDs and preserving assigned TL/TM and stages.
+ * If multiple records exist for the same service under the same deal (e.g. multiple distinct subform rows),
+ * preserves each distinct service instance while merging temporary local records with their matching real Zoho IDs.
  */
 export function deduplicateInternalOperations(records: InternalOperationRecord[]): InternalOperationRecord[] {
   if (!Array.isArray(records)) return [];
-  const map = new Map<string, InternalOperationRecord>();
+
+  const result: InternalOperationRecord[] = [];
+  const recordsByDeal = new Map<string, InternalOperationRecord[]>();
 
   for (const r of records) {
     if (!r) continue;
@@ -49,65 +95,82 @@ export function deduplicateInternalOperations(records: InternalOperationRecord[]
       ''
     ).trim().toLowerCase();
 
-    const sName = normalizeServiceName(r.Service_Scheme || r.Name || '');
-    if (!dealId || !sName) {
-      if (r.id && !map.has(String(r.id))) {
-        map.set(String(r.id), r);
+    if (!dealId) {
+      if (r.id) {
+        const existingIdx = result.findIndex(x => String(x.id) === String(r.id));
+        if (existingIdx >= 0) {
+          result[existingIdx] = mergeTwoRecords(result[existingIdx], r);
+        } else {
+          result.push(r);
+        }
+      } else {
+        result.push(r);
       }
       continue;
     }
 
-    const key = `${dealId}__${sName}`;
-    const existing = map.get(key);
-    if (!existing) {
-      map.set(key, r);
-    } else {
-      // Prefer real Zoho numeric ID over temporary IO-... ID
-      const isExistingZoho = /^\d{15,}$/.test(String(existing.id));
-      const isCurrentZoho = /^\d{15,}$/.test(String(r.id));
-      const preferred = isCurrentZoho && !isExistingZoho ? r : existing;
-      const secondary = preferred === r ? existing : r;
-
-      const isRealStaff = (s: any) => {
-        if (!s || (!s.name && !s.id)) return false;
-        const n = String(s.name || '');
-        if (n.includes('(DL-') || n.includes(' - FORM') || n.includes('PRIVATE LIMITED') || n.includes('PVT LTD') || n.includes('LLP')) return false;
-        return true;
-      };
-
-      const pickTl = isRealStaff(preferred.Team_Leader) ? preferred.Team_Leader : (isRealStaff(secondary.Team_Leader) ? secondary.Team_Leader : (preferred.Team_Leader || secondary.Team_Leader));
-      const pickTm = isRealStaff(preferred.Team_Member) ? preferred.Team_Member : (isRealStaff(secondary.Team_Member) ? secondary.Team_Member : (preferred.Team_Member || secondary.Team_Member));
-      const pickTlTL = isRealStaff(preferred.Team_Leader_TL) ? preferred.Team_Leader_TL : (isRealStaff(secondary.Team_Leader_TL) ? secondary.Team_Leader_TL : (pickTl ? { id: pickTl.id, name: pickTl.name } : null));
-      const pickTmTM = isRealStaff(preferred.Team_Member_TM) ? preferred.Team_Member_TM : (isRealStaff(secondary.Team_Member_TM) ? secondary.Team_Member_TM : (pickTm ? { id: pickTm.id, name: pickTm.name } : null));
-
-      const merged: InternalOperationRecord = {
-        ...secondary,
-        ...preferred,
-        id: preferred.id,
-        Name: preferred.Name || preferred.Service_Scheme || secondary.Name || secondary.Service_Scheme || '',
-        Service_Scheme: preferred.Service_Scheme || preferred.Name || secondary.Service_Scheme || secondary.Name || '',
-        Team_Leader: pickTl,
-        Team_Member: pickTm,
-        Team_Leader_TL: pickTlTL,
-        Team_Member_TM: pickTmTM,
-        Team_Leader_ID: pickTl?.id || preferred.Team_Leader_ID || secondary.Team_Leader_ID || '',
-        Team_Leader_Name: pickTl?.name || preferred.Team_Leader_Name || secondary.Team_Leader_Name || '',
-        Team_Member_ID: pickTm?.id || preferred.Team_Member_ID || secondary.Team_Member_ID || '',
-        Team_Member_Name: pickTm?.name || preferred.Team_Member_Name || secondary.Team_Member_Name || '',
-        Stage: preferred.Stage || secondary.Stage,
-        Operation_Stage: preferred.Operation_Stage || secondary.Operation_Stage,
-        Stages: preferred.Stages || secondary.Stages || ((preferred.Stage === 'Quality' || secondary.Stage === 'Quality') ? 'Quality' : undefined),
-        CA_CS1: preferred.CA_CS1 || preferred.CA_CS_1 || secondary.CA_CS1 || secondary.CA_CS_1 || '',
-        CA_CS2: preferred.CA_CS2 || preferred.CA_CS_2 || secondary.CA_CS2 || secondary.CA_CS_2 || '',
-        CA_CS_1: preferred.CA_CS_1 || preferred.CA_CS1 || secondary.CA_CS_1 || secondary.CA_CS1 || '',
-        CA_CS_2: preferred.CA_CS_2 || preferred.CA_CS2 || secondary.CA_CS_2 || secondary.CA_CS2 || '',
-        sectionsData: { ...(secondary.sectionsData || {}), ...(preferred.sectionsData || {}) }
-      };
-      map.set(key, merged);
+    if (!recordsByDeal.has(dealId)) {
+      recordsByDeal.set(dealId, []);
     }
+    recordsByDeal.get(dealId)!.push(r);
   }
 
-  return Array.from(map.values());
+  recordsByDeal.forEach((dealRecords) => {
+    const dedupedForDeal: InternalOperationRecord[] = [];
+
+    for (const r of dealRecords) {
+      const isZohoId = /^\d{15,}$/.test(String(r.id || ''));
+      const subformRowId = String(r.Subform_Row_ID || (r as any).subformRowId || '').trim();
+      const sName = normalizeServiceName(r.Service_Scheme || r.Name || '');
+
+      const matchIndex = dedupedForDeal.findIndex((existing) => {
+        // 1. Same exact ID is always a duplicate
+        if (existing.id && r.id && String(existing.id) === String(r.id)) {
+          return true;
+        }
+
+        const existingIsZoho = /^\d{15,}$/.test(String(existing.id || ''));
+        // 2. If BOTH are real Zoho records with DIFFERENT numeric IDs, they are two separate records in Zoho CRM! Never merge!
+        if (isZohoId && existingIsZoho && String(existing.id) !== String(r.id)) {
+          return false;
+        }
+
+        const existingSubformRowId = String(existing.Subform_Row_ID || (existing as any).subformRowId || '').trim();
+        // 3. If both have Subform_Row_ID and they differ, they represent two separate service rows! Never merge!
+        if (subformRowId && existingSubformRowId && subformRowId !== existingSubformRowId) {
+          return false;
+        }
+
+        // 4. If both have Subform_Row_ID and they match, they represent the same subform row!
+        if (subformRowId && existingSubformRowId && subformRowId === existingSubformRowId) {
+          return true;
+        }
+
+        // 5. If one is a temporary record (IO-...) and one is a Zoho ID, same service name:
+        const existingSName = normalizeServiceName(existing.Service_Scheme || existing.Name || '');
+        if (sName && existingSName && sName === existingSName) {
+          if ((isZohoId && !existingIsZoho) || (!isZohoId && existingIsZoho)) {
+            // Only merge if neither has an explicit differing subformRowId
+            if (!subformRowId || !existingSubformRowId) {
+              return true;
+            }
+          }
+        }
+
+        return false;
+      });
+
+      if (matchIndex >= 0) {
+        dedupedForDeal[matchIndex] = mergeTwoRecords(dedupedForDeal[matchIndex], r);
+      } else {
+        dedupedForDeal.push(r);
+      }
+    }
+
+    result.push(...dedupedForDeal);
+  });
+
+  return result;
 }
 
 /**
@@ -238,8 +301,8 @@ export function generateServiceAllocationsForDeal(
     const norm = normalizeServiceName(rawName);
     if (!norm || norm === 'businessadvisory' || norm === 'services' || norm === 'generalservices') return false;
     const rowId = row.id ? String(row.id).trim() : '';
-    if (rowId && seenRowIds.has(rowId)) return false;
-    if (rowId) seenRowIds.add(rowId);
+    if (rowId && !rowId.startsWith('temp_') && seenRowIds.has(rowId)) return false;
+    if (rowId && !rowId.startsWith('temp_')) seenRowIds.add(rowId);
     return true;
   });
 
@@ -272,7 +335,7 @@ export function generateServiceAllocationsForDeal(
       row.legalStatus || row.Internal_legal_status || 'RECEIVED'
     );
     const tenure = formatValue(row.tenure || row.Tenure_of_Service || '');
-    const subformRowId = String(row.id || `row_${idx + 1}`);
+    const subformRowId = String(row.id || (row as any).Subform_Row_ID || (row as any).subformRowId || `row_${idx + 1}`);
 
     // Try finding existing record for this deal:
     // 1. By Subform_Row_ID

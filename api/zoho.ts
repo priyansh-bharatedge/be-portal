@@ -2966,17 +2966,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
             if (allocPayloads.length > 0) {
               const normServiceName = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '');
 
-              // 1. Deduplicate incoming alloc payloads
-              const seenAlloc = new Set<string>();
-              allocPayloads = allocPayloads.filter((al: any) => {
-                const norm = normServiceName(al.Name);
-                if (!norm) return true;
-                if (seenAlloc.has(norm)) return false;
-                seenAlloc.add(norm);
-                return true;
-              });
-
-              // 2. Fetch existing records for this deal in Operation_Internal_CRM
+              // 1. Fetch existing records for this deal in Operation_Internal_CRM
               let existingList: any[] = [];
               try {
                 const existingRes = await fetch(`${apiBase}/crm/v8/${opsModuleName}?fields=id,Name,Parent_Record_Deal,Team_Type,Operation_Stage,Modified_Time&per_page=200`, {
@@ -2993,41 +2983,45 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
               const toInsert: any[] = [];
               const toUpdate: any[] = [];
               const extraDuplicatesToDelete: string[] = [];
-              const validNormNames = new Set(allocPayloads.map((al: any) => normServiceName(al.Name)));
+              const usedExistingIds = new Set<string>();
 
               allocPayloads.forEach((alloc: any) => {
                 const normAlloc = normServiceName(alloc.Name);
-                const matches = existingList.filter((ex: any) => normServiceName(ex.Name || ex.Service_Scheme) === normAlloc);
 
-                if (matches.length > 0) {
-                  const primary = matches[0];
-                  toUpdate.push({ ...alloc, id: String(primary.id) });
-                  // Any extra matching records in Zoho CRM are duplicates, mark for deletion
-                  for (let i = 1; i < matches.length; i++) {
-                    if (matches[i].id) extraDuplicatesToDelete.push(String(matches[i].id));
-                  }
+                if (alloc.id && /^\d{15,}$/.test(String(alloc.id)) && existingList.some((ex: any) => String(ex.id) === String(alloc.id))) {
+                  usedExistingIds.add(String(alloc.id));
+                  toUpdate.push({ ...alloc, id: String(alloc.id) });
+                  return;
+                }
+
+                const matched = existingList.find((ex: any) =>
+                  ex.id && !usedExistingIds.has(String(ex.id)) && normServiceName(ex.Name || ex.Service_Scheme) === normAlloc
+                );
+
+                if (matched && matched.id) {
+                  usedExistingIds.add(String(matched.id));
+                  toUpdate.push({ ...alloc, id: String(matched.id) });
                 } else {
                   toInsert.push(alloc);
                 }
               });
 
-              // Any existing record in Zoho CRM for this deal that is NOT one of the incoming valid services (or has an invalid generic name) is extraneous and must be deleted
+              // Any existing record in Zoho CRM for this deal that has an invalid generic name is extraneous and must be deleted
               existingList.forEach((ex: any) => {
-                const normEx = normServiceName(ex.Name || ex.Service_Scheme);
                 const rawName = String(ex.Name || ex.Service_Scheme || '');
-                if (ex.id && (!validNormNames.has(normEx) || isInvalidGenericService(rawName))) {
+                if (ex.id && isInvalidGenericService(rawName)) {
                   extraDuplicatesToDelete.push(String(ex.id));
                 }
               });
 
-              // Delete any extra duplicate records found in Zoho CRM for this deal
+              // Delete any invalid generic records found in Zoho CRM for this deal
               if (extraDuplicatesToDelete.length > 0) {
                 try {
                   await fetch(`${apiBase}/crm/v8/${opsModuleName}?ids=${extraDuplicatesToDelete.join(',')}`, {
                     method: 'DELETE',
                     headers: { Authorization: `Zoho-oauthtoken ${accessToken}` }
                   });
-                  console.log('[Zoho API Handler] Auto-deleted duplicate internal operations on transition:', extraDuplicatesToDelete);
+                  console.log('[Zoho API Handler] Auto-deleted invalid generic internal operations on transition:', extraDuplicatesToDelete);
                 } catch (delErr) {
                   console.warn('[Zoho API Handler] Duplicate cleanup warning:', delErr);
                 }
@@ -4261,12 +4255,17 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
         try {
           const store = getStoredAllocations();
           const normServiceName = (s: string) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[^a-z0-9]/g, '');
-          for (const r of rawRecords) {
+          for (let i = 0; i < rawRecords.length; i++) {
+            const r = rawRecords[i];
             const recId = r.id || r.zohoId;
             const dId = r.Parent_Record_Deal?.id || (typeof r.Parent_Record_Deal === 'string' ? r.Parent_Record_Deal : '') || (r.Deal_ID?.id || (typeof r.Deal_ID === 'string' ? r.Deal_ID : ''));
             const sName = normServiceName(r.Name || r.Service_Scheme);
+            const subRowId = r.Subform_Row_ID || (r as any).subformRowId || `row_${i + 1}`;
             if (recId) store[String(recId)] = { ...(store[String(recId)] || {}), ...r };
-            if (dId && sName) store[`${dId}__${sName}`] = { ...(store[`${dId}__${sName}`] || {}), ...r };
+            if (dId && sName) {
+              store[`${dId}__${sName}__${subRowId}`] = { ...(store[`${dId}__${sName}__${subRowId}`] || {}), ...r };
+              if (!store[`${dId}__${sName}`]) store[`${dId}__${sName}`] = store[`${dId}__${sName}__${subRowId}`];
+            }
           }
           saveStoredAllocations(store);
         } catch (stErr) {
@@ -4291,7 +4290,7 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
 
           const toInsert: any[] = [];
           const toUpdate: any[] = [];
-          const seenIncoming = new Set<string>();
+          const usedExistingCrmIds = new Set<string>();
 
           for (let i = 0; i < zohoRecords.length; i++) {
             const zr = zohoRecords[i];
@@ -4299,21 +4298,21 @@ async function handleZohoRequest(req: ApiRequest, res: ApiResponse) {
             const dealIdNum = zr.Parent_Record_Deal?.id || (typeof zr.Parent_Record_Deal === 'string' && /^\d{15,}$/.test(zr.Parent_Record_Deal) ? zr.Parent_Record_Deal : null);
             const normService = normServiceName(zr.Name);
 
-            if (dealIdNum && normService) {
-              const inKey = `${dealIdNum}__${normService}`;
-              if (seenIncoming.has(inKey)) continue;
-              seenIncoming.add(inKey);
-            }
-
             let existingMatch = null;
             if (zr.id && /^\d{15,}$/.test(String(zr.id))) {
               existingMatch = existingCrmList.find((rec: any) => String(rec.id) === String(zr.id));
+              if (existingMatch?.id) usedExistingCrmIds.add(String(existingMatch.id));
             } else if (dealIdNum && normService) {
               existingMatch = existingCrmList.find((rec: any) =>
+                rec.id &&
+                !usedExistingCrmIds.has(String(rec.id)) &&
                 String(rec.Parent_Record_Deal?.id || '').trim() === String(dealIdNum).trim() &&
                 normServiceName(rec.Name || rec.Service_Scheme) === normService
               );
-              if (existingMatch?.id) zr.id = String(existingMatch.id);
+              if (existingMatch?.id) {
+                zr.id = String(existingMatch.id);
+                usedExistingCrmIds.add(String(existingMatch.id));
+              }
             }
 
             // Process and upload attached files to Zoho Files & Attachments API

@@ -607,15 +607,20 @@ export const DealDetails = () => {
       });
 
       if (dealLegal && dealLegal.length > 0) {
+        const usedRawLegalIds = new Set<string>();
         setLegalSubformItems(dealLegal.map((lg: any, i: number) => {
           const schemaName = formatZohoValue(lg.schema || lg.Legal_Schemas || lg.Schemas || servicesList[i]?.Schemas || servicesList[i]?.name || 'Service');
           let realId = (lg.id && /^\d{15,}$/.test(String(lg.id))) ? String(lg.id) : '';
-          if (!realId && rawLegal) {
+          if (realId) {
+            usedRawLegalIds.add(realId);
+          } else if (rawLegal) {
             const matchedRaw = rawLegal.find((rl: any) => 
+              rl.id && !usedRawLegalIds.has(String(rl.id)) &&
               formatZohoValue(rl.Legal_Schemas || rl.Schemas || '').trim().toLowerCase() === schemaName.trim().toLowerCase()
-            ) || rawLegal[i];
+            ) || (rawLegal[i] && !usedRawLegalIds.has(String(rawLegal[i].id)) ? rawLegal[i] : null);
             if (matchedRaw?.id && /^\d{15,}$/.test(String(matchedRaw.id))) {
               realId = String(matchedRaw.id);
+              usedRawLegalIds.add(realId);
             }
           }
           return {
@@ -1097,15 +1102,19 @@ export const DealDetails = () => {
     setIsSavingLegalSubform(true);
     try {
       const existingRawLegal = deal.rawZohoDeal?.Legal || (deal as any).Legal || [];
+      const usedExistingIds = new Set<string>();
       const formattedLegal = legalSubformItems.map((lg: any, idx: number) => {
         let validId = lg.id && /^\d{15,}$/.test(String(lg.id)) ? String(lg.id) : '';
-        if (!validId && Array.isArray(existingRawLegal) && existingRawLegal.length > 0) {
+        if (validId) {
+          usedExistingIds.add(validId);
+        } else if (Array.isArray(existingRawLegal) && existingRawLegal.length > 0) {
           const matched = existingRawLegal.find((rl: any) => 
-            rl.id && /^\d{15,}$/.test(String(rl.id)) &&
+            rl.id && !usedExistingIds.has(String(rl.id)) && /^\d{15,}$/.test(String(rl.id)) &&
             (rl.Legal_Schemas || rl.Schemas || '').trim().toLowerCase() === (lg.schema || lg.Legal_Schemas || '').trim().toLowerCase()
-          ) || existingRawLegal[idx];
+          ) || (existingRawLegal[idx] && !usedExistingIds.has(String(existingRawLegal[idx].id)) ? existingRawLegal[idx] : null);
           if (matched?.id && /^\d{15,}$/.test(String(matched.id))) {
             validId = String(matched.id);
+            usedExistingIds.add(validId);
           }
         }
         return {

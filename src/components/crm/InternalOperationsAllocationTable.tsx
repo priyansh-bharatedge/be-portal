@@ -579,14 +579,33 @@ export const InternalOperationsAllocationTable: React.FC<InternalOperationsAlloc
       const dealId = deal ? String(deal.id || deal.zohoId || '') : undefined;
       const data = await fetchInternalOperations({ dealId });
 
-      // If in deal mode and no records found yet, only generate preview if deal is at or past Operations Allocator stage
-      if (mode === 'deal' && deal && data.length === 0) {
+      if (mode === 'deal' && deal) {
         const stageLower = String(deal.stage || deal.Stage || '').toLowerCase();
         const isAtOrPastAllocator = stageLower.includes('allocat') || stageLower.includes('execut') || stageLower.includes('qualit') || stageLower.includes('won');
-        if (isAtOrPastAllocator) {
-          const genResult = generateServiceAllocationsForDeal(deal);
-          const filtered = genResult.all.filter(r => String(r.Deal_ID || '').toLowerCase() === String(deal.id || deal.zohoId || '').toLowerCase());
-          setRecords(filtered);
+        
+        // Reconcile deal subform services with server records to ensure all distinct service line items are represented
+        if (isAtOrPastAllocator || data.length > 0) {
+          const genResult = generateServiceAllocationsForDeal(deal, data);
+          const dId = String(deal.id || deal.zohoId || '').toLowerCase();
+          const filtered = genResult.all.filter(r => {
+            const rDealId = String(r.Deal_ID || (r.Parent_Record_Deal?.id || r.Parent_Record_Deal) || (r as any).zohoDealId || '').toLowerCase();
+            return rDealId === dId;
+          });
+
+          setRecords(filtered.length > 0 ? filtered : data);
+
+          // If any newly created service allocation was generated, automatically sync it to Zoho CRM
+          if (genResult.created.length > 0 && isAtOrPastAllocator) {
+            fetch('/api/zoho/internal-operations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ allocations: genResult.created })
+            }).then(r => r.json()).then(res => {
+              if (res?.success) {
+                console.log('[Internal Ops Table] Synchronized newly generated allocation(s) to Zoho CRM:', res);
+              }
+            }).catch(e => console.warn('[Internal Ops Table] Auto-sync allocations warning:', e));
+          }
         } else {
           setRecords([]);
         }
