@@ -913,10 +913,40 @@ export const Attendance = () => {
       'Name',
       'Department',
       'check in time',
+      'punch out time',
+      'total working hours',
       'status'
     ];
 
     const escapeCsv = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+    const formatWorkingHours = (minutes?: number | null, firstIn?: string, lastOut?: string): string => {
+      let total = (minutes !== undefined && minutes !== null && !isNaN(Number(minutes))) ? Number(minutes) : 0;
+
+      // Fallback calculation from firstIn and lastOut timestamps if total minutes is missing/zero
+      if (total <= 0 && firstIn && lastOut) {
+        try {
+          const inTime = new Date(firstIn).getTime();
+          const outTime = new Date(lastOut).getTime();
+          if (!isNaN(inTime) && !isNaN(outTime) && outTime > inTime) {
+            total = Math.round((outTime - inTime) / 60000);
+          }
+        } catch (_) {}
+      }
+
+      if (total <= 0) return '--';
+
+      const hours = Math.floor(total / 60);
+      const mins = Math.round(total % 60);
+
+      if (hours > 0 && mins > 0) {
+        return `${hours} hrs ${mins} mins`;
+      }
+      if (hours > 0) {
+        return `${hours} hrs`;
+      }
+      return `${mins} mins`;
+    };
 
     const cleanEmployeeCode = (emp: any, fallback?: string): string => {
       const raw = emp?.empId || emp?.Employment_ID || emp?.Employee_Code || emp?.formData?.employmentId || emp?.formData?.employeeId || fallback || emp?.id || '';
@@ -933,6 +963,8 @@ export const Attendance = () => {
       name: string;
       department: string;
       checkInTime: string;
+      punchOutTime: string;
+      totalWorkingHours: string;
       status: string;
       email?: string;
     }> = [];
@@ -942,6 +974,8 @@ export const Attendance = () => {
       name: string;
       department: string;
       checkInTime: string;
+      punchOutTime: string;
+      totalWorkingHours: string;
       status: string;
       email?: string;
     }) => {
@@ -985,8 +1019,21 @@ export const Attendance = () => {
           };
         } else if (existing.checkInTime === '--' && newItem.checkInTime !== '--') {
           finalExportItems[existingIndex].checkInTime = newItem.checkInTime;
+          if (newItem.punchOutTime !== '--') {
+            finalExportItems[existingIndex].punchOutTime = newItem.punchOutTime;
+          }
+          if (newItem.totalWorkingHours !== '--') {
+            finalExportItems[existingIndex].totalWorkingHours = newItem.totalWorkingHours;
+          }
           if (newItem.status !== 'Absent') {
             finalExportItems[existingIndex].status = newItem.status;
+          }
+        } else {
+          if (existing.punchOutTime === '--' && newItem.punchOutTime !== '--') {
+            finalExportItems[existingIndex].punchOutTime = newItem.punchOutTime;
+          }
+          if (existing.totalWorkingHours === '--' && newItem.totalWorkingHours !== '--') {
+            finalExportItems[existingIndex].totalWorkingHours = newItem.totalWorkingHours;
           }
         }
       } else {
@@ -1009,6 +1056,14 @@ export const Attendance = () => {
         const matchedEmp = employeeMap.get(String(r.empId || '').toLowerCase());
         const dept = r.department || matchedEmp?.department || matchedEmp?.formData?.department || 'General';
         const checkInTime = formatAttendanceTime(r.firstIn);
+        const lastOutVal = r.lastOut || r.raw?.Last_Out;
+        const punchOutTime = formatAttendanceTime(lastOutVal);
+
+        const totalWorkingHours = formatWorkingHours(
+          r.totalMinutes ?? r.raw?.Total_Minutes,
+          r.firstIn,
+          lastOutVal
+        );
 
         let formattedStatus: string = r.status || 'Absent';
         if (r.status === 'Late' || Number(r.lateMinutes || 0) > 15) {
@@ -1030,6 +1085,8 @@ export const Attendance = () => {
           name: r.empName,
           department: dept,
           checkInTime,
+          punchOutTime,
+          totalWorkingHours,
           status: formattedStatus
         });
       });
@@ -1078,6 +1135,8 @@ export const Attendance = () => {
           name: empName,
           department: empDept,
           checkInTime: '--',
+          punchOutTime: '--',
+          totalWorkingHours: '--',
           status: 'Absent',
           email: empEmail
         });
@@ -1093,6 +1152,14 @@ export const Attendance = () => {
 
         const dept = r.department || matchedEmp?.department || matchedEmp?.dept || matchedEmp?.formData?.department || 'General';
         const checkInTime = formatAttendanceTime(r.firstIn);
+        const lastOutVal = r.lastOut || r.raw?.Last_Out;
+        const punchOutTime = formatAttendanceTime(lastOutVal);
+
+        const totalWorkingHours = formatWorkingHours(
+          r.totalMinutes ?? r.raw?.Total_Minutes,
+          r.firstIn,
+          lastOutVal
+        );
 
         let formattedStatus: string = r.status || 'Present';
         if (r.status === 'Late' || Number(r.lateMinutes || 0) > 15) {
@@ -1117,6 +1184,8 @@ export const Attendance = () => {
           name: resolvedName || 'Employee',
           department: dept,
           checkInTime,
+          punchOutTime,
+          totalWorkingHours,
           status: formattedStatus,
           email: r.email || matchedEmp?.email
         });
@@ -1137,6 +1206,8 @@ export const Attendance = () => {
       escapeCsv(item.name),
       escapeCsv(item.department),
       escapeCsv(item.checkInTime),
+      escapeCsv(item.punchOutTime),
+      escapeCsv(item.totalWorkingHours),
       escapeCsv(item.status)
     ]);
 
