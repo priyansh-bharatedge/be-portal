@@ -1083,6 +1083,7 @@ export const Employees = () => {
       e.dept === selectedDeptFilter ||
       ((selectedDeptFilter === 'Accounts' || selectedDeptFilter === 'Accountant') && (e.dept === 'Finance' || e.dept === 'Accounts' || e.dept === 'Account' || e.dept === 'Accountant')) ||
       (selectedDeptFilter === 'Operation' && (e.dept === 'Operations' || e.dept === 'Operation')) ||
+      (selectedDeptFilter === 'Quality' && (e.dept === 'Quality' || String(e.dept || '').toLowerCase().includes('quality'))) ||
       (selectedDeptFilter === 'IT' && (e.dept === 'IT' || e.dept === 'It')) ||
       (selectedDeptFilter === 'HR' && (e.dept === 'HR' || e.dept === 'Hr' || String(e.dept || '').toLowerCase().includes('human')));
 
@@ -1347,6 +1348,7 @@ export const Employees = () => {
               <option value="Accounts">Accounts</option>
               <option value="Legal">Legal</option>
               <option value="Operation">Operation</option>
+              <option value="Quality">Quality</option>
               <option value="Marketing">Marketing</option>
               <option value="IT">IT</option>
               <option value="HR">HR</option>
@@ -1793,6 +1795,7 @@ export const Employees = () => {
                           <option value="Accounts">Accounts</option>
                           <option value="Legal">Legal</option>
                           <option value="Operation">Operation</option>
+                          <option value="Quality">Quality</option>
                           <option value="Marketing">Marketing</option>
                           <option value="IT">IT</option>
                           <option value="HR">HR</option>
